@@ -302,9 +302,35 @@ func readOpaqueTagLiteral(attrs map[string]any, attrName, key string) (string, b
 
 // injectProvenance rewrites the tags/labels attribute in body so it carries
 // the provenance entries for the configured project/session. The resulting
-// attribute value is `merge({InsideOutImport... = "..."}, <existing>)`.
-// When body has no existing tags/labels attribute the second merge argument
-// becomes `{}`.
+// attribute value is:
+//
+//	merge({InsideOutImport... = "..."}, <discovered>, <existing>)
+//
+// where <discovered> is a literal map built from ir.Identity.Tags (the
+// discover-time cloud-side tag snapshot) and <existing> is whatever the
+// body emitter already wrote for the tags/labels attribute. Both extra
+// args are omitted when their source is empty, so the simplest call
+// remains `merge({InsideOut*}, {})` (no existing tags, no discover-time
+// tags) and the existing 2-arg shape is preserved for callers that
+// never populate Identity.Tags.
+//
+// Why we need the <discovered> arg: some AWS resource types (notably
+// aws_route53_zone — HostedZoneTags is a write-only CFN property and
+// CloudControl GetResource never returns it) lose their tags between
+// discover and Attrs-emit. Without the discover-time fallback the
+// emitted HCL would be `tags = merge({InsideOut*}, {})`, which the
+// first `terraform apply` resolves to ONLY the 4 InsideOut stamps —
+// silently deleting the customer's pre-existing tags on the live
+// resource. See #690.
+//
+// Terraform's `merge()` resolves conflicts in argument order, with later
+// arguments winning. The ordering chosen here is intentional:
+//
+//   - InsideOut* go first so the body-existing tags layer can override
+//     them on a re-import that already carries the project's stamps
+//     (matches the prior shape).
+//   - <discovered> sits in the middle: it backfills the keys the body
+//     dropped, but the body's typed values win when both are present.
 //
 // If ir's Terraform type is not taggable/labelable, body is returned
 // unchanged and ir.WeakLocked is set to true.
@@ -364,7 +390,17 @@ func injectProvenance(body []byte, ir *imported.ImportedResource, projectID, ses
 		bodyW.RemoveAttribute(attrName)
 	}
 
-	mergeExpr := buildMergeExpression(entries, existingExprText)
+	// Build the discover-time tags literal from ir.Identity.Tags. We
+	// only include keys that aren't InsideOut provenance markers — the
+	// first merge arg already carries those, so re-emitting them under
+	// <discovered> would just churn the merge in place. Identity.Tags
+	// is typically the cloud-side snapshot of the LIVE tags, including
+	// any prior-run InsideOut* stamps; dropping them here keeps the
+	// emitted HCL deterministic across re-imports without nudging
+	// InsideOutImportedAt.
+	discoveredExprText := buildDiscoveredTagsExpression(cloud, ir.Identity.Tags)
+
+	mergeExpr := buildMergeExpression(entries, discoveredExprText, existingExprText)
 	tokens, err := tokenizeExpression(mergeExpr)
 	if err != nil {
 		return nil, fmt.Errorf("tokenize provenance merge expression: %w", err)
@@ -374,19 +410,94 @@ func injectProvenance(body []byte, ir *imported.ImportedResource, projectID, ses
 	return f.Bytes(), nil
 }
 
-// buildMergeExpression formats `merge({ <provenance> }, <existingExpr>)` as
-// a string suitable for re-parsing via hclwrite. Provenance keys are emitted
-// in the order returned by provenanceKeysFor.
-func buildMergeExpression(entries []provenanceEntry, existingExpr string) string {
+// buildMergeExpression formats `merge({ <provenance> }, <discoveredExpr>,
+// <existingExpr>)` as a string suitable for re-parsing via hclwrite.
+// Provenance keys are emitted in the order returned by provenanceKeysFor.
+//
+// When discoveredExpr is empty (the resource's Identity.Tags was empty or
+// every entry was filtered as a provenance marker), the middle argument
+// is omitted so the call collapses to the historical 2-arg
+// `merge({InsideOut*}, <existing>)` shape.
+func buildMergeExpression(entries []provenanceEntry, discoveredExpr, existingExpr string) string {
 	var b strings.Builder
 	b.WriteString("merge(\n  {\n")
 	for _, e := range entries {
 		fmt.Fprintf(&b, "    %s = %q\n", quoteKeyIfNeeded(e.Key), e.Value)
 	}
-	b.WriteString("  },\n  ")
+	b.WriteString("  },\n")
+	if discoveredExpr != "" {
+		b.WriteString("  ")
+		b.WriteString(discoveredExpr)
+		b.WriteString(",\n")
+	}
+	b.WriteString("  ")
 	b.WriteString(existingExpr)
 	b.WriteString(",\n)")
 	return b.String()
+}
+
+// buildDiscoveredTagsExpression formats ir.Identity.Tags as an HCL object
+// literal suitable for an argument position inside a merge() call.
+// Returns "" when the map is empty or every entry is a provenance marker.
+//
+// Keys are emitted in sorted order so the output is deterministic
+// regardless of map iteration order. Provenance markers
+// (InsideOutImport* / insideout-import-* / insideout-imported* and
+// insideout-imported-at) are filtered out: the merge call already
+// emits the canonical values for the current pass in the first
+// argument, and re-emitting them under <discovered> would churn the
+// timestamp in place across re-imports while producing the same
+// effective `merge()` result.
+//
+// GCP label keys are emitted quoted (they may contain hyphens, which
+// HCL identifiers don't permit); AWS tag keys can contain arbitrary
+// characters and so are always quoted defensively via quoteKeyIfNeeded.
+func buildDiscoveredTagsExpression(cloud string, tags map[string]string) string {
+	if len(tags) == 0 {
+		return ""
+	}
+	provenance := provenanceMarkerKeys(cloud)
+	keys := make([]string, 0, len(tags))
+	for k := range tags {
+		if _, isMarker := provenance[k]; isMarker {
+			continue
+		}
+		keys = append(keys, k)
+	}
+	if len(keys) == 0 {
+		return ""
+	}
+	sort.Strings(keys)
+	var b strings.Builder
+	b.WriteString("{\n")
+	for _, k := range keys {
+		fmt.Fprintf(&b, "    %s = %q\n", quoteKeyIfNeeded(k), tags[k])
+	}
+	b.WriteString("  }")
+	return b.String()
+}
+
+// provenanceMarkerKeys returns the set of InsideOut marker keys for the
+// given cloud — the keys buildDiscoveredTagsExpression filters out so a
+// re-import doesn't shovel stale provenance values back into the merge.
+func provenanceMarkerKeys(cloud string) map[string]struct{} {
+	switch strings.ToLower(strings.TrimSpace(cloud)) {
+	case "aws":
+		return map[string]struct{}{
+			AWSTagKeyImportProject: {},
+			AWSTagKeyImportSession: {},
+			AWSTagKeyImported:      {},
+			AWSTagKeyImportedAt:    {},
+		}
+	case "gcp":
+		return map[string]struct{}{
+			GCPLabelKeyImportProject: {},
+			GCPLabelKeyImportSession: {},
+			GCPLabelKeyImported:      {},
+			GCPLabelKeyImportedAt:    {},
+		}
+	}
+	return nil
 }
 
 // quoteKeyIfNeeded wraps key in double quotes when it is not a legal HCL
