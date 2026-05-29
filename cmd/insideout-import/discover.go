@@ -468,7 +468,7 @@ Exit codes:
 	provider := fs.String("provider", "", "cloud provider: aws or gcp (required)")
 	project := fs.String("project", "", "project name prefix used to filter resources (required)")
 	region := fs.String("region", "", "DEPRECATED (#291): use --regions instead. Single AWS region or GCP location filter; emits a deprecation warning when set.")
-	regions := fs.String("regions", "", "comma-separated AWS regions (or GCP locations) to scan in one invocation (required for --provider aws unless --region is set; optional for --provider gcp). Multi-region scans use the same per-service tag-selector filter across every region. Note: GCP project-global asset types (Pub/Sub, VPC networks, secrets) are excluded by any non-empty --regions; this is a known asset-API limitation.")
+	regions := fs.String("regions", "", "comma-separated AWS regions (or GCP locations) to scan in one invocation (required for --provider aws unless --region is set; optional for --provider gcp). Pass `all` (AWS) to expand to the InsideOut-supported region set — the CLI equivalent of the wizard's \"Scan all supported regions\"; combine with an empty --project for the wizard's whole-account scan. Multi-region scans use the same per-service tag-selector filter across every region. Note: GCP project-global asset types (Pub/Sub, VPC networks, secrets) are excluded by any non-empty --regions; this is a known asset-API limitation.")
 	tagSelectors := fs.String("tag-selectors", "", "comma-separated tag/label selectors of the form key=value, AND-conjuncted across the list. AWS: applied client-side over each per-service tag fetch. GCP: appended as `labels.<k>:<v>` clauses to the Cloud Asset query (server-side AND).")
 	outputDir := fs.String("output-dir", "", "directory to write imported.json into (required)")
 	resourceTypes := fs.String("resource-types", "", "comma-separated subset of types to discover; default: all supported types for the chosen provider")
@@ -507,9 +507,13 @@ Exit codes:
 		return discoverExitFatal
 	}
 
+	// --project is an OPTIONAL tag-prefix filter. Empty means scan the whole
+	// account/provider: no RGT TagFilter prefetch, so each per-service
+	// discoverer falls back to its full ListResources enumeration. This is
+	// the "discover everything importable in the account" mode (#1860
+	// follow-up) — distinct from the wizard's project-scoped scan.
 	if strings.TrimSpace(*project) == "" {
-		fmt.Fprintln(os.Stderr, "discover: --project is required")
-		return discoverExitFatal
+		fmt.Fprintln(os.Stderr, "discover: no --project filter — scanning the entire account (all resources)")
 	}
 	// --from-manifest / --resource-ids mutual-exclusion + dependency
 	// validation (#292). These checks run before the AWS-region requirement
@@ -542,6 +546,9 @@ Exit codes:
 		return discoverExitFatal
 	}
 	resolvedRegions := splitCSV(*regions)
+	if cloud == "aws" {
+		resolvedRegions = expandAllSupportedAWSRegions(resolvedRegions)
+	}
 	if len(resolvedRegions) == 0 && regionRaw != "" {
 		fmt.Fprintln(os.Stderr, "discover: WARN: --region is deprecated; use --regions instead")
 		resolvedRegions = []string{regionRaw}
@@ -1316,6 +1323,57 @@ func toSummaryTagSelectors(in []tagSelectorPair) []imported.SummaryTagSelector {
 	out := make([]imported.SummaryTagSelector, 0, len(in))
 	for _, p := range in {
 		out = append(out, imported.SummaryTagSelector{Key: p.Key, Value: p.Value})
+	}
+	return out
+}
+
+// insideOutSupportedAWSRegions mirrors INSIDEOUT_SUPPORTED_AWS_REGIONS in
+// reliable (lib/stack/supportedRegions.ts / internal/agentapi/supported_regions.go)
+// — the region set the import wizard's "Scan all supported regions" button
+// uses. Keep in sync. Lives here so `--regions all` reproduces the wizard's
+// whole-account, all-supported-regions scan from the CLI.
+var insideOutSupportedAWSRegions = []string{
+	"us-east-1",
+	"us-east-2",
+	"us-west-2",
+	"eu-west-1",
+	"ap-southeast-1",
+}
+
+// expandAllSupportedAWSRegions replaces an "all" sentinel in the region list
+// with the InsideOut-supported AWS region set — the CLI equivalent of the
+// wizard's "Scan all supported regions" (and reliable's server-side
+// expandAllRegionsSentinel). Any non-sentinel entries the caller also passed
+// are preserved and de-duplicated; order is deterministic (supported set
+// first, then caller extras). No "all" → returned unchanged.
+func expandAllSupportedAWSRegions(regions []string) []string {
+	hasAll := false
+	for _, r := range regions {
+		if strings.EqualFold(strings.TrimSpace(r), "all") {
+			hasAll = true
+			break
+		}
+	}
+	if !hasAll {
+		return regions
+	}
+	seen := make(map[string]struct{}, len(insideOutSupportedAWSRegions)+len(regions))
+	out := make([]string, 0, len(insideOutSupportedAWSRegions)+len(regions))
+	for _, r := range insideOutSupportedAWSRegions {
+		if _, ok := seen[r]; !ok {
+			seen[r] = struct{}{}
+			out = append(out, r)
+		}
+	}
+	for _, r := range regions {
+		t := strings.TrimSpace(r)
+		if t == "" || strings.EqualFold(t, "all") {
+			continue
+		}
+		if _, ok := seen[t]; !ok {
+			seen[t] = struct{}{}
+			out = append(out, t)
+		}
 	}
 	return out
 }

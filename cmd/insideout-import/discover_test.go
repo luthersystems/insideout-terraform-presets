@@ -83,17 +83,29 @@ func TestRunDiscover_UnknownProvider(t *testing.T) {
 	}
 }
 
-func TestRunDiscover_MissingProject(t *testing.T) {
+// TestRunDiscover_EmptyProjectIsAllowed pins that --project is now OPTIONAL
+// (#1860 follow-up: an empty project scans the whole account). With no
+// --project AND no --regions, the run must get PAST the project gate — emitting
+// the account-wide-scan note — and fail instead at the downstream region gate.
+// Driving it this way proves the project requirement is gone without making a
+// (creds-dependent) AWS call.
+func TestRunDiscover_EmptyProjectIsAllowed(t *testing.T) {
 	dir := t.TempDir()
 	var rc int
 	stderr := captureStderr(t, func() {
-		rc = runDiscover([]string{"--provider", "aws", "--region", "us-east-1", "--output-dir", dir})
+		rc = runDiscover([]string{"--provider", "aws", "--output-dir", dir})
 	})
 	if rc != discoverExitFatal {
-		t.Errorf("rc=%d, want fatal", rc)
+		t.Errorf("rc=%d, want fatal (region gate)", rc)
 	}
-	if !strings.Contains(stderr, "--project is required") {
-		t.Errorf("stderr=%q, want substring %q", stderr, "--project is required")
+	if strings.Contains(stderr, "--project is required") {
+		t.Errorf("empty --project must no longer be rejected; stderr=%q", stderr)
+	}
+	if !strings.Contains(stderr, "scanning the entire account") {
+		t.Errorf("expected the account-wide-scan note (project gate passed); stderr=%q", stderr)
+	}
+	if !strings.Contains(stderr, "--regions is required") {
+		t.Errorf("expected failure at the region gate, not the project gate; stderr=%q", stderr)
 	}
 }
 
@@ -3263,5 +3275,25 @@ func TestStageTimeoutsDoNotExceedOverallCap(t *testing.T) {
 		if d >= discoverTimeoutOverall {
 			t.Errorf("stage %q budget=%v >= discoverTimeoutOverall=%v (the outer cap would mask the per-stage signal)", name, d, discoverTimeoutOverall)
 		}
+	}
+}
+
+// TestExpandAllSupportedAWSRegions pins the `--regions all` sentinel: it
+// expands to the InsideOut-supported AWS set (CLI mirror of the wizard's
+// "Scan all supported regions"), preserves + dedups caller extras, and is a
+// no-op without "all".
+func TestExpandAllSupportedAWSRegions(t *testing.T) {
+	join := func(s []string) string { return strings.Join(s, ",") }
+	if got := expandAllSupportedAWSRegions([]string{"us-east-1", "eu-west-1"}); join(got) != "us-east-1,eu-west-1" {
+		t.Errorf("no 'all' must be unchanged; got %v", got)
+	}
+	if got := join(expandAllSupportedAWSRegions([]string{"all"})); got != join(insideOutSupportedAWSRegions) {
+		t.Errorf("'all' → supported set; got %q want %q", got, join(insideOutSupportedAWSRegions))
+	}
+	// supported set first, then deduped caller extras (us-east-1 already present).
+	got := join(expandAllSupportedAWSRegions([]string{"all", "ca-central-1", "us-east-1"}))
+	want := join(insideOutSupportedAWSRegions) + ",ca-central-1"
+	if got != want {
+		t.Errorf("'all' + extras: got %q want %q", got, want)
 	}
 }

@@ -350,9 +350,19 @@ var cloudControlTypeConfigs = []cloudControlConfig{
 		TFType:             "aws_s3_bucket",
 		CloudFormationType: "AWS::S3::Bucket",
 		Slug:               "s3",
-		// RGT returns per-region tagged buckets (the GetBucketLocation
-		// per-bucket regionalization that the hand-rolled discoverer
-		// did is now unnecessary). Identifier = bucket name.
+		// S3 bucket ARNs (arn:aws:s3:::name) carry NO region, and
+		// ListBuckets / RGT GetResources are account-global — every
+		// scanned region returns the same buckets. Treating S3 as a
+		// per-region type therefore emitted the same bucket once per
+		// scan region, each stamped with the (wrong) scan region (#1860).
+		// Mark it global: the discoverer scans once (region="") and reads
+		// the deduped set via RGTCacheForGlobalCFN (dedups by ARN), so
+		// each bucket appears exactly once with no region. Downstream the
+		// region-less identity is handled as a global resource (reliable
+		// backfills the session region — us-east-1 — for import, which the
+		// S3 us-east-1 endpoint serves cross-region). Identifier = bucket
+		// name.
+		IsGlobal:                true,
 		ImportIDFromIdentifier:  passthroughImportID,
 		NameHintFromProperties:  nameOrIdentifier("BucketName"),
 		NativeIDsFromProperties: arnUnderKey("Arn"),
