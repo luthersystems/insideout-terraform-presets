@@ -3277,3 +3277,23 @@ func TestStageTimeoutsDoNotExceedOverallCap(t *testing.T) {
 		}
 	}
 }
+
+// TestExpandAllSupportedAWSRegions pins the `--regions all` sentinel: it
+// expands to the InsideOut-supported AWS set (CLI mirror of the wizard's
+// "Scan all supported regions"), preserves + dedups caller extras, and is a
+// no-op without "all".
+func TestExpandAllSupportedAWSRegions(t *testing.T) {
+	join := func(s []string) string { return strings.Join(s, ",") }
+	if got := expandAllSupportedAWSRegions([]string{"us-east-1", "eu-west-1"}); join(got) != "us-east-1,eu-west-1" {
+		t.Errorf("no 'all' must be unchanged; got %v", got)
+	}
+	if got := join(expandAllSupportedAWSRegions([]string{"all"})); got != join(insideOutSupportedAWSRegions) {
+		t.Errorf("'all' → supported set; got %q want %q", got, join(insideOutSupportedAWSRegions))
+	}
+	// supported set first, then deduped caller extras (us-east-1 already present).
+	got := join(expandAllSupportedAWSRegions([]string{"all", "ca-central-1", "us-east-1"}))
+	want := join(insideOutSupportedAWSRegions) + ",ca-central-1"
+	if got != want {
+		t.Errorf("'all' + extras: got %q want %q", got, want)
+	}
+}
