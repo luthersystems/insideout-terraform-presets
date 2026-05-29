@@ -29,6 +29,16 @@ type importedProviderRenderOptions struct {
 	AWSEndpointURL string
 	ProvidersUsed  map[string]bool
 	AWSAuth        awsProviderAuth
+
+	// AWSRegions is the sorted set of distinct AWS regions across the
+	// imported resource set (composer.ImportedAWSRegions). When it holds
+	// more than one region, one aliased `provider "aws" { alias =
+	// "imported_<region>" }` block is emitted per region so the
+	// region-suffixed references EmitImportedTF produces resolve. The base
+	// `aws.imported` block is always emitted too (back-compat + the
+	// region-less fallback target). Empty/single-region is a no-op, so the
+	// emitted HCL stays byte-identical to the pre-multi-region output.
+	AWSRegions []string
 }
 
 func renderImportedProvidersTF(opts importedProviderRenderOptions) ([]byte, error) {
@@ -69,26 +79,45 @@ func renderImportedProvidersTF(opts importedProviderRenderOptions) ([]byte, erro
 			"source":  cty.StringVal("hashicorp/aws"),
 			"version": cty.StringVal("~> 6.0"),
 		}))
-		prov := body.AppendNewBlock("provider", []string{"aws"})
-		prov.Body().SetAttributeValue("alias", cty.StringVal("imported"))
-		prov.Body().SetAttributeValue("region", cty.StringVal(opts.Region))
-		if opts.AWSEndpointURL != "" {
-			prov.Body().SetAttributeValue("access_key", cty.StringVal("test"))
-			prov.Body().SetAttributeValue("secret_key", cty.StringVal("test"))
-			prov.Body().SetAttributeValue("skip_credentials_validation", cty.True)
-			prov.Body().SetAttributeValue("skip_metadata_api_check", cty.True)
-			prov.Body().SetAttributeValue("skip_requesting_account_id", cty.True)
-			prov.Body().SetAttributeValue("s3_use_path_style", cty.True)
-			ep := prov.Body().AppendNewBlock("endpoints", nil)
-			for _, svc := range localstackEndpointServices {
-				ep.Body().SetAttributeValue(svc, cty.StringVal(opts.AWSEndpointURL))
+		// Base `aws.imported` block (region = primary). Always emitted:
+		// back-compat with single-region stacks and the region-less
+		// fallback target for global resources in a multi-region batch.
+		appendAWSImportedProvider(body, "imported", opts.Region, opts)
+		// Multi-region: one aliased block per distinct region so the
+		// `aws.imported_<region>` references resolve. Additive — empty /
+		// single-region emits nothing here.
+		if len(opts.AWSRegions) > 1 {
+			for _, r := range opts.AWSRegions {
+				appendAWSImportedProvider(body, "imported_"+composer.RegionAlias(r), r, opts)
 			}
 		}
-		appendAWSAssumeRole(prov.Body(), opts.AWSAuth)
 	default:
 		return nil, fmt.Errorf("unknown cloud %q", opts.Cloud)
 	}
 	return f.Bytes(), nil
+}
+
+// appendAWSImportedProvider appends one `provider "aws" { alias = <alias>
+// region = <region> … }` block carrying the shared LocalStack-endpoint and
+// assume_role plumbing. Factored out so the base `imported` alias and every
+// per-region `imported_<region>` alias render identically bar alias+region.
+func appendAWSImportedProvider(body *hclwrite.Body, alias, region string, opts importedProviderRenderOptions) {
+	prov := body.AppendNewBlock("provider", []string{"aws"})
+	prov.Body().SetAttributeValue("alias", cty.StringVal(alias))
+	prov.Body().SetAttributeValue("region", cty.StringVal(region))
+	if opts.AWSEndpointURL != "" {
+		prov.Body().SetAttributeValue("access_key", cty.StringVal("test"))
+		prov.Body().SetAttributeValue("secret_key", cty.StringVal("test"))
+		prov.Body().SetAttributeValue("skip_credentials_validation", cty.True)
+		prov.Body().SetAttributeValue("skip_metadata_api_check", cty.True)
+		prov.Body().SetAttributeValue("skip_requesting_account_id", cty.True)
+		prov.Body().SetAttributeValue("s3_use_path_style", cty.True)
+		ep := prov.Body().AppendNewBlock("endpoints", nil)
+		for _, svc := range localstackEndpointServices {
+			ep.Body().SetAttributeValue(svc, cty.StringVal(opts.AWSEndpointURL))
+		}
+	}
+	appendAWSAssumeRole(prov.Body(), opts.AWSAuth)
 }
 
 func appendAWSAssumeRole(body *hclwrite.Body, auth awsProviderAuth) {

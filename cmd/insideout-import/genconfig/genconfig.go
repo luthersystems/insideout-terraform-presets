@@ -135,7 +135,13 @@ func Run(ctx context.Context, opts Options, resources []imported.ImportedResourc
 	}
 	opts.Workdir = absWorkdir
 
-	if err := emitImports(opts.Workdir, resources); err != nil {
+	// Distinct non-primary AWS regions in THIS resource set drive the
+	// aliased provider blocks + import-block provider args. Computed from
+	// the resources arg (not Options) so each depchase iteration's expanded
+	// set re-derives its own region span. Empty for single-region stacks.
+	aliasRegions := awsScratchAliasRegions(resources, opts.Region)
+
+	if err := emitImports(opts.Workdir, resources, provider, opts.Region); err != nil {
 		return nil, fmt.Errorf("emit imports.tf: %w", err)
 	}
 	if err := emitProviders(opts.Workdir, providerEmitOptions{
@@ -147,6 +153,7 @@ func Run(ctx context.Context, opts Options, resources []imported.ImportedResourc
 			RoleARN:    opts.AWSRoleARN,
 			ExternalID: opts.AWSExternalID,
 		},
+		AliasRegions: aliasRegions,
 	}); err != nil {
 		return nil, fmt.Errorf("emit providers.tf: %w", err)
 	}
