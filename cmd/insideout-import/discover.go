@@ -507,9 +507,13 @@ Exit codes:
 		return discoverExitFatal
 	}
 
+	// --project is an OPTIONAL tag-prefix filter. Empty means scan the whole
+	// account/provider: no RGT TagFilter prefetch, so each per-service
+	// discoverer falls back to its full ListResources enumeration. This is
+	// the "discover everything importable in the account" mode (#1860
+	// follow-up) — distinct from the wizard's project-scoped scan.
 	if strings.TrimSpace(*project) == "" {
-		fmt.Fprintln(os.Stderr, "discover: --project is required")
-		return discoverExitFatal
+		fmt.Fprintln(os.Stderr, "discover: no --project filter — scanning the entire account (all resources)")
 	}
 	// --from-manifest / --resource-ids mutual-exclusion + dependency
 	// validation (#292). These checks run before the AWS-region requirement

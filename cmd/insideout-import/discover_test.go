@@ -83,17 +83,29 @@ func TestRunDiscover_UnknownProvider(t *testing.T) {
 	}
 }
 
-func TestRunDiscover_MissingProject(t *testing.T) {
+// TestRunDiscover_EmptyProjectIsAllowed pins that --project is now OPTIONAL
+// (#1860 follow-up: an empty project scans the whole account). With no
+// --project AND no --regions, the run must get PAST the project gate — emitting
+// the account-wide-scan note — and fail instead at the downstream region gate.
+// Driving it this way proves the project requirement is gone without making a
+// (creds-dependent) AWS call.
+func TestRunDiscover_EmptyProjectIsAllowed(t *testing.T) {
 	dir := t.TempDir()
 	var rc int
 	stderr := captureStderr(t, func() {
-		rc = runDiscover([]string{"--provider", "aws", "--region", "us-east-1", "--output-dir", dir})
+		rc = runDiscover([]string{"--provider", "aws", "--output-dir", dir})
 	})
 	if rc != discoverExitFatal {
-		t.Errorf("rc=%d, want fatal", rc)
+		t.Errorf("rc=%d, want fatal (region gate)", rc)
 	}
-	if !strings.Contains(stderr, "--project is required") {
-		t.Errorf("stderr=%q, want substring %q", stderr, "--project is required")
+	if strings.Contains(stderr, "--project is required") {
+		t.Errorf("empty --project must no longer be rejected; stderr=%q", stderr)
+	}
+	if !strings.Contains(stderr, "scanning the entire account") {
+		t.Errorf("expected the account-wide-scan note (project gate passed); stderr=%q", stderr)
+	}
+	if !strings.Contains(stderr, "--regions is required") {
+		t.Errorf("expected failure at the region gate, not the project gate; stderr=%q", stderr)
 	}
 }
 
