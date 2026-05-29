@@ -157,6 +157,10 @@ func Run(ctx context.Context, req job.Request, opts Options) (job.Result, error)
 		AWSEndpointURL: opts.AWSEndpointURL,
 		ProvidersUsed:  providersUsed,
 		AWSAuth:        awsAuth,
+		// Same resource slice EmitImportedTF saw → the declared
+		// `aws.imported_<region>` alias blocks match the references it
+		// emitted. Single-region is a no-op (only `aws.imported`).
+		AWSRegions: composer.ImportedAWSRegions(resources),
 	})
 	if err != nil {
 		return result, err

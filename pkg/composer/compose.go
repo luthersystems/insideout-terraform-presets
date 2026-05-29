@@ -722,12 +722,13 @@ func (c *Client) composeStackImpl(opts ComposeStackOpts) (*ComposeStackResult, e
 	}
 
 	providersFiles := generateProvidersFiles(providersTFInput{
-		Cloud:          cloud,
-		Region:         reg,
-		GCPProjectID:   opts.GCPProjectID,
-		Selected:       selected,
-		Discovered:     discoveredProviders,
-		ImportedClouds: importedClouds,
+		Cloud:              cloud,
+		Region:             reg,
+		GCPProjectID:       opts.GCPProjectID,
+		Selected:           selected,
+		Discovered:         discoveredProviders,
+		ImportedClouds:     importedClouds,
+		ImportedAWSRegions: ImportedAWSRegions(composable),
 	})
 	// /providers.tf holds the terraform{} required_providers block, the
 	// default provider, and — on AWS — the `bootstrap_role` / `aws_external_id`
@@ -826,6 +827,19 @@ type providersTFInput struct {
 	// EmitImportedTF caller is responsible for populating this key based
 	// on per-type provider source lookups.
 	ImportedClouds map[string]bool
+
+	// ImportedAWSRegions is the sorted set of distinct AWS regions across
+	// the imported resource set (composer.ImportedAWSRegions). When it
+	// holds more than one region the imported resources are multi-region:
+	// EmitImportedTF routes each through a region-suffixed
+	// `aws.imported_<region>` alias, so the AWS branch declares one
+	// matching `provider "aws" { alias = "imported_<region>" }` block per
+	// region (in addition to the unconditional `aws.imported` block, which
+	// stays for the issue-#562 state-reference contract). Empty or
+	// single-region leaves the output byte-identical to prior composes.
+	// Must be derived from the SAME resource slice EmitImportedTF receives
+	// so the declared aliases match the referenced ones exactly.
+	ImportedAWSRegions []string
 }
 
 // providersTFFiles is the split-up output of generateProvidersFiles.
@@ -1112,6 +1126,17 @@ variable "aws_external_id" {
 		var imp strings.Builder
 		imp.WriteString("\n")
 		fmt.Fprintf(&imp, "provider \"aws\" {\n  alias  = \"imported\"\n  region = %q%s\n}\n", region, awsDynamicAssumeRole)
+
+		// Multi-region imported resources: declare one region-suffixed
+		// alias (`imported_<region>`) per distinct region so the
+		// `provider = aws.imported_<region>` references EmitImportedTF
+		// emits resolve. The plain `aws.imported` block above stays
+		// (issue #562 state-reference contract); these are additive, so a
+		// single-region or empty imported set leaves the file unchanged.
+		// Same region-id → alias mapping as the WAF `us_east_1` alias.
+		for _, r := range in.ImportedAWSRegions {
+			fmt.Fprintf(&imp, "\nprovider \"aws\" {\n  alias  = \"imported_%s\"\n  region = %q%s\n}\n", RegionAlias(r), r, awsDynamicAssumeRole)
+		}
 
 		return providersTFFiles{
 			Main:     []byte(main.String()),

@@ -103,6 +103,12 @@ func EmitImportedTF(cloud string, irs []imported.ImportedResource, opts EmitImpo
 		removed  []byte // removed { from = ...; lifecycle { destroy = false } }
 	}
 
+	// Compute the distinct AWS region set once. len > 1 ⇒ multi-region:
+	// providerAliasForResource routes each AWS resource through a
+	// region-suffixed `aws.imported_<region>` alias. Single-region keeps
+	// the plain `aws.imported` alias (byte-identical to prior output).
+	awsRegions := ImportedAWSRegions(irs)
+
 	var entries []entry
 	for i := range irs {
 		ir := &irs[i]
@@ -136,7 +142,7 @@ func EmitImportedTF(cloud string, irs []imported.ImportedResource, opts EmitImpo
 				}
 			}
 			body = appendImportedLifecycle(body, ir.Identity.Type)
-			alias := providerAliasForResource(got, ir.Identity)
+			alias := providerAliasForResource(got, ir.Identity, awsRegions)
 			e.resource = wrapResourceBlock(ir.Identity.Type, addressLabel(addr), alias, body)
 			if mode == emitModeResourceImport {
 				e.imported = renderImportBlock(addr, importid.ForResource(*ir))
@@ -578,13 +584,68 @@ func providerAliasFor(cloud string) string {
 // typed registry's recorded provider source — types that aren't
 // registered (the long tail still using the opaque-attr fallback) fall
 // back to the cloud's default alias, preserving historical behavior.
-func providerAliasForResource(cloud string, id imported.ResourceIdentity) string {
+//
+// awsRegions is the sorted set of distinct AWS regions in the emitted
+// batch (see ImportedAWSRegions). When it holds more than one region the
+// batch is multi-region: each AWS resource routes through a
+// region-suffixed alias (`aws.imported_us_west_2`) so terraform import /
+// plan hits the correct regional endpoint. A region-less AWS resource
+// (global services like IAM, after reliable's region backfill this is
+// rare) falls back to the first region's alias — that block is always
+// declared. Single-region batches keep the plain `aws.imported` alias so
+// the emitted HCL is byte-identical to the pre-multi-region output.
+func providerAliasForResource(cloud string, id imported.ResourceIdentity, awsRegions []string) string {
 	if cloud == "gcp" {
 		if source, ok := generated.LookupProviderSource(id.Type); ok && source == generated.GoogleBetaProviderSource {
 			return "google-beta.imported"
 		}
+		return providerAliasFor(cloud)
+	}
+	if cloud == "aws" && len(awsRegions) > 1 {
+		region := strings.TrimSpace(id.Region)
+		if region == "" {
+			region = awsRegions[0]
+		}
+		return "aws.imported_" + RegionAlias(region)
 	}
 	return providerAliasFor(cloud)
+}
+
+// RegionAlias converts a cloud region id into a Terraform provider-alias
+// label: hyphens become underscores ("us-west-2" → "us_west_2"). This
+// matches the existing `us_east_1` WAF alias convention in the composed
+// root (see generateProvidersFiles), so the multi-region imported aliases
+// read consistently alongside it.
+func RegionAlias(region string) string {
+	return strings.ReplaceAll(strings.ToLower(strings.TrimSpace(region)), "-", "_")
+}
+
+// ImportedAWSRegions returns the sorted, de-duplicated set of non-empty
+// AWS regions across the imported resource set. It is the single source
+// of truth for "is this batch multi-region?" — both EmitImportedTF (which
+// picks per-resource aliases) and the provider-block generators (which
+// declare the matching alias blocks) call it on the SAME resource slice,
+// so the references and declarations can never drift. GCP resources are
+// ignored: multi-region GCP import is a separate follow-up.
+func ImportedAWSRegions(irs []imported.ImportedResource) []string {
+	seen := map[string]struct{}{}
+	var out []string
+	for i := range irs {
+		if !strings.EqualFold(strings.TrimSpace(irs[i].Identity.Cloud), "aws") {
+			continue
+		}
+		region := strings.TrimSpace(irs[i].Identity.Region)
+		if region == "" {
+			continue
+		}
+		if _, ok := seen[region]; ok {
+			continue
+		}
+		seen[region] = struct{}{}
+		out = append(out, region)
+	}
+	sort.Strings(out)
+	return out
 }
 
 // addressLabel extracts the Terraform label part of a fully-qualified address

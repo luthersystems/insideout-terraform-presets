@@ -152,6 +152,70 @@ func TestGenerateProvidersTF_WithImported(t *testing.T) {
 		"ProvidersUsed[gcp] must be false on an AWS-only compose: %v", res.ProvidersUsed)
 }
 
+// TestGenerateProvidersTF_MultiRegionImported drives an AWS compose with
+// imported resources in two regions and asserts the composed root declares
+// a region-suffixed `aws.imported_<region>` alias per region (additive — the
+// base `aws.imported` block stays) and that /imported.tf routes each resource
+// through its region's alias. This is the composed-root (deploy ladder) half
+// of multi-region reverse import.
+func TestGenerateProvidersTF_MultiRegionImported(t *testing.T) {
+	t.Parallel()
+
+	c := newTestClient()
+	res, err := c.ComposeStackWithIssues(ComposeStackOpts{
+		Cloud:        "aws",
+		SelectedKeys: []ComponentKey{KeyAWSVPC},
+		Comps:        &Components{Cloud: "AWS"},
+		Cfg:          &Config{},
+		Project:      "demo",
+		Region:       "us-east-1",
+		Imported: []imported.ImportedResource{
+			{
+				Identity: imported.ResourceIdentity{
+					Cloud:    "aws",
+					Type:     "aws_sqs_queue",
+					Address:  "aws_sqs_queue.east",
+					Region:   "us-east-1",
+					ImportID: "https://sqs.us-east-1.amazonaws.com/123/east",
+				},
+				Tier:  imported.TierImportedFlat,
+				Attrs: []byte(`{"name":{"literal":"east"}}`),
+			},
+			{
+				Identity: imported.ResourceIdentity{
+					Cloud:    "aws",
+					Type:     "aws_sqs_queue",
+					Address:  "aws_sqs_queue.west",
+					Region:   "us-west-2",
+					ImportID: "https://sqs.us-west-2.amazonaws.com/123/west",
+				},
+				Tier:  imported.TierImportedFlat,
+				Attrs: []byte(`{"name":{"literal":"west"}}`),
+			},
+		},
+	})
+	require.NoError(t, err)
+	require.NotNil(t, res)
+
+	importedProviders := string(res.Files["/providers-imported.tf"])
+	// Base alias still emitted (issue #562 state-reference contract).
+	assert.Contains(t, importedProviders, `alias  = "imported"`)
+	// One region-suffixed alias per distinct region.
+	assert.Contains(t, importedProviders, `alias  = "imported_us_east_1"`)
+	assert.Contains(t, importedProviders, `region = "us-east-1"`)
+	assert.Contains(t, importedProviders, `alias  = "imported_us_west_2"`)
+	assert.Contains(t, importedProviders, `region = "us-west-2"`)
+
+	// /imported.tf routes each resource through its region's alias.
+	importedTF := string(res.Files["/imported.tf"])
+	assert.Contains(t, importedTF, "aws.imported_us_east_1")
+	assert.Contains(t, importedTF, "aws.imported_us_west_2")
+	// The plain `aws.imported` (no suffix) must NOT be referenced by any
+	// resource in multi-region mode — every AWS resource carries a region.
+	assert.NotRegexp(t, `provider = aws\.imported\b\s`, importedTF,
+		"multi-region resources must use region-suffixed aliases, not plain aws.imported")
+}
+
 // TestGenerateProvidersTF_WithImportedGCP mirrors the AWS case for GCP and
 // asserts ProvidersUsed records the gcp key. The google-beta.imported
 // block is emitted unconditionally for every GCP compose (#562), so its

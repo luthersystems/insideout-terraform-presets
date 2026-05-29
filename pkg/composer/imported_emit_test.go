@@ -710,6 +710,36 @@ func TestProviderAliasFor(t *testing.T) {
 	assert.Equal(t, "aws.imported", providerAliasFor("unknown"))
 }
 
+func TestRegionAlias(t *testing.T) {
+	t.Parallel()
+	assert.Equal(t, "us_west_2", RegionAlias("us-west-2"))
+	assert.Equal(t, "eu_west_1", RegionAlias("EU-West-1"))
+	assert.Equal(t, "us_east_1", RegionAlias("  us-east-1  "))
+	assert.Equal(t, "", RegionAlias(""))
+}
+
+// TestImportedAWSRegions pins the multi-region detector: it collects the
+// sorted, de-duplicated set of non-empty AWS regions and ignores GCP and
+// region-less resources. len > 1 is the signal both the alias picker and the
+// provider-block generators key off.
+func TestImportedAWSRegions(t *testing.T) {
+	t.Parallel()
+	irs := []imported.ImportedResource{
+		{Identity: imported.ResourceIdentity{Cloud: "aws", Region: "us-west-2"}},
+		{Identity: imported.ResourceIdentity{Cloud: "aws", Region: "us-east-1"}},
+		{Identity: imported.ResourceIdentity{Cloud: "aws", Region: "us-west-2"}},   // dup
+		{Identity: imported.ResourceIdentity{Cloud: "aws", Region: ""}},            // region-less global
+		{Identity: imported.ResourceIdentity{Cloud: "gcp", Region: "us-central1"}}, // not AWS
+	}
+	assert.Equal(t, []string{"us-east-1", "us-west-2"}, ImportedAWSRegions(irs))
+
+	// Single region and empty are not multi-region.
+	assert.Len(t, ImportedAWSRegions([]imported.ImportedResource{
+		{Identity: imported.ResourceIdentity{Cloud: "aws", Region: "us-east-1"}},
+	}), 1)
+	assert.Empty(t, ImportedAWSRegions(nil))
+}
+
 // TestProviderAliasForResource pins the per-type routing decision for
 // imported GCP resources. The three API Gateway types live in
 // hashicorp/google-beta and must emit `provider = google-beta.imported`
@@ -721,11 +751,13 @@ func TestProviderAliasFor(t *testing.T) {
 func TestProviderAliasForResource(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
-		name      string
-		cloud     string
-		idCloud   string // Identity.Cloud field; "" means leave zero
-		tfType    string
-		wantAlias string
+		name       string
+		cloud      string
+		idCloud    string // Identity.Cloud field; "" means leave zero
+		idRegion   string // Identity.Region field; "" means leave zero
+		tfType     string
+		awsRegions []string // distinct AWS regions in the batch
+		wantAlias  string
 	}{
 		{name: "google_pubsub_topic routes to google.imported", cloud: "gcp", tfType: "google_pubsub_topic", wantAlias: "google.imported"},
 		{name: "google_api_gateway_api routes to google-beta.imported", cloud: "gcp", tfType: "google_api_gateway_api", wantAlias: "google-beta.imported"},
@@ -739,12 +771,23 @@ func TestProviderAliasForResource(t *testing.T) {
 		// set both fields to the same value. Force them to disagree.
 		{name: "cloud arg dominates over id.Cloud for AWS-typed in gcp scope", cloud: "gcp", idCloud: "aws", tfType: "aws_sqs_queue", wantAlias: "google.imported"},
 		{name: "cloud arg dominates over id.Cloud for GCP-typed in aws scope", cloud: "aws", idCloud: "gcp", tfType: "google_api_gateway_api", wantAlias: "aws.imported"},
+		// Single-region AWS (one region in the batch) keeps the plain
+		// alias — no suffix — so output stays byte-identical to before.
+		{name: "single-region AWS keeps aws.imported", cloud: "aws", idRegion: "us-east-1", tfType: "aws_sqs_queue", awsRegions: []string{"us-east-1"}, wantAlias: "aws.imported"},
+		// Multi-region AWS: each resource routes through its region's
+		// suffixed alias (hyphens → underscores).
+		{name: "multi-region AWS routes to region-suffixed alias", cloud: "aws", idRegion: "us-west-2", tfType: "aws_sqs_queue", awsRegions: []string{"us-east-1", "us-west-2"}, wantAlias: "aws.imported_us_west_2"},
+		{name: "multi-region AWS other region", cloud: "aws", idRegion: "us-east-1", tfType: "aws_sqs_queue", awsRegions: []string{"us-east-1", "us-west-2"}, wantAlias: "aws.imported_us_east_1"},
+		// Region-less AWS resource (e.g. IAM global) in a multi-region
+		// batch falls back to the first region's alias — a block that
+		// is always declared.
+		{name: "multi-region region-less AWS falls back to first region alias", cloud: "aws", idRegion: "", tfType: "aws_iam_role", awsRegions: []string{"eu-west-1", "us-east-1"}, wantAlias: "aws.imported_eu_west_1"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			id := imported.ResourceIdentity{Type: tc.tfType, Cloud: tc.idCloud}
-			got := providerAliasForResource(tc.cloud, id)
+			id := imported.ResourceIdentity{Type: tc.tfType, Cloud: tc.idCloud, Region: tc.idRegion}
+			got := providerAliasForResource(tc.cloud, id, tc.awsRegions)
 			assert.Equal(t, tc.wantAlias, got)
 		})
 	}
