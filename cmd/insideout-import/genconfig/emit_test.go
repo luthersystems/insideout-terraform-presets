@@ -17,7 +17,7 @@ func TestEmitImports_HappyPath(t *testing.T) {
 		{Identity: imported.ResourceIdentity{Type: "aws_sqs_queue", Address: "aws_sqs_queue.alpha", Region: "us-east-1", ImportID: "https://example/alpha"}},
 		{Identity: imported.ResourceIdentity{Type: "aws_dynamodb_table", Address: "aws_dynamodb_table.bravo", Region: "us-east-1", ImportID: "bravo"}},
 	}
-	if err := emitImports(dir, resources, ProviderAWS, "us-east-1"); err != nil {
+	if err := emitImports(dir, resources); err != nil {
 		t.Fatal(err)
 	}
 	body, err := os.ReadFile(filepath.Join(dir, importsFile))
@@ -47,7 +47,7 @@ func TestEmitImports_DoesNotAppendRegionForGlobalAWSResource(t *testing.T) {
 			Region:   "us-east-1",
 			ImportID: "arn:aws:iam::123456789012:policy/readonly",
 		}},
-	}, ProviderAWS, "us-east-1"); err != nil {
+	}); err != nil {
 		t.Fatal(err)
 	}
 	body, err := os.ReadFile(filepath.Join(dir, importsFile))
@@ -60,12 +60,11 @@ func TestEmitImports_DoesNotAppendRegionForGlobalAWSResource(t *testing.T) {
 	}
 }
 
-// TestEmitImports_NoProviderAlias pins that a SINGLE-region scratch stack
-// does NOT emit `provider = aws.<alias>` on the import block — the default
-// provider handles every resource, so adding an alias would reference a
-// provider config that doesn't exist. (Multi-region stacks DO emit the
-// provider arg for non-primary regions; see
-// TestEmitImports_MultiRegionProviderAlias.)
+// TestEmitImports_NoProviderAlias pins that the scratch stack NEVER emits a
+// `provider = aws.<alias>` arg on import blocks. `terraform plan
+// -generate-config-out` silently skips aliased-provider imports, so multi-
+// region is handled by genconfig.Run running one single-region pass per region
+// (each with its own default provider) — not by aliasing here (#1839).
 //
 // The regex matches only the `provider = ...` attribute form, not arbitrary
 // substrings — a future header comment that mentions "provider" must not
@@ -75,7 +74,7 @@ func TestEmitImports_NoProviderAlias(t *testing.T) {
 	dir := t.TempDir()
 	if err := emitImports(dir, []imported.ImportedResource{
 		{Identity: imported.ResourceIdentity{Address: "aws_sqs_queue.x", ImportID: "id"}},
-	}, ProviderAWS, ""); err != nil {
+	}); err != nil {
 		t.Fatal(err)
 	}
 	body, _ := os.ReadFile(filepath.Join(dir, importsFile))
@@ -104,80 +103,12 @@ func TestEmitImports_RejectsBadAddress(t *testing.T) {
 			dir := t.TempDir()
 			err := emitImports(dir, []imported.ImportedResource{
 				{Identity: imported.ResourceIdentity{Address: addr, ImportID: "x"}},
-			}, ProviderAWS, "")
+			})
 			if err == nil {
 				t.Errorf("expected error for address %q", addr)
 			}
 		})
 	}
-}
-
-// TestEmitImports_MultiRegionProviderAlias pins the multi-region scratch
-// stack: a resource whose region differs from the primary region gets a
-// `provider = aws.<region_alias>` meta-argument so generate-config-out reads
-// it through that region's aliased provider; a resource in the primary region
-// (and region-less globals) keeps the default provider (no provider arg).
-func TestEmitImports_MultiRegionProviderAlias(t *testing.T) {
-	t.Parallel()
-	dir := t.TempDir()
-	resources := []imported.ImportedResource{
-		{Identity: imported.ResourceIdentity{Type: "aws_sqs_queue", Address: "aws_sqs_queue.east", Region: "us-east-1", ImportID: "east"}},
-		{Identity: imported.ResourceIdentity{Type: "aws_sqs_queue", Address: "aws_sqs_queue.west", Region: "us-west-2", ImportID: "west"}},
-		{Identity: imported.ResourceIdentity{Type: "aws_iam_role", Address: "aws_iam_role.global", Region: "", ImportID: "global"}},
-	}
-	if err := emitImports(dir, resources, ProviderAWS, "us-east-1"); err != nil {
-		t.Fatal(err)
-	}
-	got := mustReadFile(t, filepath.Join(dir, importsFile))
-	// The non-primary (us-west-2) resource routes through the aliased provider.
-	if want := "provider = aws.us_west_2"; !strings.Contains(got, want) {
-		t.Errorf("imports.tf missing %q\n--- got ---\n%s", want, got)
-	}
-	// The primary-region resource and the region-less global must NOT carry a
-	// provider arg — exactly one `provider = ...` line for three resources.
-	if n := strings.Count(got, "provider ="); n != 1 {
-		t.Errorf("expected exactly one provider= line (only the non-primary resource), got %d\n--- got ---\n%s", n, got)
-	}
-}
-
-// TestEmitProviders_MultiRegion pins that the scratch providers.tf declares
-// the default provider (primary region) plus one aliased provider per
-// non-primary region listed in AliasRegions.
-func TestEmitProviders_MultiRegion(t *testing.T) {
-	t.Parallel()
-	dir := t.TempDir()
-	if err := emitProviders(dir, providerEmitOptions{
-		Provider:     ProviderAWS,
-		Region:       "us-east-1",
-		AliasRegions: []string{"us-west-2", "eu-west-1"},
-	}); err != nil {
-		t.Fatal(err)
-	}
-	got := mustReadFile(t, filepath.Join(dir, providersFile))
-	for _, want := range []string{
-		`region = "us-east-1"`, // default provider
-		`alias  = "us_west_2"`, // aliased non-primary
-		`region = "us-west-2"`,
-		`alias  = "eu_west_1"`,
-		`region = "eu-west-1"`,
-	} {
-		if !strings.Contains(got, want) {
-			t.Errorf("providers.tf missing %q\n--- got ---\n%s", want, got)
-		}
-	}
-	// Three provider blocks: default + 2 aliased.
-	if n := strings.Count(got, `provider "aws"`); n != 3 {
-		t.Errorf("expected 3 aws provider blocks (default + 2 aliased), got %d\n--- got ---\n%s", n, got)
-	}
-}
-
-func mustReadFile(t *testing.T, path string) string {
-	t.Helper()
-	b, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return string(b)
 }
 
 func TestEmitProviders_HappyPath(t *testing.T) {

@@ -9,10 +9,13 @@
 package genconfig
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
+	"strings"
 
 	"github.com/luthersystems/insideout-terraform-presets/pkg/composer/imported"
 )
@@ -121,9 +124,6 @@ func Run(ctx context.Context, opts Options, resources []imported.ImportedResourc
 		return nil, fmt.Errorf("genconfig: no resources to generate; nothing to do")
 	}
 
-	if err := os.MkdirAll(opts.Workdir, 0o755); err != nil {
-		return nil, fmt.Errorf("mkdir workdir: %w", err)
-	}
 	// terraform-exec runs the binary inside Workdir, so a relative
 	// generated-config-out path is resolved relative to Workdir — passing
 	// the same relative path twice (caller's CWD + workdir) produces a
@@ -135,13 +135,120 @@ func Run(ctx context.Context, opts Options, resources []imported.ImportedResourc
 	}
 	opts.Workdir = absWorkdir
 
-	// Distinct non-primary AWS regions in THIS resource set drive the
-	// aliased provider blocks + import-block provider args. Computed from
-	// the resources arg (not Options) so each depchase iteration's expanded
-	// set re-derives its own region span. Empty for single-region stacks.
-	aliasRegions := awsScratchAliasRegions(resources, opts.Region)
+	// Multi-region (AWS only): `terraform plan -generate-config-out` does NOT
+	// emit config for import blocks bound to an aliased provider — it silently
+	// skips them — so a single scratch stack with per-region provider aliases
+	// drops every non-primary region (the #1839 regression observed live:
+	// us-east-1 imported, us-west-2/eu-west-1 dropped to ~zero). Instead split
+	// the set into one single-region pass per distinct region, each in its own
+	// workdir with its own *default* provider (which generate-config-out
+	// handles), and merge the results. GCP import is project-global and never
+	// splits. The final imported.tf / providers-imported.tf the job emits
+	// downstream still carry per-region aliases — that path uses plain
+	// `terraform plan`, which handles aliased providers fine.
+	if provider == ProviderAWS {
+		if groups := groupResourcesByRegion(resources, opts.Region); len(groups) > 1 {
+			return runMultiRegion(ctx, opts, groups)
+		}
+	}
+	return runSingleRegion(ctx, opts, resources)
+}
 
-	if err := emitImports(opts.Workdir, resources, provider, opts.Region); err != nil {
+// regionGroup is one region's slice of a multi-region import set.
+type regionGroup struct {
+	region    string
+	resources []imported.ImportedResource
+}
+
+// groupResourcesByRegion partitions resources by AWS region, folding
+// region-less globals (IAM/Route53/CloudFront) into the primaryRegion group.
+// Returns groups sorted by region for deterministic subdir ordering. A set
+// that resolves to a single region yields one group (the caller then takes
+// the cheaper single-pass path).
+func groupResourcesByRegion(resources []imported.ImportedResource, primaryRegion string) []regionGroup {
+	byRegion := map[string][]imported.ImportedResource{}
+	for _, r := range resources {
+		region := strings.TrimSpace(r.Identity.Region)
+		if region == "" {
+			region = primaryRegion
+		}
+		byRegion[region] = append(byRegion[region], r)
+	}
+	regions := make([]string, 0, len(byRegion))
+	for region := range byRegion {
+		regions = append(regions, region)
+	}
+	sort.Strings(regions)
+	groups := make([]regionGroup, 0, len(regions))
+	for _, region := range regions {
+		groups = append(groups, regionGroup{region: region, resources: byRegion[region]})
+	}
+	return groups
+}
+
+// runMultiRegion runs one single-region genconfig pass per region group (each
+// in a region-<alias> subdir with its own default provider) and merges the
+// per-region resources. A combined generated.tf is written at the top level
+// for the debug artifact; the authoritative per-region configs live in the
+// subdirs.
+func runMultiRegion(ctx context.Context, opts Options, groups []regionGroup) (*Result, error) {
+	if err := os.MkdirAll(opts.Workdir, 0o755); err != nil {
+		return nil, fmt.Errorf("mkdir workdir: %w", err)
+	}
+	merged := make([]imported.ImportedResource, 0)
+	subdirs := make([]string, 0, len(groups))
+	for _, g := range groups {
+		sub := opts
+		sub.Region = g.region
+		sub.Workdir = filepath.Join(opts.Workdir, "region-"+regionAlias(g.region))
+		res, err := runSingleRegion(ctx, sub, g.resources)
+		if err != nil {
+			return nil, fmt.Errorf("genconfig region %s: %w", g.region, err)
+		}
+		merged = append(merged, res.Resources...)
+		subdirs = append(subdirs, sub.Workdir)
+	}
+	genPath := filepath.Join(opts.Workdir, generatedFile)
+	if err := writeMergedGenerated(genPath, subdirs); err != nil {
+		// Best-effort: the merged top-level file is only for the debug
+		// artifact; the real per-region configs are in the subdirs.
+		fmt.Fprintf(os.Stderr, "genconfig: WARN: merged generated.tf: %v\n", err)
+	}
+	return &Result{GeneratedPath: genPath, Resources: merged}, nil
+}
+
+// writeMergedGenerated concatenates each region subdir's generated.tf into one
+// file (region-headed) for traceability / downstream artifact capture. A
+// region whose generated.tf is absent (e.g. all its imports were orphan-pruned)
+// is skipped. Errors only if nothing could be assembled.
+func writeMergedGenerated(destPath string, subdirs []string) error {
+	var buf bytes.Buffer
+	for _, d := range subdirs {
+		b, err := os.ReadFile(filepath.Join(d, generatedFile))
+		if err != nil {
+			continue
+		}
+		fmt.Fprintf(&buf, "# ===== %s =====\n", filepath.Base(d))
+		buf.Write(b)
+		buf.WriteString("\n")
+	}
+	if buf.Len() == 0 {
+		return fmt.Errorf("no per-region generated.tf produced")
+	}
+	return os.WriteFile(destPath, buf.Bytes(), 0o644)
+}
+
+// runSingleRegion is the single-region genconfig core: emit imports.tf +
+// providers.tf (one default provider), terraform init, plan -generate-config-out,
+// schema cleanup, fixups, orphan-prune, cross-ref, validate, attribute extract.
+// opts.Workdir must already be absolute (Run resolves it).
+func runSingleRegion(ctx context.Context, opts Options, resources []imported.ImportedResource) (*Result, error) {
+	provider := providerOrDefault(opts.Provider)
+	if err := os.MkdirAll(opts.Workdir, 0o755); err != nil {
+		return nil, fmt.Errorf("mkdir workdir: %w", err)
+	}
+
+	if err := emitImports(opts.Workdir, resources); err != nil {
 		return nil, fmt.Errorf("emit imports.tf: %w", err)
 	}
 	if err := emitProviders(opts.Workdir, providerEmitOptions{
@@ -153,7 +260,6 @@ func Run(ctx context.Context, opts Options, resources []imported.ImportedResourc
 			RoleARN:    opts.AWSRoleARN,
 			ExternalID: opts.AWSExternalID,
 		},
-		AliasRegions: aliasRegions,
 	}); err != nil {
 		return nil, fmt.Errorf("emit providers.tf: %w", err)
 	}
