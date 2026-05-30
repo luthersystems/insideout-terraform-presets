@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"slices"
@@ -97,6 +98,15 @@ type Options struct {
 	MaxIterations int
 	Discoverer    Discoverer
 	Pipeline      PipelineFns
+
+	// Stdout, when non-nil, receives a concise per-iteration progress
+	// line ("depchase: iteration k: discovered N resource(s)…") so a
+	// long-running caller — the Mars reverse-import job — can surface live
+	// progress through the chase loop instead of going silent while the
+	// nested genconfig/driftfix re-runs execute. Nil discards progress
+	// (the historical behavior). The nested terraform subprocess output
+	// is streamed separately by the Pipeline closures the caller wires.
+	Stdout io.Writer
 }
 
 // Result is what Run hands back. Resources is the final, expanded
@@ -297,6 +307,8 @@ func Run(ctx context.Context, opts Options, resources []imported.ImportedResourc
 			return res, nil
 		}
 
+		progressf(opts.Stdout, "depchase: iteration %d: discovered %d dependency resource(s), regenerating config…\n", iter, len(added))
+
 		res.Resources = append(res.Resources, added...)
 
 		gcRes, err := opts.Pipeline.RunGenconfig(ctx, res.Resources)
@@ -473,6 +485,16 @@ func addWarning(res *Result, seen map[string]struct{}, msg string) {
 	}
 	seen[msg] = struct{}{}
 	res.Warnings = append(res.Warnings, msg)
+}
+
+// progressf writes a human-readable progress line to w when w is
+// non-nil. Best-effort: a write error to a progress sink must never
+// affect the chase result, so the error is intentionally ignored.
+func progressf(w io.Writer, format string, args ...any) {
+	if w == nil {
+		return
+	}
+	fmt.Fprintf(w, format, args...)
 }
 
 // emitUnresolvedAsWarnings is called when the loop detects a stable

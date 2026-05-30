@@ -1,6 +1,7 @@
 package reverseimport
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"os"
@@ -67,6 +68,99 @@ func TestRunEmitsArtifactsAndImportSummary(t *testing.T) {
 	}
 	if !strings.Contains(string(importedTF), `resource "aws_sqs_queue" "orders"`) {
 		t.Fatalf("imported.tf missing queue resource:\n%s", importedTF)
+	}
+}
+
+// TestRunStreamsPhaseProgressToStdout is the regression guard for
+// luthersystems/mars#178: the reverse-import engine went silent through its
+// pre-plan phases, so the import wizard's live log console stalled until the
+// job ended. Run must now emit a human-readable progress line at each major
+// phase to the Options.Stdout writer the Mars job supplies.
+func TestRunStreamsPhaseProgressToStdout(t *testing.T) {
+	dir := t.TempDir()
+	req := job.Request{
+		Version: job.Version,
+		Resources: []job.ResourceSpec{{
+			Identity: imported.ResourceIdentity{
+				Cloud:    "aws",
+				Type:     "aws_sqs_queue",
+				Address:  "aws_sqs_queue.orders",
+				ImportID: "https://sqs.us-east-1.amazonaws.com/123/orders",
+				Region:   "us-east-1",
+			},
+			Tier:   imported.TierImportedFlat,
+			Source: imported.SourceImporter,
+		}},
+	}
+
+	var progress bytes.Buffer
+	_, err := Run(context.Background(), req, Options{
+		OutputDir:    dir,
+		SkipDepChase: true,
+		Stdout:       &progress,
+		deps: deps{
+			runGenconfig: fakeGenconfig,
+			runDriftfix:  fakeDriftfix,
+			runDepChase:  fakeDepChase,
+			tf:           fakeTerraformRunner{},
+		},
+	})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+
+	got := progress.String()
+	for _, want := range []string{
+		"expanding selection closure",
+		"generating terraform config",
+		"running driftfix",
+		"terraform init",
+		"terraform validate",
+		"terraform plan",
+		"plan complete",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("progress stream missing %q; got:\n%s", want, got)
+		}
+	}
+}
+
+// TestRunWithoutStdoutStaysSilent confirms the nil-Stdout default path is
+// inert: a caller (or existing test) that supplies no progress writer must
+// not panic and must not write to any global stream. The run still succeeds
+// and produces its artifacts.
+func TestRunWithoutStdoutStaysSilent(t *testing.T) {
+	dir := t.TempDir()
+	req := job.Request{
+		Version: job.Version,
+		Resources: []job.ResourceSpec{{
+			Identity: imported.ResourceIdentity{
+				Cloud:    "aws",
+				Type:     "aws_sqs_queue",
+				Address:  "aws_sqs_queue.orders",
+				ImportID: "https://sqs.us-east-1.amazonaws.com/123/orders",
+				Region:   "us-east-1",
+			},
+			Tier:   imported.TierImportedFlat,
+			Source: imported.SourceImporter,
+		}},
+	}
+
+	result, err := Run(context.Background(), req, Options{
+		OutputDir:    dir,
+		SkipDepChase: true,
+		deps: deps{
+			runGenconfig: fakeGenconfig,
+			runDriftfix:  fakeDriftfix,
+			runDepChase:  fakeDepChase,
+			tf:           fakeTerraformRunner{},
+		},
+	})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if result.Status != job.StatusSucceeded {
+		t.Fatalf("Status = %q, want %q", result.Status, job.StatusSucceeded)
 	}
 }
 

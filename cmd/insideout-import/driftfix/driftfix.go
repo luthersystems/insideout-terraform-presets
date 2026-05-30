@@ -14,6 +14,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -41,6 +42,14 @@ type Options struct {
 	MaxIterations int
 	// Runner is optional; nil means "construct an execRunner from PATH."
 	Runner terraformRunner
+
+	// Stdout, when non-nil, receives the live stdout/stderr of the
+	// terraform subprocess (the per-iteration plan + validate) so a
+	// long-running caller — the Mars reverse-import job — can stream
+	// progress instead of going silent through the drift loop. Nil means
+	// "discard subprocess output" (the historical behavior). Ignored when
+	// Runner is injected.
+	Stdout io.Writer
 }
 
 // Result is what the orchestrator hands back to the caller. Iterations
@@ -79,7 +88,7 @@ func Run(ctx context.Context, opts Options) (*Result, error) {
 
 	runner := opts.Runner
 	if runner == nil {
-		r, err := newExecRunner(opts.Workdir)
+		r, err := newExecRunner(opts.Workdir, opts.Stdout)
 		if err != nil {
 			return nil, err
 		}

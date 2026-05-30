@@ -185,6 +185,42 @@ resource "aws_iam_role" "io_foo_handler_role" {
 	}
 }
 
+// TestRun_StreamsIterationProgressToStdout is part of the
+// luthersystems/mars#178 fix: the chase loop must surface a per-iteration
+// progress line to Options.Stdout so the Mars reverse-import job's log
+// console shows live progress while the nested genconfig/driftfix re-runs
+// execute. A nil Stdout (the default) emits nothing.
+func TestRun_StreamsIterationProgressToStdout(t *testing.T) {
+	t.Parallel()
+	roleARN := "arn:aws:iam::123:role/io-foo-handler-role"
+	gen0 := `
+resource "aws_lambda_function" "h" {
+  function_name = "io-foo-handler"
+  role          = "` + roleARN + `"
+}`
+	gen1 := gen0 + `
+resource "aws_iam_role" "io_foo_handler_role" {
+  name = "io-foo-handler-role"
+}`
+	dir := writeGen(t, gen0)
+	role := newRes("aws_iam_role.io_foo_handler_role", "io-foo-handler-role", roleARN, "aws_iam_role")
+
+	disc := &fakeDiscoverer{byID: map[string]imported.ImportedResource{
+		"aws_iam_role|" + roleARN: role,
+	}}
+	p := &scriptedPipeline{t: t, workdir: dir, generatedTF: []string{gen1}}
+
+	var progress strings.Builder
+	if _, err := Run(context.Background(), Options{
+		Workdir: dir, Discoverer: disc, Pipeline: p.fns(), Stdout: &progress,
+	}, nil); err != nil {
+		t.Fatalf("err=%v", err)
+	}
+	if got := progress.String(); !strings.Contains(got, "iteration 1") || !strings.Contains(got, "discovered 1 dependency resource") {
+		t.Errorf("progress stream missing iteration line; got:\n%s", got)
+	}
+}
+
 func TestRun_DiscoveredResourceDroppedByPipelineWarnsAndConverges(t *testing.T) {
 	t.Parallel()
 	roleARN := "arn:aws:iam::123:role/io-foo-handler-role"

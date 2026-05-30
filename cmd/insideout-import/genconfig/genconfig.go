@@ -12,6 +12,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"sort"
@@ -62,6 +63,14 @@ type Options struct {
 	// out to the `terraform` binary on PATH. Tests inject a fake here to
 	// avoid the binary dependency.
 	Runner terraformRunner
+
+	// Stdout, when non-nil, receives the live stdout/stderr of the
+	// terraform subprocess (init, plan -generate-config-out, validate)
+	// so a long-running caller — the Mars reverse-import job — can stream
+	// progress to its own log console instead of going silent through
+	// this phase. Nil means "discard subprocess output" (the historical
+	// behavior). Ignored when Runner is injected.
+	Stdout io.Writer
 }
 
 const (
@@ -266,7 +275,7 @@ func runSingleRegion(ctx context.Context, opts Options, resources []imported.Imp
 
 	runner := opts.Runner
 	if runner == nil {
-		r, err := newExecRunner(opts.Workdir)
+		r, err := newExecRunner(opts.Workdir, opts.Stdout)
 		if err != nil {
 			return nil, err
 		}

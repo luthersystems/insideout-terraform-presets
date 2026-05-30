@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 )
@@ -17,6 +18,10 @@ type terraformRunner interface {
 
 type execTerraformRunner struct {
 	binary string
+	// stdout receives the live stdout of the streaming commands (init,
+	// plan) and the stderr of every command. nil falls back to os.Stdout
+	// / os.Stderr so a zero-value runner keeps the historical behavior.
+	stdout io.Writer
 }
 
 func (r execTerraformRunner) bin() string {
@@ -26,6 +31,16 @@ func (r execTerraformRunner) bin() string {
 	return "terraform"
 }
 
+// outW is the destination for streamed stdout/stderr. nil falls back to
+// the process stderr so a zero-value runner (and the historical
+// os.Stdout/os.Stderr behavior) still surfaces output somewhere.
+func (r execTerraformRunner) outW() io.Writer {
+	if r.stdout != nil {
+		return r.stdout
+	}
+	return os.Stderr
+}
+
 func (r execTerraformRunner) Init(ctx context.Context, dir string) error {
 	return r.run(ctx, dir, "init", "-input=false", "-no-color")
 }
@@ -33,7 +48,9 @@ func (r execTerraformRunner) Init(ctx context.Context, dir string) error {
 func (r execTerraformRunner) Validate(ctx context.Context, dir string) ([]byte, error) {
 	cmd := exec.CommandContext(ctx, r.bin(), "validate", "-json")
 	cmd.Dir = dir
-	cmd.Stderr = os.Stderr
+	// stdout is captured as the validate.json artifact, so only stderr
+	// streams to the progress sink here.
+	cmd.Stderr = r.outW()
 	cmd.Env = append(os.Environ(), "TF_IN_AUTOMATION=1")
 	out, err := cmd.Output()
 	if err != nil {
@@ -57,7 +74,9 @@ func (r execTerraformRunner) Plan(ctx context.Context, dir, planPath string) err
 func (r execTerraformRunner) ShowPlanJSON(ctx context.Context, dir, planPath string) ([]byte, error) {
 	cmd := exec.CommandContext(ctx, r.bin(), "show", "-json", planPath)
 	cmd.Dir = dir
-	cmd.Stderr = os.Stderr
+	// stdout is captured as the tfplan.json artifact, so only stderr
+	// streams to the progress sink here.
+	cmd.Stderr = r.outW()
 	cmd.Env = append(os.Environ(), "TF_IN_AUTOMATION=1")
 	out, err := cmd.Output()
 	if err != nil {
@@ -69,8 +88,8 @@ func (r execTerraformRunner) ShowPlanJSON(ctx context.Context, dir, planPath str
 func (r execTerraformRunner) run(ctx context.Context, dir string, args ...string) error {
 	cmd := exec.CommandContext(ctx, r.bin(), args...)
 	cmd.Dir = dir
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
+	cmd.Stdout = r.outW()
+	cmd.Stderr = r.outW()
 	cmd.Env = append(os.Environ(), "TF_IN_AUTOMATION=1")
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("%s %v: %w", r.bin(), args, err)

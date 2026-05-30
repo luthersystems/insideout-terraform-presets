@@ -4,6 +4,8 @@ package reverseimport
 
 import (
 	"context"
+	"fmt"
+	"io"
 	"time"
 
 	"github.com/luthersystems/insideout-terraform-presets/cmd/insideout-import/depchase"
@@ -64,6 +66,17 @@ type Options struct {
 	Discoverer            Discoverer
 	ClosureDiscoverer     ClosureDiscoverer
 
+	// Stdout receives continuous human-readable progress as Run works
+	// through its phases — provider readback, genconfig, driftfix,
+	// dep-chase, and the final terraform init/validate/plan — plus the
+	// live stdout/stderr of the terraform subprocesses those phases
+	// drive. The Mars reverse-import job points this at its own stdout so
+	// Oracle's follow=1 stream (and the InsideOut import wizard's log
+	// console) shows live progress for the whole run rather than just the
+	// final plan. Nil defaults to io.Discard in withDefaults, so existing
+	// callers and tests stay silent and unaffected.
+	Stdout io.Writer
+
 	deps deps
 }
 
@@ -74,24 +87,43 @@ type deps struct {
 	tf           terraformRunner
 }
 
-func defaultDeps(terraformBinary string) deps {
+func defaultDeps(terraformBinary string, stdout io.Writer) deps {
 	return deps{
 		runGenconfig: genconfig.Run,
 		runDriftfix:  driftfix.Run,
 		runDepChase:  depchase.Run,
-		tf:           execTerraformRunner{binary: terraformBinary},
+		tf:           execTerraformRunner{binary: terraformBinary, stdout: stdout},
 	}
+}
+
+// progressf writes a human-readable phase-progress line to o.Stdout.
+// withDefaults guarantees o.Stdout is non-nil (io.Discard at minimum), so
+// callers after withDefaults never need a nil check; the guard here keeps
+// a zero-value Options safe too. Best-effort: a write error to the
+// progress sink must never affect the run result, so it is ignored.
+func (o Options) progressf(format string, args ...any) {
+	if o.Stdout == nil {
+		return
+	}
+	fmt.Fprintf(o.Stdout, format, args...)
 }
 
 func (o Options) withDefaults() Options {
 	if o.MaxDepChaseIterations <= 0 {
 		o.MaxDepChaseIterations = depchase.DefaultMaxIterations
 	}
+	// Default the progress sink to io.Discard so progressf and the
+	// terraform subprocess streaming are always safe to call without a
+	// nil check, and existing callers/tests that pass no writer stay
+	// silent.
+	if o.Stdout == nil {
+		o.Stdout = io.Discard
+	}
 	if o.deps.runGenconfig == nil ||
 		o.deps.runDriftfix == nil ||
 		o.deps.runDepChase == nil ||
 		o.deps.tf == nil {
-		o.deps = defaultDeps(o.TerraformBinary)
+		o.deps = defaultDeps(o.TerraformBinary, o.Stdout)
 	}
 	return o
 }
