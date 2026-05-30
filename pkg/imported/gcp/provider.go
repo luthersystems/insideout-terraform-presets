@@ -7,7 +7,6 @@ import (
 	"slices"
 
 	"github.com/luthersystems/insideout-terraform-presets/cmd/insideout-import/gcpdiscover"
-	"github.com/luthersystems/insideout-terraform-presets/cmd/insideout-import/progress"
 	"github.com/luthersystems/insideout-terraform-presets/pkg/composer/imported"
 	"github.com/luthersystems/insideout-terraform-presets/pkg/composer/imported/policy"
 	driftimp "github.com/luthersystems/insideout-terraform-presets/pkg/drift/imported"
@@ -133,6 +132,12 @@ func (p *Provider) CanonicalAddress(identity *imported.ResourceIdentity) string 
 // the real GCP project ID lives on the GCPDiscoverer itself, set at
 // construction time). opts.ProjectID is ignored when the underlying
 // discoverer was constructed with one — see NewGCPDiscoverer.
+//
+// Per-type progress: when opts.Progress is non-nil, the Emitter handed
+// to DiscoverTypes is a bridge (imp.NewProgressEmitter) that forwards
+// one per-Terraform-type completion event to opts.Progress with a
+// monotonic N-of-total count (#699). A nil sink resolves to
+// progress.NopEmitter{}, byte-for-byte the pre-#699 behavior.
 func (p *Provider) Discover(ctx context.Context, types []string, clients imp.Clients, opts imp.DiscoverOpts) ([]imported.ImportedResource, error) {
 	if p.d == nil {
 		return nil, imp.ErrEnrichClientUnavailable
@@ -141,7 +146,7 @@ func (p *Provider) Discover(ctx context.Context, types []string, clients imp.Cli
 		Project:      opts.Project,
 		Regions:      opts.Regions,
 		TagSelectors: toGCPTagSelectors(opts.TagSelectors),
-		Emitter:      progress.NopEmitter{},
+		Emitter:      imp.NewProgressEmitter(opts.Progress),
 	}
 	return p.d.DiscoverTypes(ctx, types, args)
 }
@@ -158,7 +163,14 @@ func toGCPTagSelectors(in []imp.TagSelector) []gcpdiscover.TagSelector {
 }
 
 // EnrichAttributes delegates to GCPDiscoverer.EnrichAttributes.
-func (p *Provider) EnrichAttributes(ctx context.Context, irs []imported.ImportedResource, clients imp.Clients) error {
+//
+// opts is variadic for back-compat (three-argument callers are
+// unaffected). When the first EnrichOpts carries a non-nil Progress, a
+// per-type bridge (imp.NewProgressEmitter) forwards one completion event
+// per enriched Terraform type with Phase="enrich" (#699); otherwise the
+// bridge resolves to progress.NopEmitter{} — byte-for-byte the pre-#699
+// behavior.
+func (p *Provider) EnrichAttributes(ctx context.Context, irs []imported.ImportedResource, clients imp.Clients, opts ...imp.EnrichOpts) error {
 	if p.d == nil {
 		return imp.ErrEnrichClientUnavailable
 	}
@@ -166,7 +178,11 @@ func (p *Provider) EnrichAttributes(ctx context.Context, irs []imported.Imported
 	if err != nil {
 		return err
 	}
-	return p.d.EnrichAttributes(ctx, irs, gcp, progress.NopEmitter{})
+	var sink func(imp.DiscoverProgress)
+	if len(opts) > 0 {
+		sink = opts[0].Progress
+	}
+	return p.d.EnrichAttributes(ctx, irs, gcp, imp.NewProgressEmitter(sink))
 }
 
 // EnrichByID delegates to GCPDiscoverer.EnrichByID, mapping the

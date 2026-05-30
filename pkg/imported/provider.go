@@ -75,6 +75,11 @@ type Provider interface {
 	// ImportedResource per matched cloud resource, with
 	// Identity populated and Tier=TierImportedFlat,
 	// Source=SourceImporter.
+	//
+	// When opts.Progress is non-nil it fires once per Terraform type
+	// as that type's resources finish discovering, carrying a running
+	// N-of-total type count (#699); a nil sink is byte-for-byte the
+	// pre-existing behavior.
 	Discover(ctx context.Context, types []string, clients Clients, opts DiscoverOpts) ([]composerimported.ImportedResource, error)
 
 	// EnrichAttributes populates ir.Attrs in place for every
@@ -84,7 +89,13 @@ type Provider interface {
 	// joined error; ErrEnrichClientUnavailable failures are
 	// downgraded internally (the per-cloud impls surface them as
 	// progress warnings without failing the batch).
-	EnrichAttributes(ctx context.Context, irs []composerimported.ImportedResource, clients Clients) error
+	//
+	// opts is variadic for back-compat: existing three-argument
+	// callers are unaffected. When the first EnrichOpts carries a
+	// non-nil Progress, it fires once per Terraform type as that
+	// type's resources finish enriching (Phase="enrich"), mirroring
+	// the Discover progress contract (#699).
+	EnrichAttributes(ctx context.Context, irs []composerimported.ImportedResource, clients Clients, opts ...EnrichOpts) error
 
 	// EnrichByID fetches the typed Layer-1 Attrs payload for a
 	// single resource named by identity. Used by the per-IR drift

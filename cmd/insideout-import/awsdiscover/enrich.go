@@ -476,13 +476,50 @@ func (a *AWSDiscoverer) EnrichAttributes(ctx context.Context, irs []imported.Imp
 	}
 	_ = g.Wait()
 
+	// Per-type progress (#699): mirror the discover phase — when the
+	// emitter additionally implements TypeProgressEmitter (the
+	// pkg/imported facade's bridge does; the wire JSONEmitter /
+	// NopEmitter do not), fire one TypeDone per enriched type. idx is
+	// sorted by (type, address), so a type's resources are contiguous;
+	// emit when the type changes and once more after the loop for the
+	// final type. totalEnrichTypes is the count of distinct enrichable
+	// types — the stable N-of-total denominator. Found counts the
+	// resources of the type this pass covered (matching the discover
+	// phase's "resources found"), independent of per-resource enrich
+	// success so the value is deterministic.
+	typeSink, _ := emitter.(progress.TypeProgressEmitter)
+	totalEnrichTypes := 0
+	for pos := range idx {
+		if pos == 0 || irs[idx[pos-1]].Identity.Type != irs[idx[pos]].Identity.Type {
+			totalEnrichTypes++
+		}
+	}
+	emitTypeDone := func(tfType string, found int) {
+		if typeSink != nil {
+			typeSink.TypeDone(progress.TypeProgress{
+				Phase:  "enrich",
+				TFType: tfType,
+				Found:  found,
+				Total:  totalEnrichTypes,
+			})
+		}
+	}
+
 	// Second pass: walk idx in sorted order to inspect results,
 	// emit progress events, and aggregate errors. Doing this serially
 	// — and outside the goroutines — keeps emit order and error-join
 	// order deterministic (progress.Emitter is not documented as
 	// concurrency-safe) and identical to the old serial behaviour.
 	var errs []error
+	var curType string
+	curFound := 0
 	for pos, i := range idx {
+		if t := irs[i].Identity.Type; pos > 0 && t != curType {
+			emitTypeDone(curType, curFound)
+			curFound = 0
+		}
+		curType = irs[i].Identity.Type
+		curFound++
 		err := results[pos]
 		switch {
 		case err == nil:
@@ -520,6 +557,9 @@ func (a *AWSDiscoverer) EnrichAttributes(ctx context.Context, irs []imported.Imp
 			irs[i].Identity.EnrichErrors = append(irs[i].Identity.EnrichErrors, wrapped.Error())
 			errs = append(errs, wrapped)
 		}
+	}
+	if len(idx) > 0 {
+		emitTypeDone(curType, curFound)
 	}
 	if len(errs) > 0 {
 		return errors.Join(errs...)

@@ -34,7 +34,7 @@ func (s *stubProvider) CanonicalAddress(*composerimported.ResourceIdentity) stri
 func (s *stubProvider) Discover(context.Context, []string, imp.Clients, imp.DiscoverOpts) ([]composerimported.ImportedResource, error) {
 	return nil, nil
 }
-func (s *stubProvider) EnrichAttributes(context.Context, []composerimported.ImportedResource, imp.Clients) error {
+func (s *stubProvider) EnrichAttributes(context.Context, []composerimported.ImportedResource, imp.Clients, ...imp.EnrichOpts) error {
 	return nil
 }
 func (s *stubProvider) EnrichByID(context.Context, *composerimported.ResourceIdentity, imp.Clients) (imp.Attrs, error) {

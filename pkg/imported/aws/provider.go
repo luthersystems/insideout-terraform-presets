@@ -7,7 +7,6 @@ import (
 	"slices"
 
 	"github.com/luthersystems/insideout-terraform-presets/cmd/insideout-import/awsdiscover"
-	"github.com/luthersystems/insideout-terraform-presets/cmd/insideout-import/progress"
 	"github.com/luthersystems/insideout-terraform-presets/pkg/composer/imported"
 	"github.com/luthersystems/insideout-terraform-presets/pkg/composer/imported/policy"
 	driftimp "github.com/luthersystems/insideout-terraform-presets/pkg/drift/imported"
@@ -175,12 +174,15 @@ func (p *Provider) CanonicalAddress(identity *imported.ResourceIdentity) string 
 //   - Regions    → Regions
 //   - TagSelectors → TagSelectors (translated to awsdiscover.TagSelector)
 //   - AccountID  → AccountID
+//   - Progress   → a per-type progress bridge on Emitter (#699)
 //
-// Progress emission is suppressed (NopEmitter) — consumers that want
-// streaming progress construct AWSDiscoverer directly and call
-// DiscoverTypes with their own Emitter. The Provider's job is
-// per-type static introspection plus one-shot live calls; streaming
-// belongs on the caller.
+// Per-type progress: when opts.Progress is non-nil, the Emitter handed
+// to DiscoverTypes is a bridge (imp.NewProgressEmitter) that forwards
+// one per-Terraform-type completion event to opts.Progress as the
+// parallel walk lands each type, serialized and with a monotonic
+// N-of-total count. A nil sink resolves to progress.NopEmitter{}, which
+// also disables the per-(service,region) wire stream — so the no-sink
+// path is byte-for-byte the pre-#699 behavior.
 func (p *Provider) Discover(ctx context.Context, types []string, clients imp.Clients, opts imp.DiscoverOpts) ([]imported.ImportedResource, error) {
 	if p.d == nil {
 		return nil, imp.ErrEnrichClientUnavailable
@@ -190,7 +192,7 @@ func (p *Provider) Discover(ctx context.Context, types []string, clients imp.Cli
 		Regions:      opts.Regions,
 		TagSelectors: toAWSTagSelectors(opts.TagSelectors),
 		AccountID:    opts.AccountID,
-		Emitter:      progress.NopEmitter{},
+		Emitter:      imp.NewProgressEmitter(opts.Progress),
 	}
 	return p.d.DiscoverTypes(ctx, types, args)
 }
@@ -211,7 +213,14 @@ func toAWSTagSelectors(in []imp.TagSelector) []awsdiscover.TagSelector {
 // EnrichAttributes delegates to AWSDiscoverer.EnrichAttributes. The
 // clients union must carry clients.AWS as a *Clients; absent bundle
 // returns ErrEnrichClientUnavailable.
-func (p *Provider) EnrichAttributes(ctx context.Context, irs []imported.ImportedResource, clients imp.Clients) error {
+//
+// opts is variadic for back-compat (three-argument callers are
+// unaffected). When the first EnrichOpts carries a non-nil Progress, a
+// per-type bridge (imp.NewProgressEmitter) forwards one completion event
+// per enriched Terraform type with Phase="enrich" (#699); otherwise the
+// bridge resolves to progress.NopEmitter{} — byte-for-byte the pre-#699
+// behavior.
+func (p *Provider) EnrichAttributes(ctx context.Context, irs []imported.ImportedResource, clients imp.Clients, opts ...imp.EnrichOpts) error {
 	if p.d == nil {
 		return imp.ErrEnrichClientUnavailable
 	}
@@ -219,7 +228,11 @@ func (p *Provider) EnrichAttributes(ctx context.Context, irs []imported.Imported
 	if err != nil {
 		return err
 	}
-	return p.d.EnrichAttributes(ctx, irs, aws, progress.NopEmitter{})
+	var sink func(imp.DiscoverProgress)
+	if len(opts) > 0 {
+		sink = opts[0].Progress
+	}
+	return p.d.EnrichAttributes(ctx, irs, aws, imp.NewProgressEmitter(sink))
 }
 
 // EnrichByID delegates to AWSDiscoverer.EnrichByID, mapping the
