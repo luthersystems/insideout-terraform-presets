@@ -49,6 +49,8 @@ func Run(ctx context.Context, req job.Request, opts Options) (job.Result, error)
 			resources[i].Identity.Cloud = cloud
 		}
 	}
+	opts.progressf("reverse-import: starting %s run for %d selected resource(s)…\n", cloud, len(resources))
+	opts.progressf("reverse-import: expanding selection closure…\n")
 	closure, err := expandSelectionClosure(ctx, selectionClosureInput{
 		resources:    resources,
 		opts:         opts,
@@ -62,6 +64,7 @@ func Run(ctx context.Context, req job.Request, opts Options) (job.Result, error)
 	resources = closure.resources
 	result.Diagnostics = append(result.Diagnostics, closure.diagnostics...)
 	dependenciesByAddress := closure.dependencies
+	opts.progressf("reverse-import: selection closure complete (%d resource(s))\n", len(resources))
 
 	var awsAuth awsProviderAuth
 	if cloud == "aws" {
@@ -83,18 +86,23 @@ func Run(ctx context.Context, req job.Request, opts Options) (job.Result, error)
 		AWSEndpointURL: opts.AWSEndpointURL,
 		AWSRoleARN:     awsAuth.RoleARN,
 		AWSExternalID:  awsAuth.ExternalID,
+		Stdout:         opts.Stdout,
 	}
 
+	opts.progressf("reverse-import: generating terraform config for %d resource(s)…\n", len(resources))
 	gcRes, err := opts.deps.runGenconfig(ctx, gcOpts, resources)
 	if err != nil {
 		return result, fmt.Errorf("genconfig: %w", err)
 	}
 	resources = gcRes.Resources
+	opts.progressf("reverse-import: terraform config generated\n")
 
 	if !opts.SkipDriftFix {
-		if _, err := opts.deps.runDriftfix(ctx, driftfix.Options{Workdir: workdir}); err != nil {
+		opts.progressf("reverse-import: running driftfix…\n")
+		if _, err := opts.deps.runDriftfix(ctx, driftfix.Options{Workdir: workdir, Stdout: opts.Stdout}); err != nil {
 			return result, fmt.Errorf("driftfix: %w", err)
 		}
+		opts.progressf("reverse-import: driftfix complete\n")
 	}
 
 	var dcRes *depchase.Result
@@ -108,13 +116,14 @@ func Run(ctx context.Context, req job.Request, opts Options) (job.Result, error)
 				return &depchase.GenconfigResult{GeneratedPath: r.GeneratedPath, Resources: r.Resources}, nil
 			},
 			RunDriftfix: func(ictx context.Context) (*depchase.DriftfixResult, error) {
-				r, err := opts.deps.runDriftfix(ictx, driftfix.Options{Workdir: workdir})
+				r, err := opts.deps.runDriftfix(ictx, driftfix.Options{Workdir: workdir, Stdout: opts.Stdout})
 				if err != nil {
 					return nil, err
 				}
 				return &depchase.DriftfixResult{GeneratedPath: r.GeneratedPath, Iterations: r.Iterations}, nil
 			},
 		}
+		opts.progressf("reverse-import: chasing resource dependencies…\n")
 		dcRes, err = opts.deps.runDepChase(ctx, depchase.Options{
 			Workdir:       workdir,
 			Region:        region,
@@ -122,6 +131,7 @@ func Run(ctx context.Context, req job.Request, opts Options) (job.Result, error)
 			MaxIterations: opts.MaxDepChaseIterations,
 			Discoverer:    opts.Discoverer,
 			Pipeline:      pipeline,
+			Stdout:        opts.Stdout,
 		}, resources)
 		if err != nil {
 			return result, fmt.Errorf("depchase: %w", err)
@@ -130,6 +140,7 @@ func Run(ctx context.Context, req job.Request, opts Options) (job.Result, error)
 			resources = dcRes.Resources
 			appendDepChaseDependencies(dependenciesByAddress, resources, dcRes.Edges)
 		}
+		opts.progressf("reverse-import: dependency chase complete (%d resource(s) total)\n", len(resources))
 	}
 
 	if err := writeJSON(filepath.Join(opts.OutputDir, importedJSONFile), resources); err != nil {
@@ -176,9 +187,11 @@ func Run(ctx context.Context, req job.Request, opts Options) (job.Result, error)
 	planPath := filepath.Join(opts.OutputDir, tfplanFile)
 	validateJSONPath := filepath.Join(opts.OutputDir, validateJSONFile)
 	tfplanJSONPath := filepath.Join(opts.OutputDir, tfplanJSONFile)
+	opts.progressf("reverse-import: terraform init…\n")
 	if err := opts.deps.tf.Init(ctx, opts.OutputDir); err != nil {
 		return result, fmt.Errorf("terraform init final: %w", err)
 	}
+	opts.progressf("reverse-import: terraform validate…\n")
 	validateJSON, err := opts.deps.tf.Validate(ctx, opts.OutputDir)
 	if len(validateJSON) > 0 {
 		if writeErr := writeFileAtomic(validateJSONPath, validateJSON, 0o644); writeErr != nil {
@@ -188,6 +201,7 @@ func Run(ctx context.Context, req job.Request, opts Options) (job.Result, error)
 	if err != nil {
 		return result, fmt.Errorf("terraform validate final: %w", err)
 	}
+	opts.progressf("reverse-import: terraform plan…\n")
 	if err := opts.deps.tf.Plan(ctx, opts.OutputDir, planPath); err != nil {
 		return result, fmt.Errorf("terraform plan final: %w", err)
 	}
@@ -195,6 +209,7 @@ func Run(ctx context.Context, req job.Request, opts Options) (job.Result, error)
 	if err != nil {
 		return result, fmt.Errorf("terraform show final plan: %w", err)
 	}
+	opts.progressf("reverse-import: plan complete\n")
 	if err := writeFileAtomic(tfplanJSONPath, planJSON, 0o644); err != nil {
 		return result, fmt.Errorf("write tfplan.json: %w", err)
 	}

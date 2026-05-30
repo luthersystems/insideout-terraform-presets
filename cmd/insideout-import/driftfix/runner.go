@@ -3,6 +3,7 @@ package driftfix
 import (
 	"context"
 	"fmt"
+	"io"
 	"os/exec"
 	"strings"
 
@@ -41,7 +42,11 @@ type execRunner struct {
 	tf *tfexec.Terraform
 }
 
-func newExecRunner(workdir string) (*execRunner, error) {
+// newExecRunner constructs an execRunner for workdir. When stdout is
+// non-nil the terraform subprocess streams its stdout/stderr there so a
+// long-running caller can surface live progress; nil keeps the historical
+// "discard subprocess output" behavior.
+func newExecRunner(workdir string, stdout io.Writer) (*execRunner, error) {
 	bin, err := exec.LookPath("terraform")
 	if err != nil {
 		return nil, fmt.Errorf("terraform binary not found on PATH: %w", err)
@@ -49,6 +54,10 @@ func newExecRunner(workdir string) (*execRunner, error) {
 	tf, err := tfexec.NewTerraform(workdir, bin)
 	if err != nil {
 		return nil, fmt.Errorf("init terraform-exec: %w", err)
+	}
+	if stdout != nil {
+		tf.SetStdout(stdout)
+		tf.SetStderr(stdout)
 	}
 	return &execRunner{tf: tf}, nil
 }
