@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"slices"
@@ -758,6 +759,12 @@ func TestRunDiscoverWithDeps_DefaultHCLUsesReverseSDK(t *testing.T) {
 		if opts.OutputDir != dir {
 			t.Fatalf("OutputDir = %q, want %q", opts.OutputDir, dir)
 		}
+		// Regression guard for #702: the discover→reverse path must wire a
+		// progress sink, otherwise the engine's live phase progress and the
+		// silent-phase heartbeat are discarded and the job log looks frozen.
+		if opts.Stdout == nil {
+			t.Fatal("runReverse opts.Stdout is nil; engine progress would be discarded")
+		}
 		return reversejob.Result{
 			Version:     reversejob.Version,
 			Status:      reversejob.StatusSucceeded,
@@ -777,6 +784,52 @@ func TestRunDiscoverWithDeps_DefaultHCLUsesReverseSDK(t *testing.T) {
 	}
 	if called != 1 {
 		t.Fatalf("runReverse called %d times, want 1", called)
+	}
+}
+
+// TestRunDiscoverWithDeps_ReverseProgressRoutedToStderrUnderJSON pins the
+// #702 output contract: under --progress=json the reverse engine's
+// human-readable progress + heartbeat must ride os.Stderr (= summaryOut),
+// never os.Stdout, so the newline-delimited JSON event stream machine
+// consumers read on stdout stays pure. In the default (human) mode the same
+// progress rides os.Stdout. Asserting non-nil alone (as the sibling test
+// does) would not catch a regression that mixed the heartbeat into the JSON
+// stream.
+func TestRunDiscoverWithDeps_ReverseProgressRoutedToStderrUnderJSON(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		progress string
+		want     *os.File
+	}{
+		{name: "human mode → stdout", progress: "", want: os.Stdout},
+		{name: "json mode → stderr", progress: "json", want: os.Stderr},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			agg := &fakeAggregator{out: []imported.ImportedResource{validResource("aws_sqs_queue.orders")}}
+			deps := okDeps(agg)
+			var gotStdout io.Writer
+			deps.runReverse = func(_ context.Context, req reversejob.Request, opts reverseimport.Options) (reversejob.Result, error) {
+				gotStdout = opts.Stdout
+				return reversejob.Result{
+					Version:     reversejob.Version,
+					Status:      reversejob.StatusSucceeded,
+					Imported:    req.ImportedResources(),
+					PlanSummary: reversejob.PlanSummary{ImportCount: 1},
+				}, nil
+			}
+
+			args := []string{"--provider", "aws", "--project", "p", "--region", "us-east-1", "--output-dir", dir}
+			if tc.progress != "" {
+				args = append(args, "--progress", tc.progress)
+			}
+			if rc := runDiscoverWithDeps(args, deps); rc != discoverExitOK {
+				t.Fatalf("exit = %d, want %d", rc, discoverExitOK)
+			}
+			if gotStdout != tc.want {
+				t.Fatalf("reverse engine Stdout = %v, want %v (progress=%q)", gotStdout, tc.want, tc.progress)
+			}
+		})
 	}
 }
 

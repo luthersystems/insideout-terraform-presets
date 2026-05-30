@@ -1028,6 +1028,13 @@ Exit codes:
 			AccountID:             accountID,
 			MaxDepChaseIterations: *maxDepChaseIter,
 			Discoverer:            d,
+			// Stream the engine's live phase progress + silent-phase
+			// heartbeat (#702) to summaryOut, which is os.Stdout in
+			// human-readable mode and os.Stderr under --progress=json — so
+			// the human progress rides the same writer as the rest of the
+			// summary and never corrupts the newline-delimited JSON event
+			// stream that machine consumers read on stdout.
+			Stdout: summaryOut,
 		})
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "discover: reverse import SDK: %v\n", err)
