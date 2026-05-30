@@ -42,11 +42,20 @@ type execRunner struct {
 	tf *tfexec.Terraform
 }
 
-// newExecRunner constructs an execRunner for workdir. When stdout is
-// non-nil the terraform subprocess streams its stdout/stderr there so a
+// newExecRunner constructs an execRunner for workdir. When stream is
+// non-nil the terraform subprocess streams its *stderr* there so a
 // long-running caller can surface live progress; nil keeps the historical
 // "discard subprocess output" behavior.
-func newExecRunner(workdir string, stdout io.Writer) (*execRunner, error) {
+//
+// We deliberately do NOT call tf.SetStdout: ShowPlan (ShowPlanFile) and
+// Validate capture `-json` payloads on stdout, and terraform-exec merges
+// tf.stdout into that captured stream, so pointing tf.stdout at the live
+// log leaks the JSON into the user-facing log and blows the gRPC-limited
+// stream (reliable#1896). Leaving stdout unset lets tfexec discard it for
+// these commands while the JSON is still captured internally. Mirrors the
+// stderr-only discipline in genconfig.execRunner and
+// pkg/reverseimport/terraform.go.
+func newExecRunner(workdir string, stream io.Writer) (*execRunner, error) {
 	bin, err := exec.LookPath("terraform")
 	if err != nil {
 		return nil, fmt.Errorf("terraform binary not found on PATH: %w", err)
@@ -55,9 +64,8 @@ func newExecRunner(workdir string, stdout io.Writer) (*execRunner, error) {
 	if err != nil {
 		return nil, fmt.Errorf("init terraform-exec: %w", err)
 	}
-	if stdout != nil {
-		tf.SetStdout(stdout)
-		tf.SetStderr(stdout)
+	if stream != nil {
+		tf.SetStderr(stream)
 	}
 	return &execRunner{tf: tf}, nil
 }

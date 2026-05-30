@@ -31,11 +31,24 @@ type execRunner struct {
 	tf *tfexec.Terraform
 }
 
-// newExecRunner constructs an execRunner for workdir. When stdout is
-// non-nil the terraform subprocess streams its stdout/stderr there so a
-// long-running caller can surface live progress; nil keeps the historical
+// newExecRunner constructs an execRunner for workdir. When stream is
+// non-nil the terraform subprocess streams its *stderr* there so a
+// long-running caller can surface live progress (terraform's human
+// progress lines and the "Config generation is experimental" warning from
+// plan -generate-config-out both land on stderr); nil keeps the historical
 // "discard subprocess output" behavior.
-func newExecRunner(workdir string, stdout io.Writer) (*execRunner, error) {
+//
+// We deliberately do NOT call tf.SetStdout: the JSON-capture commands
+// (ProvidersSchema, Validate) write their giant `-json` payload to stdout,
+// and terraform-exec merges tf.stdout into the captured stream
+// (runTerraformCmdJSON → mergeWriters(cmd.Stdout, tf.stdout)). Pointing
+// tf.stdout at the live log therefore dumps the ~19MB provider schema /
+// validate JSON into the user-facing stream and blows the gRPC-limited log
+// (reliable#1896). Leaving stdout unset lets tfexec discard it for these
+// commands while the JSON is still captured internally — only the leak
+// stops. This mirrors pkg/reverseimport/terraform.go, which streams only
+// stderr for its `-json` capture commands.
+func newExecRunner(workdir string, stream io.Writer) (*execRunner, error) {
 	bin, err := exec.LookPath("terraform")
 	if err != nil {
 		return nil, fmt.Errorf("terraform binary not found on PATH: %w", err)
@@ -44,9 +57,8 @@ func newExecRunner(workdir string, stdout io.Writer) (*execRunner, error) {
 	if err != nil {
 		return nil, fmt.Errorf("init terraform-exec: %w", err)
 	}
-	if stdout != nil {
-		tf.SetStdout(stdout)
-		tf.SetStderr(stdout)
+	if stream != nil {
+		tf.SetStderr(stream)
 	}
 	return &execRunner{tf: tf}, nil
 }
