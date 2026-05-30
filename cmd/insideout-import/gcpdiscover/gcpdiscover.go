@@ -503,6 +503,27 @@ func (g *GCPDiscoverer) DiscoverTypes(ctx context.Context, types []string, args 
 
 	scope := fmt.Sprintf("projects/%s", g.projectID)
 
+	// Per-type progress (#699): when args.Emitter additionally implements
+	// TypeProgressEmitter (the pkg/imported facade's bridge does; the wire
+	// JSONEmitter / NopEmitter do not), fire one TypeDone per type so a
+	// facade consumer can stream a real "N of total types" signal. CAI is
+	// one bulk SearchAllResources, so its types all complete in a quick
+	// burst once translation runs; non-CAI types tick individually after.
+	// A non-TypeProgressEmitter Emitter leaves typeSink nil and the path
+	// is skipped (byte-for-byte unchanged behavior).
+	typeSink, _ := args.Emitter.(progress.TypeProgressEmitter)
+	totalTypes := len(selected)
+	emitTypeDone := func(tfType string, found int) {
+		if typeSink != nil {
+			typeSink.TypeDone(progress.TypeProgress{
+				Phase:  "discover",
+				TFType: tfType,
+				Found:  found,
+				Total:  totalTypes,
+			})
+		}
+	}
+
 	stageStart := time.Now()
 	args.Emitter.ServiceStart(gcpServiceSlug, "")
 	results, err := g.searchBuckets(ctx, scope, args, labelsBucket, namePrefixBucket, parentBucket)
@@ -524,6 +545,7 @@ func (g *GCPDiscoverer) DiscoverTypes(ctx context.Context, types []string, args 
 	for _, d := range selected {
 		bucket := byAsset[d.AssetType()]
 		sort.SliceStable(bucket, func(i, j int) bool { return bucket[i].Name < bucket[j].Name })
+		typeFound := 0
 		for _, r := range bucket {
 			imp := d.FromAsset(book, r, g.projectID)
 			// A discoverer that returns a zero-valued ImportedResource
@@ -537,6 +559,14 @@ func (g *GCPDiscoverer) DiscoverTypes(ctx context.Context, types []string, args 
 			}
 			args.Emitter.ItemFound(gcpServiceSlug, r.Location, imp.Identity.Type, imp.Identity.ImportID)
 			out = append(out, imp)
+			typeFound++
+		}
+		// Per-type progress (#699): emit one event per CAI-backed type as
+		// its assets finish translating. Non-CAI types are handled in the
+		// dedicated phase below, so skip them here — that keeps each type
+		// emitting exactly once and the N-of-total count accurate.
+		if d.ScopeStyle() != ScopeStyleNonCAI {
+			emitTypeDone(d.ResourceType(), typeFound)
 		}
 	}
 	args.Emitter.ServiceFinish(gcpServiceSlug, "", len(out), time.Since(stageStart))
@@ -572,6 +602,7 @@ func (g *GCPDiscoverer) DiscoverTypes(ctx context.Context, types []string, args 
 				args.Emitter.ServiceFinish(nonCAIServiceSlug, "", len(nonCAIResults), time.Since(nonCAIStart))
 				return nil, fmt.Errorf("non-CAI list for %q: %w", d.ResourceType(), err)
 			}
+			typeFound := 0
 			for _, r := range rs {
 				if r.Identity.Type == "" {
 					continue
@@ -583,7 +614,11 @@ func (g *GCPDiscoverer) DiscoverTypes(ctx context.Context, types []string, args 
 				book.add(r.Identity.Address)
 				args.Emitter.ItemFound(nonCAIServiceSlug, r.Identity.Location, r.Identity.Type, r.Identity.ImportID)
 				nonCAIResults = append(nonCAIResults, r)
+				typeFound++
 			}
+			// Per-type progress (#699): non-CAI types complete one at a
+			// time after their service-specific lister returns.
+			emitTypeDone(d.ResourceType(), typeFound)
 		}
 		args.Emitter.ServiceFinish(nonCAIServiceSlug, "", len(nonCAIResults), time.Since(nonCAIStart))
 		out = append(out, nonCAIResults...)

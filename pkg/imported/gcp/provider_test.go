@@ -47,6 +47,39 @@ func TestNewProvider_NilDiscoverer_StaticIntrospection(t *testing.T) {
 	}
 }
 
+// TestProvider_ProgressOpts_AcceptedAndShortCircuitOnNilDiscoverer pins
+// the #699 signatures on the GCP Provider: Discover accepts
+// DiscoverOpts.Progress and EnrichAttributes accepts both the legacy
+// three-argument form (back-compat) and the variadic EnrichOpts{Progress}
+// form. With a nil discoverer every path short-circuits to
+// ErrEnrichClientUnavailable before the sink is read, so the sink is
+// never invoked.
+//
+// This does NOT prove the sink reaches the discoverer. Real end-to-end
+// delivery is covered by TestDiscoverTypes_RealBridgeDeliversDiscoverProgress
+// in the gcpdiscover package; gcpAssetSearcher is package-internal, so a
+// fake-backed Provider cannot be constructed here.
+func TestProvider_ProgressOpts_AcceptedAndShortCircuitOnNilDiscoverer(t *testing.T) {
+	t.Parallel()
+	p := gcpprov.NewProvider(nil, nil)
+
+	sinkCalls := 0
+	sink := func(imp.DiscoverProgress) { sinkCalls++ }
+
+	if _, err := p.Discover(context.Background(), nil, imp.Clients{}, imp.DiscoverOpts{Progress: sink}); !errors.Is(err, imp.ErrEnrichClientUnavailable) {
+		t.Errorf("Discover with Progress + nil discoverer: err = %v, want ErrEnrichClientUnavailable", err)
+	}
+	if err := p.EnrichAttributes(context.Background(), nil, imp.Clients{}); !errors.Is(err, imp.ErrEnrichClientUnavailable) {
+		t.Errorf("EnrichAttributes (3-arg) with nil discoverer: err = %v, want ErrEnrichClientUnavailable", err)
+	}
+	if err := p.EnrichAttributes(context.Background(), nil, imp.Clients{}, imp.EnrichOpts{Progress: sink}); !errors.Is(err, imp.ErrEnrichClientUnavailable) {
+		t.Errorf("EnrichAttributes (EnrichOpts) with nil discoverer: err = %v, want ErrEnrichClientUnavailable", err)
+	}
+	if sinkCalls != 0 {
+		t.Errorf("sink invoked %d times on the nil-discoverer short-circuit, want 0", sinkCalls)
+	}
+}
+
 func TestProvider_Capabilities_Enrichable(t *testing.T) {
 	t.Parallel()
 	d := gcpdiscover.NewGCPDiscoverer(nil, "test-project", gcpdiscover.GCPDiscovererOpts{})

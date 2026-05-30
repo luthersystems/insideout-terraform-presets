@@ -545,6 +545,28 @@ func (a *AWSDiscoverer) DiscoverTypes(ctx context.Context, types []string, args 
 
 	stageStart := time.Now()
 	results := make([][]imported.ImportedResource, len(selected))
+
+	// Per-type progress (#699): when args.Emitter additionally
+	// implements TypeProgressEmitter (the pkg/imported facade's bridge
+	// does; the wire JSONEmitter / NopEmitter do not), fire one TypeDone
+	// per type as its parallel Discover lands so a facade consumer can
+	// stream a real "N of total types" progress signal instead of a
+	// cosmetic timer. The bridge serializes these concurrent calls under
+	// its own lock; a non-TypeProgressEmitter Emitter leaves typeSink nil
+	// and the path is skipped (byte-for-byte unchanged behavior).
+	typeSink, _ := args.Emitter.(progress.TypeProgressEmitter)
+	totalTypes := len(selected)
+	emitTypeDone := func(tfType string, found int) {
+		if typeSink != nil {
+			typeSink.TypeDone(progress.TypeProgress{
+				Phase:  "discover",
+				TFType: tfType,
+				Found:  found,
+				Total:  totalTypes,
+			})
+		}
+	}
+
 	g, gctx := errgroup.WithContext(ctx)
 	g.SetLimit(defaultDiscoverTypesConcurrency)
 	// Per-goroutine startup jitter (#632). Without this, all N
@@ -614,11 +636,16 @@ func (a *AWSDiscoverer) DiscoverTypes(ctx context.Context, types []string, args 
 						time.Since(callStart).Milliseconds(),
 						args.PerTypeTimeout.Milliseconds())
 					results[i] = nil
+					// This type completed (with a partial / empty
+					// result); count it toward N-of-total so the
+					// progress denominator still reaches the total.
+					emitTypeDone(d.ResourceType(), 0)
 					return nil
 				}
 				return fmt.Errorf("%s: %w", d.ResourceType(), err)
 			}
 			results[i] = entries
+			emitTypeDone(d.ResourceType(), len(entries))
 			return nil
 		})
 	}

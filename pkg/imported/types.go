@@ -120,12 +120,65 @@ type Clients struct {
 //     Ignored on GCP.
 //   - ProjectID: GCP project ID (the real project ID, not the
 //     stack project name). Ignored on AWS.
+//   - Progress: optional per-Terraform-type completion sink (#699).
+//     Nil = no progress (today's behavior, byte-for-byte). When set,
+//     it fires once per Terraform type as that type's resources finish
+//     being discovered, carrying a running N-of-total type counter so
+//     a streaming consumer (reliable's reverse-import "Scan" step) can
+//     render real progress instead of a cosmetic timer. Invocations are
+//     serialized — safe to call from the AWS path's parallel walk — and
+//     CompletedTypes is monotonic 1..TotalTypes.
 type DiscoverOpts struct {
 	Project      string
 	Regions      []string
 	TagSelectors []TagSelector
 	AccountID    string
 	ProjectID    string
+	Progress     func(DiscoverProgress)
+}
+
+// DiscoverProgress is one per-Terraform-type completion event delivered
+// to DiscoverOpts.Progress (discover phase) or EnrichOpts.Progress
+// (enrich phase). It is emitted once per type as that type's resources
+// finish being discovered or enriched — the incremental signal the
+// reverse-import UI needs to stream a per-service / per-type count
+// instead of painting a local-timer animation (#699).
+//
+// Back-compat: a nil sink means no events are produced and the discover
+// / enrich return values are unchanged. Existing callers that never set
+// a sink are unaffected.
+type DiscoverProgress struct {
+	// Phase is "discover" (Provider.Discover) or "enrich"
+	// (Provider.EnrichAttributes). A single sink can serve both and
+	// branch on this field.
+	Phase string
+	// Type is the Terraform type that just completed, e.g.
+	// "aws_s3_bucket".
+	Type string
+	// FoundCount is the number of resources discovered (discover) or
+	// covered (enrich) for this type. Zero is valid.
+	FoundCount int
+	// CompletedTypes is the running count of types completed so far,
+	// inclusive of this one — monotonic 1..TotalTypes across a single
+	// Discover / EnrichAttributes call.
+	CompletedTypes int
+	// TotalTypes is the number of types in this call's scope: the
+	// requested type count for discover, the count of distinct
+	// enrichable types for enrich. Stable across every event of the
+	// call so the consumer's denominator never moves.
+	TotalTypes int
+}
+
+// EnrichOpts carries optional inputs to Provider.EnrichAttributes. It is
+// passed variadically so existing three-argument callers
+// (EnrichAttributes(ctx, irs, clients)) keep compiling and behaving
+// exactly as before — the zero-opts path is byte-for-byte unchanged.
+//
+//   - Progress: optional per-Terraform-type completion sink, the enrich
+//     counterpart to DiscoverOpts.Progress. Events carry Phase="enrich".
+//     Nil = no progress.
+type EnrichOpts struct {
+	Progress func(DiscoverProgress)
 }
 
 // TagSelector is a single operator-supplied tag/label equality

@@ -211,10 +211,67 @@ type Emitter interface {
 	ServiceWarn(service, region, msg string)
 }
 
+// TypeProgress reports the completion of one Terraform resource type's
+// discovery (or enrichment) scope. It is the per-Terraform-type
+// counterpart to the per-(service,region) Emitter events: where
+// ServiceFinish brackets a service/region scope, TypeProgress fires once
+// per Terraform type as that type's resources finish being discovered or
+// enriched, carrying the type's found-count and the stage's type total so
+// a facade consumer can render a real "N of total types" progress bar
+// instead of a cosmetic timer. See issue #699.
+//
+// Completed (the running count of types done so far) is intentionally
+// NOT carried here: the producer (orchestrator) emits one event per type
+// without tracking a global running count under concurrency, and the
+// receiving TypeProgressEmitter — which accumulates state across calls —
+// is the natural owner of the monotonic counter. pkg/imported's bridge
+// derives DiscoverProgress.CompletedTypes by counting invocations under
+// its own lock.
+type TypeProgress struct {
+	// Phase is "discover" (Provider.Discover) or "enrich"
+	// (Provider.EnrichAttributes) — mirrors the Stage discriminator on
+	// the wire Event and lets a single sink distinguish the two passes.
+	Phase string
+	// TFType is the Terraform resource type that just completed, e.g.
+	// "aws_s3_bucket".
+	TFType string
+	// Found is the number of resources discovered (discover phase) or
+	// enriched (enrich phase) for this type. Zero is a valid value — a
+	// type whose scope yielded nothing still completes.
+	Found int
+	// Total is the number of types in this call's scope: len(selected)
+	// for discover, the count of distinct enrichable types for enrich.
+	// Stable across every event of a single call so the consumer's
+	// denominator never moves.
+	Total int
+}
+
+// TypeProgressEmitter is an OPTIONAL extension interface an Emitter may
+// implement to receive per-Terraform-type completion events. The
+// discovery / enrichment orchestrators type-assert their Emitter to this
+// interface and call TypeDone only when it is satisfied — so the wire
+// JSONEmitter and NopEmitter (which do not implement it) are entirely
+// unaffected and the per-service event stream / CLI --progress=json
+// output is byte-for-byte unchanged. Only the pkg/imported.Provider
+// facade supplies an Emitter implementing this interface, to bridge
+// per-type progress onto its DiscoverOpts.Progress / EnrichOpts.Progress
+// sink (issue #699).
+//
+// TypeDone may be invoked concurrently — the AWS discover walk fans its
+// per-type Discover calls out across an errgroup — so implementations
+// MUST be safe for concurrent use.
+type TypeProgressEmitter interface {
+	TypeDone(TypeProgress)
+}
+
 // NopEmitter is a zero-overhead Emitter that swallows every call. The
 // orchestrator substitutes NopEmitter{} when the operator did not pass
 // --progress=json, so per-service discoverers always have a non-nil
 // Emitter to call.
+//
+// NopEmitter deliberately does NOT implement TypeProgressEmitter: the
+// orchestrators' type-assertion fails for it, so the per-type emission
+// path is skipped entirely under the default (no-sink) configuration.
 type NopEmitter struct{}
 
 // ServiceStart is a no-op.
