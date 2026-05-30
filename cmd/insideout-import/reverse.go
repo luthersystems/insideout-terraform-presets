@@ -125,6 +125,12 @@ Flags:`)
 		SkipDepChase:          *noDepChase,
 		MaxDepChaseIterations: *maxDepChaseIter,
 		Discoverer:            discoverer,
+		// Stream live phase progress + heartbeat to the process stdout the
+		// Mars reverse-import job follows (Oracle follow=1 → reliable's
+		// import plan-preview). Without this the engine's progress plumbing
+		// (PR #698) and the silent-phase heartbeat (#702) write to
+		// io.Discard and the job log looks frozen for minutes.
+		Stdout: os.Stdout,
 	})
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "reverse: %v\n", err)

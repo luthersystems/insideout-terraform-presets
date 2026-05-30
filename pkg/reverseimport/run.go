@@ -90,8 +90,12 @@ func Run(ctx context.Context, req job.Request, opts Options) (job.Result, error)
 	}
 
 	opts.progressf("reverse-import: generating terraform config for %d resource(s)…\n", len(resources))
-	gcRes, err := opts.deps.runGenconfig(ctx, gcOpts, resources)
-	if err != nil {
+	var gcRes *genconfig.Result
+	if err := opts.runPhase("generating terraform config", func() error {
+		var genErr error
+		gcRes, genErr = opts.deps.runGenconfig(ctx, gcOpts, resources)
+		return genErr
+	}); err != nil {
 		return result, fmt.Errorf("genconfig: %w", err)
 	}
 	resources = gcRes.Resources
@@ -99,7 +103,10 @@ func Run(ctx context.Context, req job.Request, opts Options) (job.Result, error)
 
 	if !opts.SkipDriftFix {
 		opts.progressf("reverse-import: running driftfix…\n")
-		if _, err := opts.deps.runDriftfix(ctx, driftfix.Options{Workdir: workdir, Stdout: opts.Stdout}); err != nil {
+		if err := opts.runPhase("driftfix", func() error {
+			_, driftErr := opts.deps.runDriftfix(ctx, driftfix.Options{Workdir: workdir, Stdout: opts.Stdout})
+			return driftErr
+		}); err != nil {
 			return result, fmt.Errorf("driftfix: %w", err)
 		}
 		opts.progressf("reverse-import: driftfix complete\n")
@@ -124,16 +131,19 @@ func Run(ctx context.Context, req job.Request, opts Options) (job.Result, error)
 			},
 		}
 		opts.progressf("reverse-import: chasing resource dependencies…\n")
-		dcRes, err = opts.deps.runDepChase(ctx, depchase.Options{
-			Workdir:       workdir,
-			Region:        region,
-			AccountID:     firstResourceField(resources, func(id imported.ResourceIdentity) string { return id.AccountID }),
-			MaxIterations: opts.MaxDepChaseIterations,
-			Discoverer:    opts.Discoverer,
-			Pipeline:      pipeline,
-			Stdout:        opts.Stdout,
-		}, resources)
-		if err != nil {
+		if err := opts.runPhase("chasing resource dependencies", func() error {
+			var chaseErr error
+			dcRes, chaseErr = opts.deps.runDepChase(ctx, depchase.Options{
+				Workdir:       workdir,
+				Region:        region,
+				AccountID:     firstResourceField(resources, func(id imported.ResourceIdentity) string { return id.AccountID }),
+				MaxIterations: opts.MaxDepChaseIterations,
+				Discoverer:    opts.Discoverer,
+				Pipeline:      pipeline,
+				Stdout:        opts.Stdout,
+			}, resources)
+			return chaseErr
+		}); err != nil {
 			return result, fmt.Errorf("depchase: %w", err)
 		}
 		if dcRes != nil {
@@ -188,25 +198,38 @@ func Run(ctx context.Context, req job.Request, opts Options) (job.Result, error)
 	validateJSONPath := filepath.Join(opts.OutputDir, validateJSONFile)
 	tfplanJSONPath := filepath.Join(opts.OutputDir, tfplanJSONFile)
 	opts.progressf("reverse-import: terraform init…\n")
-	if err := opts.deps.tf.Init(ctx, opts.OutputDir); err != nil {
+	if err := opts.runPhase("terraform init", func() error {
+		return opts.deps.tf.Init(ctx, opts.OutputDir)
+	}); err != nil {
 		return result, fmt.Errorf("terraform init final: %w", err)
 	}
 	opts.progressf("reverse-import: terraform validate…\n")
-	validateJSON, err := opts.deps.tf.Validate(ctx, opts.OutputDir)
+	var validateJSON []byte
+	validateErr := opts.runPhase("terraform validate", func() error {
+		var verr error
+		validateJSON, verr = opts.deps.tf.Validate(ctx, opts.OutputDir)
+		return verr
+	})
 	if len(validateJSON) > 0 {
 		if writeErr := writeFileAtomic(validateJSONPath, validateJSON, 0o644); writeErr != nil {
 			return result, fmt.Errorf("write validate.json: %w", writeErr)
 		}
 	}
-	if err != nil {
-		return result, fmt.Errorf("terraform validate final: %w", err)
+	if validateErr != nil {
+		return result, fmt.Errorf("terraform validate final: %w", validateErr)
 	}
 	opts.progressf("reverse-import: terraform plan…\n")
-	if err := opts.deps.tf.Plan(ctx, opts.OutputDir, planPath); err != nil {
+	if err := opts.runPhase("terraform plan", func() error {
+		return opts.deps.tf.Plan(ctx, opts.OutputDir, planPath)
+	}); err != nil {
 		return result, fmt.Errorf("terraform plan final: %w", err)
 	}
-	planJSON, err := opts.deps.tf.ShowPlanJSON(ctx, opts.OutputDir, planPath)
-	if err != nil {
+	var planJSON []byte
+	if err := opts.runPhase("terraform show plan", func() error {
+		var showErr error
+		planJSON, showErr = opts.deps.tf.ShowPlanJSON(ctx, opts.OutputDir, planPath)
+		return showErr
+	}); err != nil {
 		return result, fmt.Errorf("terraform show final plan: %w", err)
 	}
 	opts.progressf("reverse-import: plan complete\n")
