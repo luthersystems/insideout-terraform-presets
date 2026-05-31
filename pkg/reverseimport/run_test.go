@@ -3,6 +3,7 @@ package reverseimport
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -13,6 +14,7 @@ import (
 	"github.com/luthersystems/insideout-terraform-presets/cmd/insideout-import/driftfix"
 	"github.com/luthersystems/insideout-terraform-presets/cmd/insideout-import/genconfig"
 	"github.com/luthersystems/insideout-terraform-presets/pkg/composer/imported"
+	"github.com/luthersystems/insideout-terraform-presets/pkg/composer/imported/generated"
 	"github.com/luthersystems/insideout-terraform-presets/pkg/reverseimport/job"
 )
 
@@ -325,6 +327,71 @@ func TestRunExpandsSelectedParentClosure(t *testing.T) {
 	}
 }
 
+func TestRunBackfillsImportedAttrsFromFinalPlan(t *testing.T) {
+	dir := t.TempDir()
+	req := job.Request{
+		Version: job.Version,
+		Resources: []job.ResourceSpec{{
+			Identity: imported.ResourceIdentity{
+				Cloud:    "aws",
+				Type:     "aws_s3_bucket",
+				Address:  "aws_s3_bucket.uploads",
+				ImportID: "io-uploads",
+				Region:   "us-east-1",
+			},
+			Tier:   imported.TierImportedFlat,
+			Source: imported.SourceImporter,
+		}},
+	}
+
+	result, err := Run(context.Background(), req, Options{
+		OutputDir:    dir,
+		SkipDepChase: true,
+		deps: deps{
+			runGenconfig: fakeGenconfig,
+			runDriftfix:  fakeDriftfix,
+			runDepChase:  fakeDepChase,
+			tf:           s3VersioningPlanRunner{},
+		},
+	})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if result.PlanSummary.ImportCount != 1 {
+		t.Fatalf("ImportCount = %d, want 1", result.PlanSummary.ImportCount)
+	}
+	if len(result.Imported) != 1 {
+		t.Fatalf("Imported len = %d, want 1", len(result.Imported))
+	}
+	decoded, err := generated.UnmarshalAttrs("aws_s3_bucket", result.Imported[0].Attrs)
+	if err != nil {
+		t.Fatalf("result imported attrs did not decode: %v\n%s", err, result.Imported[0].Attrs)
+	}
+	bucket := decoded.(*generated.AWSS3Bucket)
+	if len(bucket.Versioning) != 1 || bucket.Versioning[0].Enabled == nil || bucket.Versioning[0].Enabled.Literal == nil || !*bucket.Versioning[0].Enabled.Literal {
+		t.Fatalf("result typed versioning not backfilled: %#v", bucket.Versioning)
+	}
+
+	var persisted []imported.ImportedResource
+	raw, err := os.ReadFile(filepath.Join(dir, "imported.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal(raw, &persisted); err != nil {
+		t.Fatal(err)
+	}
+	if len(persisted) != 1 || len(persisted[0].Attrs) == 0 {
+		t.Fatalf("persisted imported resources missing attrs: %#v", persisted)
+	}
+	importedTF, err := os.ReadFile(filepath.Join(dir, "imported.tf"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(importedTF), "versioning {") {
+		t.Fatalf("imported.tf missing plan-backed versioning block:\n%s", importedTF)
+	}
+}
+
 func fakeGenconfig(_ context.Context, opts genconfig.Options, resources []imported.ImportedResource) (*genconfig.Result, error) {
 	if err := os.MkdirAll(opts.Workdir, 0o755); err != nil {
 		return nil, err
@@ -403,6 +470,61 @@ func (r fakeTerraformRunner) ShowPlanJSON(context.Context, string, string) ([]by
   "terraform_version": "1.13.0",
   "resource_changes": [%s]
 }`, changes.String())), nil
+}
+
+type s3VersioningPlanRunner struct{}
+
+func (s3VersioningPlanRunner) Init(context.Context, string) error { return nil }
+
+func (s3VersioningPlanRunner) Validate(context.Context, string) ([]byte, error) {
+	return []byte(`{"valid":true,"diagnostics":[]}`), nil
+}
+
+func (s3VersioningPlanRunner) Plan(context.Context, string, string) error { return nil }
+
+func (s3VersioningPlanRunner) ShowPlanJSON(context.Context, string, string) ([]byte, error) {
+	return []byte(`{
+  "format_version": "1.2",
+  "terraform_version": "1.13.0",
+  "planned_values": {
+    "root_module": {
+      "resources": [{
+        "address": "aws_s3_bucket.uploads",
+        "mode": "managed",
+        "type": "aws_s3_bucket",
+        "name": "uploads",
+        "values": {
+          "bucket": "io-uploads",
+          "region": "us-east-1",
+          "versioning": [{
+            "enabled": true,
+            "mfa_delete": false
+          }]
+        }
+      }]
+    }
+  },
+  "resource_changes": [{
+    "address": "aws_s3_bucket.uploads",
+    "mode": "managed",
+    "type": "aws_s3_bucket",
+    "name": "uploads",
+    "change": {
+      "actions": ["no-op"],
+      "before": null,
+      "after": {
+        "bucket": "io-uploads",
+        "region": "us-east-1",
+        "versioning": [{
+          "enabled": true,
+          "mfa_delete": false
+        }]
+      },
+      "after_unknown": {},
+      "importing": {"id": "io-uploads"}
+    }
+  }]
+}`), nil
 }
 
 type fakeClosureDiscoverer struct {
