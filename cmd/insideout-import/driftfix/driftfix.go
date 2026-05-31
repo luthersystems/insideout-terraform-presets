@@ -79,6 +79,7 @@ func Run(ctx context.Context, opts Options) (*Result, error) {
 	if opts.MaxIterations <= 0 {
 		opts.MaxIterations = defaultMaxIterations
 	}
+	progressf(opts.Stdout, "driftfix: starting drift convergence (max %d iteration(s))…\n", opts.MaxIterations)
 
 	abs, err := filepath.Abs(opts.Workdir)
 	if err != nil {
@@ -106,14 +107,17 @@ func Run(ctx context.Context, opts Options) (*Result, error) {
 	alreadyEscalated := map[string]map[string]struct{}{}
 
 	for iter := 1; iter <= opts.MaxIterations; iter++ {
+		progressf(opts.Stdout, "driftfix: iteration %d: running terraform plan…\n", iter)
 		hasChanges, err := runner.PlanTo(ctx, planPath)
 		if err != nil {
 			return nil, fmt.Errorf("driftfix iter %d: terraform plan: %w", iter, err)
 		}
 		if !hasChanges {
+			progressf(opts.Stdout, "driftfix: converged after %d iteration(s)\n", iter)
 			return &Result{GeneratedPath: generatedPath, Iterations: iter}, nil
 		}
 
+		progressf(opts.Stdout, "driftfix: iteration %d: reading plan details…\n", iter)
 		plan, err := runner.ShowPlan(ctx, planPath)
 		if err != nil {
 			return nil, fmt.Errorf("driftfix iter %d: show plan: %w", iter, err)
@@ -128,6 +132,7 @@ func Run(ctx context.Context, opts Options) (*Result, error) {
 		// out via the no-op check; if nothing actionable remains, the
 		// plan is functionally clean and the loop is done.
 		if len(classifications) == 0 {
+			progressf(opts.Stdout, "driftfix: iteration %d: plan has no actionable drift; converged\n", iter)
 			return &Result{GeneratedPath: generatedPath, Iterations: iter}, nil
 		}
 
@@ -147,6 +152,8 @@ func Run(ctx context.Context, opts Options) (*Result, error) {
 			if everyDriftAttrAlreadyEscalated(curDrift, alreadyEscalated) {
 				return nil, fmt.Errorf("driftfix iter %d: %w", iter, errStableUnresolved(curDrift))
 			}
+			progressf(opts.Stdout, "driftfix: iteration %d: escalating %d drift attribute(s) across %d resource(s) to ignore_changes…\n",
+				iter, driftAttrCount(curDrift), len(curDrift))
 			patched, err := applyIgnoreChangesEscalation(raw, classifications)
 			if err != nil {
 				return nil, fmt.Errorf("driftfix iter %d: ignore_changes escalation: %w", iter, err)
@@ -155,6 +162,7 @@ func Run(ctx context.Context, opts Options) (*Result, error) {
 				return nil, fmt.Errorf("driftfix iter %d: write generated.tf: %w", iter, err)
 			}
 			markEscalated(curDrift, alreadyEscalated)
+			progressf(opts.Stdout, "driftfix: iteration %d: validating ignore_changes patch…\n", iter)
 			if err := runner.Validate(ctx); err != nil {
 				return nil, fmt.Errorf("driftfix iter %d: validate after ignore_changes: %w", iter, err)
 			}
@@ -163,6 +171,8 @@ func Run(ctx context.Context, opts Options) (*Result, error) {
 		}
 		prevDrift = curDrift
 
+		progressf(opts.Stdout, "driftfix: iteration %d: patching %d drift attribute(s) across %d resource(s)…\n",
+			iter, driftAttrCount(curDrift), len(curDrift))
 		patched, err := applyDriftPatches(raw, classifications)
 		if err != nil {
 			return nil, fmt.Errorf("driftfix iter %d: patch: %w", iter, err)
@@ -170,6 +180,7 @@ func Run(ctx context.Context, opts Options) (*Result, error) {
 		if err := os.WriteFile(generatedPath, patched, 0o644); err != nil {
 			return nil, fmt.Errorf("driftfix iter %d: write generated.tf: %w", iter, err)
 		}
+		progressf(opts.Stdout, "driftfix: iteration %d: validating patch…\n", iter)
 		if err := runner.Validate(ctx); err != nil {
 			return nil, fmt.Errorf("driftfix iter %d: validate after patch: %w", iter, err)
 		}
@@ -208,6 +219,23 @@ func markEscalated(cur map[string][]string, dst map[string]map[string]struct{}) 
 			dst[addr][a] = struct{}{}
 		}
 	}
+}
+
+func driftAttrCount(drift map[string][]string) int {
+	var n int
+	for _, attrs := range drift {
+		n += len(attrs)
+	}
+	return n
+}
+
+// progressf writes a human-readable progress line to w when w is non-nil.
+// Best-effort: progress sink failures must never affect drift convergence.
+func progressf(w io.Writer, format string, args ...any) {
+	if w == nil {
+		return
+	}
+	fmt.Fprintf(w, format, args...)
 }
 
 // classificationFatal returns the first fatal condition (delete or
