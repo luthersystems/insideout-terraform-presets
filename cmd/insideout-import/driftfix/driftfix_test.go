@@ -3,6 +3,7 @@ package driftfix
 import (
 	"context"
 	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"slices"
@@ -219,6 +220,92 @@ func TestRun_DriftThenCleanConverges(t *testing.T) {
 	}
 }
 
+func TestRun_StreamsIterationProgressToStdout(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	writeFixture(t, dir)
+	runner := &scriptedRunner{plansByCall: []*tfjson.Plan{
+		updatePlan("aws_sqs_queue.x",
+			map[string]any{"name": "alpha", "delay_seconds": float64(30)},
+			map[string]any{"name": "alpha", "delay_seconds": float64(0)}),
+		emptyPlan(),
+	}}
+	var progress strings.Builder
+
+	_, err := Run(context.Background(), Options{
+		Workdir: dir,
+		Runner:  runner,
+		Stdout:  &progress,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	got := progress.String()
+	assertContainsInOrder(t, got, []string{
+		"driftfix: starting drift convergence",
+		"driftfix: iteration 1: running terraform plan",
+		"driftfix: iteration 1: reading plan details",
+		"driftfix: iteration 1: patching 1 drift attribute(s) across 1 resource(s)",
+		"driftfix: iteration 1: validating patch",
+		"driftfix: iteration 2: running terraform plan",
+		"driftfix: converged after 2 iteration(s)",
+	})
+}
+
+func TestRun_NilStdoutDoesNotWriteProgressToProcessStdout(t *testing.T) {
+	dir := t.TempDir()
+	writeFixture(t, dir)
+	runner := &scriptedRunner{plansByCall: []*tfjson.Plan{emptyPlan()}}
+
+	stdout := captureStdout(t, func() {
+		_, err := Run(context.Background(), Options{Workdir: dir, Runner: runner})
+		if err != nil {
+			t.Fatal(err)
+		}
+	})
+	if stdout != "" {
+		t.Fatalf("nil Stdout wrote to process stdout; got:\n%s", stdout)
+	}
+}
+
+func assertContainsInOrder(t *testing.T, got string, wants []string) {
+	t.Helper()
+	pos := 0
+	for _, want := range wants {
+		idx := strings.Index(got[pos:], want)
+		if idx < 0 {
+			t.Fatalf("progress stream missing %q after byte %d; got:\n%s", want, pos, got)
+		}
+		pos += idx + len(want)
+	}
+}
+
+func captureStdout(t *testing.T, fn func()) string {
+	t.Helper()
+	orig := os.Stdout
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	os.Stdout = w
+	defer func() { os.Stdout = orig }()
+
+	fn()
+
+	if err := w.Close(); err != nil {
+		t.Fatal(err)
+	}
+	out, err := io.ReadAll(r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := r.Close(); err != nil {
+		t.Fatal(err)
+	}
+	return string(out)
+}
+
 // hclResourceHasAttr parses raw HCL and reports whether the named
 // resource address has the named top-level attribute. Robust to
 // formatter whitespace and comments.
@@ -258,7 +345,8 @@ func TestRun_RecurringDriftEscalatesToIgnoreChanges(t *testing.T) {
 	// iter1=drift → drop; iter2=same drift → escalate to ignore_changes;
 	// iter3=empty → converge.
 	runner := &scriptedRunner{plansByCall: []*tfjson.Plan{driftP, driftP, emptyPlan()}}
-	res, err := Run(context.Background(), Options{Workdir: dir, Runner: runner})
+	var progress strings.Builder
+	res, err := Run(context.Background(), Options{Workdir: dir, Runner: runner, Stdout: &progress})
 	if err != nil {
 		t.Fatalf("expected escalation+convergence; got: %v", err)
 	}
@@ -283,6 +371,16 @@ func TestRun_RecurringDriftEscalatesToIgnoreChanges(t *testing.T) {
 	if !equalStringSlices(runner.calls, wantOrder) {
 		t.Errorf("call order = %v, want %v", runner.calls, wantOrder)
 	}
+	assertContainsInOrder(t, progress.String(), []string{
+		"driftfix: iteration 1: patching 1 drift attribute(s) across 1 resource(s)",
+		"driftfix: iteration 1: validating patch",
+		"driftfix: iteration 2: running terraform plan",
+		"driftfix: iteration 2: reading plan details",
+		"driftfix: iteration 2: escalating 1 drift attribute(s) across 1 resource(s) to ignore_changes",
+		"driftfix: iteration 2: validating ignore_changes patch",
+		"driftfix: iteration 3: running terraform plan",
+		"driftfix: converged after 3 iteration(s)",
+	})
 }
 
 // TestRun_DriftStableAfterEscalationFatal pins the truly-stuck case:

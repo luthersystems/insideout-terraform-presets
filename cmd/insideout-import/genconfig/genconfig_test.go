@@ -3,6 +3,7 @@ package genconfig
 import (
 	"context"
 	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -175,6 +176,112 @@ func TestRun_HappyPath(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(dir, providersFile)); err != nil {
 		t.Errorf("providers.tf missing: %v", err)
 	}
+}
+
+func TestRun_StreamsMilestoneProgressToStdout(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	runner := &fakeRunner{
+		planBody: `resource "aws_sqs_queue" "x" {
+  name = "alpha"
+}
+`,
+		schemas: minimalAWSSchema(),
+	}
+	var progress strings.Builder
+
+	_, err := Run(context.Background(), Options{
+		Workdir: dir,
+		Region:  "us-east-1",
+		Runner:  runner,
+		Stdout:  &progress,
+	}, []imported.ImportedResource{
+		{Identity: imported.ResourceIdentity{Address: "aws_sqs_queue.x", ImportID: "id-x"}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	got := progress.String()
+	assertContainsInOrder(t, got, []string{
+		"genconfig: preparing 1 aws resource",
+		"genconfig: region us-east-1: writing terraform import/provider files",
+		"genconfig: region us-east-1: terraform init",
+		"genconfig: region us-east-1: terraform plan -generate-config-out",
+		"genconfig: region us-east-1: loading provider schema",
+		"genconfig: region us-east-1: reading generated terraform config",
+		"genconfig: region us-east-1: cleaning generated terraform config",
+		"genconfig: region us-east-1: applying resource type fixups",
+		"genconfig: region us-east-1: pruning orphan imports",
+		"genconfig: region us-east-1: rewriting in-batch references",
+		"genconfig: region us-east-1: validating generated terraform config",
+		"genconfig: region us-east-1: extracting generated attributes",
+		"genconfig: region us-east-1: complete (1 resource(s) retained)",
+	})
+}
+
+func TestRun_NilStdoutDoesNotWriteProgressToProcessStdout(t *testing.T) {
+	dir := t.TempDir()
+	runner := &fakeRunner{
+		planBody: `resource "aws_sqs_queue" "x" {
+  name = "alpha"
+}
+`,
+		schemas: minimalAWSSchema(),
+	}
+
+	stdout := captureStdout(t, func() {
+		_, err := Run(context.Background(), Options{
+			Workdir: dir,
+			Region:  "us-east-1",
+			Runner:  runner,
+		}, []imported.ImportedResource{
+			{Identity: imported.ResourceIdentity{Address: "aws_sqs_queue.x", ImportID: "id-x"}},
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+	})
+	if stdout != "" {
+		t.Fatalf("nil Stdout wrote to process stdout; got:\n%s", stdout)
+	}
+}
+
+func assertContainsInOrder(t *testing.T, got string, wants []string) {
+	t.Helper()
+	pos := 0
+	for _, want := range wants {
+		idx := strings.Index(got[pos:], want)
+		if idx < 0 {
+			t.Fatalf("progress stream missing %q after byte %d; got:\n%s", want, pos, got)
+		}
+		pos += idx + len(want)
+	}
+}
+
+func captureStdout(t *testing.T, fn func()) string {
+	t.Helper()
+	orig := os.Stdout
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	os.Stdout = w
+	defer func() { os.Stdout = orig }()
+
+	fn()
+
+	if err := w.Close(); err != nil {
+		t.Fatal(err)
+	}
+	out, err := io.ReadAll(r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := r.Close(); err != nil {
+		t.Fatal(err)
+	}
+	return string(out)
 }
 
 func equalStrings(a, b []string) bool {
