@@ -159,86 +159,49 @@ func Run(ctx context.Context, req job.Request, opts Options) (job.Result, error)
 	result.Imported = resources
 	result.Resources = resourceResults(resources, dependenciesByAddress)
 
-	importedTF, providersUsed := composer.EmitImportedTF(cloud, resources, composer.EmitImportedOpts{
+	emitOpts := composer.EmitImportedOpts{
 		ImportProjectID: opts.ImportProjectID,
 		ImportSessionID: opts.ImportSessionID,
 		ImportedAt:      importedAtOrNow(opts.ImportedAt),
-	})
-	if len(importedTF) == 0 {
-		return result, fmt.Errorf("reverseimport: EmitImportedTF produced no HCL")
 	}
-	importedTFPath := filepath.Join(opts.OutputDir, importedTFFile)
-	if err := writeFileAtomic(importedTFPath, importedTF, 0o644); err != nil {
-		return result, fmt.Errorf("write imported.tf: %w", err)
-	}
-	providersTF, err := renderImportedProvidersTF(importedProviderRenderOptions{
-		Cloud:          cloud,
-		Region:         region,
-		GCPProjectID:   gcpProjectID,
-		AWSEndpointURL: opts.AWSEndpointURL,
-		ProvidersUsed:  providersUsed,
-		AWSAuth:        awsAuth,
-		// Same resource slice EmitImportedTF saw → the declared
-		// `aws.imported_<region>` alias blocks match the references it
-		// emitted. Single-region is a no-op (only `aws.imported`).
-		AWSRegions: composer.ImportedAWSRegions(resources),
-	})
-	if err != nil {
-		return result, err
-	}
-	providersTFPath := filepath.Join(opts.OutputDir, importedProvidersTF)
-	if err := writeFileAtomic(providersTFPath, providersTF, 0o644); err != nil {
-		return result, fmt.Errorf("write providers-imported.tf: %w", err)
-	}
-	if err := ensurePlaceholderFiles(opts.OutputDir, resources); err != nil {
+	if err := writeImportedTerraformArtifacts(opts.OutputDir, cloud, region, gcpProjectID, opts.AWSEndpointURL, awsAuth, resources, emitOpts); err != nil {
 		return result, err
 	}
 
 	planPath := filepath.Join(opts.OutputDir, tfplanFile)
 	validateJSONPath := filepath.Join(opts.OutputDir, validateJSONFile)
 	tfplanJSONPath := filepath.Join(opts.OutputDir, tfplanJSONFile)
-	opts.progressf("reverse-import: terraform init…\n")
-	if err := opts.runPhase("terraform init", func() error {
-		return opts.deps.tf.Init(ctx, opts.OutputDir)
-	}); err != nil {
-		return result, fmt.Errorf("terraform init final: %w", err)
-	}
-	opts.progressf("reverse-import: terraform validate…\n")
-	var validateJSON []byte
-	validateErr := opts.runPhase("terraform validate", func() error {
-		var verr error
-		validateJSON, verr = opts.deps.tf.Validate(ctx, opts.OutputDir)
-		return verr
-	})
-	if len(validateJSON) > 0 {
-		if writeErr := writeFileAtomic(validateJSONPath, validateJSON, 0o644); writeErr != nil {
-			return result, fmt.Errorf("write validate.json: %w", writeErr)
-		}
-	}
-	if validateErr != nil {
-		return result, fmt.Errorf("terraform validate final: %w", validateErr)
-	}
-	opts.progressf("reverse-import: terraform plan…\n")
-	if err := opts.runPhase("terraform plan", func() error {
-		return opts.deps.tf.Plan(ctx, opts.OutputDir, planPath)
-	}); err != nil {
-		return result, fmt.Errorf("terraform plan final: %w", err)
-	}
-	var planJSON []byte
-	if err := opts.runPhase("terraform show plan", func() error {
-		var showErr error
-		planJSON, showErr = opts.deps.tf.ShowPlanJSON(ctx, opts.OutputDir, planPath)
-		return showErr
-	}); err != nil {
-		return result, fmt.Errorf("terraform show final plan: %w", err)
-	}
-	opts.progressf("reverse-import: plan complete\n")
-	if err := writeFileAtomic(tfplanJSONPath, planJSON, 0o644); err != nil {
-		return result, fmt.Errorf("write tfplan.json: %w", err)
+	planJSON, err := runFinalPlanJSON(ctx, opts, planPath, validateJSONPath, tfplanJSONPath)
+	if err != nil {
+		return result, err
 	}
 	plan, err := job.DecodeTerraformPlan(bytes.NewReader(planJSON))
 	if err != nil {
 		return result, err
+	}
+	backfilled, changed, err := BackfillImportedAttrsFromPlan(resources, plan)
+	if err != nil {
+		return result, err
+	}
+	if changed {
+		opts.progressf("reverse-import: enriching imported attributes from final plan…\n")
+		resources = backfilled
+		if err := writeJSON(filepath.Join(opts.OutputDir, importedJSONFile), resources); err != nil {
+			return result, err
+		}
+		result.Imported = resources
+		result.Resources = resourceResults(resources, dependenciesByAddress)
+		if err := writeImportedTerraformArtifacts(opts.OutputDir, cloud, region, gcpProjectID, opts.AWSEndpointURL, awsAuth, resources, emitOpts); err != nil {
+			return result, err
+		}
+		planJSON, err = runFinalPlanJSON(ctx, opts, planPath, validateJSONPath, tfplanJSONPath)
+		if err != nil {
+			return result, err
+		}
+		plan, err = job.DecodeTerraformPlan(bytes.NewReader(planJSON))
+		if err != nil {
+			return result, err
+		}
 	}
 	result.PlanSummary = job.PlanSummaryFromTerraformPlan(plan)
 	result.ValidationIssues = issuesFromComposer(composer.ValidateFirstImportPlan(plan, composer.ValidateFirstImportPlanOpts{
@@ -291,6 +254,83 @@ func writeResult(outputDir string, result *job.Result) error {
 		return err
 	}
 	return nil
+}
+
+func writeImportedTerraformArtifacts(outputDir, cloud, region, gcpProjectID, awsEndpointURL string, awsAuth awsProviderAuth, resources []imported.ImportedResource, emitOpts composer.EmitImportedOpts) error {
+	importedTF, providersUsed := composer.EmitImportedTF(cloud, resources, emitOpts)
+	if len(importedTF) == 0 {
+		return fmt.Errorf("reverseimport: EmitImportedTF produced no HCL")
+	}
+	importedTFPath := filepath.Join(outputDir, importedTFFile)
+	if err := writeFileAtomic(importedTFPath, importedTF, 0o644); err != nil {
+		return fmt.Errorf("write imported.tf: %w", err)
+	}
+	providersTF, err := renderImportedProvidersTF(importedProviderRenderOptions{
+		Cloud:          cloud,
+		Region:         region,
+		GCPProjectID:   gcpProjectID,
+		AWSEndpointURL: awsEndpointURL,
+		ProvidersUsed:  providersUsed,
+		AWSAuth:        awsAuth,
+		// Same resource slice EmitImportedTF saw → the declared
+		// `aws.imported_<region>` alias blocks match the references it
+		// emitted. Single-region is a no-op (only `aws.imported`).
+		AWSRegions: composer.ImportedAWSRegions(resources),
+	})
+	if err != nil {
+		return err
+	}
+	providersTFPath := filepath.Join(outputDir, importedProvidersTF)
+	if err := writeFileAtomic(providersTFPath, providersTF, 0o644); err != nil {
+		return fmt.Errorf("write providers-imported.tf: %w", err)
+	}
+	if err := ensurePlaceholderFiles(outputDir, resources); err != nil {
+		return err
+	}
+	return nil
+}
+
+func runFinalPlanJSON(ctx context.Context, opts Options, planPath, validateJSONPath, tfplanJSONPath string) ([]byte, error) {
+	opts.progressf("reverse-import: terraform init…\n")
+	if err := opts.runPhase("terraform init", func() error {
+		return opts.deps.tf.Init(ctx, opts.OutputDir)
+	}); err != nil {
+		return nil, fmt.Errorf("terraform init final: %w", err)
+	}
+	opts.progressf("reverse-import: terraform validate…\n")
+	var validateJSON []byte
+	validateErr := opts.runPhase("terraform validate", func() error {
+		var verr error
+		validateJSON, verr = opts.deps.tf.Validate(ctx, opts.OutputDir)
+		return verr
+	})
+	if len(validateJSON) > 0 {
+		if writeErr := writeFileAtomic(validateJSONPath, validateJSON, 0o644); writeErr != nil {
+			return nil, fmt.Errorf("write validate.json: %w", writeErr)
+		}
+	}
+	if validateErr != nil {
+		return nil, fmt.Errorf("terraform validate final: %w", validateErr)
+	}
+	opts.progressf("reverse-import: terraform plan…\n")
+	if err := opts.runPhase("terraform plan", func() error {
+		return opts.deps.tf.Plan(ctx, opts.OutputDir, planPath)
+	}); err != nil {
+		return nil, fmt.Errorf("terraform plan final: %w", err)
+	}
+	var planJSON []byte
+	if err := opts.runPhase("terraform show plan", func() error {
+		var showErr error
+		planJSON, showErr = opts.deps.tf.ShowPlanJSON(ctx, opts.OutputDir, planPath)
+		return showErr
+	}); err != nil {
+		return nil, fmt.Errorf("terraform show final plan: %w", err)
+	}
+	opts.progressf("reverse-import: plan complete\n")
+	if err := writeFileAtomic(tfplanJSONPath, planJSON, 0o644); err != nil {
+		return nil, fmt.Errorf("write tfplan.json: %w", err)
+	}
+	return planJSON, nil
 }
 
 func populateArtifacts(result *job.Result, outputDir, generatedPath string, dcRes *depchase.Result) error {
