@@ -31,6 +31,20 @@ func applyResourceTypeFixups(raw []byte) ([]byte, error) {
 	return res.HCL, err
 }
 
+// NormalizeImportedHCL applies the resource-type fixups to provider-generated
+// HCL. It is the exported entry point for the reverse-import pipeline, which
+// must run the same normalization over the FINAL imported.tf the composer
+// emits — not just genconfig's generated.tf. The final emit is built from
+// plan-backfilled attributes (BackfillImportedAttrsFromPlan), and the plan's
+// refreshed state can re-introduce mutually-exclusive provider attributes that
+// genconfig's pass already resolved — e.g. private_ip_list alongside
+// private_ips, or subnet_mapping alongside subnets — which fail
+// `terraform validate`. Running the fixups over the emitted HCL keeps the
+// shipped artifact consistent with generated.tf. Issue #708.
+func NormalizeImportedHCL(raw []byte) ([]byte, error) {
+	return applyResourceTypeFixups(raw)
+}
+
 // fixupResult is the output of applyResourceTypeFixupsReport: the rewritten
 // HCL plus the "TYPE.NAME" addresses a registered fixup ran against.
 type fixupResult struct {
@@ -275,13 +289,19 @@ func fixupLBSubnetMappingConflict(blk *hclwrite.Block) {
 	}
 
 	// Both sides present. Decide which to keep based on whether any
-	// sub-block carries an operator-supplied static IP pin.
+	// sub-block carries an operator-supplied static IP pin. A genuine pin
+	// has a NON-EMPTY value — the reverse-import backfill (#708) re-adds
+	// subnet_mapping blocks with empty-string allocation_id /
+	// private_ipv4_address / ipv6_address (and a computed-only outpost_id),
+	// which carry no intent and would fail validate ("expected a valid IPv4
+	// address, got: "). hasUsableValue alone treats "" as set, so use the
+	// stricter hasNonEmptyValue here.
 	pinned := false
 	for _, m := range mappings {
 		mb := m.Body()
-		if hasUsableValue(mb, "allocation_id") ||
-			hasUsableValue(mb, "private_ipv4_address") ||
-			hasUsableValue(mb, "ipv6_address") {
+		if hasNonEmptyValue(mb, "allocation_id") ||
+			hasNonEmptyValue(mb, "private_ipv4_address") ||
+			hasNonEmptyValue(mb, "ipv6_address") {
 			pinned = true
 			break
 		}
@@ -626,10 +646,10 @@ func fixupSNSTopicSignatureVersionZero(blk *hclwrite.Block) {
 // fixupEBSVolumeInitializationRateZero drops the invalid literal zero
 // terraform plan -generate-config-out emits for aws_ebs_volume's
 // volume_initialization_rate. The AWS provider validates the rate in the
-// range 100-2560 MiB/s (zero is the unset provider-readback shape and carries
+// range 100-300 MiB/s (zero is the unset provider-readback shape and carries
 // no operator intent); leaving it at 0 fails `terraform validate` with
-// "expected volume_initialization_rate to be in the range …". Same family as
-// the SNS signature_version=0 quirk. Issue #708.
+// "expected volume_initialization_rate to be in the range (100 - 300), got 0".
+// Same family as the SNS signature_version=0 quirk. Issue #708.
 func fixupEBSVolumeInitializationRateZero(blk *hclwrite.Block) {
 	if isAttrLiteralZero(blk.Body(), "volume_initialization_rate") {
 		blk.Body().RemoveAttribute("volume_initialization_rate")
@@ -790,6 +810,25 @@ func hasUsableValue(body *hclwrite.Body, name string) bool {
 		sb.Write(t.Bytes)
 	}
 	return strings.TrimSpace(sb.String()) != "null"
+}
+
+// hasNonEmptyValue is hasUsableValue plus an empty-string-literal check: it
+// reports present AND not `null` AND not `""`. Used where an empty-string
+// readback carries no operator intent and must not be mistaken for a real
+// value — e.g. the LB subnet_mapping pin fields the reverse-import backfill
+// re-adds as `private_ipv4_address = ""`.
+func hasNonEmptyValue(body *hclwrite.Body, name string) bool {
+	attr := body.GetAttribute(name)
+	if attr == nil {
+		return false
+	}
+	tokens := attr.Expr().BuildTokens(nil)
+	var sb strings.Builder
+	for _, t := range tokens {
+		sb.Write(t.Bytes)
+	}
+	s := strings.TrimSpace(sb.String())
+	return s != "null" && s != `""` && s != ""
 }
 
 // isAttrLiteralNull reports whether the named attribute exists and its

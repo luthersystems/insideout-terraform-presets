@@ -261,6 +261,19 @@ func writeImportedTerraformArtifacts(outputDir, cloud, region, gcpProjectID, aws
 	if len(importedTF) == 0 {
 		return fmt.Errorf("reverseimport: EmitImportedTF produced no HCL")
 	}
+	// Normalize the emitted HCL through the same resource-type fixups
+	// genconfig runs over generated.tf. The composer emits from plan-backfilled
+	// attributes (BackfillImportedAttrsFromPlan), which can re-introduce
+	// mutually-exclusive provider attrs genconfig already resolved (e.g.
+	// private_ip_list + private_ips, subnet_mapping + subnets) and fail the
+	// final `terraform validate`. AWS only — the fixups are AWS-specific. #708.
+	if cloud == "aws" {
+		normalized, err := genconfig.NormalizeImportedHCL(importedTF)
+		if err != nil {
+			return fmt.Errorf("normalize imported.tf: %w", err)
+		}
+		importedTF = normalized
+	}
 	importedTFPath := filepath.Join(outputDir, importedTFFile)
 	if err := writeFileAtomic(importedTFPath, importedTF, 0o644); err != nil {
 		return fmt.Errorf("write imported.tf: %w", err)

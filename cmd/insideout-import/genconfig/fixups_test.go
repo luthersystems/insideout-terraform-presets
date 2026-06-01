@@ -2501,7 +2501,7 @@ func TestFixupKeyPair_ExistingPublicKeyNotOverwritten(t *testing.T) {
 
 // TestFixupEBSVolume_InitializationRateZeroDropped pins the #708 EBS quirk:
 // generate-config-out emits volume_initialization_rate = 0, but the provider
-// validates the rate in 100-2560 — zero fails validate and carries no intent.
+// validates the rate in 100-300 — zero fails validate and carries no intent.
 func TestFixupEBSVolume_InitializationRateZeroDropped(t *testing.T) {
 	t.Parallel()
 	in := []byte(`resource "aws_ebs_volume" "vol" {
@@ -2529,6 +2529,7 @@ func TestFixupEBSVolume_InitializationRateZeroDropped(t *testing.T) {
 func TestFixupEBSVolume_InitializationRateNonZeroPreserved(t *testing.T) {
 	t.Parallel()
 	in := []byte(`resource "aws_ebs_volume" "vol" {
+  size                       = 20
   volume_initialization_rate = 150
 }
 `)
@@ -2539,6 +2540,11 @@ func TestFixupEBSVolume_InitializationRateNonZeroPreserved(t *testing.T) {
 	got := string(out)
 	if !regexp.MustCompile(`(?m)^\s*volume_initialization_rate\s*=\s*150`).MatchString(got) {
 		t.Errorf("explicit volume_initialization_rate must be preserved\n--- got ---\n%s", got)
+	}
+	// Sibling attribute proves the fixup is selective (preserves the block),
+	// not a whole-block pass-through that happens to leave the rate alone.
+	if !regexp.MustCompile(`(?m)^\s*size\s*=\s*20`).MatchString(got) {
+		t.Errorf("sibling size must be preserved\n--- got ---\n%s", got)
 	}
 }
 
@@ -2606,6 +2612,13 @@ func TestFixupNetworkInterface_OverEmissionResolved(t *testing.T) {
 	if !regexp.MustCompile(`(?m)^\s*subnet_id\s*=`).MatchString(got) {
 		t.Errorf("subnet_id must be preserved\n--- got ---\n%s", got)
 	}
+	// The singular private_ip does NOT conflict with private_ips (no
+	// ConflictsWith in the provider schema) and the surviving Dario ENI
+	// carries both, so the fixup must leave it untouched. Pins the contract
+	// against a "tidy up the redundant singular" regression.
+	if !regexp.MustCompile(`(?m)^\s*private_ip\s*=\s*"10.1.134.121"`).MatchString(got) {
+		t.Errorf("singular private_ip must be preserved\n--- got ---\n%s", got)
+	}
 }
 
 // TestFixupNetworkInterface_PopulatedCountWinsOverEmptyList pins the other
@@ -2648,5 +2661,68 @@ func TestFixupNetworkInterface_ServiceManagedTypePreservedForPrune(t *testing.T)
 	got := string(out)
 	if !regexp.MustCompile(`(?m)^\s*interface_type\s*=\s*"nat_gateway"`).MatchString(got) {
 		t.Errorf("service-managed interface_type must be preserved for pruneUnimportable\n--- got ---\n%s", got)
+	}
+}
+
+// TestNormalizeImportedHCL_ResolvesBackfilledConflicts pins the #708 reverse-
+// import emit fix. The composer's final imported.tf is built from
+// plan-backfilled attributes (BackfillImportedAttrsFromPlan), which re-add
+// mutually-exclusive provider attrs genconfig already resolved — here both the
+// ENI (private_ip_list + private_ips) and ALB (subnet_mapping + subnets)
+// families, on imported.tf-shaped blocks carrying `provider = aws.imported`.
+// NormalizeImportedHCL must drop the conflicting forms so the final
+// `terraform validate` passes.
+func TestNormalizeImportedHCL_ResolvesBackfilledConflicts(t *testing.T) {
+	t.Parallel()
+	in := []byte(`resource "aws_network_interface" "eni" {
+  provider        = aws.imported
+  private_ip      = "10.1.134.121"
+  private_ip_list = ["10.1.134.121"]
+  private_ips     = ["10.1.134.121"]
+  subnet_id       = "subnet-0e866663c4c5ad4d9"
+}
+
+resource "aws_lb" "alb" {
+  provider = aws.imported
+  name     = "io-alb"
+  subnets  = ["subnet-08b4ceeaf7cbeccdb", "subnet-0a9e275a33c1d279f"]
+  subnet_mapping {
+    allocation_id        = ""
+    ipv6_address         = ""
+    outpost_id           = ""
+    private_ipv4_address = ""
+    subnet_id            = "subnet-08b4ceeaf7cbeccdb"
+  }
+  subnet_mapping {
+    allocation_id        = ""
+    ipv6_address         = ""
+    outpost_id           = ""
+    private_ipv4_address = ""
+    subnet_id            = "subnet-0a9e275a33c1d279f"
+  }
+}
+`)
+	out, err := NormalizeImportedHCL(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(out)
+	// ENI: conflicting private_ip_list dropped, private_ips + singular kept.
+	if regexp.MustCompile(`(?m)^\s*private_ip_list\s*=`).MatchString(got) {
+		t.Errorf("private_ip_list must be dropped from imported.tf\n--- got ---\n%s", got)
+	}
+	if !regexp.MustCompile(`(?m)^\s*private_ips\s*=`).MatchString(got) {
+		t.Errorf("private_ips must be preserved\n--- got ---\n%s", got)
+	}
+	// ALB: unpinned subnet_mapping blocks dropped, subnets kept.
+	if strings.Contains(got, "subnet_mapping") {
+		t.Errorf("unpinned subnet_mapping must be dropped from imported.tf\n--- got ---\n%s", got)
+	}
+	if !regexp.MustCompile(`(?m)^\s*subnets\s*=`).MatchString(got) {
+		t.Errorf("subnets must be preserved\n--- got ---\n%s", got)
+	}
+	// The aliased provider attribute must be left untouched.
+	if !regexp.MustCompile(`(?m)^\s*provider\s*=\s*aws.imported`).MatchString(got) {
+		t.Errorf("provider = aws.imported must be preserved\n--- got ---\n%s", got)
 	}
 }
