@@ -265,6 +265,13 @@ func runSingleRegion(ctx context.Context, opts Options, resources []imported.Imp
 	if err := emitImports(opts.Workdir, resources); err != nil {
 		return nil, fmt.Errorf("emit imports.tf: %w", err)
 	}
+	// Per-resource visibility (#708): list every resource in the import set
+	// so the reverse-import job log shows WHICH resources are being generated,
+	// not just a count. One line per resource — chatty but bounded by the
+	// selection size, never megabytes.
+	for _, r := range resources {
+		progressf(opts.Stdout, "genconfig: %s:   • %s (id=%s)\n", scope, r.Identity.Address, r.Identity.ImportID)
+	}
 	if err := emitProviders(opts.Workdir, providerEmitOptions{
 		Provider:       provider,
 		Region:         opts.Region,
@@ -309,6 +316,26 @@ func runSingleRegion(ctx context.Context, opts Options, resources []imported.Imp
 		progressf(opts.Stdout, "genconfig: %s: generate-config-out wrote partial config after an error; continuing cleanup…\n", scope)
 	}
 
+	out, err := cleanValidateExtract(ctx, opts, runner, provider, scope, generatedPath, resources)
+	if err != nil {
+		return nil, err
+	}
+	return &Result{GeneratedPath: generatedPath, Resources: out}, nil
+}
+
+// cleanValidateExtract runs the post-generate-config-out half of the
+// single-region pipeline: load provider schema, schema-clean, resource-type
+// fixups, un-importable + orphan prune, cross-ref rewrite, terraform validate,
+// and attribute extraction. It is shared by runSingleRegion (production,
+// which feeds it a freshly-generated generated.tf) and the golden-stack
+// regression harness (golden_stack_test.go), which feeds it a pre-captured
+// raw generated.tf so the exact cleanup path is exercised offline — no AWS,
+// no generate-config-out, just `terraform init`/`providers schema`/`validate`
+// against a committed large real-world stack.
+//
+// opts.Workdir must already contain imports.tf + providers.tf and an
+// initialized .terraform (the caller runs terraform init before calling).
+func cleanValidateExtract(ctx context.Context, opts Options, runner terraformRunner, provider, scope, generatedPath string, resources []imported.ImportedResource) ([]imported.ImportedResource, error) {
 	progressf(opts.Stdout, "genconfig: %s: loading provider schema…\n", scope)
 	schemas, err := runner.ProvidersSchema(ctx)
 	if err != nil {
@@ -328,47 +355,70 @@ func runSingleRegion(ctx context.Context, opts Options, resources []imported.Imp
 	}
 
 	// Per-resource-type fixups for cases the schema alone can't describe
-	// — today, only injecting a placeholder source + ignore_changes for
-	// aws_lambda_function so it survives `terraform validate` without
-	// real code on disk. See fixups.go.
+	// (placeholder Lambda source, SNS/EBS literal-zero drops, ENI
+	// over-emission, …). See fixups.go. The reported address list drives
+	// per-resource progress logging.
 	progressf(opts.Stdout, "genconfig: %s: applying resource type fixups…\n", scope)
-	cleaned, err = applyResourceTypeFixups(cleaned)
+	fixed, err := applyResourceTypeFixupsReport(cleaned)
 	if err != nil {
 		return nil, fmt.Errorf("resource-type fixups: %w", err)
 	}
+	cleaned = fixed.HCL
+	for _, a := range fixed.Applied {
+		progressf(opts.Stdout, "genconfig: %s:   fixup %s\n", scope, a)
+	}
 
-	// Orphan-import safety net (#362): drop any import { to = X.Y }
-	// whose target resource has no body in generated.tf. terraform
-	// plan -generate-config-out occasionally produces no body for a
-	// type it can't render (default singletons modeled by sibling
-	// types, provider gaps, etc.). The orphan would fail Stage 2c1
-	// with "Configuration for import target does not exist"; dropping
-	// it here keeps the rest of the import set running. Captured
-	// orphans are written to imports-skipped.json for traceability
-	// plus a stderr WARN per drop so the operator sees the soft-fail.
-	//
-	// This must run before cross-reference replacement. If an orphan
-	// resource remains in the cross-ref index, a surviving resource can
-	// be rewritten to reference a block that was just pruned from
-	// imports.tf and never existed in generated.tf.
+	// skipped accumulates every dropped import across both safety nets so
+	// the imports-skipped.json sibling captures them in one wire object.
+	var skipped []OrphanImport
+
+	// Un-importable prune (#708): AWS-managed (alias/aws/*) and
+	// service-managed (NAT-gateway/VPC-endpoint ENI) resources get a
+	// generated body, but the provider rejects adopting them. Drop them
+	// — body + import block — before cross-ref so nothing references a
+	// pruned block.
+	progressf(opts.Stdout, "genconfig: %s: pruning un-importable resources…\n", scope)
+	unimp, err := pruneUnimportable(opts.Workdir, cleaned)
+	if err != nil {
+		return nil, fmt.Errorf("un-importable prune: %w", err)
+	}
+	cleaned = unimp.HCL
+	for _, s := range unimp.Skipped {
+		fmt.Fprintf(os.Stderr, "genconfig: WARN: dropped un-importable resource %s (id=%q, reason=%s) — AWS-managed or service-managed; cannot be adopted into Terraform state\n",
+			s.Address, s.ImportID, s.Reason)
+		progressf(opts.Stdout, "genconfig: %s:   skipped un-importable %s (%s)\n", scope, s.Address, s.Reason)
+	}
+	if len(unimp.Skipped) > 0 {
+		skipped = append(skipped, unimp.Skipped...)
+		resources = filterSkippedResources(resources, unimp.Skipped)
+	}
+
+	// Orphan-import safety net (#362): drop any import { to = X.Y } whose
+	// target resource has no body in generated.tf (default singletons,
+	// provider gaps, …). Must run before cross-reference replacement for
+	// the same reason as the un-importable prune.
 	progressf(opts.Stdout, "genconfig: %s: pruning orphan imports…\n", scope)
-	skipped, err := pruneOrphanImports(opts.Workdir, cleaned)
+	orphans, err := pruneOrphanImports(opts.Workdir, cleaned)
 	if err != nil {
 		return nil, fmt.Errorf("orphan-import safety net: %w", err)
 	}
+	for _, s := range orphans {
+		fmt.Fprintf(os.Stderr, "genconfig: WARN: dropped orphan import %s (id=%q, reason=%s) — terraform plan -generate-config-out produced no resource body\n",
+			s.Address, s.ImportID, s.Reason)
+		progressf(opts.Stdout, "genconfig: %s:   skipped orphan %s\n", scope, s.Address)
+	}
+	if len(orphans) > 0 {
+		skipped = append(skipped, orphans...)
+		resources = filterSkippedResources(resources, orphans)
+	}
+
 	if len(skipped) > 0 {
 		if _, werr := writeOrphanImportsManifest(opts.Workdir, skipped); werr != nil {
-			// Soft-fail: we already pruned imports.tf successfully;
-			// failure to write the sibling manifest shouldn't block
-			// downstream stages.
+			// Soft-fail: imports.tf was already pruned; a missing sibling
+			// manifest shouldn't block downstream stages.
 			fmt.Fprintf(os.Stderr, "genconfig: WARN: imports-skipped.json: %v (imports.tf was pruned; continuing)\n", werr)
 		}
-		for _, s := range skipped {
-			fmt.Fprintf(os.Stderr, "genconfig: WARN: dropped orphan import %s (id=%q, reason=%s) — terraform plan -generate-config-out produced no resource body\n",
-				s.Address, s.ImportID, s.Reason)
-		}
-		progressf(opts.Stdout, "genconfig: %s: pruned %d orphan import(s)…\n", scope, len(skipped))
-		resources = filterSkippedResources(resources, skipped)
+		progressf(opts.Stdout, "genconfig: %s: pruned %d import(s) total…\n", scope, len(skipped))
 	}
 
 	progressf(opts.Stdout, "genconfig: %s: rewriting in-batch references…\n", scope)
@@ -392,7 +442,7 @@ func runSingleRegion(ctx context.Context, opts Options, resources []imported.Imp
 		return nil, fmt.Errorf("extract attributes: %w", err)
 	}
 	progressf(opts.Stdout, "genconfig: %s: complete (%d resource(s) retained)\n", scope, len(out))
-	return &Result{GeneratedPath: generatedPath, Resources: out}, nil
+	return out, nil
 }
 
 func progressScope(opts Options) string {
