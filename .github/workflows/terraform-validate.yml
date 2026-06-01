@@ -341,6 +341,26 @@ jobs:
           cache: true
       - run: make verify-supported-resources
 
+  # Replays the genconfig cleanup pipeline over captured real-world import
+  # stacks (testdata/golden/**) and asserts `terraform validate` passes
+  # (#708). Needs terraform + the AWS provider (fetched by init) but NO AWS
+  # credentials — generate-config-out is pre-captured, so the gate is
+  # deterministic and offline-from-AWS. Catches regressions in any fixup /
+  # prune / cross-ref step against a large provider-generated stack.
+  golden-stack-hcl:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+      - uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c  # v6.4.0
+        with:
+          go-version-file: go.mod
+          cache: true
+      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e  # v4.0.1
+        with:
+          terraform_version: "1.7.5"
+      - run: make test-golden-stack
+
   # Single aggregator status for branch protection to require. Lets the
   # matrix jobs above grow/shrink without updating the protection rule.
   ci-gate:
@@ -360,6 +380,7 @@ jobs:
       - verify-supported-resources
       - verify-phantom-schema
       - tflint
+      - golden-stack-hcl
     if: always()
     runs-on: ubuntu-latest
     steps:
