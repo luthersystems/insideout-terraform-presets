@@ -5,72 +5,41 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
-	"strings"
 
 	"github.com/hashicorp/hcl/v2"
 	"github.com/hashicorp/hcl/v2/hclwrite"
+
+	"github.com/luthersystems/insideout-terraform-presets/pkg/composer/imported"
 )
 
-// Reason codes for the imports-skipped.json sibling. The orphan-import
-// safety net (#362) was the first producer ("no_generated_config"); the
-// un-importable prune (#708) adds the two below for resources that DO get a
-// generated body but can never be adopted into customer Terraform state.
+// Reason codes for the imports-skipped.json sibling. The orphan-import safety
+// net (#362) was the first producer ("no_generated_config"); the un-importable
+// prune (#708) adds the two below for resources that DO get a generated body
+// but can never be adopted into customer Terraform state. The codes + the
+// per-type predicates live in pkg/composer/imported (#709) so discovery, this
+// genconfig prune, and reliable's wizard all classify identically; these
+// package-local aliases keep the genconfig call sites and tests terse.
 const (
-	// reasonAWSManagedKMSAlias marks an aws_kms_alias whose name carries
-	// the reserved `alias/aws/` prefix — an AWS-managed default alias
-	// (alias/aws/rds, alias/aws/ebs, …). The provider rejects creating or
-	// importing any alias with that prefix, so it can never be adopted.
-	reasonAWSManagedKMSAlias = "aws_managed_kms_alias"
-
-	// reasonServiceManagedENI marks an aws_network_interface whose
-	// interface_type is owned by an AWS service (nat_gateway, vpc_endpoint,
-	// …) rather than a customer. These ENIs are managed by their parent
-	// resource (the NAT gateway, the VPC endpoint, …) and cannot be adopted
-	// as a standalone aws_network_interface.
-	reasonServiceManagedENI = "service_managed_eni"
+	reasonAWSManagedKMSAlias = imported.ReasonAWSManagedKMSAlias
+	reasonServiceManagedENI  = imported.ReasonServiceManagedENI
 )
-
-// importableENIInterfaceTypes is the set of interface_type values that an
-// aws_network_interface can legitimately carry for a customer-managed,
-// importable ENI. The empty string means the attribute is absent (the
-// standard case once fixupNetworkInterfaceProviderQuirks drops the
-// non-settable literal "interface"). efa/efa-only/branch/trunk are the only
-// values the provider's interface_type argument actually accepts on create.
-// Every OTHER describe-only value (nat_gateway, vpc_endpoint,
-// network_load_balancer, lambda, …) signals a service-managed ENI that is
-// owned by its parent resource and is not standalone-importable.
-var importableENIInterfaceTypes = map[string]struct{}{
-	"":          {},
-	"interface": {}, // standard ENI; fixup normally drops the literal first
-	"efa":       {},
-	"efa-only":  {},
-	"branch":    {},
-	"trunk":     {},
-}
-
-// isServiceManagedENIInterfaceType reports whether an interface_type value
-// denotes an AWS-service-managed ENI (and therefore an un-importable one).
-// Forward-compatible: any interface_type AWS introduces for a managed ENI
-// family is treated as service-managed without a code change here.
-func isServiceManagedENIInterfaceType(v string) bool {
-	_, importable := importableENIInterfaceTypes[v]
-	return !importable
-}
 
 // unimportableReason classifies a generated resource block as inherently
 // un-importable, returning the reason code (one of the reason* consts) or ""
 // when the block is importable. It inspects only the post-cleanup HCL body,
-// never live schema — the same constraint the resource-type fixups obey.
+// never live schema — the same constraint the resource-type fixups obey — and
+// delegates the actual rules to the shared pkg/composer/imported predicates so
+// the genconfig prune and discovery-time gating never drift.
 func unimportableReason(tfType string, body *hclwrite.Body) string {
 	switch tfType {
 	case "aws_kms_alias":
-		if name := stringLitFromAttr(body.GetAttribute("name")); strings.HasPrefix(name, "alias/aws/") {
+		if imported.IsAWSManagedKMSAliasName(stringLitFromAttr(body.GetAttribute("name"))) {
 			return reasonAWSManagedKMSAlias
 		}
 	case "aws_network_interface":
-		// isServiceManagedENIInterfaceType already returns false for "" (the
-		// absent / standard case), so no separate empty check is needed.
-		if it := stringLitFromAttr(body.GetAttribute("interface_type")); isServiceManagedENIInterfaceType(it) {
+		// IsServiceManagedENIInterfaceType returns false for "" (the absent /
+		// standard case), so no separate empty check is needed.
+		if imported.IsServiceManagedENIInterfaceType(stringLitFromAttr(body.GetAttribute("interface_type"))) {
 			return reasonServiceManagedENI
 		}
 	}

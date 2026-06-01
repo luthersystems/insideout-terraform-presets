@@ -72,6 +72,18 @@ type UnsupportedResource struct {
 	// gcpdiscover/unsupported.go). The picker falls back to "Other" when
 	// Category returns the empty string for an unknown type.
 	Group string `json:"group,omitempty"`
+
+	// Reason is the machine-readable code explaining why this row is
+	// unsupported, present only for instance-level un-importables that the
+	// discovery partition routed here — a *supported type* whose specific
+	// instance can't be adopted into Terraform state (#709). One of the
+	// imported.Reason* codes (e.g. "aws_managed_kms_alias",
+	// "service_managed_eni"). Empty for type-level unsupported rows (a type
+	// with no discoverer at all), where the absence of a Terraform mapping is
+	// itself the reason and the picker shows its generic "coming soon"
+	// tooltip. reliable (reliable#1967) maps this code to the greyed-out row's
+	// explanation via imported.ReasonDescription.
+	Reason string `json:"reason,omitempty"`
 }
 
 // UnsupportedManifest is the on-disk wrapper-object shape of
