@@ -68,7 +68,9 @@ func unimportableReason(tfType string, body *hclwrite.Body) string {
 			return reasonAWSManagedKMSAlias
 		}
 	case "aws_network_interface":
-		if it := stringLitFromAttr(body.GetAttribute("interface_type")); isServiceManagedENIInterfaceType(it) && it != "" {
+		// isServiceManagedENIInterfaceType already returns false for "" (the
+		// absent / standard case), so no separate empty check is needed.
+		if it := stringLitFromAttr(body.GetAttribute("interface_type")); isServiceManagedENIInterfaceType(it) {
 			return reasonServiceManagedENI
 		}
 	}

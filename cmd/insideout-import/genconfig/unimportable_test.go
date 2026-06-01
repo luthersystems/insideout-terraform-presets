@@ -131,6 +131,18 @@ resource "aws_network_interface" "standard" {
 	if !strings.Contains(got, `"standard"`) {
 		t.Errorf("standard ENI must be preserved\n%s", got)
 	}
+	// The matching import block must be removed from imports.tf (the
+	// to-traversal parse + rewrite path), and the standard one preserved.
+	importsOut, err := os.ReadFile(filepath.Join(dir, importsFile))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(importsOut), "aws_network_interface.nat") {
+		t.Errorf("nat_gateway import block must be removed from imports.tf\n%s", importsOut)
+	}
+	if !strings.Contains(string(importsOut), "aws_network_interface.standard") {
+		t.Errorf("standard import block must be preserved\n%s", importsOut)
+	}
 }
 
 // TestPruneUnimportable_NoopWhenAllImportable pins the byte-stable round-trip

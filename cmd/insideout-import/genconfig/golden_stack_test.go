@@ -2,6 +2,7 @@ package genconfig
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -76,17 +77,30 @@ func TestGoldenStackValidates(t *testing.T) {
 	}
 
 	// The un-importable prune must have dropped the AWS-managed KMS aliases
-	// and the NAT-gateway ENI the selection carried; pin that they did not
-	// survive into the retained set, so a regression that stops pruning them
-	// (and thus re-breaks validate) is caught even if validate somehow passed.
+	// and the NAT-gateway ENI the selection carried; pin that each was
+	// recorded against its OWN address with the right reason (not just that
+	// the reason strings appear somewhere), so a regression that stops
+	// pruning them — or mis-tags a different resource — is caught even if
+	// validate somehow passed.
 	skippedRaw, err := os.ReadFile(filepath.Join(work, orphanImportsFile))
 	if err != nil {
 		t.Fatalf("read %s: %v", orphanImportsFile, err)
 	}
-	skipped := string(skippedRaw)
-	for _, want := range []string{reasonAWSManagedKMSAlias, reasonServiceManagedENI} {
-		if !strings.Contains(skipped, want) {
-			t.Errorf("expected %s reason in imports-skipped.json:\n%s", want, skipped)
+	var manifest orphanImportsWrapper
+	if err := json.Unmarshal(skippedRaw, &manifest); err != nil {
+		t.Fatalf("decode %s: %v", orphanImportsFile, err)
+	}
+	reasonByAddr := map[string]string{}
+	for _, s := range manifest.Imports {
+		reasonByAddr[s.Address] = s.Reason
+	}
+	wantPruned := map[string]string{
+		"aws_kms_alias.alias_aws_rds":                 reasonAWSManagedKMSAlias,
+		"aws_network_interface.eni_0ce4fc160b647c275": reasonServiceManagedENI,
+	}
+	for addr, wantReason := range wantPruned {
+		if got := reasonByAddr[addr]; got != wantReason {
+			t.Errorf("imports-skipped.json: %s recorded reason %q, want %q", addr, got, wantReason)
 		}
 	}
 	t.Logf("golden Dario stack validated: %d resource(s) retained", len(out))
