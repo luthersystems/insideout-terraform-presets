@@ -43,10 +43,13 @@ func TestGoldenStackValidates(t *testing.T) {
 		t.Skip("golden-stack HCL test: terraform not found on PATH")
 	}
 
+	// Fixtures carry a .golden suffix so the repo's tflint --recursive and
+	// terraform fmt -check do NOT lint this intentionally-raw provider output;
+	// the harness writes them under their real .tf names into the scratch dir.
 	fixtureDir := filepath.Join("testdata", "golden", "dario")
 	work := t.TempDir()
 	for _, name := range []string{"imports.tf", "providers.tf", generatedFile} {
-		copyFixtureFile(t, filepath.Join(fixtureDir, name), filepath.Join(work, name))
+		copyFixtureFile(t, filepath.Join(fixtureDir, name+".golden"), filepath.Join(work, name))
 	}
 
 	ctx := context.Background()

@@ -14,11 +14,16 @@ asserts the result is schema-valid. Because `terraform plan
 
 ## Fixture files
 
+Files carry a `.tf.golden` suffix (not `.tf`) so the repo's `tflint --recursive`
+and `terraform fmt -check -recursive` do not lint this intentionally-raw,
+pre-cleanup provider output. The harness writes them under their real `.tf`
+names into a scratch dir at test time.
+
 | File | What it is |
 |---|---|
-| `generated.tf` | Raw output of `terraform plan -generate-config-out` (pre-cleanup, with all the provider over-emission the fixups exist to fix). |
-| `imports.tf` | The full pre-prune `import {}` block set (orphans included, so the orphan-prune step is exercised). |
-| `providers.tf` | The provider block genconfig emits for the stack. |
+| `generated.tf.golden` | Raw output of `terraform plan -generate-config-out` (pre-cleanup, with all the provider over-emission the fixups exist to fix). |
+| `imports.tf.golden` | The full pre-prune `import {}` block set (orphans included, so the orphan-prune step is exercised). |
+| `providers.tf.golden` | The provider block genconfig emits for the stack. |
 
 ## Stacks
 
@@ -42,7 +47,9 @@ insideout-import reverse --input <request>.json --output-dir /tmp/cap \
 #    generate-config-out in a clean dir so generated.tf is the raw output.
 #    See the capture procedure in the #708 PR description.
 
-# 3. Copy generated.tf, imports.tf, providers.tf into testdata/golden/<stack>/.
+# 3. Copy generated.tf, imports.tf, providers.tf into testdata/golden/<stack>/
+#    with a .golden suffix (generated.tf.golden, imports.tf.golden,
+#    providers.tf.golden) so tflint / terraform fmt skip them.
 ```
 
 ## Running the gate
