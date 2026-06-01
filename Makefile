@@ -81,6 +81,10 @@ test: ## Run go test -race for the whole module.
 test-roundtrip: ## Live AWS discover->emit->plan round-trip for the import flow (#652). Needs real AWS creds (aws_jump first) and terraform; creates and destroys real resources.
 	RUN_LIVE_ROUNDTRIP=1 $(GO) test -tags=integration -run TestLiveRoundTrip ./cmd/insideout-import/... -v -timeout 20m
 
+.PHONY: test-golden-stack
+test-golden-stack: ## Replay genconfig cleanup over captured real-world stacks and assert `terraform validate` passes (#708). Needs terraform + the AWS provider; NO AWS creds.
+	RUN_GOLDEN_HCL=1 $(GO) test -run TestGoldenStackValidates ./cmd/insideout-import/genconfig/... -v -count=1 -timeout 10m
+
 .PHONY: go-fmt-check
 go-fmt-check: ## Fail if any tracked Go file is not gofmt-clean (CI gate, #647).
 	@unformatted=$$(gofmt -l $$(git ls-files '*.go')); \

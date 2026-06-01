@@ -1,0 +1,18 @@
+terraform {
+  required_providers {
+    aws = {
+      source = "hashicorp/aws"
+      # Pinned to the exact provider version this fixture was captured
+      # against. A golden regression gate must be deterministic: cleanGenerated
+      # reads the live provider schema and `terraform validate` enforces the
+      # live provider's rules, so a floating `~> 6.0` lets a newer provider
+      # (different schema / validation) fail the gate for reasons unrelated to
+      # the fixups under test. Re-pin when the fixture is re-captured.
+      version = "6.43.0"
+    }
+  }
+}
+
+provider "aws" {
+  region = "us-east-1"
+}
