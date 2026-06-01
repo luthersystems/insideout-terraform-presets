@@ -2370,6 +2370,82 @@ resource "aws_other_resource" "extra" {
 	}
 }
 
+// TestFixupSNSTopic_SignatureVersionZeroDropped covers #708: broad AWS
+// imports can produce signature_version = 0 for SNS topics, but the AWS
+// provider validator only accepts 1 or 2. The zero carries no live-state
+// information, so drop it before terraform validate.
+func TestFixupSNSTopic_SignatureVersionZeroDropped(t *testing.T) {
+	t.Parallel()
+	in := []byte(`resource "aws_sns_topic" "topic" {
+  name              = "io-f-v6e-hzw-zt-prod-luthersystems-insideout-cwm-cwm0-alarms"
+  signature_version = 0
+}
+`)
+	out, err := applyResourceTypeFixups(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(out)
+	if regexp.MustCompile(`(?m)^\s*signature_version\s*=`).MatchString(got) {
+		t.Errorf("signature_version = 0 must be dropped\n--- got ---\n%s", got)
+	}
+	if !regexp.MustCompile(`(?m)^\s*name\s*=\s*"io-f-v6e-hzw-zt-prod-luthersystems-insideout-cwm-cwm0-alarms"`).MatchString(got) {
+		t.Errorf("topic name must be preserved\n--- got ---\n%s", got)
+	}
+}
+
+// TestFixupSNSTopic_SignatureVersionNonZeroPreserved pins conservative
+// scope: a real explicit SNS signature_version must survive. Only the
+// invalid generate-config-out literal zero is normalized away.
+func TestFixupSNSTopic_SignatureVersionNonZeroPreserved(t *testing.T) {
+	t.Parallel()
+	for _, value := range []string{"1", "2"} {
+		value := value
+		t.Run("version_"+value, func(t *testing.T) {
+			t.Parallel()
+			in := []byte(`resource "aws_sns_topic" "topic" {
+  name              = "topic"
+  signature_version = ` + value + `
+}
+`)
+			out, err := applyResourceTypeFixups(in)
+			if err != nil {
+				t.Fatal(err)
+			}
+			got := string(out)
+			if !regexp.MustCompile(`(?m)^\s*signature_version\s*=\s*` + value).MatchString(got) {
+				t.Errorf("signature_version=%s must be preserved\n--- got ---\n%s", value, got)
+			}
+		})
+	}
+}
+
+// TestFixupSNSTopic_OnlyAffectsAWSSNSTopicBlocks pins resource-type
+// isolation: the signature_version transform belongs only to
+// aws_sns_topic.
+func TestFixupSNSTopic_OnlyAffectsAWSSNSTopicBlocks(t *testing.T) {
+	t.Parallel()
+	in := []byte(`resource "aws_sns_topic" "topic" {
+  signature_version = 0
+}
+
+resource "aws_other_resource" "extra" {
+  signature_version = 0
+}
+`)
+	out, err := applyResourceTypeFixups(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(out)
+	if regexp.MustCompile(`(?s)resource "aws_sns_topic" "topic"[^}]*signature_version\s*=`).MatchString(got) {
+		t.Errorf("aws_sns_topic.signature_version=0 must be dropped\n--- got ---\n%s", got)
+	}
+	if !regexp.MustCompile(`(?s)resource "aws_other_resource" "extra"[^}]*signature_version\s*=\s*0`).MatchString(got) {
+		t.Errorf("aws_other_resource.signature_version must be preserved\n--- got ---\n%s", got)
+	}
+}
+
 // TestFixupKeyPair_NoPublicKeyInjectsPlaceholderAndIgnore pins the #665
 // fix: an imported aws_key_pair lands with no `public_key` (EC2 never
 // returns key material). The fixup injects the shared placeholder and

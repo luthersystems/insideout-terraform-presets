@@ -343,6 +343,139 @@ func TestRun_RecoversFromPlanErrorWhenFileWritten(t *testing.T) {
 	}
 }
 
+func TestRun_DarioBroadAWSStackFixupsReachValidate(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	runner := &recoveringFakeRunner{
+		fakeRunner: fakeRunner{
+			planBody: `resource "aws_lambda_function" "io_f_v6e_hzw_zt_prod_luthersystems_insideout_lambda_lambdaedf3" {
+  function_name = "io-f-v6e-hzw-zt-prod-luthersystems-insideout-lambda-lambdaedf3"
+  role          = "arn:aws:iam::141812438321:role/io-f-v6e-hzw-zt-lambda-exec"
+  handler       = "index.handler"
+  runtime       = "nodejs20.x"
+  filename      = null
+  image_uri     = null
+  s3_bucket     = null
+}
+
+resource "aws_lb" "io_f_v6e_hzw_zt_alb" {
+  name    = "io-f-v6e-hzw-zt-alb"
+  subnets = ["subnet-08b4ceeaf7cbeccdb", "subnet-0a9e275a33c1d279f"]
+  subnet_mapping {
+    subnet_id = "subnet-08b4ceeaf7cbeccdb"
+  }
+  subnet_mapping {
+    subnet_id = "subnet-0a9e275a33c1d279f"
+  }
+}
+
+resource "aws_lb_target_group" "io_f_v6e_hzw_zt_tg" {
+  name                = "io-f-v6e-hzw-zt-tg"
+  port                = 80
+  protocol            = "HTTP"
+  target_control_port = 0
+  vpc_id              = "vpc-0328efde06fc443f8"
+  target_failover {
+    on_deregistration = null
+    on_unhealthy      = null
+  }
+  target_health_state {
+    enable_unhealthy_connection_termination = null
+    unhealthy_draining_interval             = null
+  }
+}
+
+resource "aws_sns_topic" "io_f_v6e_hzw_zt_prod_luthersystems_insideout_cwm_cwm0_alarms" {
+  name              = "io-f-v6e-hzw-zt-prod-luthersystems-insideout-cwm-cwm0-alarms"
+  signature_version = 0
+}
+
+resource "aws_subnet" "subnet_08b4ceeaf7cbeccdb" {
+  vpc_id                          = "vpc-0328efde06fc443f8"
+  cidr_block                      = "10.1.128.0/20"
+  availability_zone               = "us-east-1a"
+  availability_zone_id            = "use1-az1"
+  enable_lni_at_device_index      = 0
+  map_customer_owned_ip_on_launch = false
+}
+`,
+			schemas: &tfjson.ProviderSchemas{Schemas: map[string]*tfjson.ProviderSchema{
+				awsProviderKey: {ResourceSchemas: map[string]*tfjson.Schema{}},
+			}},
+		},
+		planError: errors.New("terraform validate reported invalid generated config"),
+	}
+
+	resources := []imported.ImportedResource{
+		{Identity: imported.ResourceIdentity{
+			Type:     "aws_lambda_function",
+			Address:  "aws_lambda_function.io_f_v6e_hzw_zt_prod_luthersystems_insideout_lambda_lambdaedf3",
+			ImportID: "io-f-v6e-hzw-zt-prod-luthersystems-insideout-lambda-lambdaedf3",
+		}},
+		{Identity: imported.ResourceIdentity{
+			Type:     "aws_lb",
+			Address:  "aws_lb.io_f_v6e_hzw_zt_alb",
+			ImportID: "arn:aws:elasticloadbalancing:us-east-1:141812438321:loadbalancer/app/io-f-v6e-hzw-zt-alb/bcda3f52ff22fa50",
+		}},
+		{Identity: imported.ResourceIdentity{
+			Type:     "aws_lb_target_group",
+			Address:  "aws_lb_target_group.io_f_v6e_hzw_zt_tg",
+			ImportID: "arn:aws:elasticloadbalancing:us-east-1:141812438321:targetgroup/io-f-v6e-hzw-zt-tg/e047d5538a92a4c3",
+		}},
+		{Identity: imported.ResourceIdentity{
+			Type:     "aws_sns_topic",
+			Address:  "aws_sns_topic.io_f_v6e_hzw_zt_prod_luthersystems_insideout_cwm_cwm0_alarms",
+			ImportID: "arn:aws:sns:us-east-1:141812438321:io-f-v6e-hzw-zt-prod-luthersystems-insideout-cwm-cwm0-alarms",
+		}},
+		{Identity: imported.ResourceIdentity{
+			Type:     "aws_subnet",
+			Address:  "aws_subnet.subnet_08b4ceeaf7cbeccdb",
+			ImportID: "subnet-08b4ceeaf7cbeccdb",
+		}},
+	}
+
+	res, err := Run(context.Background(), Options{
+		Workdir: dir,
+		Region:  "us-east-1",
+		Runner:  runner,
+	}, resources)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(res.Resources) != len(resources) {
+		t.Fatalf("Resources retained = %d, want %d", len(res.Resources), len(resources))
+	}
+	if runner.validateCalled != 1 {
+		t.Fatalf("validateCalled = %d, want 1", runner.validateCalled)
+	}
+
+	validateBody := string(runner.bytesAtValidate)
+	for _, forbidden := range []string{
+		`(?m)^\s*signature_version\s*=\s*0`,
+		`(?m)^\s*target_control_port\s*=\s*0`,
+		`(?m)^\s*target_failover\s*\{`,
+		`(?m)^\s*target_health_state\s*\{`,
+		`(?m)^\s*subnet_mapping\s*\{`,
+		`(?m)^\s*availability_zone_id\s*=`,
+		`(?m)^\s*enable_lni_at_device_index\s*=\s*0`,
+		`(?m)^\s*map_customer_owned_ip_on_launch\s*=`,
+	} {
+		if regexp.MustCompile(forbidden).MatchString(validateBody) {
+			t.Fatalf("validate saw invalid generated Terraform matching %q:\n%s", forbidden, validateBody)
+		}
+	}
+	for _, required := range []string{
+		`filename\s*=\s*"lambda_placeholder\.zip"`,
+		`(?m)^\s*subnets\s*=`,
+		`(?m)^\s*name\s*=\s*"io-f-v6e-hzw-zt-prod-luthersystems-insideout-cwm-cwm0-alarms"`,
+		`(?m)^\s*availability_zone\s*=\s*"us-east-1a"`,
+	} {
+		if !regexp.MustCompile(required).MatchString(validateBody) {
+			t.Fatalf("validate body missing required pattern %q:\n%s", required, validateBody)
+		}
+	}
+}
+
 func TestFilterSkippedResourcesDropsOrphanAddresses(t *testing.T) {
 	t.Parallel()
 	in := []imported.ImportedResource{

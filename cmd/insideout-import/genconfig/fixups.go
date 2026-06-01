@@ -68,6 +68,7 @@ var resourceTypeFixups = map[string]func(*hclwrite.Block){
 	"aws_vpc_endpoint":          fixupVPCEndpointEmptyDNSDomains,
 	"aws_db_instance":           fixupDBInstanceProviderQuirks,
 	"aws_secretsmanager_secret": fixupSecretsManagerSecretDefaults,
+	"aws_sns_topic":             fixupSNSTopicSignatureVersionZero,
 	"google_compute_firewall":   fixupComputeFirewallEmptySourceTargetArrays,
 }
 
@@ -586,6 +587,16 @@ func fixupSecretsManagerSecretDefaults(blk *hclwrite.Block) {
 	}
 	if isAttrLiteralNull(body, "recovery_window_in_days") {
 		body.SetAttributeValue("recovery_window_in_days", cty.NumberIntVal(30))
+	}
+}
+
+// fixupSNSTopicSignatureVersionZero drops the invalid literal zero
+// terraform plan -generate-config-out can emit for SNS topics. The AWS
+// provider validates signature_version as 1 or 2; zero is the unset
+// provider-readback shape and carries no operator intent. Issue #708.
+func fixupSNSTopicSignatureVersionZero(blk *hclwrite.Block) {
+	if isAttrLiteralZero(blk.Body(), "signature_version") {
+		blk.Body().RemoveAttribute("signature_version")
 	}
 }
 
