@@ -27,10 +27,30 @@ import (
 // methods that need re-emission) is a one-line addition to the table
 // rather than a refactor.
 func applyResourceTypeFixups(raw []byte) ([]byte, error) {
+	res, err := applyResourceTypeFixupsReport(raw)
+	return res.HCL, err
+}
+
+// fixupResult is the output of applyResourceTypeFixupsReport: the rewritten
+// HCL plus the "TYPE.NAME" addresses a registered fixup ran against.
+type fixupResult struct {
+	// HCL is the post-fixup generated config.
+	HCL []byte
+	// Applied lists the addresses a registered fixup closure ran for, for
+	// per-resource progress logging. It reflects fixups ATTEMPTED (a
+	// registered closure ran for that block) — a useful "what did genconfig
+	// touch" signal even though a given closure may be a no-op on a block.
+	Applied []string
+}
+
+// applyResourceTypeFixupsReport is applyResourceTypeFixups plus the list of
+// addresses touched, returned together in a fixupResult.
+func applyResourceTypeFixupsReport(raw []byte) (fixupResult, error) {
 	f, diags := hclwrite.ParseConfig(raw, generatedFile, hcl.Pos{Line: 1, Column: 1})
 	if diags.HasErrors() {
-		return nil, fmt.Errorf("parse for fixups: %s", diags.Error())
+		return fixupResult{}, fmt.Errorf("parse for fixups: %s", diags.Error())
 	}
+	var applied []string
 	for _, blk := range f.Body().Blocks() {
 		if blk.Type() != "resource" {
 			continue
@@ -44,8 +64,9 @@ func applyResourceTypeFixups(raw []byte) ([]byte, error) {
 			continue
 		}
 		fix(blk)
+		applied = append(applied, labels[0]+"."+labels[1])
 	}
-	return f.Bytes(), nil
+	return fixupResult{HCL: f.Bytes(), Applied: applied}, nil
 }
 
 // resourceTypeFixups maps a Terraform resource type to its post-cleanup
@@ -69,6 +90,8 @@ var resourceTypeFixups = map[string]func(*hclwrite.Block){
 	"aws_db_instance":           fixupDBInstanceProviderQuirks,
 	"aws_secretsmanager_secret": fixupSecretsManagerSecretDefaults,
 	"aws_sns_topic":             fixupSNSTopicSignatureVersionZero,
+	"aws_ebs_volume":            fixupEBSVolumeInitializationRateZero,
+	"aws_network_interface":     fixupNetworkInterfaceProviderQuirks,
 	"google_compute_firewall":   fixupComputeFirewallEmptySourceTargetArrays,
 }
 
@@ -597,6 +620,90 @@ func fixupSecretsManagerSecretDefaults(blk *hclwrite.Block) {
 func fixupSNSTopicSignatureVersionZero(blk *hclwrite.Block) {
 	if isAttrLiteralZero(blk.Body(), "signature_version") {
 		blk.Body().RemoveAttribute("signature_version")
+	}
+}
+
+// fixupEBSVolumeInitializationRateZero drops the invalid literal zero
+// terraform plan -generate-config-out emits for aws_ebs_volume's
+// volume_initialization_rate. The AWS provider validates the rate in the
+// range 100-2560 MiB/s (zero is the unset provider-readback shape and carries
+// no operator intent); leaving it at 0 fails `terraform validate` with
+// "expected volume_initialization_rate to be in the range …". Same family as
+// the SNS signature_version=0 quirk. Issue #708.
+func fixupEBSVolumeInitializationRateZero(blk *hclwrite.Block) {
+	if isAttrLiteralZero(blk.Body(), "volume_initialization_rate") {
+		blk.Body().RemoveAttribute("volume_initialization_rate")
+	}
+}
+
+// fixupNetworkInterfaceProviderQuirks resolves the over-emission terraform
+// plan -generate-config-out produces for aws_network_interface. The provider
+// schema exposes the same data through three mutually-exclusive interfaces,
+// but generate-config-out emits ALL of them, so `terraform validate` reports
+// a wall of "Conflicting configuration arguments":
+//
+//   - the *_list form (private_ip_list, ipv6_address_list) plus its
+//     *_list_enabled flag conflicts with the plural form (private_ips,
+//     ipv6_addresses). We always drop the *_list interface — it is the
+//     alternative representation and the plural form carries the same data.
+//   - each plural list (private_ips, ipv6_addresses, ipv4_prefixes,
+//     ipv6_prefixes) conflicts with its *_count sibling. generate-config-out
+//     emits both: a populated list AND a literal-zero count, or an empty
+//     list AND a zero count. We keep whichever side carries intent (a
+//     non-empty list, else a non-zero count) and drop the other; when both
+//     are empty/zero we drop both so the attribute defaults.
+//
+// interface_type is also normalized: the literal "interface" is the
+// describe-only value generate-config-out emits for a standard ENI, but the
+// provider only accepts efa/efa-only/branch/trunk on create, so we drop it.
+// Service-managed interface_type values (nat_gateway, vpc_endpoint, …) are
+// left in place — pruneUnimportable drops those whole resources, since a
+// service-owned ENI cannot be adopted as a standalone aws_network_interface.
+// Issue #708.
+func fixupNetworkInterfaceProviderQuirks(blk *hclwrite.Block) {
+	body := blk.Body()
+
+	// The *_list interface is always the redundant alternative form.
+	for _, name := range []string{
+		"private_ip_list", "private_ip_list_enabled",
+		"ipv6_address_list", "ipv6_address_list_enabled",
+	} {
+		body.RemoveAttribute(name)
+	}
+
+	// Resolve each plural/count conflict, preferring the side with intent.
+	for _, pair := range [][2]string{
+		{"private_ips", "private_ips_count"},
+		{"ipv6_addresses", "ipv6_address_count"},
+		{"ipv4_prefixes", "ipv4_prefix_count"},
+		{"ipv6_prefixes", "ipv6_prefix_count"},
+	} {
+		resolveENIListCountConflict(body, pair[0], pair[1])
+	}
+
+	if v := stringLitFromAttr(body.GetAttribute("interface_type")); v == "interface" {
+		body.RemoveAttribute("interface_type")
+	}
+}
+
+// resolveENIListCountConflict drops one (or both) of a mutually-exclusive
+// aws_network_interface plural-list / *_count attribute pair so only the
+// side carrying operator intent survives:
+//
+//   - a non-empty list wins → drop the count
+//   - else a non-zero count wins → drop the (empty) list
+//   - else both are empty/zero → drop both so the provider default applies
+func resolveENIListCountConflict(body *hclwrite.Body, listName, countName string) {
+	listHasValue := hasUsableValue(body, listName) && !isAttrLiteralEmptyList(body, listName)
+	countHasValue := body.GetAttribute(countName) != nil && !isAttrLiteralZero(body, countName) && hasUsableValue(body, countName)
+	switch {
+	case listHasValue:
+		body.RemoveAttribute(countName)
+	case countHasValue:
+		body.RemoveAttribute(listName)
+	default:
+		body.RemoveAttribute(listName)
+		body.RemoveAttribute(countName)
 	}
 }
 
