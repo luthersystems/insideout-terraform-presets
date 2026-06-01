@@ -911,6 +911,22 @@ Exit codes:
 		}
 	}
 
+	// #709: route instance-level un-importables (AWS-managed alias/aws/* KMS
+	// aliases, service/parent-managed ENIs) out of imported.json before it is
+	// written. They are supported *types* but un-importable *instances*; left
+	// in a selection they fail `terraform plan -generate-config-out` for the
+	// whole import (#708). The dropped rows are merged into unsupported.json
+	// below (when --include-unsupported) so the wizard can grey them out with a
+	// reason; either way they are excluded from imported.json and reported.
+	resources, unimportableRows := partitionUnimportable(resources)
+	if len(unimportableRows) > 0 {
+		fmt.Fprintf(os.Stderr,
+			"discover: excluded %d un-importable resource(s) from imported.json "+
+				"(supported type, un-importable instance — e.g. AWS-managed alias/aws/* "+
+				"KMS aliases, service-managed ENIs): %s\n",
+			len(unimportableRows), unimportableReasonsSummary(unimportableRows))
+	}
+
 	out, n, err := writeManifest(*outputDir, cloud, resources)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "discover: %v\n", err)
@@ -988,6 +1004,12 @@ Exit codes:
 					"discover: WARN: --include-unsupported: cap fired (max_results=%d); unsupported.json contains the first %d resources sorted by (Type, Region, ID); truncated=true marker set.\n",
 					*maxUnsupportedResults, len(unsupported))
 			}
+			// Merge the instance-level un-importables partitioned out of
+			// imported.json above (#709) with the type-level enumerator
+			// output so the wizard renders both, each greyed-out with its
+			// reason. writeUnsupportedManifest re-sorts by (Type, Region, ID),
+			// so merge order does not affect the on-disk shape.
+			unsupported = append(unsupported, unimportableRows...)
 			uout, un, werr := writeUnsupportedManifest(*outputDir, unsupported, truncated, *maxUnsupportedResults)
 			if werr != nil {
 				fmt.Fprintf(os.Stderr, "discover: WARN: --include-unsupported: write manifest: %v; imported.json was written; continuing without unsupported.json\n", werr)

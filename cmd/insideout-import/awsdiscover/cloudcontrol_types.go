@@ -577,6 +577,20 @@ var cloudControlTypeConfigs = []cloudControlConfig{
 		ImportIDFromIdentifier: passthroughImportID,
 		NameHintFromProperties: passthroughIdentifierName,
 		TagsFromProperties:     tagsFromKey("Tags"),
+		// Surface interface_type so the instance-level importability
+		// classifier (imported.UnimportableReason, #709) can grey out
+		// service/parent-managed ENIs (nat_gateway, vpc_endpoint, …) in the
+		// wizard instead of offering them as importable. Absent-safe: when the
+		// CloudControl payload omits InterfaceType the key is simply not set
+		// and the ENI is treated as importable, with the genconfig prune (#708)
+		// as the backstop.
+		NativeIDsFromProperties: func(identifier string, props map[string]any) map[string]string {
+			out := map[string]string{"id": identifier}
+			if it := extractString(props, "InterfaceType"); it != "" {
+				out["interface_type"] = it
+			}
+			return out
+		},
 	},
 
 	// =====================================================================

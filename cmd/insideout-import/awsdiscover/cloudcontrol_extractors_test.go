@@ -3543,3 +3543,47 @@ func TestVPCSecurityGroupEgressRuleConfig(t *testing.T) {
 		t.Errorf("Tags: got %+v, want empty map (untaggable)", tags)
 	}
 }
+
+// TestNetworkInterfaceConfig pins the aws_network_interface NativeIDs
+// extractor added in #709: it must surface interface_type into
+// NativeIDs["interface_type"] when CloudControl returns it (so the
+// instance-level importability classifier can grey out service-managed ENIs in
+// the wizard) and must be absent-safe — omitting the key entirely when the
+// payload has no InterfaceType, so a standard ENI is left importable and the
+// genconfig prune remains the backstop.
+func TestNetworkInterfaceConfig(t *testing.T) {
+	t.Parallel()
+	cfg := configByTFType(t, "aws_network_interface")
+	if cfg.CloudFormationType != "AWS::EC2::NetworkInterface" {
+		t.Errorf("CloudFormationType=%q, want AWS::EC2::NetworkInterface", cfg.CloudFormationType)
+	}
+	if cfg.NativeIDsFromProperties == nil {
+		t.Fatal("aws_network_interface must declare NativeIDsFromProperties to surface interface_type (#709)")
+	}
+
+	// Service-managed ENI: InterfaceType present → surfaced.
+	managed := cfg.NativeIDsFromProperties("eni-1", map[string]any{"InterfaceType": "nat_gateway"})
+	want := map[string]string{"id": "eni-1", "interface_type": "nat_gateway"}
+	if !reflect.DeepEqual(managed, want) {
+		t.Errorf("managed ENI NativeIDs: got %+v, want %+v", managed, want)
+	}
+
+	// Standard ENI: InterfaceType absent → key omitted (absent-safe).
+	plain := cfg.NativeIDsFromProperties("eni-2", map[string]any{})
+	if _, ok := plain["interface_type"]; ok {
+		t.Errorf("absent InterfaceType must omit the key, got %+v", plain)
+	}
+	if plain["id"] != "eni-2" {
+		t.Errorf("id: got %q, want eni-2", plain["id"])
+	}
+
+	// Importable-but-present InterfaceType ("interface") is surfaced verbatim,
+	// not filtered — the extractor surfaces whatever CloudControl returns and
+	// the classifier (imported.UnimportableReason) owns the importable/managed
+	// decision. A regression that filtered to only managed types here would
+	// wrongly split that responsibility across two layers.
+	std := cfg.NativeIDsFromProperties("eni-3", map[string]any{"InterfaceType": "interface"})
+	if std["interface_type"] != "interface" {
+		t.Errorf("importable InterfaceType must pass through verbatim, got %+v", std)
+	}
+}
