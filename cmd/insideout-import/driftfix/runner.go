@@ -40,21 +40,29 @@ type terraformRunner interface {
 // genconfig).
 type execRunner struct {
 	tf *tfexec.Terraform
+	// stream, when non-nil, is the live progress sink. PlanTo points
+	// tf.stdout here for the duration of the plan call so the
+	// human-readable plan diff streams to the caller (the Mars
+	// reverse-import job → import plan-log console). Show/Validate must NOT
+	// stream — terraform-exec captures their -json payloads on stdout — so
+	// PlanTo restores io.Discard before returning.
+	stream io.Writer
 }
 
 // newExecRunner constructs an execRunner for workdir. When stream is
-// non-nil the terraform subprocess streams its *stderr* there so a
-// long-running caller can surface live progress; nil keeps the historical
+// non-nil the terraform subprocess streams its stderr there (always) and
+// its stdout there for the plan call only (see PlanTo) so a long-running
+// caller can surface the live plan diff; nil keeps the historical
 // "discard subprocess output" behavior.
 //
-// We deliberately do NOT call tf.SetStdout: ShowPlan (ShowPlanFile) and
-// Validate capture `-json` payloads on stdout, and terraform-exec merges
-// tf.stdout into that captured stream, so pointing tf.stdout at the live
-// log leaks the JSON into the user-facing log and blows the gRPC-limited
-// stream (reliable#1896). Leaving stdout unset lets tfexec discard it for
-// these commands while the JSON is still captured internally. Mirrors the
-// stderr-only discipline in genconfig.execRunner and
-// pkg/reverseimport/terraform.go.
+// stdout is scoped to PlanTo rather than set globally: ShowPlan
+// (ShowPlanFile) and Validate capture `-json` payloads on stdout, and
+// terraform-exec shares one tf.stdout across commands, so a global stdout
+// would leak that JSON into the user-facing log and blow the gRPC-limited
+// stream (reliable#1896). PlanTo restores io.Discard before returning so
+// those commands keep their JSON captured internally. Mirrors the
+// stderr-only discipline in genconfig.execRunner and the human-vs-json
+// split in pkg/reverseimport/terraform.go.
 func newExecRunner(workdir string, stream io.Writer) (*execRunner, error) {
 	bin, err := exec.LookPath("terraform")
 	if err != nil {
@@ -67,10 +75,20 @@ func newExecRunner(workdir string, stream io.Writer) (*execRunner, error) {
 	if stream != nil {
 		tf.SetStderr(stream)
 	}
-	return &execRunner{tf: tf}, nil
+	return &execRunner{tf: tf, stream: stream}, nil
 }
 
 func (r *execRunner) PlanTo(ctx context.Context, planFile string) (bool, error) {
+	// Stream the human-readable `terraform plan` diff to the live log for
+	// THIS call only. ShowPlan/Validate emit -json on stdout and
+	// terraform-exec shares one stdout across commands, so restore
+	// io.Discard before returning to keep those payloads captured
+	// (reliable#1896). The plan text is monochrome (no TTY); the import
+	// plan-log console colorizes it client-side (lib/stream/logColorize).
+	if r.stream != nil {
+		r.tf.SetStdout(r.stream)
+		defer r.tf.SetStdout(io.Discard)
+	}
 	return r.tf.Plan(ctx, tfexec.Out(planFile))
 }
 
