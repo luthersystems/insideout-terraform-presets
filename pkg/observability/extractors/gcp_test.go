@@ -418,6 +418,7 @@ func TestExtractGCPGCSConfig(t *testing.T) {
 			"name":         "demo-bucket",
 			"location":     "us-central1",
 			"storageClass": "STANDARD",
+			"versioning":   true,
 		}}
 		got := extractGCPGCSConfig(raw)
 		require.NotNil(t, got)
@@ -425,6 +426,50 @@ func TestExtractGCPGCSConfig(t *testing.T) {
 		assert.Equal(t, "demo-bucket", got["bucketName"])
 		assert.Equal(t, "us-central1", got["location"])
 		assert.Equal(t, "STANDARD", got["storageClass"])
+		assert.Equal(t, "true", got["versioning"])
+	})
+
+	t.Run("SingleBucket_VersioningDisabled", func(t *testing.T) {
+		t.Parallel()
+		raw := []any{map[string]any{
+			"name":         "demo-bucket",
+			"location":     "us-central1",
+			"storageClass": "STANDARD",
+			"versioning":   false,
+		}}
+		got := extractGCPGCSConfig(raw)
+		require.NotNil(t, got)
+		assert.Equal(t, "false", got["versioning"])
+	})
+
+	t.Run("VersioningAbsentOmits", func(t *testing.T) {
+		t.Parallel()
+		// Older inspector fixtures (pre-#712) lack the versioning key; the
+		// extractor must not invent one.
+		raw := []any{map[string]any{
+			"name":         "demo-bucket",
+			"location":     "us-central1",
+			"storageClass": "STANDARD",
+		}}
+		got := extractGCPGCSConfig(raw)
+		require.NotNil(t, got)
+		_, has := got["versioning"]
+		assert.False(t, has, "versioning omitted when absent from the envelope")
+	})
+
+	t.Run("MultiBucket_OmitsVersioning", func(t *testing.T) {
+		t.Parallel()
+		// Per-bucket setting; with multiple buckets we omit it rather than
+		// claim a single value across the set (#712).
+		raw := []any{
+			map[string]any{"name": "bkt-a", "versioning": true},
+			map[string]any{"name": "bkt-b", "versioning": false},
+		}
+		got := extractGCPGCSConfig(raw)
+		require.NotNil(t, got)
+		assert.Equal(t, "2", got["bucketCount"])
+		_, has := got["versioning"]
+		assert.False(t, has, "multi-bucket aggregate must not surface a single versioning value")
 	})
 
 	t.Run("MultiRegionalLocation", func(t *testing.T) {
