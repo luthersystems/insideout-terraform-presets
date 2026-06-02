@@ -46,6 +46,7 @@ func (r execTerraformRunner) Init(ctx context.Context, dir string) error {
 }
 
 func (r execTerraformRunner) Validate(ctx context.Context, dir string) ([]byte, error) {
+	streamErr := r.run(ctx, dir, "validate", "-no-color")
 	cmd := exec.CommandContext(ctx, r.bin(), "validate", "-json")
 	cmd.Dir = dir
 	// stdout is captured as the validate.json artifact, so only stderr
@@ -56,7 +57,7 @@ func (r execTerraformRunner) Validate(ctx context.Context, dir string) ([]byte, 
 	if err != nil {
 		return out, err
 	}
-	return out, nil
+	return out, streamErr
 }
 
 func (r execTerraformRunner) Plan(ctx context.Context, dir, planPath string) error {

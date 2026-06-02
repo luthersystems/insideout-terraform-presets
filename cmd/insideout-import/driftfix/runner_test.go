@@ -77,6 +77,51 @@ func TestExecRunner_JSONCaptureDoesNotLeakToStream(t *testing.T) {
 	}
 }
 
+// TestExecRunner_PlanStreamsHumanDiffToStream is the positive companion to the
+// #1896 leak guard above: the per-iteration `terraform plan` HUMAN diff MUST
+// reach the live-log stream so the import plan-log console shows it. Before
+// this change the driftfix runner left tf.stdout unset, so only driftfix's own
+// "running terraform plan…" narration streamed and the actual plan output was
+// invisible. PlanTo now scopes tf.stdout to the plan call (Show/Validate keep
+// it discarded — asserted by the sibling test) so the human diff streams while
+// the JSON-capture payloads stay internal.
+func TestExecRunner_PlanStreamsHumanDiffToStream(t *testing.T) {
+	if _, err := exec.LookPath("terraform"); err != nil {
+		t.Skip("terraform CLI not available, skipping plan-stream test")
+	}
+
+	workdir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(workdir, "main.tf"), []byte(builtinProviderStack), 0o644))
+
+	ctx := context.Background()
+	initCmd := exec.CommandContext(ctx, "terraform", "init", "-input=false", "-no-color")
+	initCmd.Dir = workdir
+	initCmd.Env = append(os.Environ(), "TF_IN_AUTOMATION=1")
+	out, err := initCmd.CombinedOutput()
+	require.NoError(t, err, "terraform init (builtin provider, offline):\n%s", out)
+
+	var stream stringSink
+	runner, err := newExecRunner(workdir, &stream)
+	require.NoError(t, err)
+
+	planFile := filepath.Join(workdir, "tfplan.bin")
+	// The hasChanges bool is intentionally ignored: terraform's
+	// -detailed-exitcode signalling for the builtin terraform_data resource is
+	// version-dependent, and it isn't what this test verifies. The streamed
+	// plan text below is the actual contract — PlanTo routes terraform's
+	// stdout to the live log.
+	_, err = runner.PlanTo(ctx, planFile)
+	require.NoError(t, err)
+
+	streamed := stream.String()
+	// The human-readable plan diff (not JSON) must reach the live log.
+	assert.Contains(t, streamed, "terraform_data.x", "plan human diff should stream to the log")
+	assert.Contains(t, streamed, "Plan:", "plan summary should stream to the log")
+	// Scoping still holds: the plan call must not drag show/validate JSON in.
+	assert.NotContains(t, streamed, `"format_version"`,
+		"plan stream must not carry JSON-capture payload (reliable#1896)")
+}
+
 // stringSink is a small mutex-guarded io.Writer for capturing streamed output
 // in tests. terraform-exec drains stderr from a goroutine that runs
 // concurrently with the command, so the writer must be safe under -race.

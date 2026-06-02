@@ -1118,7 +1118,7 @@ func TestFixupRouteTable_EmptyIPv6CIDRReplacedWithNull(t *testing.T) {
 // TestFixupRouteTable_AllEmptyStringFieldsNulled pins broad-strip
 // semantics with the null-replacement contract: every field whose
 // value is the literal "" gets rewritten to null. The fixture mirrors
-// the CUST3 smoke output shape (12 absent fields emitted as ""). After
+// the CUST3 smoke output shape (absent fields emitted as ""). After
 // fixup, all field names survive (object type preserved) but empty
 // values become null.
 func TestFixupRouteTable_AllEmptyStringFieldsNulled(t *testing.T) {
@@ -1156,6 +1156,7 @@ func TestFixupRouteTable_AllEmptyStringFieldsNulled(t *testing.T) {
 		"ipv6_cidr_block",
 		"local_gateway_id",
 		"network_interface_id",
+		"odb_network_arn",
 		"transit_gateway_id",
 		"vpc_endpoint_id",
 		"vpc_peering_connection_id",
@@ -1182,11 +1183,14 @@ func TestFixupRouteTable_AllEmptyStringFieldsNulled(t *testing.T) {
 	}
 }
 
-// TestFixupRouteTable_NonEmptyFieldsPreserved pins isolation: a route
-// object with no empty-string fields flows through untouched. A
-// mutation that broadened the filter to non-empty values would fail
-// this test.
-func TestFixupRouteTable_NonEmptyFieldsPreserved(t *testing.T) {
+// TestFixupRouteTable_NonEmptyFieldsPreservedAndProviderKeysBackfilled pins
+// two constraints at once: non-empty route fields must not be altered, and
+// provider-required object keys that were absent from older generated models
+// (notably AWS provider 6.47's odb_network_arn) must be backfilled as null.
+// This is the exact family of final imported.tf failure from Dario's
+// 2026-06-02 whole-account import: terraform validate rejected
+// aws_route_table.route because odb_network_arn was required but absent.
+func TestFixupRouteTable_NonEmptyFieldsPreservedAndProviderKeysBackfilled(t *testing.T) {
 	t.Parallel()
 	in := []byte(`resource "aws_route_table" "rt" {
   vpc_id = "vpc-123"
@@ -1207,9 +1211,96 @@ func TestFixupRouteTable_NonEmptyFieldsPreserved(t *testing.T) {
 			t.Errorf("non-empty %s must be preserved\n--- got ---\n%s", want, got)
 		}
 	}
-	// Negative: no field should have been rewritten to null.
-	if regexp.MustCompile(`(?m)^\s*\w+\s*=\s*null`).MatchString(got) {
-		t.Errorf("no field should be rewritten to null when none were empty\n--- got ---\n%s", got)
+	for _, want := range []string{
+		"carrier_gateway_id",
+		"core_network_arn",
+		"destination_prefix_list_id",
+		"egress_only_gateway_id",
+		"ipv6_cidr_block",
+		"local_gateway_id",
+		"network_interface_id",
+		"odb_network_arn",
+		"transit_gateway_id",
+		"vpc_endpoint_id",
+		"vpc_peering_connection_id",
+	} {
+		pat := `(?m)^\s*` + regexp.QuoteMeta(want) + `\s*=\s*null`
+		if !regexp.MustCompile(pat).MatchString(got) {
+			t.Errorf("missing route object key %s must be backfilled as null\n--- got ---\n%s", want, got)
+		}
+	}
+}
+
+// TestFixupSecurityGroup_SelfIngressBackfillsMissingCIDRBlocks captures the
+// other Dario 2026-06-02 validate failure resource: a default security group
+// with a self-referencing ingress rule. The typed imported model emitted
+// ipv6_cidr_blocks/prefix_list_ids/security_groups/self but omitted
+// cidr_blocks; the AWS provider's ingress set(object(...)) schema requires the
+// cidr_blocks key to exist even when it is an empty list.
+func TestFixupSecurityGroup_SelfIngressBackfillsMissingCIDRBlocks(t *testing.T) {
+	t.Parallel()
+	in := []byte(`resource "aws_security_group" "default" {
+  name        = "default"
+  description = "default VPC security group"
+  vpc_id      = "vpc-123"
+
+  ingress = [{
+    description      = ""
+    from_port        = 0
+    ipv6_cidr_blocks = []
+    prefix_list_ids  = []
+    protocol         = "-1"
+    security_groups  = []
+    self             = true
+    to_port          = 0
+  }]
+}
+`)
+	out, err := applyResourceTypeFixups(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(out)
+	if !regexp.MustCompile(`(?m)^\s*cidr_blocks\s*=\s*\[\]`).MatchString(got) {
+		t.Errorf("missing ingress cidr_blocks must be backfilled as an empty list\n--- got ---\n%s", got)
+	}
+	if !regexp.MustCompile(`(?m)^\s*self\s*=\s*true`).MatchString(got) {
+		t.Errorf("self=true must be preserved\n--- got ---\n%s", got)
+	}
+	if !regexp.MustCompile(`(?m)^\s*protocol\s*=\s*"-1"`).MatchString(got) {
+		t.Errorf("protocol must be preserved\n--- got ---\n%s", got)
+	}
+}
+
+// TestFixupSecurityGroup_EgressBackfillsAllMissingCollectionFields keeps the
+// egress side symmetric with ingress. A rule can be validly wide-open or empty
+// depending on the other scalar fields, but the provider object type still
+// requires every collection-valued key to be present.
+func TestFixupSecurityGroup_EgressBackfillsAllMissingCollectionFields(t *testing.T) {
+	t.Parallel()
+	in := []byte(`resource "aws_security_group" "sg" {
+  name   = "sg"
+  vpc_id = "vpc-123"
+
+  egress = [{
+    description = ""
+    from_port   = 0
+    protocol    = "-1"
+    self        = false
+    to_port     = 0
+  }]
+}
+`)
+	out, err := applyResourceTypeFixups(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(out)
+	for _, want := range []string{"cidr_blocks", "ipv6_cidr_blocks", "prefix_list_ids", "security_groups"} {
+		pat := `(?m)^\s*` + regexp.QuoteMeta(want) + `\s*=\s*\[\]`
+		if !regexp.MustCompile(pat).MatchString(got) {
+			t.Errorf("missing egress %s must be backfilled as []\n--- got ---\n%s", want, got)
+		}
 	}
 }
 
@@ -2641,6 +2732,34 @@ func TestFixupNetworkInterface_PopulatedCountWinsOverEmptyList(t *testing.T) {
 	}
 	if !regexp.MustCompile(`(?m)^\s*ipv6_address_count\s*=\s*2`).MatchString(got) {
 		t.Errorf("non-zero ipv6_address_count must be preserved\n--- got ---\n%s", got)
+	}
+}
+
+// TestFixupNetworkInterface_NullStringInterfaceTypeDropped pins the Dario
+// final-HCL path: older enriched attrs can carry `interface_type` as the string
+// literal "null". The AWS provider rejects that value, so the fixup treats it
+// like an absent describe value and drops it.
+func TestFixupNetworkInterface_NullStringInterfaceTypeDropped(t *testing.T) {
+	t.Parallel()
+	in := []byte(`resource "aws_network_interface" "eni" {
+  provider       = aws.imported
+  interface_type = "null"
+  subnet_id      = "subnet-0e866663c4c5ad4d9"
+}
+`)
+	out, err := NormalizeImportedHCL(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(out)
+	if regexp.MustCompile(`(?m)^\s*interface_type\s*=`).MatchString(got) {
+		t.Errorf("interface_type=\"null\" must be dropped\n--- got ---\n%s", got)
+	}
+	if !regexp.MustCompile(`(?m)^\s*provider\s*=\s*aws.imported`).MatchString(got) {
+		t.Errorf("provider = aws.imported must be preserved\n--- got ---\n%s", got)
+	}
+	if !regexp.MustCompile(`(?m)^\s*subnet_id\s*=`).MatchString(got) {
+		t.Errorf("subnet_id must be preserved\n--- got ---\n%s", got)
 	}
 }
 

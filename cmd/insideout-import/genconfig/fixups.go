@@ -97,6 +97,7 @@ var resourceTypeFixups = map[string]func(*hclwrite.Block){
 	"aws_lb":                    fixupLBSubnetMappingConflict,
 	"aws_subnet":                fixupSubnetProviderQuirks,
 	"aws_route_table":           fixupRouteTableEmptyRouteFields,
+	"aws_security_group":        fixupSecurityGroupInlineRuleObjects,
 	"aws_nat_gateway":           fixupNATGatewaySecondaryIPConflict,
 	"aws_lb_listener":           fixupLBListenerStickinessDurationZero,
 	"aws_lb_target_group":       fixupLBTargetGroupProviderQuirks,
@@ -354,16 +355,41 @@ func fixupSubnetProviderQuirks(blk *hclwrite.Block) {
 	}
 }
 
+// routeTableRouteStringFields is the provider's object shape for
+// aws_route_table.route. Terraform treats object attributes as required at
+// validate time, even for Optional+Computed set(object(...)) fields, so route
+// elements must carry every key with null for the fields AWS left absent.
+var routeTableRouteStringFields = []string{
+	"carrier_gateway_id",
+	"cidr_block",
+	"core_network_arn",
+	"destination_prefix_list_id",
+	"egress_only_gateway_id",
+	"gateway_id",
+	"ipv6_cidr_block",
+	"local_gateway_id",
+	"nat_gateway_id",
+	"network_interface_id",
+	"odb_network_arn",
+	"transit_gateway_id",
+	"vpc_endpoint_id",
+	"vpc_peering_connection_id",
+}
+
 // fixupRouteTableEmptyRouteFields replaces empty-string fields with
-// null in each route object literal emitted in aws_route_table.route.
+// null in each route object literal emitted in aws_route_table.route,
+// and backfills provider-added route object keys that were absent from
+// older generated models.
 // The provider's per-field validators (CIDR check on ipv6_cidr_block,
 // resource-id format on gateway_id, etc.) reject literal "" but skip
 // null. terraform plan -generate-config-out emits "" for every absent
 // field in the route object; null-replacement satisfies the validators
 // while preserving the object type's field set (the route attribute is
-// schema-typed as an object with all 12 fields required to be present
-// — DROPPING fields breaks the object type and produces a different
-// "Incorrect attribute value type" failure).
+// schema-typed as an object with every field required to be present —
+// DROPPING fields breaks the object type and produces a different
+// "Incorrect attribute value type" failure). AWS provider 6.47 added
+// odb_network_arn; final imported.tf emitted from older generated models
+// therefore needs a null placeholder for that key too.
 //
 // Shape note: generate-config-out emits route as an attribute carrying
 // a list-of-objects expression (route = [{...}, ...]), NOT as nested
@@ -390,20 +416,20 @@ func fixupRouteTableEmptyRouteFields(blk *hclwrite.Block) {
 	if diags.HasErrors() {
 		return
 	}
-	filtered, changed := nullEmptyStringFieldsInTuple(val)
+	filtered, changed := normalizeStringFieldsInTuple(val, routeTableRouteStringFields)
 	if !changed {
 		return
 	}
 	body.SetAttributeValue("route", filtered)
 }
 
-// nullEmptyStringFieldsInTuple walks a tuple/list of object values and
-// returns a new tuple with each object's empty-string fields replaced
-// by null (preserving field set, just blanking the value). The boolean
-// reports whether any field was rewritten, so callers can short-circuit
-// a no-op back to the original tokens. Non-tuple/non-list inputs and
-// unknown/null values pass through unchanged.
-func nullEmptyStringFieldsInTuple(v cty.Value) (cty.Value, bool) {
+// normalizeStringFieldsInTuple walks a tuple/list of object values and returns
+// a new tuple with each object's empty-string fields replaced by null and any
+// missing required string fields added as null. The boolean reports whether any
+// field was rewritten, so callers can short-circuit a no-op back to the original
+// tokens. Non-tuple/non-list inputs and unknown/null values pass through
+// unchanged.
+func normalizeStringFieldsInTuple(v cty.Value, requiredFields []string) (cty.Value, bool) {
 	if v.IsNull() || !v.IsKnown() {
 		return v, false
 	}
@@ -419,7 +445,7 @@ func nullEmptyStringFieldsInTuple(v cty.Value) (cty.Value, bool) {
 	it := v.ElementIterator()
 	for it.Next() {
 		_, elem := it.Element()
-		cleaned, c := nullEmptyStringFieldsInObject(elem)
+		cleaned, c := normalizeStringFieldsInObject(elem, requiredFields)
 		if c {
 			changed = true
 		}
@@ -431,14 +457,14 @@ func nullEmptyStringFieldsInTuple(v cty.Value) (cty.Value, bool) {
 	return cty.TupleVal(out), true
 }
 
-// nullEmptyStringFieldsInObject returns a new object value with
-// empty-string string fields replaced by null. Non-object inputs pass
-// through unchanged. The field set is preserved (object type unchanged)
-// — this is the difference between "satisfies the schema's type
-// requirement that all 12 route fields be present" and "fails with
-// Incorrect attribute value type because we dropped fields the type
-// declared."
-func nullEmptyStringFieldsInObject(v cty.Value) (cty.Value, bool) {
+// normalizeStringFieldsInObject returns a new object value with empty-string
+// string fields replaced by null and any missing required string fields added
+// as null. Non-object inputs pass through unchanged. The field set is preserved
+// or widened to the provider's required object shape — this is the difference
+// between "satisfies the schema's type requirement that all route fields be
+// present" and "fails with Incorrect attribute value type because a generated
+// model omitted a provider-added key."
+func normalizeStringFieldsInObject(v cty.Value, requiredFields []string) (cty.Value, bool) {
 	if v.IsNull() || !v.IsKnown() {
 		return v, false
 	}
@@ -454,6 +480,104 @@ func nullEmptyStringFieldsInObject(v cty.Value) (cty.Value, bool) {
 			continue
 		}
 		fields[k] = fv
+	}
+	for _, k := range requiredFields {
+		if _, ok := fields[k]; ok {
+			continue
+		}
+		fields[k] = cty.NullVal(cty.String)
+		changed = true
+	}
+	if !changed {
+		return v, false
+	}
+	return cty.ObjectVal(fields), true
+}
+
+// securityGroupInlineRuleListFields is the collection-valued subset of the
+// provider's aws_security_group ingress/egress object shape. The composer may
+// omit an empty collection when the typed imported model has nil for that field,
+// but terraform validate still requires the key to exist inside each inline
+// object. Add empty collections for absent keys so self-referencing default
+// rules validate without changing intent.
+var securityGroupInlineRuleListFields = []string{
+	"cidr_blocks",
+	"ipv6_cidr_blocks",
+	"prefix_list_ids",
+	"security_groups",
+}
+
+// fixupSecurityGroupInlineRuleObjects backfills missing empty collection keys in
+// aws_security_group ingress/egress object literals. The live failure this
+// prevents is a self-referencing default security group rule with `self = true`
+// and no CIDR ranges; the imported typed HCL omitted `cidr_blocks`, but the AWS
+// provider's set(object(...)) schema requires that attribute to be present.
+func fixupSecurityGroupInlineRuleObjects(blk *hclwrite.Block) {
+	body := blk.Body()
+	for _, attrName := range []string{"ingress", "egress"} {
+		attr := body.GetAttribute(attrName)
+		if attr == nil {
+			continue
+		}
+		exprBytes := attr.Expr().BuildTokens(nil).Bytes()
+		expr, diags := hclsyntax.ParseExpression(exprBytes, attrName, hcl.Pos{Line: 1, Column: 1})
+		if diags.HasErrors() {
+			continue
+		}
+		val, diags := expr.Value(nil)
+		if diags.HasErrors() {
+			continue
+		}
+		filtered, changed := addMissingListFieldsInTuple(val, securityGroupInlineRuleListFields)
+		if changed {
+			body.SetAttributeValue(attrName, filtered)
+		}
+	}
+}
+
+func addMissingListFieldsInTuple(v cty.Value, requiredFields []string) (cty.Value, bool) {
+	if v.IsNull() || !v.IsKnown() {
+		return v, false
+	}
+	t := v.Type()
+	if !t.IsTupleType() && !t.IsListType() {
+		return v, false
+	}
+	if v.LengthInt() == 0 {
+		return v, false
+	}
+	out := make([]cty.Value, 0, v.LengthInt())
+	changed := false
+	it := v.ElementIterator()
+	for it.Next() {
+		_, elem := it.Element()
+		cleaned, c := addMissingListFieldsInObject(elem, requiredFields)
+		if c {
+			changed = true
+		}
+		out = append(out, cleaned)
+	}
+	if !changed {
+		return v, false
+	}
+	return cty.TupleVal(out), true
+}
+
+func addMissingListFieldsInObject(v cty.Value, requiredFields []string) (cty.Value, bool) {
+	if v.IsNull() || !v.IsKnown() {
+		return v, false
+	}
+	if !v.Type().IsObjectType() {
+		return v, false
+	}
+	fields := v.AsValueMap()
+	changed := false
+	for _, k := range requiredFields {
+		if _, ok := fields[k]; ok {
+			continue
+		}
+		fields[k] = cty.ListValEmpty(cty.String)
+		changed = true
 	}
 	if !changed {
 		return v, false
@@ -676,6 +800,8 @@ func fixupEBSVolumeInitializationRateZero(blk *hclwrite.Block) {
 // interface_type is also normalized: the literal "interface" is the
 // describe-only value generate-config-out emits for a standard ENI, but the
 // provider only accepts efa/efa-only/branch/trunk on create, so we drop it.
+// Older enriched attrs can also carry the string literal "null"; drop that as
+// an absent value rather than rendering invalid provider input.
 // Service-managed interface_type values (nat_gateway, vpc_endpoint, …) are
 // left in place — pruneUnimportable drops those whole resources, since a
 // service-owned ENI cannot be adopted as a standalone aws_network_interface.
@@ -701,7 +827,7 @@ func fixupNetworkInterfaceProviderQuirks(blk *hclwrite.Block) {
 		resolveENIListCountConflict(body, pair[0], pair[1])
 	}
 
-	if v := stringLitFromAttr(body.GetAttribute("interface_type")); v == "interface" {
+	if v := stringLitFromAttr(body.GetAttribute("interface_type")); v == "interface" || v == "null" {
 		body.RemoveAttribute("interface_type")
 	}
 }
