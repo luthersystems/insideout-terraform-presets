@@ -634,6 +634,18 @@ var cloudControlTypeConfigs = []cloudControlConfig{
 		ImportIDFromIdentifier: passthroughImportID,
 		NameHintFromProperties: passthroughIdentifierName,
 		TagsFromProperties:     tagsFromKey("Tags"),
+		// Resolve IsDefault at DISCOVER time via ec2:DescribeNetworkAcls.
+		// The CC AWS::EC2::NetworkAcl schema exposes only {VpcId, Id,
+		// Tags} — no IsDefault — so the property extractor cannot tell a
+		// VPC's DEFAULT NACL from a custom one. The AWS provider refuses
+		// to import a default NACL as aws_network_acl ("use the
+		// `aws_default_network_acl` resource instead"), so generate-config-out
+		// emits no body and the default NACL silently drops as
+		// no_generated_config. PostDiscover stamps NativeIDs["is_default"]
+		// and re-types default NACLs to aws_default_network_acl (which
+		// bodies cleanly under the same acl-… import id). Custom NACLs
+		// stay aws_network_acl. See network_acl_post_discover.go.
+		PostDiscover: networkACLPostDiscover,
 	},
 	{
 		TFType:                 "aws_vpc_endpoint",
