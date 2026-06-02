@@ -1542,6 +1542,8 @@ func normalizeStorageSizeGBString(s, fieldName string) (string, error) {
 //   - "0" / "<N>" — bare integer (already in seconds)
 //   - "<N>s" / "<N>m" / "<N>h" — durations
 //   - "1day" / "<N>day" / "<N>days" — day shorthand the IR uses for CDN TTL
+//   - "<N> seconds" / "<N> minutes" / "<N> hours" — the human word forms
+//     humanizeDuration emits (see below)
 func parseTTLSeconds(s, fieldName string) (int, error) {
 	t := strings.TrimSpace(s)
 
@@ -1564,13 +1566,36 @@ func parseTTLSeconds(s, fieldName string) (int, error) {
 		}
 	}
 
+	// Human word forms emitted by humanizeDuration ("30 seconds" / "10 minutes"
+	// / "1 hour"). parseTTLSeconds must accept what the composer humanizes TO,
+	// so a humanizeDuration -> parseTTLSeconds round-trip is lossless and IR
+	// enums that surface the human label (e.g. SQS visibilityTimeout) compose
+	// instead of erroring. Mirrors the day/hour word handling in
+	// parseRetentionHours. See luthersystems/reliable#1994.
+	for _, u := range []struct {
+		sufs []string
+		mult int
+	}{
+		{[]string{"seconds", "second"}, 1},
+		{[]string{"minutes", "minute"}, 60},
+		{[]string{"hours", "hour"}, 3600},
+	} {
+		for _, suf := range u.sufs {
+			if rest, ok := strings.CutSuffix(low, suf); ok {
+				if n, err := strconv.Atoi(strings.TrimSpace(rest)); err == nil && n >= 0 {
+					return n * u.mult, nil
+				}
+			}
+		}
+	}
+
 	// "<N>s" / "<N>m" / "<N>h"
 	if secs, ok := matchDuration(t); ok {
 		return secs, nil
 	}
 
 	return 0, NewValidationError(fmt.Sprintf(
-		"%s=%q: expected seconds, \"<N>s\" / \"<N>m\" / \"<N>h\", or \"<N>day(s)\"",
+		"%s=%q: expected seconds, \"<N>s\" / \"<N>m\" / \"<N>h\", \"<N>day(s)\", or \"<N> seconds/minutes/hours\"",
 		fieldName, s,
 	))
 }
