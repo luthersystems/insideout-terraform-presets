@@ -66,10 +66,9 @@ func TestIdentityPlatformConfigChartable(t *testing.T) {
 		"google_identity_platform_config binding has empty DefaultMetrics — nothing to chart")
 	assert.Contains(t, b.DefaultMetrics, "serviceruntime.googleapis.com/api/request_count",
 		"binding must mirror the managed gcp_identity_platform consumed-API request series")
-	// Mirror the managed metric's `service` dimension (gcpServiceMetrics
-	// ["identityplatform"] LabelKey: "service").
 	assert.Equal(t, "service", b.DimensionKey)
-	assert.NotEmpty(t, b.DimensionFrom)
+	assert.Equal(t, "service", b.DimensionFrom,
+		"DimensionFrom must resolve to NativeIDs[service]=identitytoolkit.googleapis.com; the resource name is just the project singleton")
 }
 
 func TestSeededBindings(t *testing.T) {

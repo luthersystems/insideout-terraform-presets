@@ -33,6 +33,9 @@ func TestIdentityPlatformConfigListNonCAI_ReturnsConfigWhenActivated(t *testing.
 	if got[0].Identity.ImportID != "real-proj" {
 		t.Errorf("ImportID=%q, want real-proj", got[0].Identity.ImportID)
 	}
+	if got[0].Identity.NativeIDs["service"] != identityPlatformConfigService {
+		t.Errorf("NativeIDs[service]=%q, want %q", got[0].Identity.NativeIDs["service"], identityPlatformConfigService)
+	}
 }
 
 func TestIdentityPlatformConfigListNonCAI_NotActivatedYieldsZero(t *testing.T) {

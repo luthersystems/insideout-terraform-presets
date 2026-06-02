@@ -778,14 +778,15 @@ var seededBindings = map[string]ComponentMetricsBinding{
 	// request_count series under the `service` label, so the imported
 	// binding mirrors that: serviceruntime.googleapis.com/api/request_count
 	// filtered on the `service` dimension (= identitytoolkit.googleapis.com).
-	// DimensionFrom "name" carries the resource's project-scoped name —
-	// the same project-level dimension google_project_service uses — since
-	// no narrower key exists for a project singleton.
+	// DimensionFrom "service" resolves from NativeIDs["service"], which the
+	// non-CAI discoverer stamps to identitytoolkit.googleapis.com. Using
+	// "name" here would incorrectly filter the service label to the
+	// singleton resource name ("config" / projects/<p>/config).
 	"google_identity_platform_config": {
 		Service:        "identityplatform",
 		Action:         "timeseries-list",
 		DimensionKey:   "service",
-		DimensionFrom:  "name",
+		DimensionFrom:  "service",
 		DefaultMetrics: []string{"serviceruntime.googleapis.com/api/request_count", "serviceruntime.googleapis.com/api/request_latencies"},
 	},
 	"aws_eip": {

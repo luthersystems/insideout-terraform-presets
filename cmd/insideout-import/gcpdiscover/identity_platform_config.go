@@ -26,6 +26,7 @@ import (
 const (
 	identityPlatformConfigTFType    = "google_identity_platform_config"
 	identityPlatformConfigAssetType = "identitytoolkit.googleapis.com/Config" // descriptive; not in CAI
+	identityPlatformConfigService   = "identitytoolkit.googleapis.com"
 )
 
 type identityPlatformConfigDiscoverer struct {
@@ -73,6 +74,7 @@ func (d *identityPlatformConfigDiscoverer) ListNonCAI(ctx context.Context, proje
 	return []imported.ImportedResource{
 		makeImportedResource(book, identityPlatformConfigTFType, "config", importID, projectID, "", map[string]string{
 			"asset_name": assetName,
+			"service":    identityPlatformConfigService,
 		}, nil),
 	}, nil
 }
