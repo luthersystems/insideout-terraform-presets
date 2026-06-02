@@ -800,6 +800,8 @@ func fixupEBSVolumeInitializationRateZero(blk *hclwrite.Block) {
 // interface_type is also normalized: the literal "interface" is the
 // describe-only value generate-config-out emits for a standard ENI, but the
 // provider only accepts efa/efa-only/branch/trunk on create, so we drop it.
+// Older enriched attrs can also carry the string literal "null"; drop that as
+// an absent value rather than rendering invalid provider input.
 // Service-managed interface_type values (nat_gateway, vpc_endpoint, …) are
 // left in place — pruneUnimportable drops those whole resources, since a
 // service-owned ENI cannot be adopted as a standalone aws_network_interface.
@@ -825,7 +827,7 @@ func fixupNetworkInterfaceProviderQuirks(blk *hclwrite.Block) {
 		resolveENIListCountConflict(body, pair[0], pair[1])
 	}
 
-	if v := stringLitFromAttr(body.GetAttribute("interface_type")); v == "interface" {
+	if v := stringLitFromAttr(body.GetAttribute("interface_type")); v == "interface" || v == "null" {
 		body.RemoveAttribute("interface_type")
 	}
 }

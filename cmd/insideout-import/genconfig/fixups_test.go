@@ -2735,6 +2735,34 @@ func TestFixupNetworkInterface_PopulatedCountWinsOverEmptyList(t *testing.T) {
 	}
 }
 
+// TestFixupNetworkInterface_NullStringInterfaceTypeDropped pins the Dario
+// final-HCL path: older enriched attrs can carry `interface_type` as the string
+// literal "null". The AWS provider rejects that value, so the fixup treats it
+// like an absent describe value and drops it.
+func TestFixupNetworkInterface_NullStringInterfaceTypeDropped(t *testing.T) {
+	t.Parallel()
+	in := []byte(`resource "aws_network_interface" "eni" {
+  provider       = aws.imported
+  interface_type = "null"
+  subnet_id      = "subnet-0e866663c4c5ad4d9"
+}
+`)
+	out, err := NormalizeImportedHCL(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(out)
+	if regexp.MustCompile(`(?m)^\s*interface_type\s*=`).MatchString(got) {
+		t.Errorf("interface_type=\"null\" must be dropped\n--- got ---\n%s", got)
+	}
+	if !regexp.MustCompile(`(?m)^\s*provider\s*=\s*aws.imported`).MatchString(got) {
+		t.Errorf("provider = aws.imported must be preserved\n--- got ---\n%s", got)
+	}
+	if !regexp.MustCompile(`(?m)^\s*subnet_id\s*=`).MatchString(got) {
+		t.Errorf("subnet_id must be preserved\n--- got ---\n%s", got)
+	}
+}
+
 // TestFixupNetworkInterface_ServiceManagedTypePreservedForPrune pins the
 // division of labor: the fixup only drops the standard "interface" literal.
 // Service-managed values (nat_gateway, …) must survive so pruneUnimportable
