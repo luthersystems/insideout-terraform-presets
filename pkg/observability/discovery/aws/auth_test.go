@@ -117,6 +117,56 @@ func TestFilterCognitoUserPoolsByProjectTag_Match(t *testing.T) {
 	assert.Equal(t, "p1", aws.ToString(got[0].Id))
 }
 
+func TestFilterCognitoUserPoolsByProjectTag_MFAEnriched(t *testing.T) {
+	t.Parallel()
+	// MfaConfiguration comes off the DescribeUserPool response the scope
+	// filter already issues — the matched pool must carry it so
+	// extractCognitoConfig can surface mfaRequired (#712).
+	client := &fakeCognitoClient{
+		listOut: &cognitoidentityprovider.ListUserPoolsOutput{
+			UserPools: []cognitoidptypes.UserPoolDescriptionType{
+				{Id: aws.String("p1")},
+			},
+		},
+		descByPoolID: map[string]*cognitoidentityprovider.DescribeUserPoolOutput{
+			"p1": {UserPool: &cognitoidptypes.UserPoolType{
+				Arn:              aws.String("arn:p1"),
+				MfaConfiguration: cognitoidptypes.UserPoolMfaTypeOn,
+			}},
+		},
+		tagsByARN: map[string]*cognitoidentityprovider.ListTagsForResourceOutput{
+			"arn:p1": {Tags: map[string]string{"Project": "my-stack"}},
+		},
+	}
+	got, err := filterCognitoUserPoolsByProjectTag(context.Background(), client, "my-stack")
+	require.NoError(t, err)
+	require.Len(t, got, 1)
+	require.NotNil(t, got[0].MfaConfiguration)
+	assert.Equal(t, "ON", aws.ToString(got[0].MfaConfiguration))
+}
+
+func TestFilterCognitoUserPoolsByProjectTag_EmptyProjectOmitsMFA(t *testing.T) {
+	t.Parallel()
+	// The demo-session fallback skips DescribeUserPool, so MfaConfiguration
+	// stays nil and the JSON envelope omits it (extractCognitoConfig then
+	// won't claim an MFA state).
+	client := &fakeCognitoClient{
+		listOut: &cognitoidentityprovider.ListUserPoolsOutput{
+			UserPools: []cognitoidptypes.UserPoolDescriptionType{
+				{Id: aws.String("p1")},
+			},
+		},
+	}
+	got, err := filterCognitoUserPoolsByProjectTag(context.Background(), client, "")
+	require.NoError(t, err)
+	require.Len(t, got, 1)
+	assert.Nil(t, got[0].MfaConfiguration)
+
+	raw, err := json.Marshal(got)
+	require.NoError(t, err)
+	assert.NotContains(t, string(raw), "MfaConfiguration")
+}
+
 func TestFilterCognitoUserPoolsByProjectTag_DescribeErrorSkips(t *testing.T) {
 	t.Parallel()
 	// Concurrent delete or TooManyRequestsException → log+skip.
