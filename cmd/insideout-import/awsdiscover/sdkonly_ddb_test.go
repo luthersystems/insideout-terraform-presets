@@ -9,6 +9,8 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	ddbtypes "github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
+
+	"github.com/luthersystems/insideout-terraform-presets/pkg/composer/imported"
 )
 
 // fakeDDBSubresourceClient is the in-test fake for the DDB sub-resource
@@ -205,5 +207,85 @@ func TestNewDDBSubresourceClient_ProductionFactoryReturnsRealClient(t *testing.T
 	c := newDDBSubresourceClient(aws.Config{Region: "us-east-1"}, "us-east-1")
 	if c == nil {
 		t.Fatal("newDDBSubresourceClient returned nil")
+	}
+}
+
+// TestDDBContributorInsightsImportID is the #cust3 item-5 regression: the
+// Terraform import ID for a table-level contributor-insights binding is
+// "<table>//<account>" (empty index_name segment), NOT the bare table
+// name. Verified against AWS provider v6 generate-config-out, which
+// rejects the bare table name with "unexpected format for ID (...),
+// expected table_name/index_name/account_id" — the rejection silently
+// dropped io-a0ibmrskxfqc-app as no_generated_config.
+func TestDDBContributorInsightsImportID(t *testing.T) {
+	t.Parallel()
+	t.Run("table-level with account -> compound", func(t *testing.T) {
+		t.Parallel()
+		props := map[string]any{subresourceAccountIDKey: "031780745048"}
+		got := ddbContributorInsightsImportID("io-a0ibmrskxfqc-app", props)
+		if got != "io-a0ibmrskxfqc-app//031780745048" {
+			t.Errorf("import ID = %q, want io-a0ibmrskxfqc-app//031780745048", got)
+		}
+	})
+	t.Run("no account -> bare table fallback (no regression)", func(t *testing.T) {
+		t.Parallel()
+		if got := ddbContributorInsightsImportID("users", map[string]any{}); got != "users" {
+			t.Errorf("import ID = %q, want bare table fallback users", got)
+		}
+		if got := ddbContributorInsightsImportID("users", nil); got != "users" {
+			t.Errorf("import ID (nil props) = %q, want users", got)
+		}
+	})
+	t.Run("compound parent id strips to table for the prefix", func(t *testing.T) {
+		t.Parallel()
+		// dep-chase may hand the compound import ID back as parentID; the
+		// table must be re-extracted before re-building.
+		props := map[string]any{subresourceAccountIDKey: "031780745048"}
+		got := ddbContributorInsightsImportID("io-a0ibmrskxfqc-app//031780745048", props)
+		if got != "io-a0ibmrskxfqc-app//031780745048" {
+			t.Errorf("import ID = %q, want stable io-a0ibmrskxfqc-app//031780745048", got)
+		}
+	})
+}
+
+// TestFetchDDBContributorInsights_StripsCompoundParentID proves the
+// DescribeContributorInsights call uses the bare table name even when the
+// FetchItem is handed the compound import ID (dep-chase DiscoverByID
+// path) — the DDB API takes the table name, not the compound id.
+func TestFetchDDBContributorInsights_StripsCompoundParentID(t *testing.T) {
+	t.Parallel()
+	fake := &fakeDDBSubresourceClient{
+		insightsByT: map[string]dynamodb.DescribeContributorInsightsOutput{
+			"users": {ContributorInsightsStatus: ddbtypes.ContributorInsightsStatusEnabled},
+		},
+	}
+	exists, _, native, err := fetchDDBContributorInsightsWithClient(context.Background(), fake, "users//031780745048")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !exists {
+		t.Error("exists=false, want true (compound id should resolve table 'users')")
+	}
+	if native["table_name"] != "users" {
+		t.Errorf("NativeIDs[table_name]=%q, want bare table users", native["table_name"])
+	}
+}
+
+// TestDDBContributorInsightsEnricher_TableFromCompoundImportID proves the
+// enricher recovers the bare table name from the compound import ID (it
+// no longer trusts ImportID verbatim).
+func TestDDBContributorInsightsEnricher_TableFromCompoundImportID(t *testing.T) {
+	t.Parallel()
+	id := &imported.ResourceIdentity{
+		Type:     "aws_dynamodb_contributor_insights",
+		ImportID: "io-a0ibmrskxfqc-app//031780745048",
+		NameHint: "io-a0ibmrskxfqc-app-contributor-insights",
+	}
+	table, err := ddbContributorInsightsTableName(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if table != "io-a0ibmrskxfqc-app" {
+		t.Errorf("table = %q, want io-a0ibmrskxfqc-app (compound import ID must be split)", table)
 	}
 }

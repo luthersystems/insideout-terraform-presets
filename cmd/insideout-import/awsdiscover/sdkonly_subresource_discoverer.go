@@ -101,6 +101,13 @@ type sdkOnlySubresourceConfig struct {
 	NameHintFromParent   func(parentID string, props map[string]any) string
 }
 
+// subresourceAccountIDKey is the props key fetchOne stamps with the
+// discover-run account ID so an ImportIDFromParent closure can embed it
+// in a compound Terraform import ID (e.g. aws_dynamodb_contributor_insights's
+// "<table>/<index>/<account>"). Prefixed with "__" so it never collides
+// with a CloudFormation/SDK property name an enricher might read.
+const subresourceAccountIDKey = "__account_id"
+
 // subresourceEmission is one (importID, nameHint, nativeIDs, props)
 // tuple emitted by a FetchItems closure (Bundle 14k2 multi-emit
 // extension). Each emission becomes exactly one ImportedResource — the
@@ -223,7 +230,7 @@ func (d *sdkOnlySubresourceDiscoverer) Discover(ctx context.Context, args Discov
 				if err := gctx.Err(); err != nil {
 					return err
 				}
-				emissions, ferr := d.fetchOne(gctx, region, parentID)
+				emissions, ferr := d.fetchOne(gctx, region, parentID, args.AccountID)
 				if ferr != nil {
 					if cerr := gctx.Err(); cerr != nil {
 						return cerr
@@ -351,7 +358,7 @@ func (d *sdkOnlySubresourceDiscoverer) enumerateParents(ctx context.Context, reg
 // emission and ImportIDFromParent / NameHintFromParent are ignored —
 // the parent ID alone is insufficient to address per-attachment /
 // per-association / per-tag resources.
-func (d *sdkOnlySubresourceDiscoverer) fetchOne(ctx context.Context, region, parentID string) ([]subresourceEmission, error) {
+func (d *sdkOnlySubresourceDiscoverer) fetchOne(ctx context.Context, region, parentID, accountID string) ([]subresourceEmission, error) {
 	if d.cfg.FetchItems != nil {
 		return d.cfg.FetchItems(ctx, d.awsCfg, region, parentID)
 	}
@@ -364,6 +371,24 @@ func (d *sdkOnlySubresourceDiscoverer) fetchOne(ctx context.Context, region, par
 	}
 	if !exists {
 		return nil, nil
+	}
+	// Surface the discover-run account ID through props so an
+	// ImportIDFromParent closure can build a Terraform import ID that
+	// embeds it (e.g. aws_dynamodb_contributor_insights's
+	// "<table>/<index>/<account>" format). The FetchItem closure only
+	// knows the parent ID + live SDK response, never the account; the
+	// discoverer stamps the account onto every emitted IR via
+	// makeImportedResource, so threading the same value here keeps the
+	// import ID and the IR's AccountID consistent. props is the
+	// FetchItem's own map (or nil for closures that emit none); allocate
+	// when nil so the stamp always lands.
+	if accountID != "" {
+		if props == nil {
+			props = map[string]any{}
+		}
+		if _, ok := props[subresourceAccountIDKey]; !ok {
+			props[subresourceAccountIDKey] = accountID
+		}
 	}
 	importID := parentID
 	if d.cfg.ImportIDFromParent != nil {
@@ -404,7 +429,7 @@ func (d *sdkOnlySubresourceDiscoverer) DiscoverByID(ctx context.Context, id, reg
 	if id == "" {
 		return imported.ImportedResource{}, fmt.Errorf("%s: empty id: %w", d.cfg.TFType, ErrNotSupported)
 	}
-	emissions, err := d.fetchOne(ctx, region, id)
+	emissions, err := d.fetchOne(ctx, region, id, accountID)
 	if err != nil {
 		return imported.ImportedResource{}, fmt.Errorf("FetchItem %s parent=%q: %w", d.cfg.TFType, id, err)
 	}

@@ -118,9 +118,18 @@ func (e ddbContributorInsightsEnricher) EnrichByID(ctx context.Context, identity
 // ddbContributorInsightsTableName extracts the table name from
 // Identity. Preference order:
 //
-//  1. Identity.NativeIDs["table_name"] (discoverer-set).
-//  2. Identity.NameHint / Identity.ImportID — TF's import ID is the
-//     bare table name for this resource.
+//  1. Identity.NativeIDs["table_name"] (discoverer-set; always the bare
+//     table name).
+//  2. Identity.ImportID — the compound "<table>/<index>/<account>"
+//     import ID; the table name is its first "/"-delimited segment.
+//  3. Identity.NameHint — "<table>-contributor-insights"; strip the
+//     canonical suffix.
+//
+// The ImportID for this resource is NOT the bare table name: the
+// terraform-provider-aws importer expects "<table>/<index>/<account>"
+// (table-level => empty index => "<table>//<account>"), so the bare
+// ImportID must be split, not used verbatim, to recover the table name
+// for the DescribeContributorInsights SDK call.
 func ddbContributorInsightsTableName(id *imported.ResourceIdentity) (string, error) {
 	if id == nil {
 		return "", errors.New(ddbContributorInsightsTFType + ": identity is nil")
@@ -128,22 +137,21 @@ func ddbContributorInsightsTableName(id *imported.ResourceIdentity) (string, err
 	if s := strings.TrimSpace(id.NativeIDs["table_name"]); s != "" {
 		return s, nil
 	}
-	if s := strings.TrimSpace(id.NameHint); s != "" {
-		// Discoverer sets NameHint = "<table>-contributor-insights".
-		// Strip the suffix when present so the SDK call gets the bare
-		// table name. ImportID is the more reliable fallback when
-		// available.
-		if imp := strings.TrimSpace(id.ImportID); imp != "" {
-			return imp, nil
+	if imp := strings.TrimSpace(id.ImportID); imp != "" {
+		// Compound import ID "<table>/<index>/<account>" — the table is
+		// the first segment. A legacy bare table name (no "/") returns
+		// itself.
+		if i := strings.IndexByte(imp, '/'); i >= 0 {
+			return imp[:i], nil
 		}
+		return imp, nil
+	}
+	if s := strings.TrimSpace(id.NameHint); s != "" {
 		// NameHint-only fallback: strip the canonical suffix.
 		const suffix = "-contributor-insights"
 		if strings.HasSuffix(s, suffix) {
 			return strings.TrimSuffix(s, suffix), nil
 		}
-		return s, nil
-	}
-	if s := strings.TrimSpace(id.ImportID); s != "" {
 		return s, nil
 	}
 	return "", fmt.Errorf("%s: cannot derive table name from Identity (Address=%q ImportID=%q NameHint=%q)",

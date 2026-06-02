@@ -346,6 +346,16 @@ var cloudControlTypeConfigs = []cloudControlConfig{
 			return out
 		},
 		TagsFromProperties: tagsFromKey("Tags"),
+		// Resolve KeyManager at DISCOVER time via kms:DescribeKey. The CC
+		// AWS::KMS::Key schema omits KeyManager (see the LIMITATION note
+		// above), so the NativeIDsFromProperties extractor above can't set
+		// it and the reverse-import / genconfig dry-run never runs the
+		// AttributeEnricher that otherwise would. PostDiscover stamps
+		// NativeIDs["key_manager"] so imported.UnimportableReason classifies
+		// AWS-managed keys (KeyManager=AWS, e.g. the ACM/RDS/DynamoDB
+		// default keys) into unsupported.json instead of letting them drop
+		// as no_generated_config orphans (#cust3 item 1).
+		PostDiscover: kmsKeyPostDiscover,
 	},
 
 	// =====================================================================
@@ -420,6 +430,17 @@ var cloudControlTypeConfigs = []cloudControlConfig{
 		NameHintFromProperties:  nameOrIdentifier("BucketName"),
 		NativeIDsFromProperties: arnUnderKey("Arn"),
 		TagsFromProperties:      tagsFromKey("Tags"),
+		// Resolve the bucket's TRUE region at DISCOVER time via
+		// s3:GetBucketLocation and promote it into Identity.Region. S3 is
+		// IsGlobal-enumerated (region-less), so without this a non-us-east-1
+		// bucket lands under the us-east-1 provider in genconfig and fails
+		// cross-region generate-config-out (#cust3 item 3). The s3_bucket
+		// AttributeEnricher does the same promotion from HeadBucket, but the
+		// reverse-import / genconfig dry-run never runs enrichment — so the
+		// region must be set here too. PostDiscover soft-fails: a bucket
+		// whose location can't be read is still emitted (region empty →
+		// backfilled to the primary region, the prior behavior).
+		PostDiscover: s3BucketPostDiscover,
 		// #501 Normalizer: CFN AWS::S3::Bucket uses primary-name
 		// `BucketName` (TF: `bucket`) and a list-of-{Key,Value}
 		// `Tags` shape (TF: map shape). NOTE: a hand-rolled enricher
