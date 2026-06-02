@@ -50,6 +50,28 @@ var emptyDefaultMetricsAllowed = map[string]bool{
 	"google_secret_manager_secret_iam_member": true,
 }
 
+// TestIdentityPlatformConfigChartable pins the parity fix for
+// presets#712 / reliable#1981: the managed gcp_identity_platform metric
+// charts a consumed-API request series, but the imported
+// google_identity_platform_config had a policy entry and NO
+// MetricsBinding — so its Observable panel could not chart anything.
+// This asserts the type now resolves to a chartable binding (non-empty
+// DefaultMetrics) on the `service` dimension the managed path uses.
+func TestIdentityPlatformConfigChartable(t *testing.T) {
+	reseed(t)
+
+	b, ok := Binding("google_identity_platform_config")
+	require.True(t, ok, "google_identity_platform_config has no binding — imported observable panel cannot chart")
+	require.NotEmpty(t, b.DefaultMetrics,
+		"google_identity_platform_config binding has empty DefaultMetrics — nothing to chart")
+	assert.Contains(t, b.DefaultMetrics, "serviceruntime.googleapis.com/api/request_count",
+		"binding must mirror the managed gcp_identity_platform consumed-API request series")
+	// Mirror the managed metric's `service` dimension (gcpServiceMetrics
+	// ["identityplatform"] LabelKey: "service").
+	assert.Equal(t, "service", b.DimensionKey)
+	assert.NotEmpty(t, b.DimensionFrom)
+}
+
 func TestSeededBindings(t *testing.T) {
 	reseed(t)
 

@@ -34,9 +34,10 @@ func fakeStorageREST(t *testing.T, handler http.HandlerFunc) (*httptest.Server, 
 const listBucketsResponse = `{
   "kind": "storage#buckets",
   "items": [
-    {"name": "bkt-a", "location": "US", "storageClass": "STANDARD", "timeCreated": "2024-01-01T00:00:00Z", "labels": {"project": "io-foo"}},
+    {"name": "bkt-a", "location": "US", "storageClass": "STANDARD", "timeCreated": "2024-01-01T00:00:00Z", "versioning": {"enabled": true}, "labels": {"project": "io-foo"}},
     {"name": "bkt-b", "location": "EU", "storageClass": "NEARLINE", "timeCreated": "2024-01-02T00:00:00Z", "labels": {"project": "io-bar"}},
-    {"name": "bkt-c", "location": "ASIA", "storageClass": "STANDARD", "timeCreated": "2024-01-03T00:00:00Z"}
+    {"name": "bkt-c", "location": "ASIA", "storageClass": "STANDARD", "timeCreated": "2024-01-03T00:00:00Z"},
+    {"name": "bkt-d", "location": "US", "storageClass": "STANDARD", "timeCreated": "2024-01-04T00:00:00Z", "versioning": {"enabled": false}, "labels": {"project": "io-baz"}}
   ]
 }`
 
@@ -53,11 +54,21 @@ func TestInspectGCS_ListBuckets_AllReturned(t *testing.T) {
 
 	buckets, ok := got.([]map[string]any)
 	require.True(t, ok, "expected []map[string]any, got %T", got)
-	// No project filter — all three buckets surface.
-	assert.Len(t, buckets, 3)
+	// No project filter — all four buckets surface.
+	require.Len(t, buckets, 4)
 	assert.Equal(t, "bkt-a", buckets[0]["name"])
 	assert.Equal(t, "STANDARD", buckets[0]["storageClass"])
 	assert.Equal(t, "EU", buckets[1]["location"])
+	// versioning comes straight off BucketAttrs.VersioningEnabled (#712):
+	// bkt-a has versioning enabled, bkt-b/bkt-c default to false.
+	assert.Equal(t, true, buckets[0]["versioning"])
+	assert.Equal(t, false, buckets[1]["versioning"])
+	// bkt-d carries an EXPLICIT "versioning":{"enabled":false} block on the
+	// wire (not a missing block defaulting to Go's zero value), proving the
+	// false path is extracted from real REST data rather than an
+	// encoding/json default. #712.
+	assert.Equal(t, "bkt-d", buckets[3]["name"])
+	assert.Equal(t, false, buckets[3]["versioning"])
 }
 
 func TestInspectGCS_ListBuckets_FiltersByProject(t *testing.T) {

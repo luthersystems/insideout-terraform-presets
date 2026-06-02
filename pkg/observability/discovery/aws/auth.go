@@ -33,6 +33,23 @@ type cognitoUserPoolsClient interface {
 	ListTagsForResource(ctx context.Context, params *cognitoidentityprovider.ListTagsForResourceInput, optFns ...func(*cognitoidentityprovider.Options)) (*cognitoidentityprovider.ListTagsForResourceOutput, error)
 }
 
+// userPoolWithMFA is the enriched element the project-scoped filter path
+// returns: the ListUserPools summary extended with the pool's
+// MfaConfiguration (OFF|ON|OPTIONAL). The scope filter already calls
+// DescribeUserPool to resolve the pool ARN, so MfaConfiguration comes off
+// that same response — NO extra SDK round-trip (the same "data already
+// fetched, just surface it" enrichment as the VPC IGW join).
+//
+// MfaConfiguration is a *string so the JSON envelope OMITS it when the
+// DescribeUserPool data wasn't available (the empty-project demo path,
+// which skips DescribeUserPool entirely), letting extractCognitoConfig tell
+// "MFA genuinely off" apart from "not fetched" — the same presence check
+// extractVPCConfig does for HasInternetGateway (#712).
+type userPoolWithMFA struct {
+	cognitoidptypes.UserPoolDescriptionType
+	MfaConfiguration *string `json:"MfaConfiguration,omitempty"`
+}
+
 func inspectCognito(ctx context.Context, cfg aws.Config, action, filters string) (any, error) {
 	project := filter.Project(filters)
 	switch action {
@@ -53,7 +70,13 @@ func inspectCognito(ctx context.Context, cfg aws.Config, action, filters string)
 //
 // Mirrors the InsideOut backend's filterCognitoUserPoolsByProjectTag
 // (aws_metrics.go:1405).
-func filterCognitoUserPoolsByProjectTag(ctx context.Context, client cognitoUserPoolsClient, project string) ([]cognitoidptypes.UserPoolDescriptionType, error) {
+//
+// Project-scoped matches are enriched with MfaConfiguration off the
+// DescribeUserPool response the scope filter already issues, so
+// extractCognitoConfig can surface aws_cognito.mfaRequired with no extra
+// SDK call (#712). The empty-project demo path skips DescribeUserPool and
+// returns pools with MfaConfiguration unset (omitted from the envelope).
+func filterCognitoUserPoolsByProjectTag(ctx context.Context, client cognitoUserPoolsClient, project string) ([]userPoolWithMFA, error) {
 	all := []cognitoidptypes.UserPoolDescriptionType{}
 	paginator := cognitoidentityprovider.NewListUserPoolsPaginator(client, &cognitoidentityprovider.ListUserPoolsInput{
 		// 60 is the ListUserPools MaxResults API max — minimises
@@ -68,9 +91,16 @@ func filterCognitoUserPoolsByProjectTag(ctx context.Context, client cognitoUserP
 		all = append(all, page.UserPools...)
 	}
 	if project == "" {
-		return all, nil
+		// Demo-session fallback: skip the per-pool DescribeUserPool scope
+		// filter. MfaConfiguration stays unset (omitted) since we don't
+		// fetch the describe response here.
+		out := make([]userPoolWithMFA, 0, len(all))
+		for _, p := range all {
+			out = append(out, userPoolWithMFA{UserPoolDescriptionType: p})
+		}
+		return out, nil
 	}
-	matched := make([]cognitoidptypes.UserPoolDescriptionType, 0, len(all))
+	matched := make([]userPoolWithMFA, 0, len(all))
 	for _, p := range all {
 		id := aws.ToString(p.Id)
 		if id == "" {
@@ -94,7 +124,13 @@ func filterCognitoUserPoolsByProjectTag(ctx context.Context, client cognitoUserP
 			continue
 		}
 		if tagsOut.Tags["Project"] == project {
-			matched = append(matched, p)
+			wrapped := userPoolWithMFA{UserPoolDescriptionType: p}
+			// MfaConfiguration is already on the describe response we just
+			// fetched for the ARN — surface it for free.
+			if mfa := string(descOut.UserPool.MfaConfiguration); mfa != "" {
+				wrapped.MfaConfiguration = aws.String(mfa)
+			}
+			matched = append(matched, wrapped)
 		}
 	}
 	return matched, nil

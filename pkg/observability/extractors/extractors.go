@@ -602,25 +602,39 @@ func extractKMSConfig(rawResult any) map[string]string {
 	}
 }
 
-// extractS3Config extracts config from list-buckets response. Shape:
+// extractS3Config extracts config from list-buckets response. Shape (the
+// inspector enriches each bucket with Versioning via a GetBucketVersioning
+// fan-out — see filterS3BucketsByProjectTag / enrichS3Versioning):
 //
-//	[ { Name, CreationDate } ]
+//	[ { Name, CreationDate, Versioning } ]
 //
-// frontend field (lib/stack/ir.ts:308): aws_s3.versioning (bool). Versioning
-// is not returned by ListBuckets and would require an additional
-// GetBucketVersioning call per bucket.
+// frontend field (lib/stack/ir.ts:312): aws_s3.versioning (bool). The
+// reliable-side humanizeConfigValue treats "versioning" as a BOOLEAN_KEY,
+// so we stringify the literal lowercase bool ("true"/"false").
 //
-// TODO(#1089): surface per-bucket versioning by fanning out
-// GetBucketVersioning. Current live config surfaces only a bucket count,
-// which is sufficient for the "deploy succeeded / bucket exists" signal.
+// Multi-bucket nuance: this extractor aggregates the whole aws_s3 component
+// (a list of buckets), not one bucket. Versioning is a per-bucket setting,
+// so we only emit `versioning` when there is exactly ONE bucket AND its
+// state was actually fetched (the inspector omits Versioning when the
+// GetBucketVersioning call was skipped/failed). With multiple buckets we
+// omit it rather than claim a single value across the set — the per-resource
+// imported path surfaces each bucket's versioning precisely (#712).
 func extractS3Config(rawResult any) map[string]string {
 	items := sliceFromEnvelope(rawResult, "Buckets")
 	if len(items) == 0 {
 		return nil
 	}
-	return map[string]string{
+	cfg := map[string]string{
 		"bucketCount": strconv.Itoa(len(items)),
 	}
+	if len(items) == 1 {
+		if v, ok := items[0]["Versioning"]; ok {
+			if b, ok := v.(bool); ok {
+				cfg["versioning"] = strconv.FormatBool(b)
+			}
+		}
+	}
+	return cfg
 }
 
 // extractSecretsManagerConfig extracts config from list-secrets response.
@@ -907,13 +921,21 @@ func extractSQSConfig(rawResult any) map[string]string {
 //	[ { Id, Name, Status, CreationDate, LambdaConfig } ]
 //
 // frontend fields (lib/stack/ir.ts:347): aws_cognito.signInType,
-// mfaRequired, okta, auth0 — none of which are on the list-user-pools
-// summary; they live on DescribeUserPool.
+// mfaRequired, okta, auth0. mfaRequired is surfaced here; the inspector
+// enriches each project-scoped pool with MfaConfiguration off the
+// DescribeUserPool response it already issues for the ARN — see
+// filterCognitoUserPoolsByProjectTag (#712). signInType / okta / auth0
+// still need wider DescribeUserPool fields and remain design-only.
 //
-// TODO(#1089): fan out DescribeUserPool per pool to surface MFA policy
-// (MfaConfiguration), password policy (Policies.PasswordPolicy), and
-// alias attributes. Today we emit the drift/identity signals so the UI
-// can render a "pool exists, status active" card.
+// MfaConfiguration is OFF|ON|OPTIONAL; mfaRequired is true only for ON
+// (OPTIONAL leaves MFA up to the user, so it is not "required"). The value
+// is the literal lowercase bool to match the reliable-side
+// humanizeConfigValue BOOLEAN_KEYS contract.
+//
+// Multi-pool nuance (same as extractS3Config): MfaConfiguration is
+// per-pool, so mfaRequired is only surfaced when there is exactly ONE pool
+// AND its config was fetched (the inspector omits MfaConfiguration on the
+// empty-project demo path); multiple pools omit it.
 func extractCognitoConfig(rawResult any) map[string]string {
 	items := sliceFromEnvelope(rawResult, "UserPools")
 	if len(items) == 0 {
@@ -931,6 +953,11 @@ func extractCognitoConfig(rawResult any) map[string]string {
 	}
 	if v := getString(first, "Id"); v != "" {
 		cfg["poolId"] = v
+	}
+	if len(items) == 1 {
+		if mfa := getString(first, "MfaConfiguration"); mfa != "" {
+			cfg["mfaRequired"] = strconv.FormatBool(mfa == "ON")
+		}
 	}
 	return cfg
 }
@@ -1404,17 +1431,22 @@ func extractGCPCloudSQLConfig(rawResult any) map[string]string {
 }
 
 // extractGCPGCSConfig extracts config from the list-buckets response. The
-// inspector (inspectGCPGCS) PRE-FLATTENS each bucket to a 4-key map:
+// inspector (inspectGCPGCS) PRE-FLATTENS each bucket to a 5-key map:
 //
-//	[ { name, location, storageClass, created } ]
+//	[ { name, location, storageClass, created, versioning } ]
 //
 // — so this extractor is the simplest of the bundle: no proto parsing
 // required, straight field lookups.
 //
-// frontend fields (lib/stack/ir.ts:488-495): storageClass, versioning.
-// versioning is NOT on the inspector's pre-flattened shape (would need
-// a per-bucket GetAttrs fan-out). TODO(#1090 follow-up): fan out
-// (*storage.BucketHandle).Attrs() to surface VersioningEnabled.
+// frontend fields (lib/stack/ir.ts:493-494): storageClass, versioning.
+// versioning comes straight off BucketAttrs.VersioningEnabled — list-buckets
+// already fetches full attrs, so (unlike AWS S3) no second SDK call is
+// needed. It is stringified as the literal lowercase bool ("true"/"false")
+// to match the reliable-side humanizeConfigValue BOOLEAN_KEYS contract.
+//
+// Multi-bucket nuance (same as extractS3Config): versioning is per-bucket,
+// so we only surface it when there is exactly ONE bucket; multiple buckets
+// omit it rather than claim a single value across the set (#712).
 func extractGCPGCSConfig(rawResult any) map[string]string {
 	items := sliceFromEnvelope(rawResult, "buckets")
 	if len(items) == 0 {
@@ -1432,6 +1464,13 @@ func extractGCPGCSConfig(rawResult any) map[string]string {
 	}
 	if v := getString(first, "storageClass"); v != "" {
 		cfg["storageClass"] = v
+	}
+	if len(items) == 1 {
+		if v, ok := first["versioning"]; ok {
+			if b, ok := v.(bool); ok {
+				cfg["versioning"] = strconv.FormatBool(b)
+			}
+		}
 	}
 	return cfg
 }

@@ -58,6 +58,11 @@ func inspectGCS(ctx context.Context, projectID, action, filters string, opts ...
 // hand-rolled JSON shape the inspector contract returns. The output
 // is always a non-nil slice so an empty input marshals as `[]`,
 // pinned by the per-site empty-state test (#256).
+//
+// versioning comes straight off BucketAttrs.VersioningEnabled — the
+// list-buckets call already fetches full attrs, so unlike AWS S3 this
+// needs no second SDK round-trip. Surfaced so extractGCPGCSConfig can
+// report gcp_gcs.versioning (#712).
 func bucketAttrsToMaps(attrs []*storage.BucketAttrs) []map[string]any {
 	out := make([]map[string]any, 0, len(attrs))
 	for _, b := range attrs {
@@ -66,6 +71,7 @@ func bucketAttrsToMaps(attrs []*storage.BucketAttrs) []map[string]any {
 			"location":     b.Location,
 			"storageClass": b.StorageClass,
 			"created":      b.Created,
+			"versioning":   b.VersioningEnabled,
 		})
 	}
 	return out
