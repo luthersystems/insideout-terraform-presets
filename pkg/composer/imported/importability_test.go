@@ -147,6 +147,20 @@ func TestUnimportableReason_ENI(t *testing.T) {
 	})
 }
 
+func TestUnimportableReason_LogStream(t *testing.T) {
+	t.Parallel()
+	t.Run("every log stream is un-importable (type-level)", func(t *testing.T) {
+		ir := ImportedResource{Identity: ResourceIdentity{
+			Type:     "aws_cloudwatch_log_stream",
+			ImportID: "/aws/rds/instance/db/postgresql:db.0",
+		}}
+		assert.Equal(t, ReasonEphemeralLogStream, UnimportableReason(ir))
+	})
+	t.Run("reason carries an operator description", func(t *testing.T) {
+		assert.NotEmpty(t, ReasonDescription(ReasonEphemeralLogStream))
+	})
+}
+
 func TestUnimportableReason_OtherTypesImportable(t *testing.T) {
 	t.Parallel()
 	for _, typ := range []string{"aws_vpc", "aws_s3_bucket", "aws_kms_key", "aws_lambda_function"} {

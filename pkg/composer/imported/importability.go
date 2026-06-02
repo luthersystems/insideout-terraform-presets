@@ -60,6 +60,15 @@ const (
 	// are managed by their parent resource and cannot be adopted as a
 	// standalone aws_network_interface.
 	ReasonServiceManagedENI = "service_managed_eni"
+
+	// ReasonEphemeralLogStream marks an aws_cloudwatch_log_stream. Individual
+	// log streams are created automatically by their log group as events
+	// arrive and are continuously rotated — they are not declarative
+	// infrastructure (Terraform manages the aws_cloudwatch_log_group, not its
+	// streams), and terraform plan -generate-config-out emits no body for
+	// them. The whole type is un-importable, so streams are classified into
+	// unsupported.json instead of being silently dropped as no_generated_config.
+	ReasonEphemeralLogStream = "ephemeral_log_stream"
 )
 
 // awsManagedKMSAliasPrefix is the reserved alias prefix the AWS provider
@@ -139,6 +148,10 @@ func UnimportableReason(ir ImportedResource) string {
 		if IsServiceManagedENIInterfaceType(eniInterfaceType(ir.Identity)) {
 			return ReasonServiceManagedENI
 		}
+	case "aws_cloudwatch_log_stream":
+		// Type-level: every log stream is ephemeral and un-importable (see
+		// ReasonEphemeralLogStream).
+		return ReasonEphemeralLogStream
 	}
 	return ""
 }
@@ -155,6 +168,8 @@ func ReasonDescription(reason string) string {
 		return "AWS-managed KMS key (KeyManager=AWS, e.g. the ACM default key) — cannot be imported into Terraform."
 	case ReasonServiceManagedENI:
 		return "Service-managed network interface (owned by its parent NAT gateway / VPC endpoint / load balancer) — cannot be imported as a standalone network interface."
+	case ReasonEphemeralLogStream:
+		return "Ephemeral CloudWatch log stream (auto-created and rotated by its log group) — not declarative infrastructure; manage the log group instead."
 	default:
 		return ""
 	}
