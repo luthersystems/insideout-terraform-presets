@@ -86,13 +86,22 @@ var cloudControlTypeConfigs = []cloudControlConfig{
 		//
 		// Cloud Control's primary identifier is `<SelectionId>_<BackupPlanId>`
 		// (underscore-separated, verified live). Terraform's import
-		// format is `<SelectionId>|<BackupPlanId>` (pipe-separated).
+		// format is `<BackupPlanId>|<SelectionId>` (pipe-separated, plan
+		// FIRST — the reverse of the CC field order; verified against
+		// terraform-provider-aws aws_backup_selection import docs). A
+		// naive single `_`→`|` replace emits `<SelectionId>|<BackupPlanId>`
+		// (wrong order), which terraform import rejects and the selection
+		// silently drops with no_generated_config.
 		TFType:               "aws_backup_selection",
 		CloudFormationType:   "AWS::Backup::BackupSelection",
 		Slug:                 "backup_selection",
 		SkipProjectTagFilter: true,
 		ImportIDFromIdentifier: func(identifier string, _ map[string]any) string {
-			return strings.Replace(identifier, "_", "|", 1)
+			if idx := strings.Index(identifier, "_"); idx != -1 {
+				selectionID, planID := identifier[:idx], identifier[idx+1:]
+				return planID + "|" + selectionID
+			}
+			return identifier
 		},
 		NameHintFromProperties: func(identifier string, props map[string]any) string {
 			if sel, ok := props["BackupSelection"].(map[string]any); ok {
@@ -232,10 +241,19 @@ var cloudControlTypeConfigs = []cloudControlConfig{
 		),
 	},
 	{
-		TFType:                  "aws_cloudwatch_event_rule",
-		CloudFormationType:      "AWS::Events::Rule",
-		Slug:                    "cloudwatch_event_rule",
-		ImportIDFromIdentifier:  passthroughImportID,
+		TFType:             "aws_cloudwatch_event_rule",
+		CloudFormationType: "AWS::Events::Rule",
+		Slug:               "cloudwatch_event_rule",
+		// Cloud Control's primary identifier for AWS::Events::Rule is the
+		// full ARN. Terraform's import format is `<event-bus-name>/<rule-name>`
+		// (verified against terraform-provider-aws aws_cloudwatch_event_rule
+		// import docs), NOT the ARN — passthrough emits the ARN and the rule
+		// silently drops with no_generated_config. eventRuleImportID parses
+		// the ARN's resource part (`rule/<bus>/<name>` for a custom bus,
+		// `rule/<name>` for the implicit default bus) into the bus/name form.
+		ImportIDFromIdentifier: func(identifier string, _ map[string]any) string {
+			return eventRuleImportID(identifier)
+		},
 		NameHintFromProperties:  nameOrIdentifier("Name"),
 		NativeIDsFromProperties: arnUnderKey("Arn"),
 		TagsFromProperties:      tagsFromKey("Tags"),
@@ -290,13 +308,44 @@ var cloudControlTypeConfigs = []cloudControlConfig{
 	// KMS — regional
 	// =====================================================================
 	{
-		TFType:                  "aws_kms_key",
-		CloudFormationType:      "AWS::KMS::Key",
-		Slug:                    "kms",
-		ImportIDFromIdentifier:  passthroughImportID,
-		NameHintFromProperties:  nameOrIdentifier("KeyId"),
-		NativeIDsFromProperties: arnUnderKey("Arn"),
-		TagsFromProperties:      tagsFromKey("Tags"),
+		TFType:                 "aws_kms_key",
+		CloudFormationType:     "AWS::KMS::Key",
+		Slug:                   "kms",
+		ImportIDFromIdentifier: passthroughImportID,
+		NameHintFromProperties: nameOrIdentifier("KeyId"),
+		// Surface KeyManager (AWS | CUSTOMER) into NativeIDs["key_manager"]
+		// when the Cloud Control payload carries it, so the instance-level
+		// importability classifier (imported.UnimportableReason, #709) can
+		// grey out AWS-managed keys instead of offering them. AWS-managed
+		// keys (e.g. the ACM default key, KeyManager == "AWS") are not
+		// customer-owned and FAIL import: the provider's read calls
+		// kms:GetKeyRotationStatus, which AWS-managed keys deny — so the key
+		// silently drops with no_generated_config.
+		//
+		// LIMITATION: AWS::KMS::Key's CloudFormation schema does NOT list
+		// KeyManager among its (read-only) properties, so a Cloud Control
+		// GetResource payload may omit it. KeyManager is therefore the
+		// closest available signal but not a guaranteed one. This is the
+		// same posture as the service-managed-ENI classifier (#709): when
+		// the discoverer can't surface the discriminator, the key is treated
+		// as importable here and the reverse-import genconfig prune (#708)
+		// remains the backstop. The exclusion cannot be done via
+		// SkipIdentifier because that hook receives only the bare KeyId
+		// (a UUID with no manager signal) before the GetResource fan-out.
+		NativeIDsFromProperties: func(identifier string, props map[string]any) map[string]string {
+			out := map[string]string{}
+			if arn := extractString(props, "Arn"); arn != "" {
+				out["arn"] = arn
+			}
+			if km := extractString(props, "KeyManager"); km != "" {
+				out["key_manager"] = km
+			}
+			if len(out) == 0 {
+				return nil
+			}
+			return out
+		},
+		TagsFromProperties: tagsFromKey("Tags"),
 	},
 
 	// =====================================================================
@@ -355,13 +404,17 @@ var cloudControlTypeConfigs = []cloudControlConfig{
 		// scanned region returns the same buckets. Treating S3 as a
 		// per-region type therefore emitted the same bucket once per
 		// scan region, each stamped with the (wrong) scan region (#1860).
-		// Mark it global: the discoverer scans once (region="") and reads
-		// the deduped set via RGTCacheForGlobalCFN (dedups by ARN), so
-		// each bucket appears exactly once with no region. Downstream the
-		// region-less identity is handled as a global resource (reliable
-		// backfills the session region — us-east-1 — for import, which the
-		// S3 us-east-1 endpoint serves cross-region). Identifier = bucket
-		// name.
+		// Mark it global FOR ENUMERATION: the discoverer scans once
+		// (region="") and reads the deduped set via RGTCacheForGlobalCFN
+		// (dedups by ARN), so each bucket appears exactly once. IsGlobal
+		// keeps that single ListBuckets/RGT pass — it does NOT mean the
+		// bucket lives in us-east-1. A bucket in us-west-2 / eu-central-1
+		// is generated under a us-east-1 provider only if its Identity.Region
+		// is left empty (reliable then backfills the session region,
+		// us-east-1), and generate-config-out fails for it (#1860 follow-up).
+		// The s3_bucket enricher promotes each bucket's TRUE region (from
+		// HeadBucket BucketRegion) into Identity.Region so genconfig groups
+		// every bucket into its real region dir. Identifier = bucket name.
 		IsGlobal:                true,
 		ImportIDFromIdentifier:  passthroughImportID,
 		NameHintFromProperties:  nameOrIdentifier("BucketName"),
@@ -518,21 +571,28 @@ var cloudControlTypeConfigs = []cloudControlConfig{
 		TFType:             "aws_eip",
 		CloudFormationType: "AWS::EC2::EIP",
 		Slug:               "eip",
-		// Cloud Control identifier is compound "|<AllocationId>" (per
-		// arnRule); Terraform import takes just the AllocationId. Strip
-		// the leading "|".
+		// Cloud Control's primary identifier for AWS::EC2::EIP is the
+		// compound `<PublicIp>|<AllocationId>` (verified live, e.g.
+		// `100.49.75.26|eipalloc-07d114af86fd5d1c3`). The arnRule path
+		// yields the `|<AllocationId>` form (empty PublicIp). Terraform
+		// import for aws_eip takes JUST the AllocationId, so take the
+		// segment after the LAST `|` — that handles both the live
+		// `<ip>|<alloc>` form and the ARN-rule `|<alloc>` form. A plain
+		// TrimPrefix("|") is a no-op on the live form and would emit the
+		// wrong ID (with the public IP), silently dropping the EIP with
+		// no_generated_config.
 		ImportIDFromIdentifier: func(identifier string, _ map[string]any) string {
-			return strings.TrimPrefix(identifier, "|")
+			return eipAllocID(identifier)
 		},
 		NameHintFromProperties: func(identifier string, _ map[string]any) string {
-			return strings.TrimPrefix(identifier, "|")
+			return eipAllocID(identifier)
 		},
 		NativeIDsFromProperties: func(identifier string, props map[string]any) map[string]string {
 			out := map[string]string{}
 			if ip := extractString(props, "PublicIp"); ip != "" {
 				out["public_ip"] = ip
 			}
-			out["allocation_id"] = strings.TrimPrefix(identifier, "|")
+			out["allocation_id"] = eipAllocID(identifier)
 			return out
 		},
 		TagsFromProperties: tagsFromKey("Tags"),
@@ -2725,6 +2785,59 @@ var cloudControlTypeConfigs = []cloudControlConfig{
 // import format byte-for-byte.
 func passthroughImportID(identifier string, _ map[string]any) string {
 	return identifier
+}
+
+// eipAllocID extracts the AllocationId from an AWS::EC2::EIP Cloud Control
+// identifier. The live primary identifier is the compound
+// `<PublicIp>|<AllocationId>` (e.g.
+// `100.49.75.26|eipalloc-07d114af86fd5d1c3`); the arnRule path yields the
+// `|<AllocationId>` form (empty PublicIp). Terraform import for aws_eip
+// takes only the AllocationId, so return the segment after the LAST `|`.
+// This is correct for both forms; an identifier with no `|` is returned
+// unchanged.
+func eipAllocID(identifier string) string {
+	if i := strings.LastIndex(identifier, "|"); i >= 0 {
+		return identifier[i+1:]
+	}
+	return identifier
+}
+
+// eventRuleImportID converts an AWS::Events::Rule Cloud Control identifier
+// (the full ARN) into Terraform's `<event-bus-name>/<rule-name>` import
+// format. EventBridge rule ARNs take two shapes:
+//
+//   - custom bus:  arn:aws:events:<region>:<acct>:rule/<bus>/<name>
+//   - default bus: arn:aws:events:<region>:<acct>:rule/<name>
+//
+// The resource segment after the 5th `:` is `rule/<bus>/<name>` or
+// `rule/<name>`. We emit `<bus>/<name>`, defaulting the bus to `default`
+// when the ARN carries only the rule name (the implicit default bus). A
+// string that is not an events-rule ARN is returned unchanged so an
+// already-correct `<bus>/<name>` input passes through untouched.
+func eventRuleImportID(identifier string) string {
+	const arnPrefix = "arn:"
+	if !strings.HasPrefix(identifier, arnPrefix) {
+		return identifier
+	}
+	// ARN layout: arn:partition:service:region:account-id:resource…
+	// Split into 6 parts so the resource segment (which itself contains
+	// `/` and possibly `:`) stays intact.
+	parts := strings.SplitN(identifier, ":", 6)
+	if len(parts) != 6 {
+		return identifier
+	}
+	resource := parts[5] // e.g. "rule/<bus>/<name>" or "rule/<name>"
+	const resPrefix = "rule/"
+	if !strings.HasPrefix(resource, resPrefix) {
+		return identifier
+	}
+	rest := strings.TrimPrefix(resource, resPrefix)
+	if idx := strings.Index(rest, "/"); idx != -1 {
+		// rest = "<bus>/<name>" — already the target form.
+		return rest
+	}
+	// rest = "<name>" — implicit default bus.
+	return "default/" + rest
 }
 
 // passthroughIdentifierName is the common NameHintFromProperties used by

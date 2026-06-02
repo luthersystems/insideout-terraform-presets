@@ -12,6 +12,9 @@ import "strings"
 //   - AWS-managed default KMS aliases (alias/aws/rds, alias/aws/ebs, …): the
 //     provider refuses any aws_kms_alias under the reserved `alias/aws/`
 //     prefix.
+//   - AWS-managed KMS keys (KeyManager == "AWS", e.g. the ACM default key):
+//     the provider's read calls kms:GetKeyRotationStatus, which AWS-managed
+//     keys deny, so importing one fails.
 //   - Service/parent-managed ENIs (NAT gateway, VPC endpoint, load balancer,
 //     Lambda, …): owned by their parent resource, not standalone-importable
 //     as aws_network_interface.
@@ -44,6 +47,13 @@ const (
 	// importing any alias with that prefix.
 	ReasonAWSManagedKMSAlias = "aws_managed_kms_alias"
 
+	// ReasonAWSManagedKMSKey marks an aws_kms_key whose KeyManager is "AWS"
+	// — an AWS-managed key (e.g. the ACM default key) rather than a
+	// customer-managed one. The provider's read path calls
+	// kms:GetKeyRotationStatus, which AWS-managed keys deny, so the key
+	// cannot be imported into customer Terraform state.
+	ReasonAWSManagedKMSKey = "aws_managed_kms_key"
+
 	// ReasonServiceManagedENI marks an aws_network_interface whose
 	// interface_type is owned by an AWS service (nat_gateway, vpc_endpoint,
 	// network_load_balancer, lambda, …) rather than a customer. These ENIs
@@ -55,6 +65,11 @@ const (
 // awsManagedKMSAliasPrefix is the reserved alias prefix the AWS provider
 // refuses to create or import an aws_kms_alias under.
 const awsManagedKMSAliasPrefix = "alias/aws/"
+
+// awsManagedKMSKeyManager is the KeyManager value KMS reports for keys it
+// manages on the customer's behalf (vs "CUSTOMER" for customer-managed
+// keys). An AWS-managed key cannot be imported into Terraform state.
+const awsManagedKMSKeyManager = "AWS"
 
 // importableENIInterfaceTypes is the set of interface_type values an
 // aws_network_interface can legitimately carry for a customer-managed,
@@ -80,6 +95,16 @@ func IsAWSManagedKMSAliasName(name string) bool {
 	return strings.HasPrefix(name, awsManagedKMSAliasPrefix)
 }
 
+// IsAWSManagedKMSKeyManager reports whether a KMS key's KeyManager value
+// denotes an AWS-managed key (KeyManager == "AWS"), which the provider
+// cannot import. The empty string (KeyManager not surfaced by the
+// discoverer) is treated as importable so an absent discriminator never
+// drops a customer-managed key — the genconfig prune (#708) remains the
+// backstop.
+func IsAWSManagedKMSKeyManager(keyManager string) bool {
+	return keyManager == awsManagedKMSKeyManager
+}
+
 // IsServiceManagedENIInterfaceType reports whether an interface_type value
 // denotes an AWS-service-managed ENI (and therefore an un-importable one).
 // Forward-compatible: any interface_type AWS introduces for a managed ENI
@@ -95,15 +120,20 @@ func IsServiceManagedENIInterfaceType(interfaceType string) bool {
 // of the Reason* consts) or "" when the resource is importable.
 //
 // KMS aliases are always classifiable — the alias name is the import ID /
-// native ID stamped by every discoverer. Service-managed ENIs are classifiable
-// only when the discoverer surfaced interface_type into
-// NativeIDs["interface_type"]; when it is absent the ENI is treated as
-// importable here and the genconfig prune (#708) remains the backstop.
+// native ID stamped by every discoverer. AWS-managed KMS keys and
+// service-managed ENIs are classifiable only when the discoverer surfaced
+// the discriminator (NativeIDs["key_manager"] / NativeIDs["interface_type"]);
+// when it is absent the resource is treated as importable here and the
+// genconfig prune (#708) remains the backstop.
 func UnimportableReason(ir ImportedResource) string {
 	switch ir.Identity.Type {
 	case "aws_kms_alias":
 		if IsAWSManagedKMSAliasName(kmsAliasName(ir.Identity)) {
 			return ReasonAWSManagedKMSAlias
+		}
+	case "aws_kms_key":
+		if IsAWSManagedKMSKeyManager(kmsKeyManager(ir.Identity)) {
+			return ReasonAWSManagedKMSKey
 		}
 	case "aws_network_interface":
 		if IsServiceManagedENIInterfaceType(eniInterfaceType(ir.Identity)) {
@@ -121,6 +151,8 @@ func ReasonDescription(reason string) string {
 	switch reason {
 	case ReasonAWSManagedKMSAlias:
 		return "AWS-managed KMS alias (reserved alias/aws/* prefix) — cannot be imported into Terraform."
+	case ReasonAWSManagedKMSKey:
+		return "AWS-managed KMS key (KeyManager=AWS, e.g. the ACM default key) — cannot be imported into Terraform."
 	case ReasonServiceManagedENI:
 		return "Service-managed network interface (owned by its parent NAT gateway / VPC endpoint / load balancer) — cannot be imported as a standalone network interface."
 	default:
@@ -139,6 +171,14 @@ func kmsAliasName(id ResourceIdentity) string {
 		return id.ImportID
 	}
 	return id.NameHint
+}
+
+// kmsKeyManager resolves a KMS key's KeyManager value from
+// NativeIDs["key_manager"] (populated by the kms_key discoverer's property
+// extractor when the Cloud Control payload carries KeyManager). Empty when
+// the discoverer did not surface it — treated as importable upstream.
+func kmsKeyManager(id ResourceIdentity) string {
+	return id.NativeIDs["key_manager"]
 }
 
 // eniInterfaceType resolves an ENI's interface_type from

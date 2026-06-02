@@ -39,10 +39,11 @@ func configByTFType(t *testing.T, tfType string) cloudControlConfig {
 }
 
 // TestBackupSelectionConfig pins the per-type extractors for
-// aws_backup_selection: ImportID rewrite `_`→`|` (single-replace —
-// SelectionIds containing underscores must round-trip intact), nested
-// NameHint fall-back (BackupSelection.SelectionName), NativeIDs split
-// on first `_`, defensive behavior on a malformed identifier
+// aws_backup_selection: ImportID rewrite `<sel>_<plan>` →
+// `<plan>|<sel>` (split on the FIRST `_`, emit plan-then-selection —
+// the provider's import order is the reverse of the CC field order),
+// nested NameHint fall-back (BackupSelection.SelectionName), NativeIDs
+// split on first `_`, defensive behavior on a malformed identifier
 // (downstream readers must see both keys present), and the non-nil
 // empty Tags map per the #255 in-memory contract.
 func TestBackupSelectionConfig(t *testing.T) {
@@ -55,16 +56,17 @@ func TestBackupSelectionConfig(t *testing.T) {
 		t.Errorf("CloudFormationType=%q, want AWS::Backup::BackupSelection", cfg.CloudFormationType)
 	}
 
-	// ImportID: `<sel>_<plan>` → `<sel>|<plan>` (single replace).
-	if got := cfg.ImportIDFromIdentifier("s1_p1", nil); got != "s1|p1" {
-		t.Errorf("ImportID rewrite: got %q, want %q", got, "s1|p1")
+	// ImportID: CC `<SelectionId>_<BackupPlanId>` → TF
+	// `<BackupPlanId>|<SelectionId>` (plan FIRST — reversed order).
+	if got := cfg.ImportIDFromIdentifier("s1_p1", nil); got != "p1|s1" {
+		t.Errorf("ImportID rewrite: got %q, want %q", got, "p1|s1")
 	}
-	// Only the first `_` is rewritten so SelectionIds containing
-	// underscores survive (sanity-pin AWS doesn't use them, but the
-	// `strings.Replace` count argument is load-bearing for symmetry
-	// with aws_eks_pod_identity_association's `|`→`,` rewrite).
-	if got := cfg.ImportIDFromIdentifier("s_a_b_p", nil); got != "s|a_b_p" {
-		t.Errorf("ImportID single-replace: got %q, want %q", got, "s|a_b_p")
+	// Split on the FIRST `_` only, so a BackupPlanId tail containing
+	// underscores survives intact (the SelectionId is the head; AWS
+	// selection IDs themselves don't contain `_`). The split point is
+	// load-bearing for symmetry with the plan-first ordering.
+	if got := cfg.ImportIDFromIdentifier("s_a_b_p", nil); got != "a_b_p|s" {
+		t.Errorf("ImportID first-`_` split: got %q, want %q", got, "a_b_p|s")
 	}
 
 	// NameHint from nested BackupSelection.SelectionName.
@@ -104,10 +106,10 @@ func TestBackupSelectionConfig(t *testing.T) {
 	if malformed["backup_plan_id"] != "" {
 		t.Errorf("NativeIDs malformed-id backup_plan_id: got %q, want \"\"", malformed["backup_plan_id"])
 	}
-	// ImportID on malformed identifier: strings.Replace is a no-op
-	// when `_` is absent; the resulting ID round-trips identically.
-	// Surfacing this as a test prevents a future "ImportID returns
-	// empty on malformed" regression.
+	// ImportID on malformed identifier: when `_` is absent the rewrite
+	// is a no-op and the ID round-trips identically. Surfacing this as a
+	// test prevents a future "ImportID returns empty on malformed"
+	// regression.
 	if got := cfg.ImportIDFromIdentifier("orphan", nil); got != "orphan" {
 		t.Errorf("ImportID malformed-id: got %q, want orphan (no-op when no `_`)", got)
 	}
@@ -119,6 +121,163 @@ func TestBackupSelectionConfig(t *testing.T) {
 	}
 	if len(tags) != 0 {
 		t.Errorf("Tags: got %v, want empty map", tags)
+	}
+}
+
+// TestEIPConfig pins the per-type extractors for aws_eip. Cloud Control's
+// live primary identifier is the compound `<PublicIp>|<AllocationId>`
+// (e.g. `100.49.75.26|eipalloc-07d114af86fd5d1c3`); the arnRule path
+// yields the `|<AllocationId>` form (empty PublicIp). Terraform import for
+// aws_eip takes JUST the AllocationId, so ImportID / NameHint / the
+// allocation_id NativeID must return the segment after the LAST `|` for
+// BOTH forms. A regression to TrimPrefix("|") is a no-op on the live form
+// and emits the wrong (public-IP-bearing) ID, silently dropping the EIP.
+func TestEIPConfig(t *testing.T) {
+	t.Parallel()
+	cfg := configByTFType(t, "aws_eip")
+	const (
+		liveID  = "100.49.75.26|eipalloc-07d114af86fd5d1c3"
+		ruleID  = "|eipalloc-07d114af86fd5d1c3"
+		allocID = "eipalloc-07d114af86fd5d1c3"
+	)
+
+	// ImportID: both forms collapse to the bare AllocationId.
+	if got := cfg.ImportIDFromIdentifier(liveID, nil); got != allocID {
+		t.Errorf("ImportID (live compound form): got %q, want %q", got, allocID)
+	}
+	if got := cfg.ImportIDFromIdentifier(ruleID, nil); got != allocID {
+		t.Errorf("ImportID (arn-rule form): got %q, want %q", got, allocID)
+	}
+	// An identifier with no `|` (defensive) round-trips unchanged.
+	if got := cfg.ImportIDFromIdentifier(allocID, nil); got != allocID {
+		t.Errorf("ImportID (no `|`): got %q, want %q", got, allocID)
+	}
+
+	// NameHint mirrors ImportID — the AllocationId is the hint.
+	if got := cfg.NameHintFromProperties(liveID, nil); got != allocID {
+		t.Errorf("NameHint (live compound form): got %q, want %q", got, allocID)
+	}
+
+	// NativeIDs: allocation_id is the LAST-`|` segment; public_ip comes
+	// from the PublicIp property when present.
+	native := cfg.NativeIDsFromProperties(liveID, map[string]any{"PublicIp": "100.49.75.26"})
+	if native["allocation_id"] != allocID {
+		t.Errorf("NativeIDs allocation_id: got %q, want %q", native["allocation_id"], allocID)
+	}
+	if native["public_ip"] != "100.49.75.26" {
+		t.Errorf("NativeIDs public_ip: got %q, want %q", native["public_ip"], "100.49.75.26")
+	}
+	// public_ip is absent when the PublicIp property is missing.
+	bare := cfg.NativeIDsFromProperties(ruleID, nil)
+	if _, ok := bare["public_ip"]; ok {
+		t.Errorf("NativeIDs public_ip: must be absent when PublicIp property missing, got %q", bare["public_ip"])
+	}
+	if bare["allocation_id"] != allocID {
+		t.Errorf("NativeIDs allocation_id (arn-rule form): got %q, want %q", bare["allocation_id"], allocID)
+	}
+}
+
+// TestCloudWatchEventRuleConfig pins the per-type extractors for
+// aws_cloudwatch_event_rule. Cloud Control's primary identifier is the
+// full ARN; Terraform's import format is `<event-bus-name>/<rule-name>`.
+// The ImportID transform must convert a custom-bus ARN
+// (`rule/<bus>/<name>`) into `<bus>/<name>` and a default-bus ARN
+// (`rule/<name>`) into `default/<name>`. A regression to passthrough emits
+// the ARN and the rule silently drops with no_generated_config.
+func TestCloudWatchEventRuleConfig(t *testing.T) {
+	t.Parallel()
+	cfg := configByTFType(t, "aws_cloudwatch_event_rule")
+
+	cases := []struct {
+		name string
+		arn  string
+		want string
+	}{
+		{
+			name: "default bus",
+			arn:  "arn:aws:events:us-east-1:111111111111:rule/my-rule",
+			want: "default/my-rule",
+		},
+		{
+			name: "custom bus",
+			arn:  "arn:aws:events:us-east-1:111111111111:rule/my-bus/my-rule",
+			want: "my-bus/my-rule",
+		},
+		{
+			name: "govcloud partition default bus",
+			arn:  "arn:aws-us-gov:events:us-gov-west-1:111111111111:rule/gov-rule",
+			want: "default/gov-rule",
+		},
+		{
+			name: "already in bus/name form (passthrough)",
+			arn:  "my-bus/my-rule",
+			want: "my-bus/my-rule",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := cfg.ImportIDFromIdentifier(tc.arn, nil); got != tc.want {
+				t.Errorf("ImportID(%q): got %q, want %q", tc.arn, got, tc.want)
+			}
+		})
+	}
+
+	// NativeIDs still carry the full ARN, and NameHint reads Name.
+	props := map[string]any{
+		"Name": "my-rule",
+		"Arn":  "arn:aws:events:us-east-1:111111111111:rule/my-bus/my-rule",
+	}
+	if got := cfg.NameHintFromProperties("x", props); got != "my-rule" {
+		t.Errorf("NameHint: got %q, want my-rule", got)
+	}
+	native := cfg.NativeIDsFromProperties("x", props)
+	if native["arn"] != props["Arn"] {
+		t.Errorf("NativeIDs arn: got %q, want %q", native["arn"], props["Arn"])
+	}
+}
+
+// TestKMSKeyConfig pins the per-type extractors for aws_kms_key, focused
+// on the AWS-managed-key exclusion signal (Fix 4): the discoverer surfaces
+// KeyManager into NativeIDs["key_manager"] when the Cloud Control payload
+// carries it, so imported.UnimportableReason can grey out AWS-managed keys.
+// When the payload omits KeyManager (the CFN schema does not guarantee it),
+// the key is treated as importable and the genconfig prune is the backstop.
+func TestKMSKeyConfig(t *testing.T) {
+	t.Parallel()
+	cfg := configByTFType(t, "aws_kms_key")
+
+	const (
+		keyID = "1234abcd-12ab-34cd-56ef-1234567890ab"
+		arn   = "arn:aws:kms:us-east-1:111111111111:key/" + keyID
+	)
+	if got := cfg.ImportIDFromIdentifier(keyID, nil); got != keyID {
+		t.Errorf("ImportID passthrough: got %q, want %q", got, keyID)
+	}
+
+	// AWS-managed key: key_manager surfaced.
+	managed := cfg.NativeIDsFromProperties(keyID, map[string]any{"Arn": arn, "KeyManager": "AWS"})
+	if managed["key_manager"] != "AWS" {
+		t.Errorf("NativeIDs key_manager (AWS-managed): got %q, want AWS", managed["key_manager"])
+	}
+	if managed["arn"] != arn {
+		t.Errorf("NativeIDs arn: got %q, want %q", managed["arn"], arn)
+	}
+
+	// Customer key: key_manager surfaced as CUSTOMER.
+	cust := cfg.NativeIDsFromProperties(keyID, map[string]any{"Arn": arn, "KeyManager": "CUSTOMER"})
+	if cust["key_manager"] != "CUSTOMER" {
+		t.Errorf("NativeIDs key_manager (customer): got %q, want CUSTOMER", cust["key_manager"])
+	}
+
+	// KeyManager absent from the payload: key_manager key omitted (so the
+	// importability classifier treats the key as importable — the documented
+	// CFN-schema limitation).
+	absent := cfg.NativeIDsFromProperties(keyID, map[string]any{"Arn": arn})
+	if _, ok := absent["key_manager"]; ok {
+		t.Errorf("NativeIDs key_manager: must be omitted when KeyManager absent, got %q", absent["key_manager"])
+	}
+	if absent["arn"] != arn {
+		t.Errorf("NativeIDs arn (no KeyManager): got %q, want %q", absent["arn"], arn)
 	}
 }
 

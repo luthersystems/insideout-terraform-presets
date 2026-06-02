@@ -16,6 +16,7 @@ import (
 func TestReasonCodes_WireStable(t *testing.T) {
 	t.Parallel()
 	assert.Equal(t, "aws_managed_kms_alias", ReasonAWSManagedKMSAlias)
+	assert.Equal(t, "aws_managed_kms_key", ReasonAWSManagedKMSKey)
 	assert.Equal(t, "service_managed_eni", ReasonServiceManagedENI)
 }
 
@@ -33,6 +34,44 @@ func TestIsAWSManagedKMSAliasName(t *testing.T) {
 	for name, want := range cases {
 		assert.Equalf(t, want, IsAWSManagedKMSAliasName(name), "IsAWSManagedKMSAliasName(%q)", name)
 	}
+}
+
+func TestIsAWSManagedKMSKeyManager(t *testing.T) {
+	t.Parallel()
+	cases := map[string]bool{
+		"AWS":      true,
+		"CUSTOMER": false,
+		"":         false, // not surfaced by the discoverer → importable
+		"aws":      false, // case-sensitive: KMS reports the literal "AWS"
+	}
+	for km, want := range cases {
+		assert.Equalf(t, want, IsAWSManagedKMSKeyManager(km), "IsAWSManagedKMSKeyManager(%q)", km)
+	}
+}
+
+func TestUnimportableReason_KMSKey(t *testing.T) {
+	t.Parallel()
+	t.Run("AWS-managed key (KeyManager=AWS) is un-importable", func(t *testing.T) {
+		ir := ImportedResource{Identity: ResourceIdentity{
+			Type:      "aws_kms_key",
+			NativeIDs: map[string]string{"key_manager": "AWS"},
+		}}
+		assert.Equal(t, ReasonAWSManagedKMSKey, UnimportableReason(ir))
+	})
+	t.Run("customer-managed key (KeyManager=CUSTOMER) is importable", func(t *testing.T) {
+		ir := ImportedResource{Identity: ResourceIdentity{
+			Type:      "aws_kms_key",
+			NativeIDs: map[string]string{"key_manager": "CUSTOMER"},
+		}}
+		assert.Equal(t, "", UnimportableReason(ir))
+	})
+	t.Run("absent key_manager is importable (discriminator not surfaced; genconfig backstop covers it)", func(t *testing.T) {
+		ir := ImportedResource{Identity: ResourceIdentity{
+			Type:      "aws_kms_key",
+			NativeIDs: map[string]string{"arn": "arn:aws:kms:us-east-1:111111111111:key/1234abcd"},
+		}}
+		assert.Equal(t, "", UnimportableReason(ir))
+	})
 }
 
 func TestIsServiceManagedENIInterfaceType(t *testing.T) {
@@ -121,9 +160,12 @@ func TestReasonDescription(t *testing.T) {
 	// Pin a distinctive phrase per code (not just non-empty) so a regression
 	// that swaps the two case bodies — or truncates a description — fails.
 	kms := ReasonDescription(ReasonAWSManagedKMSAlias)
-	assert.Truef(t, strings.Contains(kms, "alias/aws/"), "KMS description must mention the reserved prefix, got %q", kms)
+	assert.Truef(t, strings.Contains(kms, "alias/aws/"), "KMS-alias description must mention the reserved prefix, got %q", kms)
+	kmsKey := ReasonDescription(ReasonAWSManagedKMSKey)
+	assert.Truef(t, strings.Contains(kmsKey, "KeyManager"), "KMS-key description must mention KeyManager, got %q", kmsKey)
 	eni := ReasonDescription(ReasonServiceManagedENI)
 	assert.Truef(t, strings.Contains(eni, "network interface"), "ENI description must mention network interface, got %q", eni)
 	assert.NotEqual(t, kms, eni, "the two descriptions must be distinct (guards against swapped case bodies)")
+	assert.NotEqual(t, kms, kmsKey, "the KMS-alias and KMS-key descriptions must be distinct")
 	assert.Equal(t, "", ReasonDescription("unknown_code"))
 }
