@@ -242,10 +242,6 @@ var metricsBindingExempt = map[string]bool{
 	"google_secret_manager_secret_iam_member":    true,
 	"google_storage_bucket_iam_member":           true,
 
-	// --- GCP Cloud Build / Cloud Functions (binding deferred) ---
-	"google_cloudbuild_trigger":       true,
-	"google_cloudfunctions2_function": true,
-
 	// --- GCP Compute networking primitives (no per-resource metrics) ---
 	"google_compute_address":                 true,
 	"google_compute_backend_service":         true,
