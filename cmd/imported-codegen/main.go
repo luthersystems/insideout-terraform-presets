@@ -48,6 +48,10 @@
 //	        every curated policy.Map field with a non-empty drift axis
 //	        (presets#482).
 //
+//	managed-map [--output <path>]
+//	        Emit a TypeScript const mapping managed component keys to the
+//	        primary imported Terraform type they resolve to.
+//
 //	supported-resources --output <path> [--check]
 //	        Render SUPPORTED_RESOURCES.md from the same capabilities map
 //	        the `capabilities` subcommand emits as JSON. --check
@@ -90,6 +94,8 @@ func main() {
 			os.Exit(runDependencies(os.Args[2:]))
 		case "drift-fields":
 			os.Exit(runDriftFields(os.Args[2:]))
+		case "managed-map":
+			os.Exit(runManagedMap(os.Args[2:]))
 		case "supported-resources":
 			os.Exit(runSupportedResources(os.Args[2:]))
 		case "-h", "--help":
@@ -112,6 +118,7 @@ Subcommands:
   capabilities  emit per-type Capabilities matrix JSON (presets#482)
   dependencies  emit per-type cross-resource ref edge-list JSON (presets#482)
   drift-fields  emit per-type DriftSemantic field list JSON (presets#482)
+  managed-map   emit managed component -> imported tfType TypeScript
   supported-resources  render SUPPORTED_RESOURCES.md from the capabilities matrix (presets#492)
 
 Run 'imported-codegen <subcommand> --help' for subcommand flags.`)
