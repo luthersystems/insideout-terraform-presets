@@ -1058,12 +1058,55 @@ func TestExtractCognitoConfig(t *testing.T) {
 	t.Run("MultiplePools", func(t *testing.T) {
 		t.Parallel()
 		got := extractCognitoConfig([]any{
-			map[string]any{"Id": "p1", "Name": "first"},
-			map[string]any{"Id": "p2", "Name": "second"},
+			map[string]any{"Id": "p1", "Name": "first", "MfaConfiguration": "ON"},
+			map[string]any{"Id": "p2", "Name": "second", "MfaConfiguration": "OFF"},
 		})
 		require.NotNil(t, got)
 		assert.Equal(t, "2", got["userPoolCount"])
 		assert.Equal(t, "first", got["poolName"]) // first one
+		_, has := got["mfaRequired"]
+		assert.False(t, has, "multi-pool aggregate must not surface a single mfaRequired value")
+	})
+
+	t.Run("SinglePool_MFAOn", func(t *testing.T) {
+		t.Parallel()
+		// MfaConfiguration=ON → mfaRequired=true.
+		got := extractCognitoConfig([]any{
+			map[string]any{"Id": "p1", "Name": "secure-pool", "MfaConfiguration": "ON"},
+		})
+		require.NotNil(t, got)
+		assert.Equal(t, "true", got["mfaRequired"])
+	})
+
+	t.Run("SinglePool_MFAOptionalIsNotRequired", func(t *testing.T) {
+		t.Parallel()
+		// OPTIONAL leaves MFA to the user — not "required".
+		got := extractCognitoConfig([]any{
+			map[string]any{"Id": "p1", "MfaConfiguration": "OPTIONAL"},
+		})
+		require.NotNil(t, got)
+		assert.Equal(t, "false", got["mfaRequired"])
+	})
+
+	t.Run("SinglePool_MFAOff", func(t *testing.T) {
+		t.Parallel()
+		got := extractCognitoConfig([]any{
+			map[string]any{"Id": "p1", "MfaConfiguration": "OFF"},
+		})
+		require.NotNil(t, got)
+		assert.Equal(t, "false", got["mfaRequired"])
+	})
+
+	t.Run("SinglePool_MFANotFetchedOmits", func(t *testing.T) {
+		t.Parallel()
+		// Inspector omits MfaConfiguration on the empty-project path; the
+		// extractor must not invent a value.
+		got := extractCognitoConfig([]any{
+			map[string]any{"Id": "p1", "Name": "demo-pool"},
+		})
+		require.NotNil(t, got)
+		_, has := got["mfaRequired"]
+		assert.False(t, has, "mfaRequired omitted when the inspector didn't fetch it")
 	})
 
 	t.Run("Envelope", func(t *testing.T) {

@@ -921,13 +921,21 @@ func extractSQSConfig(rawResult any) map[string]string {
 //	[ { Id, Name, Status, CreationDate, LambdaConfig } ]
 //
 // frontend fields (lib/stack/ir.ts:347): aws_cognito.signInType,
-// mfaRequired, okta, auth0 — none of which are on the list-user-pools
-// summary; they live on DescribeUserPool.
+// mfaRequired, okta, auth0. mfaRequired is surfaced here; the inspector
+// enriches each project-scoped pool with MfaConfiguration off the
+// DescribeUserPool response it already issues for the ARN — see
+// filterCognitoUserPoolsByProjectTag (#712). signInType / okta / auth0
+// still need wider DescribeUserPool fields and remain design-only.
 //
-// TODO(#1089): fan out DescribeUserPool per pool to surface MFA policy
-// (MfaConfiguration), password policy (Policies.PasswordPolicy), and
-// alias attributes. Today we emit the drift/identity signals so the UI
-// can render a "pool exists, status active" card.
+// MfaConfiguration is OFF|ON|OPTIONAL; mfaRequired is true only for ON
+// (OPTIONAL leaves MFA up to the user, so it is not "required"). The value
+// is the literal lowercase bool to match the reliable-side
+// humanizeConfigValue BOOLEAN_KEYS contract.
+//
+// Multi-pool nuance (same as extractS3Config): MfaConfiguration is
+// per-pool, so mfaRequired is only surfaced when there is exactly ONE pool
+// AND its config was fetched (the inspector omits MfaConfiguration on the
+// empty-project demo path); multiple pools omit it.
 func extractCognitoConfig(rawResult any) map[string]string {
 	items := sliceFromEnvelope(rawResult, "UserPools")
 	if len(items) == 0 {
@@ -945,6 +953,11 @@ func extractCognitoConfig(rawResult any) map[string]string {
 	}
 	if v := getString(first, "Id"); v != "" {
 		cfg["poolId"] = v
+	}
+	if len(items) == 1 {
+		if mfa := getString(first, "MfaConfiguration"); mfa != "" {
+			cfg["mfaRequired"] = strconv.FormatBool(mfa == "ON")
+		}
 	}
 	return cfg
 }
