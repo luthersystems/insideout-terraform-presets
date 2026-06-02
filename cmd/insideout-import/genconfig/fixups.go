@@ -88,26 +88,29 @@ func applyResourceTypeFixupsReport(raw []byte) (fixupResult, error) {
 // They must NOT depend on schema metadata — that's already been applied
 // by cleanGenerated.
 var resourceTypeFixups = map[string]func(*hclwrite.Block){
-	"aws_lambda_function":       fixupLambdaSource,
-	"aws_cognito_user_pool":     fixupCognitoVerificationMessageConflict,
-	"aws_key_pair":              fixupKeyPairPublicKey,
-	"aws_kms_key":               fixupKMSRotationPeriodZero,
-	"aws_dynamodb_table":        fixupDynamoDBPITRRecoveryPeriodZero,
-	"aws_vpc":                   fixupVPCIPv6NetmaskOrphan,
-	"aws_lb":                    fixupLBSubnetMappingConflict,
-	"aws_subnet":                fixupSubnetProviderQuirks,
-	"aws_route_table":           fixupRouteTableEmptyRouteFields,
-	"aws_security_group":        fixupSecurityGroupInlineRuleObjects,
-	"aws_nat_gateway":           fixupNATGatewaySecondaryIPConflict,
-	"aws_lb_listener":           fixupLBListenerStickinessDurationZero,
-	"aws_lb_target_group":       fixupLBTargetGroupProviderQuirks,
-	"aws_vpc_endpoint":          fixupVPCEndpointEmptyDNSDomains,
-	"aws_db_instance":           fixupDBInstanceProviderQuirks,
-	"aws_secretsmanager_secret": fixupSecretsManagerSecretDefaults,
-	"aws_sns_topic":             fixupSNSTopicSignatureVersionZero,
-	"aws_ebs_volume":            fixupEBSVolumeInitializationRateZero,
-	"aws_network_interface":     fixupNetworkInterfaceProviderQuirks,
-	"google_compute_firewall":   fixupComputeFirewallEmptySourceTargetArrays,
+	"aws_lambda_function":         fixupLambdaSource,
+	"aws_cognito_user_pool":       fixupCognitoVerificationMessageConflict,
+	"aws_key_pair":                fixupKeyPairPublicKey,
+	"aws_kms_key":                 fixupKMSRotationPeriodZero,
+	"aws_dynamodb_table":          fixupDynamoDBPITRRecoveryPeriodZero,
+	"aws_vpc":                     fixupVPCIPv6NetmaskOrphan,
+	"aws_lb":                      fixupLBSubnetMappingConflict,
+	"aws_subnet":                  fixupSubnetProviderQuirks,
+	"aws_route_table":             fixupRouteTableEmptyRouteFields,
+	"aws_security_group":          fixupSecurityGroupInlineRuleObjects,
+	"aws_nat_gateway":             fixupNATGatewaySecondaryIPConflict,
+	"aws_lb_listener":             fixupLBListenerStickinessDurationZero,
+	"aws_lb_target_group":         fixupLBTargetGroupProviderQuirks,
+	"aws_vpc_endpoint":            fixupVPCEndpointEmptyDNSDomains,
+	"aws_db_instance":             fixupDBInstanceProviderQuirks,
+	"aws_secretsmanager_secret":   fixupSecretsManagerSecretDefaults,
+	"aws_sns_topic":               fixupSNSTopicSignatureVersionZero,
+	"aws_ebs_volume":              fixupEBSVolumeInitializationRateZero,
+	"aws_network_interface":       fixupNetworkInterfaceProviderQuirks,
+	"aws_iam_role":                fixupIAMRoleNamePrefixConflict,
+	"aws_instance":                fixupInstanceProviderQuirks,
+	"aws_cloudwatch_metric_alarm": fixupMetricAlarmProviderQuirks,
+	"google_compute_firewall":     fixupComputeFirewallEmptySourceTargetArrays,
 }
 
 // fixupCognitoVerificationMessageConflict drops Cognito's legacy top-level
@@ -898,6 +901,113 @@ func fixupVPCEndpointEmptyDNSDomains(blk *hclwrite.Block) {
 		if isAttrLiteralEmptyList(sub.Body(), "private_dns_specified_domains") {
 			sub.Body().RemoveAttribute("private_dns_specified_domains")
 		}
+	}
+}
+
+// fixupIAMRoleNamePrefixConflict drops aws_iam_role.name_prefix when name
+// is also present. terraform plan -generate-config-out emits BOTH for an
+// imported role, but the provider marks them mutually exclusive ("name":
+// conflicts with name_prefix). The explicit name is authoritative for an
+// existing role, so the derived name_prefix is the one to drop. Conservative:
+// fires only when both carry a usable value. (name/name_prefix is a common
+// generate-config-out conflict; this helper can be reused for other types
+// that surface it.)
+func fixupIAMRoleNamePrefixConflict(blk *hclwrite.Block) {
+	body := blk.Body()
+	if hasUsableValue(body, "name") && hasUsableValue(body, "name_prefix") {
+		body.RemoveAttribute("name_prefix")
+	}
+}
+
+// instancePrimaryENIConflicts is the set of top-level aws_instance network
+// attributes the provider marks mutually exclusive with a
+// primary_network_interface block. When an instance is launched with an
+// explicit primary ENI, all of its networking lives on the interface — but
+// terraform plan -generate-config-out still emits these scalars too, so the
+// provider rejects the pair (e.g. "primary_network_interface": conflicts with
+// private_ip). The interface block is authoritative for an imported instance,
+// so the redundant top-level attrs are the ones to drop.
+var instancePrimaryENIConflicts = []string{
+	"associate_public_ip_address",
+	"private_ip",
+	"secondary_private_ips",
+	"security_groups",
+	"source_dest_check",
+	"subnet_id",
+	"vpc_security_group_ids",
+	"ipv6_address_count",
+	"ipv6_addresses",
+}
+
+// fixupInstanceProviderQuirks resolves aws_instance mutual-exclusion conflicts
+// that terraform plan -generate-config-out emits:
+//
+//   - When a primary_network_interface block is present, drop every top-level
+//     network attribute it conflicts with (instancePrimaryENIConflicts) — the
+//     interface governs the instance's networking.
+//   - Otherwise, ipv6_address_count conflicts with ipv6_addresses:
+//     generate-config-out emits both (count = 0, addresses = []) for a
+//     non-IPv6 instance. Both empty convey no intent, so drop both; if exactly
+//     one is empty, drop the empty one and keep the real value.
+//
+// Conservative: each transform fires only on its specific emitted pattern, and
+// RemoveAttribute is a no-op for attrs the block doesn't carry.
+func fixupInstanceProviderQuirks(blk *hclwrite.Block) {
+	body := blk.Body()
+
+	for _, sub := range body.Blocks() {
+		if sub.Type() == "primary_network_interface" {
+			for _, attr := range instancePrimaryENIConflicts {
+				body.RemoveAttribute(attr)
+			}
+			return
+		}
+	}
+
+	// No primary ENI: ipv6_address_count vs ipv6_addresses mutual exclusion.
+	hasCount := body.GetAttribute("ipv6_address_count") != nil
+	hasAddrs := body.GetAttribute("ipv6_addresses") != nil
+	if hasCount && hasAddrs {
+		countZero := isAttrLiteralZero(body, "ipv6_address_count")
+		addrsEmpty := isAttrLiteralEmptyList(body, "ipv6_addresses")
+		switch {
+		case countZero && addrsEmpty:
+			body.RemoveAttribute("ipv6_address_count")
+			body.RemoveAttribute("ipv6_addresses")
+		case countZero:
+			body.RemoveAttribute("ipv6_address_count")
+		case addrsEmpty:
+			body.RemoveAttribute("ipv6_addresses")
+		default:
+			// Both carry real values (generate-config-out shouldn't, but be
+			// safe): keep the explicit address list, drop the count.
+			body.RemoveAttribute("ipv6_address_count")
+		}
+	}
+}
+
+// fixupMetricAlarmProviderQuirks drops zero-valued attributes that
+// terraform plan -generate-config-out emits for aws_cloudwatch_metric_alarm
+// and the provider then rejects:
+//
+//   - datapoints_to_alarm = 0: the provider's validator pins it to >= 1;
+//     generate-config-out emits 0 when the alarm doesn't set it. null/absent
+//     is valid, literal 0 is not.
+//   - evaluation_interval = 0: an orphan of the mutually-required pair
+//     {evaluation_criteria, evaluation_interval} (anomaly-detection alarms).
+//     generate-config-out emits evaluation_interval = 0 standalone for a
+//     standard alarm, breaking the all-of constraint. Drop it when its
+//     sibling evaluation_criteria has no usable value.
+//
+// Conservative: only the literal-0 orphan patterns fire; a real anomaly
+// alarm carrying both keys is preserved.
+func fixupMetricAlarmProviderQuirks(blk *hclwrite.Block) {
+	body := blk.Body()
+	if isAttrLiteralZero(body, "datapoints_to_alarm") {
+		body.RemoveAttribute("datapoints_to_alarm")
+	}
+	if isAttrLiteralZero(body, "evaluation_interval") && !hasUsableValue(body, "evaluation_criteria") {
+		body.RemoveAttribute("evaluation_interval")
 	}
 }
 

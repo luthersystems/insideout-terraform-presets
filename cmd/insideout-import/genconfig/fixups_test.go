@@ -2845,3 +2845,169 @@ resource "aws_lb" "alb" {
 		t.Errorf("provider = aws.imported must be preserved\n--- got ---\n%s", got)
 	}
 }
+
+// TestFixupIAMRole_DropsNamePrefixWhenNameSet: generate-config-out emits both
+// name and name_prefix for an imported aws_iam_role, which the provider rejects
+// as mutually exclusive. The fixup keeps the explicit name and drops the
+// derived name_prefix.
+func TestFixupIAMRole_DropsNamePrefixWhenNameSet(t *testing.T) {
+	t.Parallel()
+	in := []byte(`resource "aws_iam_role" "r" {
+  name        = "io-eks0-cluster-2026"
+  name_prefix = "io-eks0-cluster-"
+  path        = "/"
+}
+`)
+	out, err := applyResourceTypeFixups(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(out)
+	if strings.Contains(got, "name_prefix") {
+		t.Errorf("name_prefix must be dropped when name is set\n--- got ---\n%s", got)
+	}
+	if !regexp.MustCompile(`(?m)^\s*name\s*=\s*"io-eks0-cluster-2026"`).MatchString(got) {
+		t.Errorf("explicit name must be preserved\n--- got ---\n%s", got)
+	}
+}
+
+// TestFixupIAMRole_KeepsNamePrefixAlone guards friendly-fire: name_prefix on
+// its own (no name) must be preserved.
+func TestFixupIAMRole_KeepsNamePrefixAlone(t *testing.T) {
+	t.Parallel()
+	in := []byte(`resource "aws_iam_role" "r" {
+  name_prefix = "io-eks0-cluster-"
+  path        = "/"
+}
+`)
+	out, err := applyResourceTypeFixups(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(out), "name_prefix") {
+		t.Errorf("name_prefix must be kept when name is absent\n--- got ---\n%s", out)
+	}
+}
+
+// TestFixupInstance_DropsTopLevelNetworkArgsWithPrimaryENI: when a
+// primary_network_interface block is present, every conflicting top-level
+// network attribute is dropped while the interface block and non-network attrs
+// survive.
+func TestFixupInstance_DropsTopLevelNetworkArgsWithPrimaryENI(t *testing.T) {
+	t.Parallel()
+	in := []byte(`resource "aws_instance" "i" {
+  instance_type               = "t3.micro"
+  associate_public_ip_address = true
+  private_ip                  = "10.1.134.121"
+  secondary_private_ips       = []
+  security_groups             = []
+  source_dest_check           = true
+  subnet_id                   = "subnet-0e866663c4c5ad4d9"
+  vpc_security_group_ids      = ["sg-1"]
+  ipv6_address_count          = 0
+  ipv6_addresses              = []
+  primary_network_interface {
+    network_interface_id = "eni-0071933677a6be65f"
+  }
+}
+`)
+	out, err := applyResourceTypeFixups(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(out)
+	for _, banned := range []string{
+		"associate_public_ip_address", "private_ip", "secondary_private_ips",
+		"security_groups", "source_dest_check", "subnet_id",
+		"vpc_security_group_ids", "ipv6_address_count", "ipv6_addresses",
+	} {
+		if regexp.MustCompile(`(?m)^\s*` + banned + `\s*=`).MatchString(got) {
+			t.Errorf("%s must be dropped when primary_network_interface is present\n--- got ---\n%s", banned, got)
+		}
+	}
+	if !strings.Contains(got, "primary_network_interface") || !strings.Contains(got, "eni-0071933677a6be65f") {
+		t.Errorf("primary_network_interface block must be preserved\n--- got ---\n%s", got)
+	}
+	if !strings.Contains(got, "instance_type") {
+		t.Errorf("non-network attrs must be preserved\n--- got ---\n%s", got)
+	}
+}
+
+// TestFixupInstance_KeepsNetworkArgsWithoutPrimaryENI guards: without a
+// primary ENI, top-level network attrs stay; only the empty ipv6 count/addresses
+// pair is reconciled.
+func TestFixupInstance_KeepsNetworkArgsWithoutPrimaryENI(t *testing.T) {
+	t.Parallel()
+	in := []byte(`resource "aws_instance" "i" {
+  instance_type               = "t3.micro"
+  associate_public_ip_address = true
+  ipv6_address_count          = 0
+  ipv6_addresses              = []
+}
+`)
+	out, err := applyResourceTypeFixups(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(out)
+	if !strings.Contains(got, "associate_public_ip_address") {
+		t.Errorf("associate_public_ip_address must be kept without a primary ENI\n--- got ---\n%s", got)
+	}
+	if strings.Contains(got, "ipv6_address_count") || strings.Contains(got, "ipv6_addresses") {
+		t.Errorf("empty ipv6 count/addresses pair must be dropped\n--- got ---\n%s", got)
+	}
+}
+
+// TestFixupMetricAlarm_DropsZeroOrphans: datapoints_to_alarm = 0 (min 1) and an
+// orphan evaluation_interval = 0 (no evaluation_criteria sibling) are dropped;
+// other attrs survive.
+func TestFixupMetricAlarm_DropsZeroOrphans(t *testing.T) {
+	t.Parallel()
+	in := []byte(`resource "aws_cloudwatch_metric_alarm" "a" {
+  alarm_name          = "sqs-backlog"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = 1
+  datapoints_to_alarm = 0
+  evaluation_interval = 0
+}
+`)
+	out, err := applyResourceTypeFixups(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(out)
+	if strings.Contains(got, "datapoints_to_alarm") {
+		t.Errorf("datapoints_to_alarm = 0 must be dropped\n--- got ---\n%s", got)
+	}
+	if strings.Contains(got, "evaluation_interval") {
+		t.Errorf("orphan evaluation_interval = 0 must be dropped\n--- got ---\n%s", got)
+	}
+	if !regexp.MustCompile(`(?m)^\s*evaluation_periods\s*=\s*1`).MatchString(got) {
+		t.Errorf("evaluation_periods must be preserved\n--- got ---\n%s", got)
+	}
+}
+
+// TestFixupMetricAlarm_KeepsRealAndAnomalyValues guards: a real
+// datapoints_to_alarm and an evaluation_interval paired with evaluation_criteria
+// (anomaly-detection alarm) are preserved.
+func TestFixupMetricAlarm_KeepsRealAndAnomalyValues(t *testing.T) {
+	t.Parallel()
+	in := []byte(`resource "aws_cloudwatch_metric_alarm" "a" {
+  alarm_name          = "x"
+  datapoints_to_alarm = 2
+  evaluation_interval = 60
+  evaluation_criteria = "criteria"
+}
+`)
+	out, err := applyResourceTypeFixups(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(out)
+	if !regexp.MustCompile(`(?m)^\s*datapoints_to_alarm\s*=\s*2`).MatchString(got) {
+		t.Errorf("real datapoints_to_alarm must be kept\n--- got ---\n%s", got)
+	}
+	if !regexp.MustCompile(`(?m)^\s*evaluation_interval\s*=\s*60`).MatchString(got) {
+		t.Errorf("evaluation_interval with sibling evaluation_criteria must be kept\n--- got ---\n%s", got)
+	}
+}
