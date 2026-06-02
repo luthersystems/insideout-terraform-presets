@@ -229,24 +229,56 @@ func TestFilterS3BucketsByProjectTag_VersioningErrorOmits(t *testing.T) {
 	// returned, but Versioning stays nil so the JSON envelope omits it and
 	// extractS3Config falls back to design values rather than claiming a
 	// wrong state.
-	client := &fakeS3Client{
-		listOut: &s3.ListBucketsOutput{
-			Buckets: []s3types.Bucket{{Name: aws.String("denied-bucket")}},
+	//
+	// enrichS3Versioning has TWO non-fatal error branches: isS3VersioningSkip
+	// (the s3VersioningSkipCodes allowlist — cross-region / access-denied
+	// buckets) AND the default catch-all (transport / throttle errors that
+	// are not smithy.APIErrors at all). Both must leave Versioning nil and
+	// drop the field from the JSON envelope. Table-drive across a skip code,
+	// a second skip code (so deleting any one entry from the allowlist is a
+	// detectable mutation), and a plain non-API transport error that only the
+	// default branch can absorb.
+	tests := []struct {
+		name string
+		err  error
+	}{
+		{
+			name: "AccessDenied skip code",
+			err:  &fakeAPIError{code: "AccessDenied", message: "denied"},
 		},
-		versErrByKey: map[string]error{
-			"denied-bucket": &fakeAPIError{code: "AccessDenied", message: "denied"},
+		{
+			name: "PermanentRedirect skip code",
+			err:  &fakeAPIError{code: "PermanentRedirect", message: "wrong region endpoint"},
+		},
+		{
+			name: "plain transport error (default branch)",
+			err:  errors.New("dial tcp: i/o timeout"),
 		},
 	}
-	got, err := filterS3BucketsByProjectTag(context.Background(), client, "")
-	require.NoError(t, err)
-	require.Len(t, got, 1)
-	assert.Nil(t, got[0].Versioning, "versioning omitted on lookup failure")
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			client := &fakeS3Client{
+				listOut: &s3.ListBucketsOutput{
+					Buckets: []s3types.Bucket{{Name: aws.String("error-bucket")}},
+				},
+				versErrByKey: map[string]error{
+					"error-bucket": tc.err,
+				},
+			}
+			got, err := filterS3BucketsByProjectTag(context.Background(), client, "")
+			require.NoError(t, err, "versioning lookup failure must be non-fatal")
+			require.Len(t, got, 1)
+			assert.Nil(t, got[0].Versioning, "versioning omitted on lookup failure")
 
-	// Round-trip through JSON to confirm the omitempty field truly drops
-	// out of the envelope the extractor consumes.
-	raw, err := json.Marshal(got)
-	require.NoError(t, err)
-	assert.NotContains(t, string(raw), "Versioning")
+			// Round-trip through JSON to confirm the omitempty field truly
+			// drops out of the envelope the extractor consumes.
+			raw, err := json.Marshal(got)
+			require.NoError(t, err)
+			assert.NotContains(t, string(raw), "Versioning")
+		})
+	}
 }
 
 // --- KMS fake ---
