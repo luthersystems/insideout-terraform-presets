@@ -44,6 +44,13 @@ type fakeS3Client struct {
 	tagsOut   *s3.GetBucketTaggingOutput
 	tagsErr   error
 	tagsByKey map[string]error // per-bucket tag-error injection
+
+	// Versioning enrichment fakes. versByKey maps bucket name to the
+	// versioning status the fake reports; versErrByKey injects a per-bucket
+	// GetBucketVersioning error. Absent buckets default to an empty status
+	// (never configured → versioning off).
+	versByKey    map[string]s3types.BucketVersioningStatus
+	versErrByKey map[string]error
 }
 
 func (f *fakeS3Client) ListBuckets(_ context.Context, _ *s3.ListBucketsInput, _ ...func(*s3.Options)) (*s3.ListBucketsOutput, error) {
@@ -68,6 +75,14 @@ func (f *fakeS3Client) GetBucketTagging(_ context.Context, in *s3.GetBucketTaggi
 		return &s3.GetBucketTaggingOutput{}, nil
 	}
 	return f.tagsOut, nil
+}
+
+func (f *fakeS3Client) GetBucketVersioning(_ context.Context, in *s3.GetBucketVersioningInput, _ ...func(*s3.Options)) (*s3.GetBucketVersioningOutput, error) {
+	name := aws.ToString(in.Bucket)
+	if perBucketErr, ok := f.versErrByKey[name]; ok {
+		return nil, perBucketErr
+	}
+	return &s3.GetBucketVersioningOutput{Status: f.versByKey[name]}, nil
 }
 
 func TestFilterS3BucketsByProjectTag_EmptyProjectShortCircuits(t *testing.T) {
@@ -158,6 +173,80 @@ func TestFilterS3BucketsByProjectTag_UnexpectedErrorAborts(t *testing.T) {
 	_, err := filterS3BucketsByProjectTag(context.Background(), client, "my-stack")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "s3 GetBucketTagging")
+}
+
+func TestFilterS3BucketsByProjectTag_VersioningEnriched(t *testing.T) {
+	t.Parallel()
+	// A matched bucket with versioning Enabled must surface Versioning=true
+	// on the enriched wrapper so extractS3Config can report it.
+	client := &fakeS3Client{
+		listOut: &s3.ListBucketsOutput{
+			Buckets: []s3types.Bucket{{Name: aws.String("versioned-bucket")}},
+		},
+		tagsOut: &s3.GetBucketTaggingOutput{
+			TagSet: []s3types.Tag{{Key: aws.String("Project"), Value: aws.String("my-stack")}},
+		},
+		versByKey: map[string]s3types.BucketVersioningStatus{
+			"versioned-bucket": s3types.BucketVersioningStatusEnabled,
+		},
+	}
+	got, err := filterS3BucketsByProjectTag(context.Background(), client, "my-stack")
+	require.NoError(t, err)
+	require.Len(t, got, 1)
+	require.NotNil(t, got[0].Versioning)
+	assert.True(t, *got[0].Versioning)
+}
+
+func TestFilterS3BucketsByProjectTag_VersioningSuspendedAndUnset(t *testing.T) {
+	t.Parallel()
+	// Suspended and the never-configured empty status both map to
+	// Versioning=false (not nil) — the call succeeded, the answer is "off".
+	client := &fakeS3Client{
+		listOut: &s3.ListBucketsOutput{
+			Buckets: []s3types.Bucket{
+				{Name: aws.String("suspended-bucket")},
+				{Name: aws.String("unset-bucket")},
+			},
+		},
+		// empty project → no tag scope filter, all buckets returned.
+		versByKey: map[string]s3types.BucketVersioningStatus{
+			"suspended-bucket": s3types.BucketVersioningStatusSuspended,
+			// unset-bucket absent → empty status.
+		},
+	}
+	got, err := filterS3BucketsByProjectTag(context.Background(), client, "")
+	require.NoError(t, err)
+	require.Len(t, got, 2)
+	for _, b := range got {
+		require.NotNil(t, b.Versioning, "successful GetBucketVersioning must set the flag")
+		assert.False(t, *b.Versioning)
+	}
+}
+
+func TestFilterS3BucketsByProjectTag_VersioningErrorOmits(t *testing.T) {
+	t.Parallel()
+	// A GetBucketVersioning failure is non-fatal: the bucket is still
+	// returned, but Versioning stays nil so the JSON envelope omits it and
+	// extractS3Config falls back to design values rather than claiming a
+	// wrong state.
+	client := &fakeS3Client{
+		listOut: &s3.ListBucketsOutput{
+			Buckets: []s3types.Bucket{{Name: aws.String("denied-bucket")}},
+		},
+		versErrByKey: map[string]error{
+			"denied-bucket": &fakeAPIError{code: "AccessDenied", message: "denied"},
+		},
+	}
+	got, err := filterS3BucketsByProjectTag(context.Background(), client, "")
+	require.NoError(t, err)
+	require.Len(t, got, 1)
+	assert.Nil(t, got[0].Versioning, "versioning omitted on lookup failure")
+
+	// Round-trip through JSON to confirm the omitempty field truly drops
+	// out of the envelope the extractor consumes.
+	raw, err := json.Marshal(got)
+	require.NoError(t, err)
+	assert.NotContains(t, string(raw), "Versioning")
 }
 
 // --- KMS fake ---
