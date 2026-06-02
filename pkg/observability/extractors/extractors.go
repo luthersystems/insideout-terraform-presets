@@ -1418,17 +1418,22 @@ func extractGCPCloudSQLConfig(rawResult any) map[string]string {
 }
 
 // extractGCPGCSConfig extracts config from the list-buckets response. The
-// inspector (inspectGCPGCS) PRE-FLATTENS each bucket to a 4-key map:
+// inspector (inspectGCPGCS) PRE-FLATTENS each bucket to a 5-key map:
 //
-//	[ { name, location, storageClass, created } ]
+//	[ { name, location, storageClass, created, versioning } ]
 //
 // — so this extractor is the simplest of the bundle: no proto parsing
 // required, straight field lookups.
 //
-// frontend fields (lib/stack/ir.ts:488-495): storageClass, versioning.
-// versioning is NOT on the inspector's pre-flattened shape (would need
-// a per-bucket GetAttrs fan-out). TODO(#1090 follow-up): fan out
-// (*storage.BucketHandle).Attrs() to surface VersioningEnabled.
+// frontend fields (lib/stack/ir.ts:493-494): storageClass, versioning.
+// versioning comes straight off BucketAttrs.VersioningEnabled — list-buckets
+// already fetches full attrs, so (unlike AWS S3) no second SDK call is
+// needed. It is stringified as the literal lowercase bool ("true"/"false")
+// to match the reliable-side humanizeConfigValue BOOLEAN_KEYS contract.
+//
+// Multi-bucket nuance (same as extractS3Config): versioning is per-bucket,
+// so we only surface it when there is exactly ONE bucket; multiple buckets
+// omit it rather than claim a single value across the set (#712).
 func extractGCPGCSConfig(rawResult any) map[string]string {
 	items := sliceFromEnvelope(rawResult, "buckets")
 	if len(items) == 0 {
@@ -1446,6 +1451,13 @@ func extractGCPGCSConfig(rawResult any) map[string]string {
 	}
 	if v := getString(first, "storageClass"); v != "" {
 		cfg["storageClass"] = v
+	}
+	if len(items) == 1 {
+		if v, ok := first["versioning"]; ok {
+			if b, ok := v.(bool); ok {
+				cfg["versioning"] = strconv.FormatBool(b)
+			}
+		}
 	}
 	return cfg
 }

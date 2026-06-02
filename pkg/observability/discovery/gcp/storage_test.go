@@ -34,7 +34,7 @@ func fakeStorageREST(t *testing.T, handler http.HandlerFunc) (*httptest.Server, 
 const listBucketsResponse = `{
   "kind": "storage#buckets",
   "items": [
-    {"name": "bkt-a", "location": "US", "storageClass": "STANDARD", "timeCreated": "2024-01-01T00:00:00Z", "labels": {"project": "io-foo"}},
+    {"name": "bkt-a", "location": "US", "storageClass": "STANDARD", "timeCreated": "2024-01-01T00:00:00Z", "versioning": {"enabled": true}, "labels": {"project": "io-foo"}},
     {"name": "bkt-b", "location": "EU", "storageClass": "NEARLINE", "timeCreated": "2024-01-02T00:00:00Z", "labels": {"project": "io-bar"}},
     {"name": "bkt-c", "location": "ASIA", "storageClass": "STANDARD", "timeCreated": "2024-01-03T00:00:00Z"}
   ]
@@ -58,6 +58,10 @@ func TestInspectGCS_ListBuckets_AllReturned(t *testing.T) {
 	assert.Equal(t, "bkt-a", buckets[0]["name"])
 	assert.Equal(t, "STANDARD", buckets[0]["storageClass"])
 	assert.Equal(t, "EU", buckets[1]["location"])
+	// versioning comes straight off BucketAttrs.VersioningEnabled (#712):
+	// bkt-a has versioning enabled, bkt-b/bkt-c default to false.
+	assert.Equal(t, true, buckets[0]["versioning"])
+	assert.Equal(t, false, buckets[1]["versioning"])
 }
 
 func TestInspectGCS_ListBuckets_FiltersByProject(t *testing.T) {
