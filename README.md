@@ -46,6 +46,23 @@ The InsideOut Terraform composition engine reads these presets at build time and
 3. **Rebase and merge** — Preset files are rebased into a unified directory structure under `modules/<component>/` and combined with a root `main.tf` that wires everything together.
 4. **Apply** — The composed Terraform is handed to the InsideOut deployment service which runs `terraform init/plan/apply`.
 
+## Generated Consumer Artifacts
+
+Downstream consumers should prefer `cmd/imported-codegen` over hand-maintained mirrors when they need imported-resource metadata in TypeScript or JSON. The generator already emits:
+
+- `zod`: TypeScript Zod schemas and registries for supported imported Terraform types.
+- `policy-ts`: TypeScript policy projections from `pkg/composer/imported/policy`.
+- `labels`, `capabilities`, `dependencies`, `drift-fields`: JSON metadata artifacts for UI/runtime consumers.
+- `managed-map`: TypeScript `MANAGED_TO_IMPORTED_TFTYPE`, generated from `pkg/imported.ManagedComponentPrimaryTFTypes`.
+
+Example:
+
+```bash
+go run ./cmd/imported-codegen managed-map --output /path/to/reliable/lib/stack/managed-imported-map.ts
+```
+
+When adding a new cross-repo mirror, check this generator path first so the canonical data stays in presets and consumer repos regenerate it.
+
 ## Standalone Usage
 
 Each directory contains a standard Terraform module with `main.tf`, `variables.tf`, and `outputs.tf`. While these are optimized for composition by the InsideOut engine, they can also be used as standalone Terraform modules.
