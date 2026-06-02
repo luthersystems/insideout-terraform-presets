@@ -92,6 +92,7 @@ var seededTypes = []string{
 	"google_compute_health_check",
 	"google_api_gateway_gateway",
 	"google_cloudbuild_trigger",
+	"google_identity_platform_config",
 	"aws_eip",
 	"aws_network_interface",
 	"aws_ssm_parameter",
@@ -769,6 +770,23 @@ var seededBindings = map[string]ComponentMetricsBinding{
 		DimensionKey:   "trigger_id",
 		DimensionFrom:  "id",
 		DefaultMetrics: []string{"cloudbuild.googleapis.com/build_count", "cloudbuild.googleapis.com/build/duration"},
+	},
+	// google_identity_platform_config is the project-scoped singleton for
+	// GCP Identity Platform — there is no per-instance dimension. The
+	// managed gcp_identity_platform metric (pkg/observability
+	// gcpServiceMetrics["identityplatform"]) charts the consumed-API
+	// request_count series under the `service` label, so the imported
+	// binding mirrors that: serviceruntime.googleapis.com/api/request_count
+	// filtered on the `service` dimension (= identitytoolkit.googleapis.com).
+	// DimensionFrom "name" carries the resource's project-scoped name —
+	// the same project-level dimension google_project_service uses — since
+	// no narrower key exists for a project singleton.
+	"google_identity_platform_config": {
+		Service:        "identityplatform",
+		Action:         "timeseries-list",
+		DimensionKey:   "service",
+		DimensionFrom:  "name",
+		DefaultMetrics: []string{"serviceruntime.googleapis.com/api/request_count", "serviceruntime.googleapis.com/api/request_latencies"},
 	},
 	"aws_eip": {
 		Service:        "ec2",

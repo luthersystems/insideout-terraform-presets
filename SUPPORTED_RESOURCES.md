@@ -23,7 +23,7 @@ and is checked in lockstep with the runtime registries. See the
 ## Summary
 
 - **AWS:** 135 types · 81% Discoverable · 81% Enrichable · 100% DriftDetectable · 67% MetricsAvailable · 91% AgentEditable
-- **GCP:** 64 types · 84% Discoverable · 84% Enrichable · 100% DriftDetectable · 77% MetricsAvailable · 91% AgentEditable
+- **GCP:** 64 types · 84% Discoverable · 84% Enrichable · 100% DriftDetectable · 78% MetricsAvailable · 91% AgentEditable
 
 ## AWS
 
@@ -205,7 +205,7 @@ and is checked in lockstep with the runtime registries. See the
 | `google_firestore_database` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `google_iam_workload_identity_pool` | – | – | ✓ | – | ✓ |
 | `google_iam_workload_identity_pool_provider` | – | – | ✓ | – | ✓ |
-| `google_identity_platform_config` | ✓ | ✓ | ✓ | – | ✓ |
+| `google_identity_platform_config` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `google_identity_platform_default_supported_idp_config` | ✓ | ✓ | ✓ | – | ✓ |
 | `google_kms_crypto_key` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `google_kms_crypto_key_iam_binding` | ✓ | ✓ | ✓ | – | ✓ |

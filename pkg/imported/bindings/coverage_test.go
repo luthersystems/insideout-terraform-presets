@@ -54,11 +54,13 @@ import (
 //     compute_backend_service, compute_security_policy, vpc_access_connector,
 //     service_networking_connection): metrics surface on the consumer
 //     workload (Cloud Run, GKE), not the network primitive.
-//   - GCP singleton / metadata (identity_platform_*, firestore_database,
-//     api_gateway_*, kms_*, secret_manager_secret*, logging_project_sink,
-//     monitoring_*, vertex_ai_dataset, storage_bucket_object,
-//     sql_user): no per-resource metrics or metrics aggregate at the
-//     project level.
+//   - GCP singleton / metadata (identity_platform_default_supported_idp_config,
+//     firestore_database, api_gateway_*, kms_*, secret_manager_secret*,
+//     logging_project_sink, monitoring_*, vertex_ai_dataset,
+//     storage_bucket_object, sql_user): no per-resource metrics or metrics
+//     aggregate at the project level. (identity_platform_config is the
+//     exception — it now binds the project-scoped consumed-API series that
+//     the managed gcp_identity_platform metric charts.)
 //   - Lambda sub-resources (lambda_alias, lambda_event_source_mapping,
 //     lambda_function_url, lambda_permission): metrics aggregate on the
 //     parent aws_lambda_function.
@@ -269,7 +271,6 @@ var metricsBindingExempt = map[string]bool{
 
 	// --- GCP singletons / configuration (no per-resource metrics) ---
 	"google_firestore_database":                             true,
-	"google_identity_platform_config":                       true,
 	"google_identity_platform_default_supported_idp_config": true,
 	"google_kms_crypto_key":                                 true,
 	"google_kms_key_ring":                                   true,
