@@ -602,25 +602,39 @@ func extractKMSConfig(rawResult any) map[string]string {
 	}
 }
 
-// extractS3Config extracts config from list-buckets response. Shape:
+// extractS3Config extracts config from list-buckets response. Shape (the
+// inspector enriches each bucket with Versioning via a GetBucketVersioning
+// fan-out — see filterS3BucketsByProjectTag / enrichS3Versioning):
 //
-//	[ { Name, CreationDate } ]
+//	[ { Name, CreationDate, Versioning } ]
 //
-// frontend field (lib/stack/ir.ts:308): aws_s3.versioning (bool). Versioning
-// is not returned by ListBuckets and would require an additional
-// GetBucketVersioning call per bucket.
+// frontend field (lib/stack/ir.ts:312): aws_s3.versioning (bool). The
+// reliable-side humanizeConfigValue treats "versioning" as a BOOLEAN_KEY,
+// so we stringify the literal lowercase bool ("true"/"false").
 //
-// TODO(#1089): surface per-bucket versioning by fanning out
-// GetBucketVersioning. Current live config surfaces only a bucket count,
-// which is sufficient for the "deploy succeeded / bucket exists" signal.
+// Multi-bucket nuance: this extractor aggregates the whole aws_s3 component
+// (a list of buckets), not one bucket. Versioning is a per-bucket setting,
+// so we only emit `versioning` when there is exactly ONE bucket AND its
+// state was actually fetched (the inspector omits Versioning when the
+// GetBucketVersioning call was skipped/failed). With multiple buckets we
+// omit it rather than claim a single value across the set — the per-resource
+// imported path surfaces each bucket's versioning precisely (#712).
 func extractS3Config(rawResult any) map[string]string {
 	items := sliceFromEnvelope(rawResult, "Buckets")
 	if len(items) == 0 {
 		return nil
 	}
-	return map[string]string{
+	cfg := map[string]string{
 		"bucketCount": strconv.Itoa(len(items)),
 	}
+	if len(items) == 1 {
+		if v, ok := items[0]["Versioning"]; ok {
+			if b, ok := v.(bool); ok {
+				cfg["versioning"] = strconv.FormatBool(b)
+			}
+		}
+	}
+	return cfg
 }
 
 // extractSecretsManagerConfig extracts config from list-secrets response.

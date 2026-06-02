@@ -40,9 +40,58 @@ import (
 
 // s3BucketsClient is the subset of the s3 SDK used by the bucket filter
 // helper. Mirrors the InsideOut backend's s3BucketsClient (aws_metrics.go:1173).
+//
+// GetBucketVersioning enriches each returned bucket with its versioning
+// state (the same fan-out pattern inspectVPCWithIGW uses for IGW
+// attachments) so extractS3Config can surface aws_s3.versioning without a
+// second inspector round-trip (#712, TODO#1089).
 type s3BucketsClient interface {
 	ListBuckets(ctx context.Context, params *s3.ListBucketsInput, optFns ...func(*s3.Options)) (*s3.ListBucketsOutput, error)
 	GetBucketTagging(ctx context.Context, params *s3.GetBucketTaggingInput, optFns ...func(*s3.Options)) (*s3.GetBucketTaggingOutput, error)
+	GetBucketVersioning(ctx context.Context, params *s3.GetBucketVersioningInput, optFns ...func(*s3.Options)) (*s3.GetBucketVersioningOutput, error)
+}
+
+// bucketWithVersioning is the enriched element filterS3BucketsByProjectTag
+// returns: the AWS SDK Bucket type extended with a Versioning bool computed
+// via a GetBucketVersioning fan-out. ListBuckets does not carry versioning
+// on the Bucket resource itself, so this wrapper documents the derived
+// field explicitly. The embed flattens the SDK's Name/CreationDate at the
+// top level and appends Versioning alongside — the shape extractS3Config
+// reads.
+//
+// Versioning is a *bool so the JSON envelope OMITS the field when the
+// GetBucketVersioning call failed (cross-region / access-denied buckets),
+// letting extractS3Config tell "versioning genuinely off" apart from "not
+// fetched" — the same presence check extractVPCConfig does for
+// HasInternetGateway.
+//
+// Mirrors the vpcWithIGW enrichment pattern (network.go).
+type bucketWithVersioning struct {
+	s3types.Bucket
+	Versioning *bool `json:"Versioning,omitempty"`
+}
+
+// s3VersioningSkipCodes are GetBucketVersioning error codes tolerated by
+// excluding the versioning flag (the bucket is still returned) rather than
+// aborting the pass. Same fail-soft set S3 GetBucketTagging tolerates:
+// cross-region / cross-account buckets commonly return these.
+var s3VersioningSkipCodes = map[string]struct{}{
+	"AccessDenied":       {},
+	"AllAccessDisabled":  {},
+	"PermanentRedirect":  {},
+	"BucketRegionError":  {},
+	"AuthorizationError": {},
+	"NoSuchBucket":       {},
+}
+
+func isS3VersioningSkip(err error) bool {
+	var ae smithy.APIError
+	if errors.As(err, &ae) {
+		if _, ok := s3VersioningSkipCodes[ae.ErrorCode()]; ok {
+			return true
+		}
+	}
+	return false
 }
 
 // s3TaggingSkipCodes are the SDK error codes returned by GetBucketTagging
@@ -87,14 +136,21 @@ func inspectS3(ctx context.Context, cfg aws.Config, action, filters string) (any
 // them as "not ours" (see s3TaggingSkipCodes); other errors abort so
 // callers don't silently get a partial scan.
 //
+// Each returned bucket is then enriched with its versioning state via a
+// GetBucketVersioning fan-out (see enrichS3Versioning) so extractS3Config
+// can surface aws_s3.versioning (#712, TODO#1089).
+//
 // Mirrors the InsideOut backend's filterS3BucketsByProjectTag (aws_metrics.go:1233).
-func filterS3BucketsByProjectTag(ctx context.Context, client s3BucketsClient, project string) ([]s3types.Bucket, error) {
+func filterS3BucketsByProjectTag(ctx context.Context, client s3BucketsClient, project string) ([]bucketWithVersioning, error) {
 	out, err := client.ListBuckets(ctx, &s3.ListBucketsInput{})
 	if err != nil {
 		return nil, fmt.Errorf("s3 ListBuckets: %w", err)
 	}
 	if project == "" {
-		return nilSliceToEmpty(out.Buckets), nil
+		// Demo-session fallback: skip the per-bucket GetBucketTagging
+		// scope filter, but still enrich versioning so live config is
+		// consistent across both paths.
+		return enrichS3Versioning(ctx, client, nilSliceToEmpty(out.Buckets)), nil
 	}
 	matched := make([]s3types.Bucket, 0, len(out.Buckets))
 	for _, b := range out.Buckets {
@@ -117,7 +173,38 @@ func filterS3BucketsByProjectTag(ctx context.Context, client s3BucketsClient, pr
 			}
 		}
 	}
-	return matched, nil
+	return enrichS3Versioning(ctx, client, matched), nil
+}
+
+// enrichS3Versioning fans out GetBucketVersioning per bucket and wraps each
+// in a bucketWithVersioning. A versioning lookup failure is non-fatal — the
+// bucket is still returned, just with Versioning left nil (the field is then
+// omitted from the JSON envelope), mirroring inspectVPCWithIGW's non-fatal
+// IGW join. Versioning is "on" only when Status==Enabled; Suspended and the
+// never-configured empty status both map to false.
+func enrichS3Versioning(ctx context.Context, client s3BucketsClient, buckets []s3types.Bucket) []bucketWithVersioning {
+	out := make([]bucketWithVersioning, 0, len(buckets))
+	for _, b := range buckets {
+		wrapped := bucketWithVersioning{Bucket: b}
+		name := aws.ToString(b.Name)
+		if name != "" {
+			vOut, err := client.GetBucketVersioning(ctx, &s3.GetBucketVersioningInput{Bucket: aws.String(name)})
+			switch {
+			case err == nil:
+				enabled := vOut.Status == s3types.BucketVersioningStatusEnabled
+				wrapped.Versioning = &enabled
+			case isS3VersioningSkip(err):
+				log.Printf("[s3 GetBucketVersioning] skip bucket=%s: %v", name, err)
+			default:
+				// Non-skip errors (transport, throttling) are also
+				// non-fatal here: the bucket inventory + tag scope is the
+				// primary signal; versioning is a best-effort enrichment.
+				log.Printf("[s3 GetBucketVersioning] bucket=%s: %v (versioning omitted)", name, err)
+			}
+		}
+		out = append(out, wrapped)
+	}
+	return out
 }
 
 // --- Secrets Manager ---
