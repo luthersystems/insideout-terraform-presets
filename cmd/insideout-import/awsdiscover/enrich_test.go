@@ -594,6 +594,31 @@ func TestIsThrottleError(t *testing.T) {
 	assert.True(t, isThrottleError(&smithy.GenericAPIError{Code: "RequestLimitExceeded"}))
 	assert.False(t, isThrottleError(&smithy.GenericAPIError{Code: "AccessDenied"}),
 		"a non-throttle API error code must not classify as a throttle")
+	// CloudControl wraps a downstream service throttle as a 400 handler
+	// failure whose error CODE is generic (GeneralServiceException) — the
+	// throttle signal lives only in the message. Classify it by message so
+	// the discovery retry/backoff engages on this shape (the exact error a
+	// reverse-import "scan my account" hit on ElastiCache).
+	assert.True(t, isThrottleError(&smithy.GenericAPIError{
+		Code:    "GeneralServiceException",
+		Message: "AWS::ElastiCache::ReplicationGroup Handler returned status FAILED: Rate exceeded (Service: ElastiCache, Status Code: 400)",
+	}), "CloudControl 400 handler-FAILED 'Rate exceeded' must classify as a throttle")
+	assert.True(t, isThrottleError(errors.New("operation error: Throttling: slow down")),
+		"a plain error whose message says Throttling must classify as a throttle")
+	assert.False(t, isThrottleError(&smithy.GenericAPIError{Code: "GeneralServiceException", Message: "validation failed"}),
+		"a non-throttle handler failure must not be misclassified as a throttle")
+}
+
+func TestRetryThrottled_ContextCancelPropagates(t *testing.T) {
+	t.Parallel()
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	err := retryThrottled(ctx, 2, time.Hour, time.Hour, func() error {
+		return &smithy.GenericAPIError{Code: "ThrottlingException"}
+	})
+	assert.ErrorIs(t, err, context.Canceled,
+		"parent cancellation must not be returned as the prior throttle error; callers use isThrottleError(err) to soft-skip")
 }
 
 // filterEvents returns the subset of recorded events whose Kind matches

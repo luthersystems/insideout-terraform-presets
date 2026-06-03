@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"math/rand"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/service/apigatewayv2"
@@ -286,7 +287,8 @@ var ErrEnrichClientUnavailable = errors.New("enrich: required SDK client unavail
 // 429 (Too Many Requests) or 503 (Slow Down / Service Unavailable) as a
 // throttle via *smithyhttp.ResponseError.
 //
-// nil err returns false; a non-AWS error returns false.
+// nil err returns false; a non-AWS error returns false unless it carries a
+// throttle-shaped message.
 func isThrottleError(err error) bool {
 	if err == nil {
 		return false
@@ -315,6 +317,20 @@ func isThrottleError(err error) bool {
 			return true
 		}
 	}
+	// CloudControl wraps a downstream service throttle as a handler failure
+	// rather than a ThrottlingException: HTTP 400 with an error code like
+	// GeneralServiceException/HandlerFailureException and a message of the
+	// form "...Handler returned status FAILED: Rate exceeded (Service:
+	// ElastiCache ...)". That is neither a throttle error-code nor a 429/503,
+	// so it slips past the checks above. Match it (and any other throttle
+	// surfaced only in the message) by substring so both the enrich backstop
+	// and the discovery ListResources retry treat it as throttling.
+	switch msg := strings.ToLower(err.Error()); {
+	case strings.Contains(msg, "rate exceeded"),
+		strings.Contains(msg, "throttl"),
+		strings.Contains(msg, "too many requests"):
+		return true
+	}
 	return false
 }
 
@@ -340,11 +356,28 @@ func isThrottleError(err error) bool {
 // ir.Attrs atomically, so a retried call simply overwrites the prior
 // (failed) attempt's partial state.
 func enrichWithRetry(ctx context.Context, fn func() error) error {
+	return retryThrottled(ctx, enrichRetryMaxAttempts, enrichRetryBaseDelay, enrichRetryMaxDelay, fn)
+}
+
+// retryThrottled calls fn and, if it returns a throttle error (per
+// isThrottleError), retries it under an exponential backoff with jitter — up
+// to maxAttempts total attempts. A nil result, a non-throttle error, or
+// exhausting the attempt budget returns immediately. The backoff sleep is
+// select-cancellable on ctx.Done(); on cancel ctx.Err() is returned.
+//
+// Shared by the enrich backstop (enrichWithRetry) and the discovery
+// ListResources retry (cloudControlDiscoverer.Discover) so both throttle-
+// sensitive paths use one backoff implementation. Layered ON TOP of the AWS
+// SDK adaptive retryer (awsdiscover.RetryMode): classic ThrottlingException /
+// 429 / 503 throttles are usually absorbed below this loop, so it primarily
+// catches throttles the SDK retryer does NOT classify as retryable — notably
+// CloudControl's HTTP 400 handler-FAILED "Rate exceeded" (see isThrottleError).
+func retryThrottled(ctx context.Context, maxAttempts int, baseDelay, maxDelay time.Duration, fn func() error) error {
 	var err error
-	backoff := enrichRetryBaseDelay
+	backoff := baseDelay
 	for attempt := 1; ; attempt++ {
 		err = fn()
-		if err == nil || !isThrottleError(err) || attempt >= enrichRetryMaxAttempts {
+		if err == nil || !isThrottleError(err) || attempt >= maxAttempts {
 			return err
 		}
 		// Half-fixed + half-random of the current backoff window so
@@ -354,13 +387,13 @@ func enrichWithRetry(ctx context.Context, fn func() error) error {
 		select {
 		case <-ctx.Done():
 			t.Stop()
-			return err
+			return ctx.Err()
 		case <-t.C:
 		}
-		if backoff < enrichRetryMaxDelay {
+		if backoff < maxDelay {
 			backoff *= 2
-			if backoff > enrichRetryMaxDelay {
-				backoff = enrichRetryMaxDelay
+			if backoff > maxDelay {
+				backoff = maxDelay
 			}
 		}
 	}
