@@ -32,6 +32,13 @@ func Run(ctx context.Context, req job.Request, opts Options) (job.Result, error)
 	if len(resources) == 0 {
 		return result, fmt.Errorf("reverseimport: no resources selected")
 	}
+	if issues := selectedUnimportableIssues(resources); len(issues) > 0 {
+		result.ValidationIssues = issuesFromComposer(issues)
+		if err := writeResult(opts.OutputDir, &result); err != nil {
+			return result, err
+		}
+		return result, fmt.Errorf("reverseimport: selected resource cannot be imported")
+	}
 	cloud := firstNonEmpty(opts.Cloud, resources[0].Identity.Cloud)
 	if cloud == "" {
 		return result, fmt.Errorf("reverseimport: cloud required")
@@ -254,6 +261,23 @@ func writeResult(outputDir string, result *job.Result) error {
 		return err
 	}
 	return nil
+}
+
+func selectedUnimportableIssues(resources []imported.ImportedResource) []composer.ValidationIssue {
+	var issues []composer.ValidationIssue
+	for i, resource := range resources {
+		reason := imported.UnimportableReason(resource)
+		if reason == "" {
+			continue
+		}
+		issues = append(issues, composer.ValidationIssue{
+			Field:      fmt.Sprintf("resources[%d]", i),
+			Code:       reason,
+			Reason:     fmt.Sprintf("selected resource %q cannot be imported: %s", resource.Identity.Address, imported.ReasonDescription(reason)),
+			Suggestion: "re-run discovery and select only importable resources",
+		})
+	}
+	return issues
 }
 
 func writeImportedTerraformArtifacts(outputDir, cloud, region, gcpProjectID, awsEndpointURL string, awsAuth awsProviderAuth, resources []imported.ImportedResource, emitOpts composer.EmitImportedOpts) error {
