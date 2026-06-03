@@ -322,6 +322,9 @@ func TestS3BucketEnricher_BasicMapping(t *testing.T) {
 	// Stamps on NativeIDs (synthesized ARN, region from HeadBucket).
 	assert.Equal(t, "arn:aws:s3:::orders", ir.Identity.NativeIDs["arn"])
 	assert.Equal(t, "us-east-1", ir.Identity.NativeIDs["region"])
+	// The true region is also promoted into Identity.Region so genconfig
+	// groups the bucket into its real region dir (Fix 5 / #1860 follow-up).
+	assert.Equal(t, "us-east-1", ir.Identity.Region)
 
 	b := decodeS3BucketAttrs(t, ir)
 	require.NotNil(t, b.Bucket)
@@ -344,6 +347,34 @@ func TestS3BucketEnricher_BasicMapping(t *testing.T) {
 	assert.Empty(t, b.Tags, "tags must be absent when fetchTags returns nil")
 	assert.Empty(t, b.ObjectLockConfiguration, "object_lock_configuration must be absent when fetchObjectLock returns nil")
 	assert.Nil(t, b.ObjectLockEnabled, "object_lock_enabled must be absent when fetchObjectLock returns nil")
+}
+
+// TestS3BucketEnricher_PromotesNonDefaultRegion proves Fix 5: a bucket in a
+// region other than us-east-1 has its TRUE region (learned from HeadBucket
+// BucketRegion) promoted into Identity.Region, overriding any empty/backfilled
+// value. Without this, an IsGlobal-enumerated bucket lands under a us-east-1
+// provider and fails generate-config-out (#1860 follow-up).
+func TestS3BucketEnricher_PromotesNonDefaultRegion(t *testing.T) {
+	t.Parallel()
+	enr := newTestS3Enricher(s3FetchHooks{
+		head: func(context.Context, *s3.Client, string) (*s3.HeadBucketOutput, error) {
+			return &s3.HeadBucketOutput{
+				BucketRegion: aws.String("us-west-2"),
+			}, nil
+		},
+	})
+	ir := &imported.ImportedResource{
+		Identity: imported.ResourceIdentity{
+			Type:     "aws_s3_bucket",
+			NameHint: "west-bucket",
+			// Empty Region simulates the IsGlobal-enumerated identity before
+			// the enricher runs (reliable would otherwise backfill us-east-1).
+			Region: "",
+		},
+	}
+	require.NoError(t, enr.Enrich(context.Background(), ir, EnrichClients{S3: &s3.Client{}}))
+	assert.Equal(t, "us-west-2", ir.Identity.NativeIDs["region"])
+	assert.Equal(t, "us-west-2", ir.Identity.Region, "true region must be promoted into Identity.Region")
 }
 
 func TestS3BucketEnricher_HeadBucketArnRespected(t *testing.T) {

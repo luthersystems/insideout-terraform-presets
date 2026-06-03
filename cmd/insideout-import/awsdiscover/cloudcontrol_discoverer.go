@@ -154,6 +154,25 @@ type cloudControlConfig struct {
 	// alone cannot do for cases like list-of-{Key,Value} tags vs the
 	// generated `map[string]*Value[string]` Tags field.
 	Normalizer func(json.RawMessage) (json.RawMessage, error)
+
+	// PostDiscover, when non-nil, runs once per emitted ImportedResource
+	// immediately after the IR is built (bulk Discover) or resolved
+	// (DiscoverByID), with the per-resource AWS config so the hook can
+	// issue a follow-up SDK call. Use it to populate Identity fields that
+	// the Cloud Control GetResource payload OMITS but that downstream
+	// stages need before any enrichment runs — the reverse-import /
+	// genconfig dry-run path never calls EnrichAttributes, so a field set
+	// only by an AttributeEnricher (e.g. the S3 bucket's true region, a
+	// KMS key's KeyManager) is absent in that path and the resource is
+	// mis-grouped or mis-classified, then silently dropped as
+	// no_generated_config.
+	//
+	// Soft-fail contract: a non-nil error is logged via ServiceWarn and
+	// the resource is still emitted with whatever the hook managed to set
+	// — a best-effort follow-up must never drop an otherwise-importable
+	// resource. The hook receives a pointer to the just-built IR and
+	// mutates Identity in place.
+	PostDiscover func(ctx context.Context, awsCfg aws.Config, region string, ir *imported.ImportedResource) error
 }
 
 // cloudControlDiscoverer is the generic per-type Discoverer that routes
@@ -487,7 +506,7 @@ func (d *cloudControlDiscoverer) Discover(ctx context.Context, args DiscoverArgs
 			if d.cfg.NativeIDsFromProperties != nil {
 				native = d.cfg.NativeIDsFromProperties(f.identifier, f.props)
 			}
-			out = append(out, makeImportedResource(
+			ir := makeImportedResource(
 				book,
 				d.cfg.TFType,
 				name,
@@ -496,7 +515,17 @@ func (d *cloudControlDiscoverer) Discover(ctx context.Context, args DiscoverArgs
 				args.AccountID,
 				native,
 				f.tags,
-			))
+			)
+			if d.cfg.PostDiscover != nil {
+				if perr := d.cfg.PostDiscover(ctx, d.awsCfg, region, &ir); perr != nil {
+					// Soft-fail: the resource is still emitted with whatever
+					// the hook set. A follow-up SDK miss must not drop an
+					// otherwise-importable resource.
+					args.Emitter.ServiceWarn(d.cfg.Slug, region,
+						fmt.Sprintf("PostDiscover %s id=%q: %v", d.cfg.TFType, importID, perr))
+				}
+			}
+			out = append(out, ir)
 			args.Emitter.ItemFound(d.cfg.Slug, region, d.cfg.TFType, importID)
 			regionCount++
 		}
@@ -564,7 +593,7 @@ func (d *cloudControlDiscoverer) DiscoverByID(ctx context.Context, id, region, a
 	if d.cfg.TagsFromProperties != nil {
 		tags = d.cfg.TagsFromProperties(props)
 	}
-	return makeImportedResource(
+	ir := makeImportedResource(
 		addressBook{},
 		d.cfg.TFType,
 		name,
@@ -573,7 +602,14 @@ func (d *cloudControlDiscoverer) DiscoverByID(ctx context.Context, id, region, a
 		accountID,
 		native,
 		tags,
-	), nil
+	)
+	if d.cfg.PostDiscover != nil {
+		// Soft-fail to match the bulk Discover path: a follow-up SDK miss
+		// on a single dep-chased resource still returns the IR with
+		// whatever the hook populated rather than failing the lookup.
+		_ = d.cfg.PostDiscover(ctx, d.awsCfg, region, &ir)
+	}
+	return ir, nil
 }
 
 func (d *cloudControlDiscoverer) discoverByIDIdentifier(id string) (string, error) {

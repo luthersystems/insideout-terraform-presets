@@ -1380,7 +1380,7 @@
     {
       "service": "network_acl",
       "iam_action": "ec2:DescribeNetworkAcls",
-      "purpose": "list per-region network ACLs (server-side tag:Project filter when project is set; tags inline)"
+      "purpose": "list per-region network ACLs (server-side tag:Project filter when project is set; tags inline); PostDiscover resolves IsDefault to re-type default NACLs to aws_default_network_acl"
     },
     {
       "service": "network_interface",

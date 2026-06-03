@@ -271,7 +271,17 @@ func Run(ctx context.Context, opts Options, resources []imported.ImportedResourc
 		var added []imported.ImportedResource
 		var discoveries []discoveredResource
 		for _, s := range newSeeds {
-			ir, err := opts.Discoverer.DiscoverByID(ctx, s.ref.TFType, s.ref.ImportID, opts.Region, opts.AccountID)
+			// Discover each ref in ITS OWN region (the ARN's 4th segment),
+			// falling back to the run's primary region for global/region-less
+			// ARNs (IAM/CloudFront/Route53/S3, where Region is empty). This is
+			// what makes the chase correct for multi-region imports: a
+			// cross-region reference (e.g. a us-east-1 resource pointing at a
+			// us-west-2 KMS key) must hit the target's region, not the primary.
+			region := s.ref.Region
+			if region == "" {
+				region = opts.Region
+			}
+			ir, err := opts.Discoverer.DiscoverByID(ctx, s.ref.TFType, s.ref.ImportID, region, opts.AccountID)
 			if err != nil {
 				// Check both AWS and GCP sentinels so the GCP path
 				// surfaces the same warn-and-continue UX as AWS. The two

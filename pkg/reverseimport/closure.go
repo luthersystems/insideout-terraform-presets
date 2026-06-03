@@ -175,6 +175,27 @@ func mergeClosureResources(in mergeClosureInput) ([]imported.ImportedResource, m
 		if _, ok := childTypeSet[r.Identity.Type]; !ok {
 			continue
 		}
+		// Instance-level un-importables must not be pulled into the
+		// closure (#cust3 item 2). The closure re-discovers EVERY child of
+		// each selected parent — e.g. every aws_kms_alias whose target is a
+		// selected aws_kms_key, including the AWS-managed alias/aws/* aliases
+		// (alias/aws/rds, alias/aws/acm, …) that point at AWS-managed default
+		// keys. The primary discovery already routes these into
+		// unsupported.json via partitionUnimportable; re-adding them here
+		// feeds genconfig a body-less import that drops as no_generated_config
+		// — a generic orphan instead of the clean aws_managed_kms_alias
+		// classification. Apply the SAME shared classifier the primary path
+		// uses so the closure and the primary discovery agree on exactly
+		// which instances are importable.
+		if imported.UnimportableReason(r) != "" {
+			diagnostics = append(diagnostics, job.Diagnostic{
+				Severity: "info",
+				Code:     "selection_closure_skipped_unimportable",
+				Field:    r.Identity.Address,
+				Message:  fmt.Sprintf("closure skipped un-importable %s (%s)", r.Identity.Address, imported.UnimportableReason(r)),
+			})
+			continue
+		}
 		parentAddr := strings.TrimSpace(r.Identity.ParentAddress)
 		selectedParentAddr, ok := discoveredParentToSelected[parentAddr]
 		if !ok {

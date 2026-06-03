@@ -125,12 +125,53 @@ func applySchemaToBlock(blk *hclwrite.Block, schema *tfjson.SchemaBlock) {
 	lc.Body().SetAttributeRaw("ignore_changes", ignoreChangesTokens(sensitive))
 }
 
-// mergeIgnoreChanges is a placeholder for the case where a `lifecycle` block
-// already exists. The current emitter never produces one, so we rebuild the
-// attribute from scratch — a smarter merge can land in Stage 2c if a real
-// caller hits it.
-func mergeIgnoreChanges(lc *hclwrite.Block, sensitive []string) {
-	lc.Body().SetAttributeRaw("ignore_changes", ignoreChangesTokens(sensitive))
+// mergeIgnoreChanges unions `names` into the lifecycle block's existing
+// ignore_changes list, PRESERVING the entries already there and
+// de-duplicating. A resource that already pins some attributes (e.g.
+// `ignore_changes = [tags]` from a Sensitive-driven cleanup pass, or from an
+// earlier fixup) keeps them and gains the new ones —
+// e.g. [tags] + [egress, ingress] -> [tags, egress, ingress]. Builds the list
+// when no ignore_changes attribute is present yet. Bare-identifier (traversal)
+// form throughout, matching ignoreChangesTokens. Idempotent: re-merging the
+// same names is a no-op (so NormalizeImportedHCL re-runs are stable). If the
+// existing list is the catch-all `all`, it already covers everything and is
+// left untouched.
+func mergeIgnoreChanges(lc *hclwrite.Block, names []string) {
+	merged := existingIgnoreChangeNames(lc)
+	seen := make(map[string]struct{}, len(merged))
+	for _, n := range merged {
+		if n == "all" {
+			return // `all` already ignores every attribute
+		}
+		seen[n] = struct{}{}
+	}
+	for _, n := range names {
+		if _, ok := seen[n]; ok {
+			continue
+		}
+		seen[n] = struct{}{}
+		merged = append(merged, n)
+	}
+	lc.Body().SetAttributeRaw("ignore_changes", ignoreChangesTokens(merged))
+}
+
+// existingIgnoreChangeNames returns the bare-identifier names already present
+// in the lifecycle block's ignore_changes list (e.g. ["tags"]). Empty when the
+// attribute is absent. Only traversal (bare-identifier) entries are recognized
+// — the form this package always emits via ignoreChangesTokens; the quoted
+// terraform-<1.5 form is never produced here.
+func existingIgnoreChangeNames(lc *hclwrite.Block) []string {
+	attr := lc.Body().GetAttribute("ignore_changes")
+	if attr == nil {
+		return nil
+	}
+	var names []string
+	for _, tok := range attr.Expr().BuildTokens(nil) {
+		if tok.Type == hclsyntax.TokenIdent {
+			names = append(names, string(tok.Bytes))
+		}
+	}
+	return names
 }
 
 // ignoreChangesTokens emits the canonical `[name1, name2, ...]` form

@@ -22,11 +22,16 @@ type fakeDiscoverer struct {
 	notFound     map[string]bool // key = tfType|id
 	notSupported map[string]bool
 	calls        []string
+	regionByID   map[string]string // id → region passed to DiscoverByID
 }
 
-func (f *fakeDiscoverer) DiscoverByID(_ context.Context, tfType, id, _, _ string) (imported.ImportedResource, error) {
+func (f *fakeDiscoverer) DiscoverByID(_ context.Context, tfType, id, region, _ string) (imported.ImportedResource, error) {
 	key := tfType + "|" + id
 	f.calls = append(f.calls, key)
+	if f.regionByID == nil {
+		f.regionByID = map[string]string{}
+	}
+	f.regionByID[id] = region
 	// Wrap sentinels the same way production discoverers do (e.g.
 	// kms.go, iam_role.go) so the loop's `errors.Is` chain-walk is
 	// exercised — a regression to `err == awsdiscover.ErrNotFound`
@@ -115,6 +120,51 @@ func (p *scriptedPipeline) runDriftfix(_ context.Context) (*DriftfixResult, erro
 
 func (p *scriptedPipeline) fns() PipelineFns {
 	return PipelineFns{RunGenconfig: p.runGenconfig, RunDriftfix: p.runDriftfix}
+}
+
+// TestRun_DiscoversCrossRegionRefInItsOwnRegion proves the chase loop
+// discovers each unresolved ARN in ITS region (the ARN's 4th segment) and
+// falls back to the run's primary region for global/region-less ARNs. This is
+// what makes dep-chase correct for multi-region imports — a us-east-1 stack
+// referencing a us-west-2 KMS key must hit us-west-2, not the primary region.
+func TestRun_DiscoversCrossRegionRefInItsOwnRegion(t *testing.T) {
+	t.Parallel()
+	const kmsARN = "arn:aws:kms:us-west-2:123:key/abcd-1234"
+	const iamARN = "arn:aws:iam::123:role/io-fn"
+	body1 := `resource "aws_lambda_function" "fn" {
+  kms_key_arn = "` + kmsARN + `"
+  role        = "` + iamARN + `"
+}
+`
+	dir := writeGen(t, body1)
+	disc := &fakeDiscoverer{
+		byID: map[string]imported.ImportedResource{
+			"aws_kms_key|" + kmsARN:  newRes("aws_kms_key.k", "abcd-1234", kmsARN, "aws_kms_key"),
+			"aws_iam_role|" + iamARN: newRes("aws_iam_role.r", "io-fn", iamARN, "aws_iam_role"),
+		},
+	}
+	// After the discovery iteration, genconfig regenerates a body with no
+	// dangling refs so the loop converges on the next pass.
+	pipe := &scriptedPipeline{t: t, workdir: dir, generatedTF: []string{"# resolved\n"}}
+
+	_, err := Run(context.Background(), Options{
+		Workdir:    dir,
+		Region:     "us-east-1", // the run's primary region
+		AccountID:  "123",
+		Discoverer: disc,
+		Pipeline:   pipe.fns(),
+	}, []imported.ImportedResource{
+		{Identity: imported.ResourceIdentity{Address: "aws_lambda_function.fn", Type: "aws_lambda_function"}},
+	})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if got := disc.regionByID[kmsARN]; got != "us-west-2" {
+		t.Errorf("KMS key discovered in region %q, want us-west-2 (the ARN's own region)", got)
+	}
+	if got := disc.regionByID[iamARN]; got != "us-east-1" {
+		t.Errorf("IAM role discovered in region %q, want us-east-1 (primary fallback for region-less ARN)", got)
+	}
 }
 
 // TestRun_NoUnresolvedRefsExitsWithoutCallingPipeline pins that the

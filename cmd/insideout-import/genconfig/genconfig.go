@@ -17,8 +17,10 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 
 	"github.com/luthersystems/insideout-terraform-presets/pkg/composer/imported"
+	"golang.org/x/sync/errgroup"
 )
 
 // generatedFile is the file `terraform plan -generate-config-out` writes
@@ -61,7 +63,9 @@ type Options struct {
 
 	// Runner is optional. If nil, Run constructs an execRunner that shells
 	// out to the `terraform` binary on PATH. Tests inject a fake here to
-	// avoid the binary dependency.
+	// avoid the binary dependency. Used as-is on the single-region path;
+	// the multi-region path ignores it (see newRunner) so concurrent passes
+	// never share one runner's mutable state.
 	Runner terraformRunner
 
 	// Stdout, when non-nil, receives the live stdout/stderr of the
@@ -71,6 +75,28 @@ type Options struct {
 	// this phase. Nil means "discard subprocess output" (the historical
 	// behavior). Ignored when Runner is injected.
 	Stdout io.Writer
+
+	// newRunner builds a terraformRunner for a specific region subdir on the
+	// multi-region path, so each concurrent region gets its own runner
+	// instance rather than sharing one (production runs one execRunner per
+	// subdir; the per-region passes are independent). nil → newExecRunner.
+	// Unexported: production callers never set it — they want the real
+	// execRunner — and only the package's own tests inject per-subdir fakes.
+	newRunner func(workdir string, stdout io.Writer) (terraformRunner, error)
+}
+
+// buildRunner returns the terraformRunner to drive the stack in opts.Workdir,
+// streaming subprocess output to stdout. The single injected Runner wins when
+// set (single-region path / direct tests); otherwise newRunner builds one,
+// falling back to the real execRunner.
+func (opts Options) buildRunner(stdout io.Writer) (terraformRunner, error) {
+	if opts.Runner != nil {
+		return opts.Runner, nil
+	}
+	if opts.newRunner != nil {
+		return opts.newRunner(opts.Workdir, stdout)
+	}
+	return newExecRunner(opts.Workdir, stdout)
 }
 
 const (
@@ -201,27 +227,71 @@ func groupResourcesByRegion(resources []imported.ImportedResource, primaryRegion
 // per-region resources. A combined generated.tf is written at the top level
 // for the debug artifact; the authoritative per-region configs live in the
 // subdirs.
+// maxRegionConcurrency bounds how many per-region genconfig passes run at
+// once. Each pass runs its own terraform init + plan -generate-config-out
+// (memory-heavy, AWS-API-heavy), but the regions are independent (separate
+// subdirs, separate default providers) and AWS rate limits are
+// per-region/per-service, so spreading across regions is both faster and more
+// throttle-safe than running them strictly back-to-back.
+const maxRegionConcurrency = 6
+
 func runMultiRegion(ctx context.Context, opts Options, groups []regionGroup) (*Result, error) {
 	if err := os.MkdirAll(opts.Workdir, 0o755); err != nil {
 		return nil, fmt.Errorf("mkdir workdir: %w", err)
 	}
-	progressf(opts.Stdout, "genconfig: split into %d regional pass(es)…\n", len(groups))
+	limit := min(len(groups), maxRegionConcurrency)
+	progressf(opts.Stdout, "genconfig: split into %d regional pass(es) (up to %d in parallel)…\n", len(groups), limit)
+
+	// Serialize progress + terraform-stderr across concurrent regions so their
+	// streamed lines don't interleave mid-line on the shared sink.
+	var logMu sync.Mutex
+	sink := func() io.Writer {
+		if opts.Stdout == nil {
+			return nil
+		}
+		return &syncWriter{mu: &logMu, w: opts.Stdout}
+	}
+
+	// Index-addressed slots keep the merge order deterministic (region-sorted)
+	// regardless of which region finishes first.
+	type regionOut struct {
+		resources []imported.ImportedResource
+		subdir    string
+	}
+	outs := make([]regionOut, len(groups))
+
+	g, gctx := errgroup.WithContext(ctx)
+	g.SetLimit(limit)
+	for i, grp := range groups {
+		g.Go(func() error {
+			sub := opts
+			sub.Region = grp.region
+			sub.Workdir = filepath.Join(opts.Workdir, "region-"+regionAlias(grp.region))
+			// Force a per-region runner (never share one injected Runner across
+			// concurrent passes) and a line-serialized output sink.
+			sub.Runner = nil
+			sub.Stdout = sink()
+			progressf(sub.Stdout, "genconfig: region %s: generating config for %d resource(s)…\n", grp.region, len(grp.resources))
+			res, err := runSingleRegion(gctx, sub, grp.resources)
+			if err != nil {
+				return fmt.Errorf("genconfig region %s: %w", grp.region, err)
+			}
+			outs[i] = regionOut{resources: res.Resources, subdir: sub.Workdir}
+			return nil
+		})
+	}
+	if err := g.Wait(); err != nil {
+		return nil, err
+	}
+
 	merged := make([]imported.ImportedResource, 0)
 	subdirs := make([]string, 0, len(groups))
-	for _, g := range groups {
-		progressf(opts.Stdout, "genconfig: region %s: generating config for %d resource(s)…\n", g.region, len(g.resources))
-		sub := opts
-		sub.Region = g.region
-		sub.Workdir = filepath.Join(opts.Workdir, "region-"+regionAlias(g.region))
-		res, err := runSingleRegion(ctx, sub, g.resources)
-		if err != nil {
-			return nil, fmt.Errorf("genconfig region %s: %w", g.region, err)
-		}
-		merged = append(merged, res.Resources...)
-		subdirs = append(subdirs, sub.Workdir)
+	for _, o := range outs {
+		merged = append(merged, o.resources...)
+		subdirs = append(subdirs, o.subdir)
 	}
 	genPath := filepath.Join(opts.Workdir, generatedFile)
-	if err := writeMergedGenerated(genPath, subdirs); err != nil {
+	if err := WriteMergedGenerated(genPath, subdirs); err != nil {
 		// Best-effort: the merged top-level file is only for the debug
 		// artifact; the real per-region configs are in the subdirs.
 		fmt.Fprintf(os.Stderr, "genconfig: WARN: merged generated.tf: %v\n", err)
@@ -229,11 +299,30 @@ func runMultiRegion(ctx context.Context, opts Options, groups []regionGroup) (*R
 	return &Result{GeneratedPath: genPath, Resources: merged}, nil
 }
 
-// writeMergedGenerated concatenates each region subdir's generated.tf into one
+// syncWriter serializes whole-line writes from concurrent per-region passes so
+// their progress/terraform output doesn't interleave mid-line on the shared
+// sink.
+type syncWriter struct {
+	mu *sync.Mutex
+	w  io.Writer
+}
+
+func (s *syncWriter) Write(p []byte) (int, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.w.Write(p)
+}
+
+// WriteMergedGenerated concatenates each region subdir's generated.tf into one
 // file (region-headed) for traceability / downstream artifact capture. A
 // region whose generated.tf is absent (e.g. all its imports were orphan-pruned)
 // is skipped. Errors only if nothing could be assembled.
-func writeMergedGenerated(destPath string, subdirs []string) error {
+//
+// Exported so the driftfix stage can re-merge the parent debug concat after it
+// patches each per-region generated.tf — keeping the parent (which dep-chase
+// reads as text) byte-consistent with the format genconfig wrote on the first
+// pass.
+func WriteMergedGenerated(destPath string, subdirs []string) error {
 	var buf bytes.Buffer
 	for _, d := range subdirs {
 		b, err := os.ReadFile(filepath.Join(d, generatedFile))
@@ -285,13 +374,9 @@ func runSingleRegion(ctx context.Context, opts Options, resources []imported.Imp
 		return nil, fmt.Errorf("emit providers.tf: %w", err)
 	}
 
-	runner := opts.Runner
-	if runner == nil {
-		r, err := newExecRunner(opts.Workdir, opts.Stdout)
-		if err != nil {
-			return nil, err
-		}
-		runner = r
+	runner, err := opts.buildRunner(opts.Stdout)
+	if err != nil {
+		return nil, err
 	}
 
 	progressf(opts.Stdout, "genconfig: %s: terraform init…\n", scope)

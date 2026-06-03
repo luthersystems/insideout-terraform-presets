@@ -230,14 +230,26 @@ var sdkOnlySubresourceTypeConfigs = []sdkOnlySubresourceConfig{
 		// (the TF resource is a meta-binding on the table) so
 		// SkipProjectTagFilter=true and parent enumeration falls back to
 		// dynamodb:ListTables when the RGT cache for AWS::DynamoDB::Table
-		// is empty / cold. Import ID is the bare table name.
+		// is empty / cold.
+		//
+		// Import ID is the compound "<table_name>/<index_name>/<account_id>"
+		// (terraform-provider-aws aws_dynamodb_contributor_insights
+		// importer). For a TABLE-level binding (no index) the index_name
+		// segment is empty, giving "<table_name>//<account_id>" — verified
+		// against terraform plan -generate-config-out on AWS provider v6:
+		// the bare table name is rejected with "unexpected format for ID
+		// (...), expected table_name/index_name/account_id", which silently
+		// dropped the resource as no_generated_config. fetchOne stamps the
+		// discover-run account ID into props[subresourceAccountIDKey];
+		// without it the account cannot be embedded and we fall back to the
+		// bare table name (no regression vs. the prior behavior).
 		TFType:               "aws_dynamodb_contributor_insights",
 		Slug:                 "dynamodb_contributor_insights",
 		ParentCFNType:        "AWS::DynamoDB::Table",
 		SkipProjectTagFilter: true,
 		ListParents:          listDDBTables,
 		FetchItem:            fetchDDBContributorInsights,
-		ImportIDFromParent:   func(parentID string, _ map[string]any) string { return parentID },
+		ImportIDFromParent:   ddbContributorInsightsImportID,
 		NameHintFromParent:   func(parentID string, _ map[string]any) string { return parentID + "-contributor-insights" },
 	},
 	{

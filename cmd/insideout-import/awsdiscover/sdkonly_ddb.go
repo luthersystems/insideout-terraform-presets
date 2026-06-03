@@ -3,6 +3,7 @@ package awsdiscover
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
@@ -82,14 +83,46 @@ func listDDBTablesWithClient(ctx context.Context, client ddbSubresourceClient) (
 // also yields exists=false (table vanished or DDB returned
 // "feature never used" for legacy tables).
 //
-// The TF import ID is the bare table name — verified against
-// terraform-provider-aws v6.x source: DynamoDB contributor insights
-// uses table_name as the resource's primary id.
+// The Terraform import ID is the compound
+// "<table_name>/<index_name>/<account_id>" — built by
+// ddbContributorInsightsImportID from props. This FetchItem only
+// resolves "does the table-level binding exist"; the parentID it
+// receives is the bare table name (dep-chase may hand it the compound
+// import ID, so strip any "/..." suffix before the DescribeContributorInsights
+// call — the DDB API takes the table name, not the compound id).
 func fetchDDBContributorInsights(ctx context.Context, awsCfg aws.Config, region, parentID string) (bool, map[string]any, map[string]string, error) {
 	return fetchDDBContributorInsightsWithClient(ctx, newDDBSubresourceClient(awsCfg, region), parentID)
 }
 
+// ddbContributorInsightsTableFromID extracts the table name from a parent
+// identifier that may be either the bare table name (bulk Discover path)
+// or the compound "<table>/<index>/<account>" import ID (dep-chase
+// DiscoverByID path). The table name is always the first "/"-delimited
+// segment.
+func ddbContributorInsightsTableFromID(parentID string) string {
+	if i := strings.IndexByte(parentID, '/'); i >= 0 {
+		return parentID[:i]
+	}
+	return parentID
+}
+
+// ddbContributorInsightsImportID builds the Terraform import ID for a
+// table-level contributor-insights binding: "<table_name>//<account_id>"
+// (empty index_name segment). The account ID is threaded through
+// props[subresourceAccountIDKey] by fetchOne. When the account is
+// unavailable we fall back to the bare table name — no worse than the
+// pre-fix behavior.
+func ddbContributorInsightsImportID(parentID string, props map[string]any) string {
+	table := ddbContributorInsightsTableFromID(parentID)
+	account, _ := props[subresourceAccountIDKey].(string)
+	if account == "" {
+		return table
+	}
+	return table + "//" + account
+}
+
 func fetchDDBContributorInsightsWithClient(ctx context.Context, client ddbSubresourceClient, parentID string) (bool, map[string]any, map[string]string, error) {
+	parentID = ddbContributorInsightsTableFromID(parentID)
 	out, err := client.DescribeContributorInsights(ctx, &dynamodb.DescribeContributorInsightsInput{TableName: aws.String(parentID)})
 	if err != nil {
 		if isAPIErrorCode(err, "ResourceNotFoundException") {

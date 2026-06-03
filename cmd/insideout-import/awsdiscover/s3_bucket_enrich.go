@@ -144,6 +144,16 @@ func (e s3BucketEnricher) Enrich(ctx context.Context, ir *imported.ImportedResou
 			ir.Identity.NativeIDs = map[string]string{}
 		}
 		ir.Identity.NativeIDs["region"] = *typed.Region.Literal
+		// Promote the bucket's TRUE region (learned from HeadBucket
+		// BucketRegion) into Identity.Region. aws_s3_bucket is marked
+		// IsGlobal for ENUMERATION (one ARN-deduped ListBuckets pass),
+		// which leaves Identity.Region empty; reliable then backfills the
+		// session region (us-east-1). A bucket in another region
+		// (us-west-2, eu-central-1, …) would then be grouped under a
+		// us-east-1 provider and fail generate-config-out (#1860 follow-up).
+		// Stamping the real region here makes genconfig group each bucket
+		// into its actual region dir.
+		ir.Identity.Region = *typed.Region.Literal
 	}
 
 	raw, err := json.Marshal(typed)

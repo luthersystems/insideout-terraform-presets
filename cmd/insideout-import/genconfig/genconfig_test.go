@@ -774,11 +774,15 @@ func (r *regionAwareRunner) PlanGenerate(_ context.Context, generatedPath string
 func TestRun_MultiRegion(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
-	runner := &regionAwareRunner{fakeRunner: fakeRunner{schemas: minimalAWSSchema()}}
+	// Per-region runner factory: each concurrent region pass gets its own
+	// regionAwareRunner so the parallel multi-region path never shares one
+	// runner's mutable state (which -race would flag).
 	res, err := Run(context.Background(), Options{
 		Workdir: dir,
 		Region:  "us-east-1",
-		Runner:  runner,
+		newRunner: func(_ string, _ io.Writer) (terraformRunner, error) {
+			return &regionAwareRunner{fakeRunner: fakeRunner{schemas: minimalAWSSchema()}}, nil
+		},
 	}, []imported.ImportedResource{
 		{Identity: imported.ResourceIdentity{Type: "aws_sqs_queue", Address: "aws_sqs_queue.east1", Region: "us-east-1", ImportID: "e1"}},
 		{Identity: imported.ResourceIdentity{Type: "aws_sqs_queue", Address: "aws_sqs_queue.east2", Region: "us-east-1", ImportID: "e2"}},
