@@ -56,8 +56,8 @@ func TestParseRef_Region(t *testing.T) {
 		{"arn:aws:kms:us-west-2:123:key/00000000-0000-0000-0000-000000000000", "us-west-2"},
 		{"arn:aws:kms:eu-west-1:123:alias/io-foo-data", "eu-west-1"},
 		{"arn:aws:lambda:ap-southeast-1:123:function:io-foo-handler", "ap-southeast-1"},
-		{"arn:aws:iam::123:role/io-foo", ""},   // global service: no region
-		{"arn:aws:s3:::io-foo-uploads", ""},    // global namespace: no region
+		{"arn:aws:iam::123:role/io-foo", ""}, // global service: no region
+		{"arn:aws:s3:::io-foo-uploads", ""},  // global namespace: no region
 		{"arn:aws:dynamodb:us-east-2:123:table/io-foo", "us-east-2"},
 	}
 	for _, tc := range cases {
