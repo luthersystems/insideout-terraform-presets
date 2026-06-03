@@ -233,7 +233,25 @@ func (d *cloudControlDiscoverer) ResourceType() string { return d.cfg.TFType }
 // Per-item GetResource errors are soft-fails: a ServiceWarn is emitted
 // and the item is skipped. Parent-context cancellation propagates via
 // gctx, so a shutdown signal still tears down in-flight goroutines
-// cleanly. ListResources errors abort the region.
+// cleanly. A ListResources error normally aborts the region, EXCEPT a
+// throttle ("Rate exceeded") that survives retryThrottled's backoff: that
+// degrades to a partial result for this type (ServiceWarn + skip) so one
+// rate-limited resource type can't abort the whole account scan.
+
+// listRetry* bound the throttle backoff retryThrottled applies around each
+// CloudControl ListResources page. Discovery fans up to
+// defaultDiscoverTypesConcurrency resource types across a shared per-region
+// CloudControl rate budget, so a downstream service throttle — surfaced as a
+// 400 handler-FAILED "Rate exceeded" the SDK adaptive retryer does not
+// classify as retryable — is retried here before we give up and skip the
+// type. Vars (not consts) so tests can shrink the delays; production never
+// reassigns them.
+var (
+	listRetryMaxAttempts = 4
+	listRetryBaseDelay   = 250 * time.Millisecond
+	listRetryMaxDelay    = 4 * time.Second
+)
+
 func (d *cloudControlDiscoverer) Discover(ctx context.Context, args DiscoverArgs) ([]imported.ImportedResource, error) {
 	args.Emitter = emitterOrNop(args.Emitter)
 	book := addressBook{}
@@ -347,6 +365,7 @@ func (d *cloudControlDiscoverer) Discover(ctx context.Context, args DiscoverArgs
 					}
 				}
 
+			listLoop:
 				for _, parentModel := range parentModels {
 					input := &cloudcontrol.ListResourcesInput{
 						TypeName: aws.String(d.cfg.CloudFormationType),
@@ -356,7 +375,17 @@ func (d *cloudControlDiscoverer) Discover(ctx context.Context, args DiscoverArgs
 					}
 					paginator := cloudcontrol.NewListResourcesPaginator(client, input)
 					for paginator.HasMorePages() {
-						page, err := paginator.NextPage(ctx)
+						// Retry each page on a throttle (backoff + jitter)
+						// before treating it as fatal. Layered on top of the
+						// SDK adaptive retryer to also cover CloudControl's
+						// 400 handler-FAILED "Rate exceeded", which the SDK
+						// does not classify as retryable.
+						var page *cloudcontrol.ListResourcesOutput
+						err := retryThrottled(ctx, listRetryMaxAttempts, listRetryBaseDelay, listRetryMaxDelay, func() error {
+							var perr error
+							page, perr = paginator.NextPage(ctx)
+							return perr
+						})
 						if err != nil {
 							// Per-parent ListResources fan-out: some
 							// CFN handlers (e.g. AWS::Lambda::Permission
@@ -378,6 +407,22 @@ func (d *cloudControlDiscoverer) Discover(ctx context.Context, args DiscoverArgs
 									fmt.Sprintf("ListResources %s%s: NotFound treated as empty (#426 — CFN handler returned NotFound for a parent with zero children of this type): %v",
 										d.cfg.CloudFormationType, parentLabelFromModel(parentModel), err))
 								break
+							}
+							// A throttle that survived both the SDK adaptive
+							// retryer and retryThrottled's backoff means this
+							// type/region is genuinely rate-limited right now.
+							// Degrade to a PARTIAL result for this type — warn
+							// and stop listing it in this region — rather than
+							// aborting the entire account scan: one throttled
+							// resource type must not nuke discovery of every
+							// other resource. The refs gathered so far still
+							// flow through the GetResource fan-out below, and
+							// other regions/types continue independently.
+							if isThrottleError(err) {
+								args.Emitter.ServiceWarn(d.cfg.Slug, region,
+									fmt.Sprintf("ListResources %s (region=%s): still throttled after %d retries — skipping the rest of this type's listing in this region (partial results): %v",
+										d.cfg.CloudFormationType, region, listRetryMaxAttempts, err))
+								break listLoop
 							}
 							args.Emitter.ServiceFinish(d.cfg.Slug, region, regionCount, time.Since(regionStart))
 							return nil, fmt.Errorf("ListResources %s (region=%s): %w", d.cfg.CloudFormationType, region, err)

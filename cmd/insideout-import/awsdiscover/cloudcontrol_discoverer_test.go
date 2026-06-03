@@ -132,6 +132,53 @@ func testConfig() cloudControlConfig {
 	}
 }
 
+// throttleListClient always fails ListResources with a CloudControl
+// handler-FAILED "Rate exceeded" (the exact shape a reverse-import scan hit
+// on ElastiCache), counting calls so the test can assert retryThrottled
+// retried before the discoverer soft-skipped the type. GetResource must
+// never be reached.
+type throttleListClient struct{ calls int }
+
+func (c *throttleListClient) ListResources(_ context.Context, _ *cloudcontrol.ListResourcesInput, _ ...func(*cloudcontrol.Options)) (*cloudcontrol.ListResourcesOutput, error) {
+	c.calls++
+	return nil, &smithy.GenericAPIError{
+		Code:    "GeneralServiceException",
+		Message: "AWS::ElastiCache::ReplicationGroup Handler returned status FAILED: Rate exceeded (Service: ElastiCache, Status Code: 400)",
+	}
+}
+
+func (c *throttleListClient) GetResource(_ context.Context, _ *cloudcontrol.GetResourceInput, _ ...func(*cloudcontrol.Options)) (*cloudcontrol.GetResourceOutput, error) {
+	return nil, errors.New("GetResource must not be called when ListResources is throttled")
+}
+
+// TestCloudControlDiscover_ThrottleSoftSkips pins the rate-limit fix: a
+// ListResources throttle that survives retryThrottled's backoff must degrade
+// to a PARTIAL result for that type (no resources, nil error) rather than
+// aborting the whole account scan. Before the fix, one throttled type
+// returned a hard error that failed the entire discover.
+func TestCloudControlDiscover_ThrottleSoftSkips(t *testing.T) {
+	t.Parallel()
+	client := &throttleListClient{}
+	d := &cloudControlDiscoverer{
+		cfg:            testConfig(),
+		new:            func(_ string) cloudControlClient { return client },
+		maxConcurrency: DefaultMaxConcurrency,
+	}
+	got, err := d.Discover(context.Background(), DiscoverArgs{
+		Regions:   []string{"us-east-1"},
+		AccountID: "123",
+	})
+	if err != nil {
+		t.Fatalf("a surviving throttle must degrade to a partial result, not abort the scan; got err: %v", err)
+	}
+	if len(got) != 0 {
+		t.Fatalf("a throttled type yields no resources; got %d", len(got))
+	}
+	if client.calls != listRetryMaxAttempts {
+		t.Errorf("ListResources call count=%d, want %d (retryThrottled must retry before soft-skipping)", client.calls, listRetryMaxAttempts)
+	}
+}
+
 // TestCloudControlDiscover_HappyPath exercises the full read path:
 // ListResources → per-id GetResource fan-out → tag extraction →
 // MatchesAll filter (none here) → ImportedResource emission. Pins
