@@ -43,6 +43,38 @@ func TestParseRef_SupportedTypes(t *testing.T) {
 	}
 }
 
+// TestParseRef_Region pins that ParseRef carries the ARN's own region so the
+// chase loop discovers cross-region references in the right region. Global
+// services (IAM/S3) have an empty region — the loop falls back to the run's
+// primary region for those.
+func TestParseRef_Region(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		arn        string
+		wantRegion string
+	}{
+		{"arn:aws:kms:us-west-2:123:key/00000000-0000-0000-0000-000000000000", "us-west-2"},
+		{"arn:aws:kms:eu-west-1:123:alias/io-foo-data", "eu-west-1"},
+		{"arn:aws:lambda:ap-southeast-1:123:function:io-foo-handler", "ap-southeast-1"},
+		{"arn:aws:iam::123:role/io-foo", ""},   // global service: no region
+		{"arn:aws:s3:::io-foo-uploads", ""},    // global namespace: no region
+		{"arn:aws:dynamodb:us-east-2:123:table/io-foo", "us-east-2"},
+	}
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.arn, func(t *testing.T) {
+			t.Parallel()
+			ref, err := ParseRef(tc.arn)
+			if err != nil {
+				t.Fatalf("err=%v", err)
+			}
+			if ref.Region != tc.wantRegion {
+				t.Errorf("Region=%q, want %q", ref.Region, tc.wantRegion)
+			}
+		})
+	}
+}
+
 func TestParseRef_UnsupportedTypes(t *testing.T) {
 	t.Parallel()
 	cases := []string{

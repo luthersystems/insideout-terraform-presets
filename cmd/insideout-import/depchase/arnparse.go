@@ -29,9 +29,17 @@ var ErrUnsupportedType = errors.New("depchase: ARN service/resource-type not map
 // ARN found in generated.tf. ImportID is the value that aws_<type>'s
 // `terraform import` block expects — typically the raw ARN, sometimes
 // a name or UUID depending on the provider's import semantics.
+//
+// Region is the ARN's own region (the 4th ARN segment). It is empty for
+// global/region-less services (IAM, CloudFront, Route53, S3). The chase
+// loop discovers each ref in ITS region — critical for multi-region imports
+// where a resource in one region references a resource in another (e.g. a
+// us-east-1 stack referencing a us-west-2 KMS key); without this, every
+// cross-region ref would be looked up in the primary region and warn-skipped.
 type Ref struct {
 	TFType   string
 	ImportID string
+	Region   string
 }
 
 // arnKey is the ARN service + leading resource-type segment, e.g.
@@ -90,8 +98,10 @@ func ParseRef(s string) (Ref, error) {
 	// Each discoverer's DiscoverByID accepts the raw ARN, so we hand
 	// it through verbatim. Discoverers that need a different shape
 	// (e.g. lambda strips the version qualifier from a function ARN)
-	// do that conversion themselves.
-	return Ref{TFType: tf, ImportID: s}, nil
+	// do that conversion themselves. parsed.Region is empty for global
+	// services (IAM/CloudFront/Route53/S3); the loop falls back to the
+	// run's primary region in that case.
+	return Ref{TFType: tf, ImportID: s, Region: parsed.Region}, nil
 }
 
 // splitResource splits an ARN resource portion into a leading
