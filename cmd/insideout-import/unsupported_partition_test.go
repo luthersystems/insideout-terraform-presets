@@ -127,6 +127,59 @@ func TestPartitionUnimportable_StampsWizardFields(t *testing.T) {
 	}
 }
 
+func TestPartitionUnimportable_DropsInsideOutImportedMarker(t *testing.T) {
+	in := []imported.ImportedResource{
+		{Identity: imported.ResourceIdentity{
+			Type:     "aws_vpc",
+			Address:  "aws_vpc.already_managed",
+			NameHint: "already-managed",
+			ImportID: "vpc-123",
+			Tags: map[string]string{
+				"InsideOutImportProject": "123456789012",
+				"InsideOutImported":      "true",
+			},
+		}},
+		{Identity: imported.ResourceIdentity{
+			Type:     "aws_vpc",
+			Address:  "aws_vpc.bare_project_tag",
+			NameHint: "bare-project-tag",
+			ImportID: "vpc-456",
+			Tags: map[string]string{
+				"InsideOutImportProject": "123456789012",
+			},
+		}},
+		{Identity: imported.ResourceIdentity{
+			Type:     "google_storage_bucket",
+			Address:  "google_storage_bucket.already_managed",
+			NameHint: "already-managed-gcp",
+			ImportID: "gcs-bucket",
+			Tags: map[string]string{
+				"insideout-imported": "true",
+			},
+		}},
+	}
+
+	keep, dropped := partitionUnimportable(in)
+	if len(keep) != 1 {
+		t.Fatalf("keep: got %d, want 1 (bare project tag only)", len(keep))
+	}
+	if keep[0].Identity.Address != "aws_vpc.bare_project_tag" {
+		t.Errorf("kept address = %q, want aws_vpc.bare_project_tag", keep[0].Identity.Address)
+	}
+
+	if len(dropped) != 2 {
+		t.Fatalf("dropped: got %d, want 2 (AWS + GCP imported markers)", len(dropped))
+	}
+	for i, row := range dropped {
+		if row.Reason != imported.ReasonInsideOutImported {
+			t.Errorf("dropped[%d].Reason = %q, want %q", i, row.Reason, imported.ReasonInsideOutImported)
+		}
+	}
+	if dropped[0].ID != "vpc-123" || dropped[1].ID != "gcs-bucket" {
+		t.Errorf("dropped IDs = [%q, %q], want [vpc-123, gcs-bucket]", dropped[0].ID, dropped[1].ID)
+	}
+}
+
 func TestPartitionUnimportable_Empty(t *testing.T) {
 	keep, dropped := partitionUnimportable(nil)
 	if keep == nil || dropped == nil {

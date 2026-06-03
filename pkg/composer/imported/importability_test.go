@@ -18,6 +18,8 @@ func TestReasonCodes_WireStable(t *testing.T) {
 	assert.Equal(t, "aws_managed_kms_alias", ReasonAWSManagedKMSAlias)
 	assert.Equal(t, "aws_managed_kms_key", ReasonAWSManagedKMSKey)
 	assert.Equal(t, "service_managed_eni", ReasonServiceManagedENI)
+	assert.Equal(t, "ephemeral_log_stream", ReasonEphemeralLogStream)
+	assert.Equal(t, "insideout_imported", ReasonInsideOutImported)
 }
 
 func TestIsAWSManagedKMSAliasName(t *testing.T) {
@@ -85,6 +87,76 @@ func TestIsServiceManagedENIInterfaceType(t *testing.T) {
 	for _, it := range []string{"nat_gateway", "vpc_endpoint", "network_load_balancer", "lambda", "transit_gateway", "some_future_managed_type"} {
 		assert.Truef(t, IsServiceManagedENIInterfaceType(it), "interface_type %q should be service-managed", it)
 	}
+}
+
+func TestHasInsideOutImportedMarker(t *testing.T) {
+	t.Parallel()
+	cases := map[string]struct {
+		tags map[string]string
+		want bool
+	}{
+		"aws imported marker present": {
+			tags: map[string]string{awsTagKeyImported: "true"},
+			want: true,
+		},
+		"aws imported marker presence is enough": {
+			tags: map[string]string{awsTagKeyImported: ""},
+			want: true,
+		},
+		"gcp imported marker present": {
+			tags: map[string]string{gcpLabelKeyImported: "true"},
+			want: true,
+		},
+		"bare aws import project account id is not ownership": {
+			tags: map[string]string{awsTagKeyImportProject: "123456789012"},
+			want: false,
+		},
+		"bare gcp import project label is not ownership": {
+			tags: map[string]string{gcpLabelKeyImportProject: "customer-project"},
+			want: false,
+		},
+		"no tags": {
+			tags: map[string]string{},
+			want: false,
+		},
+		"not fetched": {
+			tags: nil,
+			want: false,
+		},
+	}
+
+	for name, tc := range cases {
+		tc := tc
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			assert.Equal(t, tc.want, HasInsideOutImportedMarker(tc.tags))
+		})
+	}
+}
+
+func TestUnimportableReason_InsideOutImportedMarker(t *testing.T) {
+	t.Parallel()
+	t.Run("aws marker makes otherwise importable resource un-importable", func(t *testing.T) {
+		ir := ImportedResource{Identity: ResourceIdentity{
+			Type: "aws_vpc",
+			Tags: map[string]string{awsTagKeyImported: "true"},
+		}}
+		assert.Equal(t, ReasonInsideOutImported, UnimportableReason(ir))
+	})
+	t.Run("gcp marker makes otherwise importable resource un-importable", func(t *testing.T) {
+		ir := ImportedResource{Identity: ResourceIdentity{
+			Type: "google_storage_bucket",
+			Tags: map[string]string{gcpLabelKeyImported: "true"},
+		}}
+		assert.Equal(t, ReasonInsideOutImported, UnimportableReason(ir))
+	})
+	t.Run("bare import project account id stays importable", func(t *testing.T) {
+		ir := ImportedResource{Identity: ResourceIdentity{
+			Type: "aws_vpc",
+			Tags: map[string]string{awsTagKeyImportProject: "123456789012"},
+		}}
+		assert.Equal(t, "", UnimportableReason(ir))
+	})
 }
 
 func TestUnimportableReason_KMSAlias(t *testing.T) {
@@ -179,7 +251,10 @@ func TestReasonDescription(t *testing.T) {
 	assert.Truef(t, strings.Contains(kmsKey, "KeyManager"), "KMS-key description must mention KeyManager, got %q", kmsKey)
 	eni := ReasonDescription(ReasonServiceManagedENI)
 	assert.Truef(t, strings.Contains(eni, "network interface"), "ENI description must mention network interface, got %q", eni)
+	insideOut := ReasonDescription(ReasonInsideOutImported)
+	assert.Truef(t, strings.Contains(insideOut, "InsideOut"), "InsideOut-imported description must mention InsideOut, got %q", insideOut)
 	assert.NotEqual(t, kms, eni, "the two descriptions must be distinct (guards against swapped case bodies)")
 	assert.NotEqual(t, kms, kmsKey, "the KMS-alias and KMS-key descriptions must be distinct")
+	assert.NotEqual(t, insideOut, kms, "the InsideOut-imported and KMS-alias descriptions must be distinct")
 	assert.Equal(t, "", ReasonDescription("unknown_code"))
 }

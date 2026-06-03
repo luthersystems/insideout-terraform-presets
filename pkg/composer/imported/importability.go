@@ -4,10 +4,9 @@ import "strings"
 
 // Instance-level un-importability classification (#709).
 //
-// Some AWS resources are *supported types* (they appear in
+// Some resources are *supported types* (they appear in
 // registry.SupportedDiscoverTypes and have discoverers) but whose *specific
-// instances* can never be adopted into customer Terraform state — the AWS
-// provider rejects the import. The two known families:
+// instances* must not be offered for a new import. The known families:
 //
 //   - AWS-managed default KMS aliases (alias/aws/rds, alias/aws/ebs, …): the
 //     provider refuses any aws_kms_alias under the reserved `alias/aws/`
@@ -18,6 +17,9 @@ import "strings"
 //   - Service/parent-managed ENIs (NAT gateway, VPC endpoint, load balancer,
 //     Lambda, …): owned by their parent resource, not standalone-importable
 //     as aws_network_interface.
+//   - Resources already stamped with InsideOut's imported marker tag/label:
+//     already managed by InsideOut, so they are not selectable for another
+//     import run.
 //
 // This predicate is the single source of truth shared across the pipeline so
 // the reason codes never drift:
@@ -31,9 +33,9 @@ import "strings"
 //   - reliable's importer wizard + reverse-run persist gate (reliable#1967):
 //     stamp support=unsupported on the DTO and reject the run path.
 //
-// It inspects only the ResourceIdentity surface populated at discovery time —
-// never live provider schema or rendered HCL — so it produces the same verdict
-// everywhere it runs.
+// It inspects only the ResourceIdentity surface populated at discovery time
+// (including Tags/labels) — never live provider schema or rendered HCL — so it
+// produces the same verdict everywhere it runs.
 
 // Reason codes for instance-level un-importability. Stable wire identifiers
 // carried in the unsupported.json `reason` field (#709), the reverse-import
@@ -69,11 +71,25 @@ const (
 	// them. The whole type is un-importable, so streams are classified into
 	// unsupported.json instead of being silently dropped as no_generated_config.
 	ReasonEphemeralLogStream = "ephemeral_log_stream"
+
+	// ReasonInsideOutImported marks a resource already carrying InsideOut's
+	// adopted-resource marker tag/label. Discovery routes these rows to
+	// unsupported.json so another import run cannot select a resource already
+	// managed by InsideOut. The marker key is the signal; a project/account tag
+	// alone is not enough.
+	ReasonInsideOutImported = "insideout_imported"
 )
 
 // awsManagedKMSAliasPrefix is the reserved alias prefix the AWS provider
 // refuses to create or import an aws_kms_alias under.
 const awsManagedKMSAliasPrefix = "alias/aws/"
+
+const (
+	awsTagKeyImported        = "InsideOutImported"
+	gcpLabelKeyImported      = "insideout-imported"
+	awsTagKeyImportProject   = "InsideOutImportProject"
+	gcpLabelKeyImportProject = "insideout-import-project"
+)
 
 // awsManagedKMSKeyManager is the KeyManager value KMS reports for keys it
 // manages on the customer's behalf (vs "CUSTOMER" for customer-managed
@@ -124,17 +140,41 @@ func IsServiceManagedENIInterfaceType(interfaceType string) bool {
 	return !importable
 }
 
+// HasInsideOutImportedMarker reports whether discovery observed the
+// adopted-resource marker tag/label stamped by InsideOut. The marker key's
+// presence is enough; callers must not infer ownership from the project tag
+// because some historical resources carry a bare account/project marker
+// without having been imported.
+func HasInsideOutImportedMarker(tags map[string]string) bool {
+	if tags == nil {
+		return false
+	}
+	if _, ok := tags[awsTagKeyImported]; ok {
+		return true
+	}
+	if _, ok := tags[gcpLabelKeyImported]; ok {
+		return true
+	}
+	return false
+}
+
 // UnimportableReason classifies a discovered resource as inherently
 // un-importable into customer Terraform state, returning the reason code (one
 // of the Reason* consts) or "" when the resource is importable.
 //
-// KMS aliases are always classifiable — the alias name is the import ID /
-// native ID stamped by every discoverer. AWS-managed KMS keys and
-// service-managed ENIs are classifiable only when the discoverer surfaced
-// the discriminator (NativeIDs["key_manager"] / NativeIDs["interface_type"]);
-// when it is absent the resource is treated as importable here and the
-// genconfig prune (#708) remains the backstop.
+// InsideOut-managed resources are classified by the imported marker key in
+// Identity.Tags; the project/account marker alone is deliberately ignored. KMS
+// aliases are always classifiable — the alias name is the import ID / native ID
+// stamped by every discoverer. AWS-managed KMS keys and service-managed ENIs
+// are classifiable only when the discoverer surfaced the discriminator
+// (NativeIDs["key_manager"] / NativeIDs["interface_type"]); when it is absent
+// the resource is treated as importable here and the genconfig prune (#708)
+// remains the backstop.
 func UnimportableReason(ir ImportedResource) string {
+	if HasInsideOutImportedMarker(ir.Identity.Tags) {
+		return ReasonInsideOutImported
+	}
+
 	switch ir.Identity.Type {
 	case "aws_kms_alias":
 		if IsAWSManagedKMSAliasName(kmsAliasName(ir.Identity)) {
@@ -170,6 +210,8 @@ func ReasonDescription(reason string) string {
 		return "Service-managed network interface (owned by its parent NAT gateway / VPC endpoint / load balancer) — cannot be imported as a standalone network interface."
 	case ReasonEphemeralLogStream:
 		return "Ephemeral CloudWatch log stream (auto-created and rotated by its log group) — not declarative infrastructure; manage the log group instead."
+	case ReasonInsideOutImported:
+		return "Already managed by InsideOut — cannot be selected for a new import."
 	default:
 		return ""
 	}

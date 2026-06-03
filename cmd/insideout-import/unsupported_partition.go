@@ -11,8 +11,10 @@ import (
 // partitionUnimportable splits a freshly-discovered resource slice into the
 // importable rows (which stay in imported.json) and the instance-level
 // un-importable rows — a *supported type* whose specific instance can never be
-// adopted into customer Terraform state (AWS-managed alias/aws/* KMS aliases,
-// service/parent-managed ENIs). The dropped rows are returned as
+// adopted into customer Terraform state or should not be selected again
+// (AWS-managed alias/aws/* KMS aliases, service/parent-managed ENIs,
+// InsideOut-managed rows already carrying the imported marker). The dropped
+// rows are returned as
 // UnsupportedResource carriers (with a reason code) so the caller can route
 // them into unsupported.json alongside the type-level enumerator output (#709).
 //
