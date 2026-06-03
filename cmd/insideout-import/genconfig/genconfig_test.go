@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"sync"
 	"testing"
 
 	tfjson "github.com/hashicorp/terraform-json"
@@ -29,6 +30,7 @@ type fakeRunner struct {
 	schemaErr   error
 	schemas     *tfjson.ProviderSchemas
 	validateErr error
+	versionErr  error
 
 	calls           []string
 	generatedPath   string
@@ -37,6 +39,15 @@ type fakeRunner struct {
 	initCalled      int
 	validateCalled  int
 	schemaCalled    int
+	versionCalled   int
+}
+
+// Version models the tfenv warm-up call (#724). The single-region path never
+// calls it; the multi-region path warms terraform once before fan-out.
+func (f *fakeRunner) Version(_ context.Context) error {
+	f.calls = append(f.calls, "version")
+	f.versionCalled++
+	return f.versionErr
 }
 
 func (f *fakeRunner) Init(_ context.Context) error {
@@ -145,6 +156,11 @@ func TestRun_HappyPath(t *testing.T) {
 	wantOrder := []string{"init", "plan", "schema", "validate"}
 	if !equalStrings(runner.calls, wantOrder) {
 		t.Errorf("pipeline order = %v, want %v", runner.calls, wantOrder)
+	}
+	// The tfenv warm-up (#724) is a multi-region-only concern — the
+	// single-region path inits serially, so it must never pay for a warm-up.
+	if runner.versionCalled != 0 {
+		t.Errorf("single-region path must not warm up tfenv; Version called %d time(s)", runner.versionCalled)
 	}
 	if res.GeneratedPath != filepath.Join(dir, generatedFile) {
 		t.Errorf("GeneratedPath=%q", res.GeneratedPath)
@@ -823,5 +839,184 @@ func TestRun_MultiRegion(t *testing.T) {
 	// A combined generated.tf is assembled at the top level for the artifact.
 	if _, err := os.Stat(res.GeneratedPath); err != nil {
 		t.Errorf("merged top-level generated.tf missing: %v", err)
+	}
+}
+
+// warmupOrder records, across every runner the multi-region fan-out builds,
+// the ordering of the #724 tfenv warm-up (Version) relative to the per-region
+// Init calls. All runners built by the factory share one instance, mutated
+// under its mutex so the assertions hold under -race.
+type warmupOrder struct {
+	mu sync.Mutex
+	// versionStarted/versionCompleted are tracked separately so the Init check
+	// below means "the warm-up RETURNED", not merely "the warm-up was entered".
+	// A warm-up still in flight during fan-out shows started > completed.
+	versionStarted   int
+	versionCompleted int
+	initCalls        int
+	initBeforeWarm   bool // an Init began before the warm-up Version had returned
+}
+
+// orderTrackingRunner wraps regionAwareRunner (region-correct generated.tf) and
+// records warm-up/init ordering into a shared warmupOrder.
+type orderTrackingRunner struct {
+	regionAwareRunner
+	order *warmupOrder
+}
+
+func (r *orderTrackingRunner) Version(_ context.Context) error {
+	r.order.mu.Lock()
+	r.order.versionStarted++
+	r.order.mu.Unlock()
+
+	err := r.versionErr // nil on the happy path; set to exercise warm-up failure
+
+	// Mark completion only after the call's work is done (here: once the result
+	// is determined), so Init observing versionCompleted means the warm-up has
+	// actually returned — not just begun.
+	r.order.mu.Lock()
+	r.order.versionCompleted++
+	r.order.mu.Unlock()
+	return err
+}
+
+func (r *orderTrackingRunner) Init(ctx context.Context) error {
+	r.order.mu.Lock()
+	// Contract: no per-region init may begin until the single warm-up has fully
+	// returned — exactly one Version started AND completed, none still in
+	// flight. A dropped warm-up (completed == 0) or a warm-up running
+	// concurrently with the fan-out (started > completed) both trip this.
+	if r.order.versionCompleted == 0 || r.order.versionStarted != r.order.versionCompleted {
+		r.order.initBeforeWarm = true
+	}
+	r.order.initCalls++
+	r.order.mu.Unlock()
+	return r.regionAwareRunner.Init(ctx)
+}
+
+// TestRun_MultiRegion_WarmsTerraformBeforeParallelInit is the #724 regression
+// guard: the multi-region path must run `terraform version` exactly once,
+// serially, BEFORE fanning out the per-region Init() calls. Without that
+// warm-up, the concurrent first-time tfenv installs race on the freshly
+// written binary and intermittently fail with exit 126 (Permission denied).
+//
+// We can't deterministically reproduce the OS-level race, so we pin the
+// contract that prevents it: every per-region Init observes a warm-up Version
+// that has already RETURNED, and the warm-up ran exactly once. A revert that
+// drops the warm-up leaves versionCompleted at 0, flipping initBeforeWarm true.
+func TestRun_MultiRegion_WarmsTerraformBeforeParallelInit(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	order := &warmupOrder{}
+	res, err := Run(context.Background(), Options{
+		Workdir: dir,
+		Region:  "us-east-1",
+		newRunner: func(_ string, _ io.Writer) (terraformRunner, error) {
+			return &orderTrackingRunner{
+				regionAwareRunner: regionAwareRunner{fakeRunner: fakeRunner{schemas: minimalAWSSchema()}},
+				order:             order,
+			}, nil
+		},
+	}, []imported.ImportedResource{
+		{Identity: imported.ResourceIdentity{Type: "aws_sqs_queue", Address: "aws_sqs_queue.east1", Region: "us-east-1", ImportID: "e1"}},
+		{Identity: imported.ResourceIdentity{Type: "aws_sqs_queue", Address: "aws_sqs_queue.west1", Region: "us-west-2", ImportID: "w1"}},
+		{Identity: imported.ResourceIdentity{Type: "aws_sqs_queue", Address: "aws_sqs_queue.euw1", Region: "eu-west-1", ImportID: "ew1"}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(res.Resources) != 3 {
+		t.Fatalf("want 3 merged resources, got %d", len(res.Resources))
+	}
+
+	order.mu.Lock()
+	defer order.mu.Unlock()
+	if order.versionCompleted != 1 || order.versionStarted != 1 {
+		t.Errorf("terraform warm-up (version) started %d / completed %d time(s), want exactly 1 each before fan-out", order.versionStarted, order.versionCompleted)
+	}
+	if order.initCalls != 3 {
+		t.Errorf("per-region init ran %d time(s), want 3 (one per region)", order.initCalls)
+	}
+	if order.initBeforeWarm {
+		t.Error("a per-region terraform init began before the warm-up returned — the #724 tfenv install race is reintroduced")
+	}
+}
+
+// TestRun_MultiRegion_WarmUpFailureAbortsBeforeFanOut pins the other half of
+// the #724 contract: if the serial warm-up fails (e.g. tfenv can't install the
+// pinned version), Run must abort with a wrapped, warm-up-identified error and
+// must NOT fan out — starting the parallel inits after a failed install would
+// re-expose exactly the race the warm-up exists to prevent.
+func TestRun_MultiRegion_WarmUpFailureAbortsBeforeFanOut(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	order := &warmupOrder{}
+	wantErr := errors.New("tfenv: could not install terraform 1.7.5")
+	_, err := Run(context.Background(), Options{
+		Workdir: dir,
+		Region:  "us-east-1",
+		newRunner: func(_ string, _ io.Writer) (terraformRunner, error) {
+			return &orderTrackingRunner{
+				regionAwareRunner: regionAwareRunner{fakeRunner: fakeRunner{schemas: minimalAWSSchema(), versionErr: wantErr}},
+				order:             order,
+			}, nil
+		},
+	}, []imported.ImportedResource{
+		{Identity: imported.ResourceIdentity{Type: "aws_sqs_queue", Address: "aws_sqs_queue.east1", Region: "us-east-1", ImportID: "e1"}},
+		{Identity: imported.ResourceIdentity{Type: "aws_sqs_queue", Address: "aws_sqs_queue.west1", Region: "us-west-2", ImportID: "w1"}},
+	})
+	if err == nil {
+		t.Fatal("want an error when the tfenv warm-up fails, got nil")
+	}
+	if !strings.Contains(err.Error(), "terraform warm-up (install pinned version)") {
+		t.Errorf("error %q must identify the warm-up step", err)
+	}
+	if !errors.Is(err, wantErr) {
+		t.Errorf("error must wrap the underlying tfenv failure, got %v", err)
+	}
+
+	order.mu.Lock()
+	defer order.mu.Unlock()
+	if order.versionCompleted != 1 {
+		t.Errorf("warm-up completed %d time(s), want exactly 1", order.versionCompleted)
+	}
+	if order.initCalls != 0 {
+		t.Errorf("the per-region fan-out must NOT start after a failed warm-up; %d init(s) ran", order.initCalls)
+	}
+}
+
+// TestRun_MultiRegion_IgnoresInjectedRunner pins the Options.Runner contract on
+// the multi-region path: an injected single Runner is ignored — by the warm-up
+// AND the per-region passes alike — so concurrent passes never share one
+// runner's mutable state. Each region forces sub.Runner = nil and the warm-up
+// clears it too; both build via the per-region factory instead. (The #724
+// warm-up originally honored the injected Runner, an inconsistency this guards
+// against.) If the injected Runner were ever touched, its call counters would
+// be non-zero.
+func TestRun_MultiRegion_IgnoresInjectedRunner(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	injected := &fakeRunner{schemas: minimalAWSSchema()}
+	res, err := Run(context.Background(), Options{
+		Workdir: dir,
+		Region:  "us-east-1",
+		Runner:  injected,
+		newRunner: func(_ string, _ io.Writer) (terraformRunner, error) {
+			return &regionAwareRunner{fakeRunner: fakeRunner{schemas: minimalAWSSchema()}}, nil
+		},
+	}, []imported.ImportedResource{
+		{Identity: imported.ResourceIdentity{Type: "aws_sqs_queue", Address: "aws_sqs_queue.east1", Region: "us-east-1", ImportID: "e1"}},
+		{Identity: imported.ResourceIdentity{Type: "aws_sqs_queue", Address: "aws_sqs_queue.west1", Region: "us-west-2", ImportID: "w1"}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(res.Resources) != 2 {
+		t.Fatalf("want 2 merged resources, got %d", len(res.Resources))
+	}
+	touched := injected.versionCalled + injected.initCalled + injected.planCalled + injected.schemaCalled + injected.validateCalled
+	if touched != 0 {
+		t.Errorf("multi-region path used the injected Runner (version=%d init=%d plan=%d schema=%d validate=%d); warm-up + regions must use the per-region factory only",
+			injected.versionCalled, injected.initCalled, injected.planCalled, injected.schemaCalled, injected.validateCalled)
 	}
 }

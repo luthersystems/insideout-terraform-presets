@@ -252,6 +252,36 @@ func runMultiRegion(ctx context.Context, opts Options, groups []regionGroup) (*R
 		return &syncWriter{mu: &logMu, w: opts.Stdout}
 	}
 
+	// Warm tfenv ONCE before fanning out (#724). The first `terraform`
+	// invocation in an environment whose pinned version isn't pre-baked in the
+	// image makes tfenv auto-install it (download → unzip → chmod +x → exec),
+	// which is NOT concurrency-safe: N regions racing that first install hit
+	// `Permission denied` / `exit status 126` on the freshly written,
+	// not-yet-executable binary, failing the whole reverse-import job. Running
+	// `terraform version` once, serially, installs the pinned version up front
+	// so the parallel Init() calls below all find a present, executable binary.
+	// The version tfenv resolves here matches each region subdir's: the subdirs
+	// are children of Workdir and the emitted providers.tf pins no
+	// `required_version`, so resolution walks up to the same
+	// .terraform-version / env source either way.
+	//
+	// Build the warm-up runner the same way the per-region passes do — via the
+	// newRunner factory / execRunner, never a shared injected Runner. The
+	// fan-out forces sub.Runner = nil for exactly this reason (concurrent passes
+	// must not share one runner's mutable state); the warm-up clears it too so
+	// it exercises the same runner the children will, honoring the
+	// "multi-region ignores the injected Runner" contract (see Options.Runner).
+	progressf(opts.Stdout, "genconfig: warming terraform (installing pinned version once before parallel init)…\n")
+	warmOpts := opts
+	warmOpts.Runner = nil
+	warmup, err := warmOpts.buildRunner(sink())
+	if err != nil {
+		return nil, fmt.Errorf("genconfig: terraform warm-up runner: %w", err)
+	}
+	if err := warmup.Version(ctx); err != nil {
+		return nil, fmt.Errorf("genconfig: terraform warm-up (install pinned version): %w", err)
+	}
+
 	// Index-addressed slots keep the merge order deterministic (region-sorted)
 	// regardless of which region finishes first.
 	type regionOut struct {
