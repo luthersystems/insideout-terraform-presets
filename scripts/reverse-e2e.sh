@@ -14,7 +14,7 @@
 #
 # This is the live tier (like `make test-roundtrip`): it needs real AWS creds,
 # so it is operator-run, not a CI gate. Point it at any account you've authed
-# into (cust1/cust2/cust3, …). Multi-region is exercised by listing >1 region
+# into (cust1/cust2/cust3, ...). Multi-region is exercised by listing >1 region
 # or REGIONS=all.
 #
 # Prereqs:
@@ -43,6 +43,7 @@ REGIONS="${REVERSE_E2E_REGIONS:-us-east-1}"
 PROJECT="${REVERSE_E2E_PROJECT:-}"
 MIRROR="${REVERSE_E2E_MIRROR:-$HOME/.terraform.d/plugin-cache}"
 OUTDIR="${REVERSE_E2E_OUTDIR:-$(mktemp -d -t reverse-e2e.XXXXXX)}"
+mkdir -p "$OUTDIR"
 PRIMARY="${REVERSE_E2E_PRIMARY:-}"
 if [[ -z "$PRIMARY" ]]; then
   if [[ "$REGIONS" == "all" ]]; then PRIMARY="us-east-1"; else PRIMARY="${REGIONS%%,*}"; fi
@@ -84,13 +85,13 @@ log "offline mirror wired via TF_CLI_CONFIG_FILE=$TFRC"
 
 # ---- build the CLI --------------------------------------------------------
 BIN="$OUTDIR/insideout-import"
-log "building insideout-import…"
+log "building insideout-import..."
 go build -o "$BIN" ./cmd/insideout-import
 
 # ---- stage 2a: discover identities (--no-hcl: fast, reverse regenerates HCL)
 DISC="$OUTDIR/discover"
 mkdir -p "$DISC"
-log "discover (identities only) across regions: $REGIONS…"
+log "discover (identities only) across regions: $REGIONS..."
 "$BIN" discover \
   --provider aws \
   --no-hcl \
@@ -104,7 +105,7 @@ log "discovered $NRES importable resource(s)"
 # ---- stages 2b/2c + final plan: the production engine ---------------------
 OUT="$OUTDIR/out"
 mkdir -p "$OUT"
-log "reverse (genconfig → driftfix → depchase → terraform plan)…"
+log "reverse (genconfig → driftfix → depchase → terraform plan)..."
 REV_ARGS=(reverse
   --input "$DISC/imported.json"
   --output-dir "$OUT"
@@ -115,7 +116,7 @@ REV_ARGS=(reverse
 "$BIN" "${REV_ARGS[@]}"
 
 # ---- assert: clean, tag-only plan -----------------------------------------
-log "asserting clean tag-only plan…"
+log "asserting clean tag-only plan..."
 python3 - "$OUT" <<'PY'
 import json, sys
 out = sys.argv[1]
