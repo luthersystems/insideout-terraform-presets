@@ -18,6 +18,11 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"sort"
+	"sync"
+
+	"github.com/luthersystems/insideout-terraform-presets/cmd/insideout-import/genconfig"
+	"golang.org/x/sync/errgroup"
 )
 
 // generatedFile is the file genconfig wrote and driftfix mutates in
@@ -50,6 +55,31 @@ type Options struct {
 	// "discard subprocess output" (the historical behavior). Ignored when
 	// Runner is injected.
 	Stdout io.Writer
+
+	// newRunner builds a terraformRunner for a specific stack directory.
+	// It exists so the multi-region path can construct one runner per
+	// region subdir (each subdir is its own plannable stack), and so
+	// tests can inject per-stack fakes. nil → newExecRunner. The single
+	// injected Runner above still takes precedence for the single-stack
+	// path (Workdir itself is the stack); newRunner is consulted for the
+	// per-region subdirs. Unexported because production callers
+	// (run.go/discover.go) never set it — they always want the real
+	// execRunner — and only the package's own tests inject a fake.
+	newRunner func(workdir string, stdout io.Writer) (terraformRunner, error)
+}
+
+// runnerFor returns the terraformRunner to drive the stack rooted at
+// stackDir. The single injected Runner wins only for the single-stack path
+// (stackDir == Workdir); every other stack (the per-region subdirs) goes
+// through newRunner, falling back to the real execRunner.
+func (opts Options) runnerFor(stackDir string, out io.Writer) (terraformRunner, error) {
+	if opts.Runner != nil && stackDir == opts.Workdir {
+		return opts.Runner, nil
+	}
+	if opts.newRunner != nil {
+		return opts.newRunner(stackDir, out)
+	}
+	return newExecRunner(stackDir, out)
 }
 
 // Result is what the orchestrator hands back to the caller. Iterations
@@ -79,25 +109,42 @@ func Run(ctx context.Context, opts Options) (*Result, error) {
 	if opts.MaxIterations <= 0 {
 		opts.MaxIterations = defaultMaxIterations
 	}
-	progressf(opts.Stdout, "driftfix: starting drift convergence (max %d iteration(s))…\n", opts.MaxIterations)
-
 	abs, err := filepath.Abs(opts.Workdir)
 	if err != nil {
 		return nil, fmt.Errorf("abs workdir: %w", err)
 	}
 	opts.Workdir = abs
 
-	runner := opts.Runner
-	if runner == nil {
-		r, err := newExecRunner(opts.Workdir, opts.Stdout)
-		if err != nil {
-			return nil, err
-		}
-		runner = r
+	// Multi-region: genconfig emits one plannable stack per region under
+	// region-<alias>/ subdirs and leaves only a debug-concat generated.tf at
+	// the parent (no providers.tf, no .terraform). Drift-fix each region
+	// subdir independently — they share no state — then re-merge the parent
+	// concat. A single-region run (or any layout where the Workdir itself is
+	// the plannable stack) takes the historical single-stack path unchanged.
+	stacks := plannableStacks(opts.Workdir)
+	if len(stacks) == 1 && stacks[0] == opts.Workdir {
+		progressf(opts.Stdout, "driftfix: starting drift convergence (max %d iteration(s))…\n", opts.MaxIterations)
+		return runStack(ctx, opts, opts.Workdir, opts.Stdout)
+	}
+	return runMultiStack(ctx, opts, stacks)
+}
+
+// runStack runs the Stage 2c1 drift-convergence loop against a single
+// plannable stack rooted at stackDir, streaming progress to out. It is the
+// historical Run body, parameterized by stack directory so the multi-region
+// path can drive one loop per region subdir.
+func runStack(ctx context.Context, opts Options, stackDir string, out io.Writer) (*Result, error) {
+	// Route this stack's progress (and the terraform subprocess output the
+	// runner streams) to the caller-provided sink, which for the multi-region
+	// path is a per-stack writer that serializes whole lines.
+	opts.Stdout = out
+	runner, err := opts.runnerFor(stackDir, out)
+	if err != nil {
+		return nil, err
 	}
 
-	generatedPath := filepath.Join(opts.Workdir, generatedFile)
-	planPath := filepath.Join(opts.Workdir, planFile)
+	generatedPath := filepath.Join(stackDir, generatedFile)
+	planPath := filepath.Join(stackDir, planFile)
 
 	var prevDrift map[string][]string
 	// alreadyEscalated tracks (address, attr) pairs we've already moved
@@ -186,6 +233,140 @@ func Run(ctx context.Context, opts Options) (*Result, error) {
 		}
 	}
 	return nil, fmt.Errorf("driftfix: %d iterations exhausted without convergence", opts.MaxIterations)
+}
+
+// maxStackConcurrency bounds how many region subdirs drift-fix converges at
+// once. Each terraform plan is memory-heavy and hits the AWS API, but parallel
+// regions spread load across per-region/per-service rate limits (safer than
+// parallel calls within one region), so a modest pool keeps a whole-account
+// multi-region run from converging the regions strictly back-to-back without
+// risking throttling or OOM.
+const maxStackConcurrency = 6
+
+// runMultiStack converges each plannable region stack concurrently (bounded by
+// maxStackConcurrency), then re-concatenates the per-region generated.tf files
+// into the parent debug artifact so dep-chase's text-read of the parent
+// reflects the patches. Per-stack progress streams are serialized through a
+// shared mutex so concurrent regions don't interleave mid-line.
+func runMultiStack(ctx context.Context, opts Options, stacks []string) (*Result, error) {
+	limit := min(len(stacks), maxStackConcurrency)
+	progressf(opts.Stdout, "driftfix: %d regional stack(s) detected; converging each (max %d iteration(s), up to %d in parallel)…\n",
+		len(stacks), opts.MaxIterations, limit)
+
+	var mu sync.Mutex
+	sink := func() io.Writer {
+		if opts.Stdout == nil {
+			return nil
+		}
+		return &syncWriter{mu: &mu, w: opts.Stdout}
+	}
+
+	g, gctx := errgroup.WithContext(ctx)
+	g.SetLimit(limit)
+	iterations := make([]int, len(stacks))
+	for i, stack := range stacks {
+		g.Go(func() error {
+			label := filepath.Base(stack)
+			out := sink()
+			progressf(out, "driftfix: %s: starting…\n", label)
+			res, err := runStack(gctx, opts, stack, out)
+			if err != nil {
+				return fmt.Errorf("driftfix %s: %w", label, err)
+			}
+			iterations[i] = res.Iterations
+			progressf(out, "driftfix: %s: converged after %d iteration(s)\n", label, res.Iterations)
+			return nil
+		})
+	}
+	if err := g.Wait(); err != nil {
+		return nil, err
+	}
+
+	// Re-merge the per-region generated.tf into the parent debug concat so
+	// dep-chase (which reads the parent as text) and the on-disk artifact
+	// reflect the drift patches. Reuse genconfig's merge so the parent format
+	// stays identical to the one genconfig wrote on the first pass.
+	parentGenerated := filepath.Join(opts.Workdir, generatedFile)
+	if err := genconfig.WriteMergedGenerated(parentGenerated, stacks); err != nil {
+		return nil, fmt.Errorf("driftfix: re-merge generated.tf: %w", err)
+	}
+
+	maxIter := 0
+	for _, it := range iterations {
+		maxIter = max(maxIter, it)
+	}
+	progressf(opts.Stdout, "driftfix: all %d regional stack(s) converged\n", len(stacks))
+	return &Result{GeneratedPath: parentGenerated, Iterations: maxIter}, nil
+}
+
+// plannableStacks decides which directories drift-fix runs against. A stack is
+// "plannable" when it carries both providers.tf and generated.tf (genconfig
+// emits both into every single-region stack and every per-region subdir). The
+// multi-region parent carries only the debug-concat generated.tf — no
+// providers.tf — so it is NOT plannable and we descend into its
+// region-<alias>/ subdirs. Resolution order:
+//
+//  1. Workdir itself is plannable → single-stack run ([Workdir]).
+//  2. else immediate subdirs that are plannable → multi-region run.
+//  3. else fall back to [Workdir] so the historical single-stack path (and
+//     fake-runner tests that don't emit providers.tf) behave exactly as before
+//     — runStack surfaces the real terraform error if the dir isn't runnable.
+func plannableStacks(workdir string) []string {
+	if isPlannable(workdir) {
+		return []string{workdir}
+	}
+	if subs := plannableSubdirs(workdir); len(subs) > 0 {
+		return subs
+	}
+	return []string{workdir}
+}
+
+// isPlannable reports whether dir contains both providers.tf and generated.tf
+// — the marker that genconfig finished emitting a runnable stack there.
+func isPlannable(dir string) bool {
+	return fileExists(filepath.Join(dir, "providers.tf")) &&
+		fileExists(filepath.Join(dir, generatedFile))
+}
+
+// plannableSubdirs returns the immediate subdirectories of workdir that are
+// plannable stacks, sorted for deterministic ordering (matching genconfig's
+// region-sorted merge order).
+func plannableSubdirs(workdir string) []string {
+	entries, err := os.ReadDir(workdir)
+	if err != nil {
+		return nil
+	}
+	var subs []string
+	for _, e := range entries {
+		if !e.IsDir() {
+			continue
+		}
+		dir := filepath.Join(workdir, e.Name())
+		if isPlannable(dir) {
+			subs = append(subs, dir)
+		}
+	}
+	sort.Strings(subs)
+	return subs
+}
+
+func fileExists(path string) bool {
+	info, err := os.Stat(path)
+	return err == nil && !info.IsDir()
+}
+
+// syncWriter serializes whole-line writes from concurrent per-region drift
+// loops so their progress/terraform output doesn't interleave mid-line on the
+// shared sink.
+type syncWriter struct {
+	mu *sync.Mutex
+	w  io.Writer
+}
+
+func (s *syncWriter) Write(p []byte) (int, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.w.Write(p)
 }
 
 // everyDriftAttrAlreadyEscalated returns true iff every (address, attr)

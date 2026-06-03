@@ -221,7 +221,7 @@ func runMultiRegion(ctx context.Context, opts Options, groups []regionGroup) (*R
 		subdirs = append(subdirs, sub.Workdir)
 	}
 	genPath := filepath.Join(opts.Workdir, generatedFile)
-	if err := writeMergedGenerated(genPath, subdirs); err != nil {
+	if err := WriteMergedGenerated(genPath, subdirs); err != nil {
 		// Best-effort: the merged top-level file is only for the debug
 		// artifact; the real per-region configs are in the subdirs.
 		fmt.Fprintf(os.Stderr, "genconfig: WARN: merged generated.tf: %v\n", err)
@@ -229,11 +229,16 @@ func runMultiRegion(ctx context.Context, opts Options, groups []regionGroup) (*R
 	return &Result{GeneratedPath: genPath, Resources: merged}, nil
 }
 
-// writeMergedGenerated concatenates each region subdir's generated.tf into one
+// WriteMergedGenerated concatenates each region subdir's generated.tf into one
 // file (region-headed) for traceability / downstream artifact capture. A
 // region whose generated.tf is absent (e.g. all its imports were orphan-pruned)
 // is skipped. Errors only if nothing could be assembled.
-func writeMergedGenerated(destPath string, subdirs []string) error {
+//
+// Exported so the driftfix stage can re-merge the parent debug concat after it
+// patches each per-region generated.tf — keeping the parent (which dep-chase
+// reads as text) byte-consistent with the format genconfig wrote on the first
+// pass.
+func WriteMergedGenerated(destPath string, subdirs []string) error {
 	var buf bytes.Buffer
 	for _, d := range subdirs {
 		b, err := os.ReadFile(filepath.Join(d, generatedFile))
