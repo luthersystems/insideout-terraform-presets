@@ -103,6 +103,10 @@ func TestHasInsideOutImportedMarker(t *testing.T) {
 			tags: map[string]string{awsTagKeyImported: ""},
 			want: true,
 		},
+		"aws imported marker match is case-insensitive": {
+			tags: map[string]string{"insideoutimported": "true"},
+			want: true,
+		},
 		"gcp imported marker present": {
 			tags: map[string]string{gcpLabelKeyImported: "true"},
 			want: true,

@@ -166,6 +166,119 @@ func TestRunWithoutStdoutStaysSilent(t *testing.T) {
 	}
 }
 
+func TestRunRejectsUnimportableSelectionBeforePlan(t *testing.T) {
+	cases := map[string]struct {
+		identity imported.ResourceIdentity
+		wantCode string
+	}{
+		"insideout imported marker": {
+			identity: imported.ResourceIdentity{
+				Cloud:    "aws",
+				Type:     "aws_sqs_queue",
+				Address:  "aws_sqs_queue.orders",
+				ImportID: "https://sqs.us-east-1.amazonaws.com/123/orders",
+				Region:   "us-east-1",
+				Tags: map[string]string{
+					"InsideOutImported":      "true",
+					"InsideOutImportProject": "4b982735-ff89-4295-a3fa-8a75a554ffc9",
+				},
+			},
+			wantCode: imported.ReasonInsideOutImported,
+		},
+		"aws managed kms key": {
+			identity: imported.ResourceIdentity{
+				Cloud:     "aws",
+				Type:      "aws_kms_key",
+				Address:   "aws_kms_key.aws_managed",
+				ImportID:  "1234abcd-12ab-34cd-56ef-1234567890ab",
+				Region:    "us-east-1",
+				NativeIDs: map[string]string{"key_manager": "AWS"},
+			},
+			wantCode: imported.ReasonAWSManagedKMSKey,
+		},
+		"aws managed kms alias": {
+			identity: imported.ResourceIdentity{
+				Cloud:    "aws",
+				Type:     "aws_kms_alias",
+				Address:  "aws_kms_alias.aws_rds",
+				ImportID: "alias/aws/rds",
+				Region:   "us-east-1",
+			},
+			wantCode: imported.ReasonAWSManagedKMSAlias,
+		},
+		"service managed eni": {
+			identity: imported.ResourceIdentity{
+				Cloud:     "aws",
+				Type:      "aws_network_interface",
+				Address:   "aws_network_interface.nat",
+				ImportID:  "eni-0123456789abcdef0",
+				Region:    "us-east-1",
+				NativeIDs: map[string]string{"interface_type": "nat_gateway"},
+			},
+			wantCode: imported.ReasonServiceManagedENI,
+		},
+		"ephemeral log stream": {
+			identity: imported.ResourceIdentity{
+				Cloud:    "aws",
+				Type:     "aws_cloudwatch_log_stream",
+				Address:  "aws_cloudwatch_log_stream.ephemeral",
+				ImportID: "app-log-group:2026/06/03/example",
+				Region:   "us-east-1",
+			},
+			wantCode: imported.ReasonEphemeralLogStream,
+		},
+	}
+
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			dir := t.TempDir()
+			req := job.Request{
+				Version: job.Version,
+				Resources: []job.ResourceSpec{{
+					Identity: tc.identity,
+					Tier:     imported.TierImportedFlat,
+					Source:   imported.SourceImporter,
+				}},
+			}
+
+			genconfigCalled := false
+			result, err := Run(context.Background(), req, Options{
+				OutputDir: dir,
+				deps: deps{
+					runGenconfig: func(context.Context, genconfig.Options, []imported.ImportedResource) (*genconfig.Result, error) {
+						genconfigCalled = true
+						return nil, fmt.Errorf("genconfig should not run")
+					},
+					runDriftfix: fakeDriftfix,
+					runDepChase: fakeDepChase,
+					tf:          fakeTerraformRunner{},
+				},
+			})
+			if err == nil {
+				t.Fatal("Run returned nil error for unimportable resource")
+			}
+			if genconfigCalled {
+				t.Fatal("Run reached genconfig for unimportable resource")
+			}
+			if result.Status != job.StatusFailed {
+				t.Fatalf("Status = %q, want %q", result.Status, job.StatusFailed)
+			}
+			if len(result.ValidationIssues) != 1 {
+				t.Fatalf("ValidationIssues len = %d, want 1: %#v", len(result.ValidationIssues), result.ValidationIssues)
+			}
+			if result.ValidationIssues[0].Code != tc.wantCode {
+				t.Fatalf("ValidationIssues[0].Code = %q, want %q", result.ValidationIssues[0].Code, tc.wantCode)
+			}
+			if _, statErr := os.Stat(filepath.Join(dir, "reverse-result.json")); statErr != nil {
+				t.Fatalf("reverse-result.json not written: %v", statErr)
+			}
+			if _, statErr := os.Stat(filepath.Join(dir, "imported.tf")); !os.IsNotExist(statErr) {
+				t.Fatalf("imported.tf should not be written before rejection, stat err=%v", statErr)
+			}
+		})
+	}
+}
+
 func TestRunEmitsAWSAssumeRoleFromProjectBundle(t *testing.T) {
 	root := t.TempDir()
 	mustWrite(t, filepath.Join(root, "outputs", "cloud-provision.json"), []byte(`{

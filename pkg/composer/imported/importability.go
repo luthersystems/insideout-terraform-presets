@@ -149,11 +149,11 @@ func HasInsideOutImportedMarker(tags map[string]string) bool {
 	if tags == nil {
 		return false
 	}
-	if _, ok := tags[awsTagKeyImported]; ok {
-		return true
-	}
-	if _, ok := tags[gcpLabelKeyImported]; ok {
-		return true
+	for key := range tags {
+		switch strings.ToLower(strings.TrimSpace(key)) {
+		case strings.ToLower(awsTagKeyImported), gcpLabelKeyImported:
+			return true
+		}
 	}
 	return false
 }
