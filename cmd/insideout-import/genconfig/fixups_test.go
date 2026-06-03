@@ -3011,3 +3011,115 @@ func TestFixupMetricAlarm_KeepsRealAndAnomalyValues(t *testing.T) {
 		t.Errorf("evaluation_interval with sibling evaluation_criteria must be kept\n--- got ---\n%s", got)
 	}
 }
+
+// TestFixupDefaultNetworkACL_InjectsIgnoreChanges pins the core contract: an
+// imported aws_default_network_acl carrying no lifecycle block gets
+// `lifecycle { ignore_changes = [egress, ingress] }` injected. This is the
+// fix for the only non-tag drift in a real whole-account import — imported.tf
+// is emitted from scalar attributes (composer.EmitImportedTF), which drops the
+// nested egress/ingress rule blocks, so without ignore_changes terraform plans
+// to DELETE the live default allow-all rules.
+//
+// The references MUST be bare identifiers (egress, ingress), not quoted
+// strings — terraform 1.5+ deprecates the quoted form with a per-plan warning.
+// The test asserts the bare form is present AND the quoted form is absent.
+func TestFixupDefaultNetworkACL_InjectsIgnoreChanges(t *testing.T) {
+	t.Parallel()
+	in := []byte(`resource "aws_default_network_acl" "default" {
+  default_network_acl_id = "acl-0123456789abcdef0"
+  tags = {
+    "luther.provenance" = "imported"
+  }
+}
+`)
+	out, err := applyResourceTypeFixups(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(out)
+	if !strings.Contains(got, "lifecycle {") {
+		t.Errorf("lifecycle block not injected\n--- got ---\n%s", got)
+	}
+	if !regexp.MustCompile(`ignore_changes\s*=\s*\[egress,\s+ingress\]`).MatchString(got) {
+		t.Errorf("ignore_changes must be the bare-identifier list [egress, ingress]\n--- got ---\n%s", got)
+	}
+	// Bare identifiers, NOT quoted strings — terraform 1.5+ deprecates quoting.
+	if strings.Contains(got, `"egress"`) || strings.Contains(got, `"ingress"`) {
+		t.Errorf("ignore_changes refs must be bare identifiers, not quoted strings\n--- got ---\n%s", got)
+	}
+}
+
+// TestFixupDefaultNetworkACL_Idempotent pins the idempotency guard:
+// NormalizeImportedHCL re-runs the resource-type fixups over already-fixed
+// generated.tf, so a second pass — and a block that already carries a
+// lifecycle block — must NOT append a duplicate lifecycle block.
+func TestFixupDefaultNetworkACL_Idempotent(t *testing.T) {
+	t.Parallel()
+
+	// (a) Running the fixup twice over a fresh block adds exactly one
+	// lifecycle block.
+	in := []byte(`resource "aws_default_network_acl" "default" {
+  default_network_acl_id = "acl-0123456789abcdef0"
+}
+`)
+	once, err := applyResourceTypeFixups(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	twice, err := applyResourceTypeFixups(once)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n := strings.Count(string(twice), "lifecycle {"); n != 1 {
+		t.Errorf("re-running fixups must not add a second lifecycle block, got %d\n--- got ---\n%s", n, string(twice))
+	}
+
+	// (b) A block that already carries a lifecycle block is left untouched —
+	// no second lifecycle block, and the operator's existing ignore_changes
+	// set is preserved verbatim.
+	withLifecycle := []byte(`resource "aws_default_network_acl" "default" {
+  default_network_acl_id = "acl-0123456789abcdef0"
+  lifecycle {
+    ignore_changes = [tags]
+  }
+}
+`)
+	out, err := applyResourceTypeFixups(withLifecycle)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(out)
+	if n := strings.Count(got, "lifecycle {"); n != 1 {
+		t.Errorf("existing lifecycle block must not be duplicated, got %d\n--- got ---\n%s", n, got)
+	}
+	if !regexp.MustCompile(`ignore_changes\s*=\s*\[tags\]`).MatchString(got) {
+		t.Errorf("existing lifecycle.ignore_changes must be preserved\n--- got ---\n%s", got)
+	}
+}
+
+// TestFixupDefaultNetworkACL_WiredViaNormalizeImportedHCL proves the
+// resourceTypeFixups map registration works end to end through the exported
+// reverse-import entry point (NormalizeImportedHCL) — not just the internal
+// applyResourceTypeFixups — over a full resource document.
+func TestFixupDefaultNetworkACL_WiredViaNormalizeImportedHCL(t *testing.T) {
+	t.Parallel()
+	in := []byte(`resource "aws_default_network_acl" "default" {
+  default_network_acl_id = "acl-0123456789abcdef0"
+  subnet_ids             = ["subnet-aaaa", "subnet-bbbb"]
+  tags = {
+    "luther.provenance" = "imported"
+  }
+}
+`)
+	out, err := NormalizeImportedHCL(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(out)
+	if !strings.Contains(got, "lifecycle {") {
+		t.Errorf("NormalizeImportedHCL did not inject lifecycle block — map registration not wired\n--- got ---\n%s", got)
+	}
+	if !regexp.MustCompile(`ignore_changes\s*=\s*\[egress,\s+ingress\]`).MatchString(got) {
+		t.Errorf("ignore_changes = [egress, ingress] missing after NormalizeImportedHCL\n--- got ---\n%s", got)
+	}
+}

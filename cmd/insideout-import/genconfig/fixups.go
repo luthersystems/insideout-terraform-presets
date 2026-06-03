@@ -110,7 +110,50 @@ var resourceTypeFixups = map[string]func(*hclwrite.Block){
 	"aws_iam_role":                fixupIAMRoleNamePrefixConflict,
 	"aws_instance":                fixupInstanceProviderQuirks,
 	"aws_cloudwatch_metric_alarm": fixupMetricAlarmProviderQuirks,
+	"aws_default_network_acl":     fixupDefaultNetworkACLIgnoreRules,
 	"google_compute_firewall":     fixupComputeFirewallEmptySourceTargetArrays,
+}
+
+// fixupDefaultNetworkACLIgnoreRules pins lifecycle.ignore_changes =
+// [egress, ingress] on an imported aws_default_network_acl so the
+// first-import plan is clean tag-only and a real apply can never strip the
+// live default NACL's allow-all rules.
+//
+// Why this is needed: the FINAL imported.tf is emitted from each resource's
+// extracted SCALAR attributes (composer.EmitImportedTF). That extraction does
+// not capture nested HCL blocks, so an aws_default_network_acl loses its
+// `egress`/`ingress` rule blocks (the live default NACL carries allow-all
+// rule_no 100 in each direction). With egress/ingress absent from imported.tf,
+// `terraform plan` sees the live rules as drift it must remove (before:
+// [rule 100] -> after: []) — the only non-tag drift in a real whole-account
+// import, and unsafe on apply (it would delete the default NACL's allow-all
+// rules). genconfig's scratch generated.tf captures the blocks correctly via
+// generate-config-out; only the emitted imported.tf drops them, but both run
+// through this shared fixup so the result is consistent.
+//
+// Rather than try to reconstruct the dropped rule blocks, we ADOPT the default
+// NACL for provenance tagging WITHOUT managing (or destroying) its rules:
+// ignore_changes = [egress, ingress] tells terraform to leave the live rules
+// untouched. The first-import validator then sees only tag/label repair, which
+// it allows ("path egress/ingress not in allowed set" no longer fires because
+// those paths produce no diff).
+//
+// ignore_changes carries BARE attribute references (identifiers egress,
+// ingress), not quoted strings — terraform 1.5+ deprecates the quoted form.
+// The shared ignoreChangesTokens helper emits exactly that traversal form.
+//
+// Idempotent: if the block already carries a lifecycle block we leave it alone
+// (NormalizeImportedHCL re-runs the fixups over already-fixed generated.tf, so
+// a second pass must not append a duplicate lifecycle block).
+func fixupDefaultNetworkACLIgnoreRules(blk *hclwrite.Block) {
+	body := blk.Body()
+	for _, sub := range body.Blocks() {
+		if sub.Type() == "lifecycle" {
+			return
+		}
+	}
+	lc := body.AppendNewBlock("lifecycle", nil)
+	lc.Body().SetAttributeRaw("ignore_changes", ignoreChangesTokens([]string{"egress", "ingress"}))
 }
 
 // fixupCognitoVerificationMessageConflict drops Cognito's legacy top-level
