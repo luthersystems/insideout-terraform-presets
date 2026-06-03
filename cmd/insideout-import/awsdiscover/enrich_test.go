@@ -609,6 +609,18 @@ func TestIsThrottleError(t *testing.T) {
 		"a non-throttle handler failure must not be misclassified as a throttle")
 }
 
+func TestRetryThrottled_ContextCancelPropagates(t *testing.T) {
+	t.Parallel()
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	err := retryThrottled(ctx, 2, time.Hour, time.Hour, func() error {
+		return &smithy.GenericAPIError{Code: "ThrottlingException"}
+	})
+	assert.ErrorIs(t, err, context.Canceled,
+		"parent cancellation must not be returned as the prior throttle error; callers use isThrottleError(err) to soft-skip")
+}
+
 // filterEvents returns the subset of recorded events whose Kind matches
 // kind. Mirrors gcpdiscover.filterEvents — kept per-package so each
 // cloud's test suite is self-contained.

@@ -420,7 +420,7 @@ func (d *cloudControlDiscoverer) Discover(ctx context.Context, args DiscoverArgs
 							// other regions/types continue independently.
 							if isThrottleError(err) {
 								args.Emitter.ServiceWarn(d.cfg.Slug, region,
-									fmt.Sprintf("ListResources %s (region=%s): still throttled after %d retries — skipping the rest of this type's listing in this region (partial results): %v",
+									fmt.Sprintf("ListResources %s (region=%s): still throttled after %d attempts — skipping the rest of this type's listing in this region (partial results): %v",
 										d.cfg.CloudFormationType, region, listRetryMaxAttempts, err))
 								break listLoop
 							}

@@ -287,7 +287,8 @@ var ErrEnrichClientUnavailable = errors.New("enrich: required SDK client unavail
 // 429 (Too Many Requests) or 503 (Slow Down / Service Unavailable) as a
 // throttle via *smithyhttp.ResponseError.
 //
-// nil err returns false; a non-AWS error returns false.
+// nil err returns false; a non-AWS error returns false unless it carries a
+// throttle-shaped message.
 func isThrottleError(err error) bool {
 	if err == nil {
 		return false
@@ -362,7 +363,7 @@ func enrichWithRetry(ctx context.Context, fn func() error) error {
 // isThrottleError), retries it under an exponential backoff with jitter — up
 // to maxAttempts total attempts. A nil result, a non-throttle error, or
 // exhausting the attempt budget returns immediately. The backoff sleep is
-// select-cancellable on ctx.Done(); on cancel the last error is returned.
+// select-cancellable on ctx.Done(); on cancel ctx.Err() is returned.
 //
 // Shared by the enrich backstop (enrichWithRetry) and the discovery
 // ListResources retry (cloudControlDiscoverer.Discover) so both throttle-
@@ -386,7 +387,7 @@ func retryThrottled(ctx context.Context, maxAttempts int, baseDelay, maxDelay ti
 		select {
 		case <-ctx.Done():
 			t.Stop()
-			return err
+			return ctx.Err()
 		case <-t.C:
 		}
 		if backoff < maxDelay {
