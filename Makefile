@@ -85,6 +85,10 @@ test-roundtrip: ## Live AWS discover->emit->plan round-trip for the import flow 
 test-golden-stack: ## Replay genconfig cleanup over captured real-world stacks and assert `terraform validate` passes (#708). Needs terraform + the AWS provider; NO AWS creds.
 	RUN_GOLDEN_HCL=1 $(GO) test -run TestGoldenStackValidates ./cmd/insideout-import/genconfig/... -v -count=1 -timeout 10m
 
+.PHONY: reverse-e2e
+reverse-e2e: ## Live whole-account reverse-import e2e: discover->genconfig->driftfix->depchase->plan via the prod engine, asserting a clean tag-only plan. Needs real AWS creds + terraform + an offline provider mirror. REVERSE_E2E_REGIONS=all for multi-region; see scripts/reverse-e2e.sh header for knobs.
+	./scripts/reverse-e2e.sh
+
 .PHONY: go-fmt-check
 go-fmt-check: ## Fail if any tracked Go file is not gofmt-clean (CI gate, #647).
 	@unformatted=$$(gofmt -l $$(git ls-files '*.go')); \
