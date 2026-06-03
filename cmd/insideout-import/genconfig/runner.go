@@ -14,6 +14,14 @@ import (
 // Tests inject a fakeRunner; production uses execRunner backed by a real
 // terraform binary on PATH.
 type terraformRunner interface {
+	// Version runs `terraform version`. genconfig calls it as a one-time,
+	// serial warm-up before the multi-region fan-out: the first `terraform`
+	// invocation in an environment whose pinned version isn't pre-baked makes
+	// tfenv auto-install it (download → unzip → chmod +x → exec), which is NOT
+	// concurrency-safe — N regions racing that first install hit
+	// `Permission denied` / exit 126 on the freshly written, not-yet-executable
+	// binary (#724). Running version once forces that install serially.
+	Version(ctx context.Context) error
 	Init(ctx context.Context) error
 	// PlanGenerate runs `terraform plan -generate-config-out=<path>` and
 	// returns whether the plan has changes (which it always does for a fresh
@@ -61,6 +69,16 @@ func newExecRunner(workdir string, stream io.Writer) (*execRunner, error) {
 		tf.SetStderr(stream)
 	}
 	return &execRunner{tf: tf}, nil
+}
+
+// Version runs `terraform version`, discarding the parsed result — genconfig
+// only needs the side effect: forcing the binary to actually execute so tfenv
+// resolves and installs the pinned version. skipCache=true guarantees the
+// binary runs (rather than returning a cached value) so a cold tfenv version
+// is installed here, serially, before the parallel Init() fan-out.
+func (r *execRunner) Version(ctx context.Context) error {
+	_, _, err := r.tf.Version(ctx, true)
+	return err
 }
 
 func (r *execRunner) Init(ctx context.Context) error {
