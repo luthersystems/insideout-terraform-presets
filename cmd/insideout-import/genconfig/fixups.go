@@ -142,19 +142,28 @@ var resourceTypeFixups = map[string]func(*hclwrite.Block){
 // ingress), not quoted strings — terraform 1.5+ deprecates the quoted form.
 // The shared ignoreChangesTokens helper emits exactly that traversal form.
 //
-// Idempotent: if the block already carries a lifecycle block we leave it alone
-// (NormalizeImportedHCL re-runs the fixups over already-fixed generated.tf, so
-// a second pass must not append a duplicate lifecycle block).
+// Idempotent and merge-safe: if the block already carries a lifecycle block we
+// MERGE egress/ingress into its existing ignore_changes rather than skip — an
+// existing `ignore_changes = [tags]` becomes `[tags, egress, ingress]`, so the
+// rule protection is never dropped just because cleanGenerated (or a prior
+// fixup) already emitted a lifecycle block. mergeIgnoreChanges de-dupes, so a
+// NormalizeImportedHCL re-run over already-fixed generated.tf is stable.
 func fixupDefaultNetworkACLIgnoreRules(blk *hclwrite.Block) {
 	body := blk.Body()
 	for _, sub := range body.Blocks() {
 		if sub.Type() == "lifecycle" {
+			mergeIgnoreChanges(sub, defaultNACLIgnoreChanges)
 			return
 		}
 	}
 	lc := body.AppendNewBlock("lifecycle", nil)
-	lc.Body().SetAttributeRaw("ignore_changes", ignoreChangesTokens([]string{"egress", "ingress"}))
+	lc.Body().SetAttributeRaw("ignore_changes", ignoreChangesTokens(defaultNACLIgnoreChanges))
 }
+
+// defaultNACLIgnoreChanges are the nested rule blocks dropped by scalar-only
+// imported.tf emission; pinned under ignore_changes so a default NACL is
+// adopted for tagging without managing (or destroying) its live rules.
+var defaultNACLIgnoreChanges = []string{"egress", "ingress"}
 
 // fixupCognitoVerificationMessageConflict drops Cognito's legacy top-level
 // email verification fields when generate-config-out also emits the newer

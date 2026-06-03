@@ -3074,9 +3074,12 @@ func TestFixupDefaultNetworkACL_Idempotent(t *testing.T) {
 		t.Errorf("re-running fixups must not add a second lifecycle block, got %d\n--- got ---\n%s", n, string(twice))
 	}
 
-	// (b) A block that already carries a lifecycle block is left untouched —
-	// no second lifecycle block, and the operator's existing ignore_changes
-	// set is preserved verbatim.
+	// (b) A block that already carries a lifecycle block (e.g. cleanGenerated
+	// emitted `ignore_changes = [tags]`) MERGES egress/ingress into the
+	// existing set rather than skipping — no second lifecycle block, the
+	// operator's existing entries are preserved, AND the rule protection is
+	// still applied. Skipping here would leave the default NACL's egress/ingress
+	// unprotected (the bug this guards against).
 	withLifecycle := []byte(`resource "aws_default_network_acl" "default" {
   default_network_acl_id = "acl-0123456789abcdef0"
   lifecycle {
@@ -3092,8 +3095,19 @@ func TestFixupDefaultNetworkACL_Idempotent(t *testing.T) {
 	if n := strings.Count(got, "lifecycle {"); n != 1 {
 		t.Errorf("existing lifecycle block must not be duplicated, got %d\n--- got ---\n%s", n, got)
 	}
-	if !regexp.MustCompile(`ignore_changes\s*=\s*\[tags\]`).MatchString(got) {
-		t.Errorf("existing lifecycle.ignore_changes must be preserved\n--- got ---\n%s", got)
+	// Existing entry preserved AND egress/ingress merged in: [tags, egress, ingress].
+	if !regexp.MustCompile(`ignore_changes\s*=\s*\[tags,\s+egress,\s+ingress\]`).MatchString(got) {
+		t.Errorf("existing ignore_changes=[tags] must merge to [tags, egress, ingress]\n--- got ---\n%s", got)
+	}
+
+	// (c) Re-running over the merged output is stable — no duplicate egress/
+	// ingress entries creep in.
+	stable, err := applyResourceTypeFixups(out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !regexp.MustCompile(`ignore_changes\s*=\s*\[tags,\s+egress,\s+ingress\]`).MatchString(string(stable)) {
+		t.Errorf("re-run must be idempotent (no duplicate egress/ingress)\n--- got ---\n%s", string(stable))
 	}
 }
 

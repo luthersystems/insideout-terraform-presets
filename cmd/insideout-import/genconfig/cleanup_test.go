@@ -88,11 +88,12 @@ resource "aws_sqs_queue" "bravo" {
 }
 
 // TestCleanGenerated_MergesIntoExistingLifecycle pins that when an input
-// block already has a `lifecycle` sub-block, cleanup overwrites
-// ignore_changes with the union of declared-Sensitive attributes. The
-// current implementation clobbers (intentional — flagged in comment) but
-// the assertion focuses on the operator-visible contract: ignore_changes
-// must list at least every Sensitive attr present in the schema.
+// block already has a `lifecycle` sub-block, cleanup UNIONS the declared-
+// Sensitive attributes into its ignore_changes — preserving the operator's
+// existing entries rather than clobbering them. The fixture uses a bare-
+// identifier entry (`other`) because that is the form this package emits and
+// the form existingIgnoreChangeNames recognizes; the assertion proves both the
+// existing entry and the Sensitive attr survive, in order.
 func TestCleanGenerated_MergesIntoExistingLifecycle(t *testing.T) {
 	t.Parallel()
 	in := []byte(`resource "aws_secretsmanager_secret_version" "x" {
@@ -100,7 +101,7 @@ func TestCleanGenerated_MergesIntoExistingLifecycle(t *testing.T) {
   secret_string = "actual-secret"
 
   lifecycle {
-    ignore_changes = ["other"]
+    ignore_changes = [other]
   }
 }
 `)
@@ -117,8 +118,10 @@ func TestCleanGenerated_MergesIntoExistingLifecycle(t *testing.T) {
 	if strings.Count(got, "lifecycle {") != 1 {
 		t.Errorf("expected exactly 1 lifecycle block, got %d:\n%s", strings.Count(got, "lifecycle {"), got)
 	}
-	if !strings.Contains(got, "secret_string") {
-		t.Errorf("ignore_changes must mention Sensitive attr `secret_string`\n--- got ---\n%s", got)
+	// The existing entry is preserved AND the Sensitive attr is unioned in,
+	// in order: [other, secret_string]. (A clobbering impl would drop `other`.)
+	if !regexp.MustCompile(`ignore_changes\s*=\s*\[other,\s+secret_string\]`).MatchString(got) {
+		t.Errorf("ignore_changes must union existing `other` with Sensitive `secret_string` -> [other, secret_string]\n--- got ---\n%s", got)
 	}
 }
 
