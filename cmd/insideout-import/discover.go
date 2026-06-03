@@ -62,25 +62,13 @@ var (
 	discoverTimeoutOverall = 25 * time.Minute
 )
 
-// discoverRetryMaxAttempts raises the SDK retryer's attempt budget above
-// the v2 default of 3 so transient Throttling errors during a multi-
-// thousand-resource discover run don't abort mid-batch. 8 covers the
-// empirical worst case observed in audit data: a saturated DynamoDB
-// ListTagsOfResource fanout on a few-hundred-table account. With v2's
-// adaptive backoff (jitter + exponential) attempt 8 lands ~30s after
-// attempt 1, which matches the per-call budget the operator-facing
-// stage budgets above can absorb.
-const discoverRetryMaxAttempts = 8
-
-// discoverRetryMode pins the SDK retryer to v2's adaptive mode (#632).
-// The default `standard` mode uses exponential backoff + jitter, which
-// reacts to ThrottlingException after the fact. Adaptive mode adds a
-// client-side token bucket that *proactively* slows the send rate when
-// the server signals throttling, which is the right shape for the
-// parallel DiscoverTypes walk (#629): per-service goroutines share the
-// same per-region CloudControl rate budget, so a feedback signal from
-// one goroutine's 400 should slow the others' first calls too.
-const discoverRetryMode = aws.RetryModeAdaptive
+// discoverRetryMaxAttempts / discoverRetryMode alias the canonical
+// adaptive-retry tuning, now defined in the importable awsdiscover package
+// (awsdiscover.RetryMaxAttempts / awsdiscover.RetryMode) so the CLI and
+// downstream callers (reliable's reverse-import discovery) share one source
+// of truth. See awsdiscover/retry_config.go for the full rationale (#632).
+const discoverRetryMaxAttempts = awsdiscover.RetryMaxAttempts
+const discoverRetryMode = awsdiscover.RetryMode
 
 // discoveryAggregator is the small subset of awsdiscover.AWSDiscoverer
 // (and gcpdiscover.GCPDiscoverer) the orchestrator needs. Defining the
