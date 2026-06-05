@@ -8,6 +8,7 @@ CLI for bringing existing cloud resources under InsideOut management.
 |---|---|---|
 | `adopt` | implemented | Emit `import {}` blocks against an *already-known* preset stack. |
 | `discover` | Stage 2d (AWS + GCP, manifest + HCL + drift fix + dep chase) | Discover existing cloud resources, emit `imported.json`, generate validated HCL bodies, loop `terraform plan` patches until plan-clean, then walk the cleaned generated.tf for ARN literals pointing at resources outside the import set and pull them in until the references converge. Stage 2c4 adds the LocalStack zero-drift CI gate (AWS); Stage 2d (#264) adds GCP via Cloud Asset Inventory. See #189 for the chain. |
+| `bench` | implemented (AWS) | Internal perf tool: time the discovery scan (`Provider.Discover` = `DiscoverTypes`, then `Provider.EnrichAttributes` = per-resource describe) at a chosen enrich concurrency against a real AWS account, to validate and tune the `EnrichOpts.Concurrency` knob (#731). Read-only; writes no artifacts. |
 
 ## `adopt`
 
@@ -185,6 +186,26 @@ The smoke applies a 5-resource seed stack, runs `discover`, hydrates state via `
 - **No GCP self-link cross-reference rewriting.** `applyCrossRefs` is AWS-flavored (ARN/URL pattern matching). On `--provider gcp`, the rewriter is a no-op — literal self-links stay as quoted strings instead of becoming `google_*.<addr>.id` references. Filed as a follow-up; not a customer blocker because Cloud Asset's eventual consistency means cross-resource references are rarely drift-clean on first pass anyway.
 - **No GCP self-link dep-chase.** The dep-chase loop's literal-finder only matches `arn:` shapes. GCP self-links pass through; if a generated.tf references a resource not in the import set, it shows up as drift rather than auto-pulled. Filed as a follow-up.
 - **No automated GCP CI gate.** Cloud Asset Inventory has no emulator (#264 documents the gap). Smoke is opt-in via `tests/gcp-discover-smoke.sh`.
+
+## `bench`
+
+Internal benchmarking tool. Runs the exact discovery-scan path reliable's reverse-import "Scan" step runs — `Provider.Discover` (= `DiscoverTypes`, list identities) followed by `Provider.EnrichAttributes` (= per-resource describe, the slow part) — and times each phase separately so the `EnrichOpts.Concurrency` knob (#731) can be validated and tuned against a real AWS account (the test `cust3` account).
+
+```bash
+insideout-import bench --provider aws --regions us-east-1 -p 16
+```
+
+`-p` / `--enrich-concurrency` is the enrich fan-out passed straight to `imp.EnrichOpts{Concurrency: p}` (0 = package default). `--max-concurrency` mirrors `discover` for the discover phase. AWS config comes from ambient env credentials (same construction as `discover`); `--aws-endpoint-url` retargets the SDK at LocalStack. GCP is not yet supported (needs service-account credential plumbing).
+
+It is read-only — the only cloud calls are the List/Describe round-trips the scan already makes; no `imported.json`, HCL, or `terraform`. Output is a compact, greppable summary (one line per phase + a totals line):
+
+```
+bench: phase=discover concurrency=10 resources=512 types=23 duration=18.4s
+bench: phase=enrich concurrency=16 resources=512 enriched=500 errors=12 duration=92.3s
+bench: total provider=aws discover_concurrency=10 enrich_concurrency=16 resources=512 duration=110.7s
+```
+
+`enriched` / `errors` come from the per-resource `Identity.EnrichmentStatus` stamps; a joined enrich error is treated as data (per-resource describe failures), not a fatal — exit 0 unless inputs are bad, AWS config / STS fails, or the discover phase errors.
 
 ## Development
 
