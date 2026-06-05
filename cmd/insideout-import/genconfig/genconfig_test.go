@@ -2,6 +2,7 @@ package genconfig
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"os"
@@ -839,6 +840,108 @@ func TestRun_MultiRegion(t *testing.T) {
 	// A combined generated.tf is assembled at the top level for the artifact.
 	if _, err := os.Stat(res.GeneratedPath); err != nil {
 		t.Errorf("merged top-level generated.tf missing: %v", err)
+	}
+}
+
+// orphanProneRegionRunner is regionAwareRunner that DROPS the body for any
+// import whose target address is in the orphan set — modeling a resource type
+// `terraform plan -generate-config-out` cannot render. The orphan-prune
+// post-pass then drops the import and records it in the region's
+// imports-skipped.json.
+type orphanProneRegionRunner struct {
+	fakeRunner
+	orphans map[string]struct{}
+}
+
+func (r *orphanProneRegionRunner) PlanGenerate(_ context.Context, generatedPath string) (bool, error) {
+	r.calls = append(r.calls, "plan")
+	r.planCalled++
+	r.generatedPath = generatedPath
+	importsTF, err := os.ReadFile(filepath.Join(filepath.Dir(generatedPath), importsFile))
+	if err != nil {
+		return false, err
+	}
+	var body strings.Builder
+	for _, m := range regexp.MustCompile(`to\s*=\s*aws_sqs_queue\.(\w+)`).FindAllStringSubmatch(string(importsTF), -1) {
+		if _, orphan := r.orphans["aws_sqs_queue."+m[1]]; orphan {
+			continue // no body → orphan-pruned
+		}
+		body.WriteString("resource \"aws_sqs_queue\" \"" + m[1] + "\" {\n  name = \"" + m[1] + "\"\n}\n")
+	}
+	if err := os.WriteFile(generatedPath, []byte(body.String()), 0o644); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+// TestRun_MultiRegion_MergesOrphanSkipManifest pins the P2 fix (#732): when
+// orphan imports are pruned in MORE THAN ONE region, the per-region
+// region-*/imports-skipped.json manifests must be merged into a single
+// top-level imports-skipped.json so the reverse-import engine's
+// addSkipManifestArtifact (which only inspects the top-level workdir) can
+// surface them. Result.Skipped must likewise carry every region's orphan.
+func TestRun_MultiRegion_MergesOrphanSkipManifest(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	orphans := map[string]struct{}{
+		"aws_sqs_queue.east_orphan": {},
+		"aws_sqs_queue.west_orphan": {},
+	}
+	res, err := Run(context.Background(), Options{
+		Workdir: dir,
+		Region:  "us-east-1",
+		newRunner: func(_ string, _ io.Writer) (terraformRunner, error) {
+			return &orphanProneRegionRunner{
+				fakeRunner: fakeRunner{schemas: minimalAWSSchema()},
+				orphans:    orphans,
+			}, nil
+		},
+	}, []imported.ImportedResource{
+		{Identity: imported.ResourceIdentity{Type: "aws_sqs_queue", Address: "aws_sqs_queue.east_keep", Region: "us-east-1", ImportID: "e-keep"}},
+		{Identity: imported.ResourceIdentity{Type: "aws_sqs_queue", Address: "aws_sqs_queue.east_orphan", Region: "us-east-1", ImportID: "e-orphan"}},
+		{Identity: imported.ResourceIdentity{Type: "aws_sqs_queue", Address: "aws_sqs_queue.west_keep", Region: "us-west-2", ImportID: "w-keep"}},
+		{Identity: imported.ResourceIdentity{Type: "aws_sqs_queue", Address: "aws_sqs_queue.west_orphan", Region: "us-west-2", ImportID: "w-orphan"}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Two resources survive (one per region); two orphans were pruned.
+	if len(res.Resources) != 2 {
+		t.Fatalf("want 2 surviving resources, got %d", len(res.Resources))
+	}
+	if len(res.Skipped) != 2 {
+		t.Fatalf("want 2 merged orphan skips in Result.Skipped, got %d: %#v", len(res.Skipped), res.Skipped)
+	}
+	gotSkipped := map[string]struct{}{}
+	for _, s := range res.Skipped {
+		gotSkipped[s.Address] = struct{}{}
+	}
+	for addr := range orphans {
+		if _, ok := gotSkipped[addr]; !ok {
+			t.Errorf("Result.Skipped missing orphan %q: %#v", addr, res.Skipped)
+		}
+	}
+	// The merged top-level manifest must exist and carry BOTH regions' orphans —
+	// this is the file addSkipManifestArtifact reads.
+	raw, err := os.ReadFile(filepath.Join(dir, orphanImportsFile))
+	if err != nil {
+		t.Fatalf("top-level merged imports-skipped.json missing: %v", err)
+	}
+	var wrapper orphanImportsWrapper
+	if err := json.Unmarshal(raw, &wrapper); err != nil {
+		t.Fatalf("decode merged imports-skipped.json: %v", err)
+	}
+	if len(wrapper.Imports) != 2 {
+		t.Fatalf("merged manifest want 2 orphans, got %d: %#v", len(wrapper.Imports), wrapper.Imports)
+	}
+	gotManifest := map[string]struct{}{}
+	for _, o := range wrapper.Imports {
+		gotManifest[o.Address] = struct{}{}
+	}
+	for addr := range orphans {
+		if _, ok := gotManifest[addr]; !ok {
+			t.Errorf("merged manifest missing orphan %q: %#v", addr, wrapper.Imports)
+		}
 	}
 }
 

@@ -122,6 +122,18 @@ func providerOrDefault(p string) string {
 type Result struct {
 	GeneratedPath string
 	Resources     []imported.ImportedResource
+
+	// Skipped is every import block dropped during config generation
+	// because Terraform could not render a usable body for it
+	// (un-importable AWS/service-managed resources, orphan imports with
+	// no generated config). Each entry carries the dropped Terraform
+	// address, its import ID, and a reason code. Mirrors the per-region
+	// imports-skipped.json manifest(s); the reverse-import engine folds
+	// these into Result.Resources[] as ResourceStatusSkipped so the
+	// dropped identities are reported rather than silently disappearing
+	// from the import set (#732). Never nil-vs-empty sensitive — callers
+	// range over it.
+	Skipped []OrphanImport
 }
 
 // Run is the Stage 2b pipeline:
@@ -286,6 +298,7 @@ func runMultiRegion(ctx context.Context, opts Options, groups []regionGroup) (*R
 	// regardless of which region finishes first.
 	type regionOut struct {
 		resources []imported.ImportedResource
+		skipped   []OrphanImport
 		subdir    string
 	}
 	outs := make([]regionOut, len(groups))
@@ -306,7 +319,7 @@ func runMultiRegion(ctx context.Context, opts Options, groups []regionGroup) (*R
 			if err != nil {
 				return fmt.Errorf("genconfig region %s: %w", grp.region, err)
 			}
-			outs[i] = regionOut{resources: res.Resources, subdir: sub.Workdir}
+			outs[i] = regionOut{resources: res.Resources, skipped: res.Skipped, subdir: sub.Workdir}
 			return nil
 		})
 	}
@@ -315,8 +328,10 @@ func runMultiRegion(ctx context.Context, opts Options, groups []regionGroup) (*R
 	}
 
 	merged := make([]imported.ImportedResource, 0)
+	var mergedSkipped []OrphanImport
 	subdirs := make([]string, 0, len(groups))
 	for _, o := range outs {
+		mergedSkipped = append(mergedSkipped, o.skipped...)
 		merged = append(merged, o.resources...)
 		subdirs = append(subdirs, o.subdir)
 	}
@@ -326,7 +341,17 @@ func runMultiRegion(ctx context.Context, opts Options, groups []regionGroup) (*R
 		// artifact; the real per-region configs are in the subdirs.
 		fmt.Fprintf(os.Stderr, "genconfig: WARN: merged generated.tf: %v\n", err)
 	}
-	return &Result{GeneratedPath: genPath, Resources: merged}, nil
+	// Surface the merged orphan-skip manifest at the top level. Each region
+	// pass writes its own region-*/imports-skipped.json, but downstream
+	// consumers (reverseimport's addSkipManifestArtifact) only look at the
+	// top-level workdir — without this merged copy, multi-region orphan skips
+	// never reach the artifact set (#732).
+	if len(mergedSkipped) > 0 {
+		if _, werr := writeOrphanImportsManifest(opts.Workdir, mergedSkipped); werr != nil {
+			fmt.Fprintf(os.Stderr, "genconfig: WARN: merged imports-skipped.json: %v\n", werr)
+		}
+	}
+	return &Result{GeneratedPath: genPath, Resources: merged, Skipped: mergedSkipped}, nil
 }
 
 // syncWriter serializes whole-line writes from concurrent per-region passes so
@@ -431,11 +456,11 @@ func runSingleRegion(ctx context.Context, opts Options, resources []imported.Imp
 		progressf(opts.Stdout, "genconfig: %s: generate-config-out wrote partial config after an error; continuing cleanup…\n", scope)
 	}
 
-	out, err := cleanValidateExtract(ctx, opts, runner, provider, scope, generatedPath, resources)
+	out, skipped, err := cleanValidateExtract(ctx, opts, runner, provider, scope, generatedPath, resources)
 	if err != nil {
 		return nil, err
 	}
-	return &Result{GeneratedPath: generatedPath, Resources: out}, nil
+	return &Result{GeneratedPath: generatedPath, Resources: out, Skipped: skipped}, nil
 }
 
 // cleanValidateExtract runs the post-generate-config-out half of the
@@ -450,23 +475,23 @@ func runSingleRegion(ctx context.Context, opts Options, resources []imported.Imp
 //
 // opts.Workdir must already contain imports.tf + providers.tf and an
 // initialized .terraform (the caller runs terraform init before calling).
-func cleanValidateExtract(ctx context.Context, opts Options, runner terraformRunner, provider, scope, generatedPath string, resources []imported.ImportedResource) ([]imported.ImportedResource, error) {
+func cleanValidateExtract(ctx context.Context, opts Options, runner terraformRunner, provider, scope, generatedPath string, resources []imported.ImportedResource) ([]imported.ImportedResource, []OrphanImport, error) {
 	progressf(opts.Stdout, "genconfig: %s: loading provider schema…\n", scope)
 	schemas, err := runner.ProvidersSchema(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("terraform providers schema: %w", err)
+		return nil, nil, fmt.Errorf("terraform providers schema: %w", err)
 	}
 
 	progressf(opts.Stdout, "genconfig: %s: reading generated terraform config…\n", scope)
 	raw, err := os.ReadFile(generatedPath)
 	if err != nil {
-		return nil, fmt.Errorf("read generated.tf: %w", err)
+		return nil, nil, fmt.Errorf("read generated.tf: %w", err)
 	}
 
 	progressf(opts.Stdout, "genconfig: %s: cleaning generated terraform config…\n", scope)
 	cleaned, err := cleanGenerated(raw, schemas, provider)
 	if err != nil {
-		return nil, fmt.Errorf("schema cleanup: %w", err)
+		return nil, nil, fmt.Errorf("schema cleanup: %w", err)
 	}
 
 	// Per-resource-type fixups for cases the schema alone can't describe
@@ -476,7 +501,7 @@ func cleanValidateExtract(ctx context.Context, opts Options, runner terraformRun
 	progressf(opts.Stdout, "genconfig: %s: applying resource type fixups…\n", scope)
 	fixed, err := applyResourceTypeFixupsReport(cleaned)
 	if err != nil {
-		return nil, fmt.Errorf("resource-type fixups: %w", err)
+		return nil, nil, fmt.Errorf("resource-type fixups: %w", err)
 	}
 	cleaned = fixed.HCL
 	for _, a := range fixed.Applied {
@@ -495,7 +520,7 @@ func cleanValidateExtract(ctx context.Context, opts Options, runner terraformRun
 	progressf(opts.Stdout, "genconfig: %s: pruning un-importable resources…\n", scope)
 	unimp, err := pruneUnimportable(opts.Workdir, cleaned)
 	if err != nil {
-		return nil, fmt.Errorf("un-importable prune: %w", err)
+		return nil, nil, fmt.Errorf("un-importable prune: %w", err)
 	}
 	cleaned = unimp.HCL
 	for _, s := range unimp.Skipped {
@@ -515,7 +540,7 @@ func cleanValidateExtract(ctx context.Context, opts Options, runner terraformRun
 	progressf(opts.Stdout, "genconfig: %s: pruning orphan imports…\n", scope)
 	orphans, err := pruneOrphanImports(opts.Workdir, cleaned)
 	if err != nil {
-		return nil, fmt.Errorf("orphan-import safety net: %w", err)
+		return nil, nil, fmt.Errorf("orphan-import safety net: %w", err)
 	}
 	for _, s := range orphans {
 		fmt.Fprintf(os.Stderr, "genconfig: WARN: dropped orphan import %s (id=%q, reason=%s) — terraform plan -generate-config-out produced no resource body\n",
@@ -539,25 +564,25 @@ func cleanValidateExtract(ctx context.Context, opts Options, runner terraformRun
 	progressf(opts.Stdout, "genconfig: %s: rewriting in-batch references…\n", scope)
 	cleaned, err = applyCrossRefs(cleaned, resources, provider)
 	if err != nil {
-		return nil, fmt.Errorf("cross-ref: %w", err)
+		return nil, nil, fmt.Errorf("cross-ref: %w", err)
 	}
 
 	if err := os.WriteFile(generatedPath, cleaned, 0o644); err != nil {
-		return nil, fmt.Errorf("rewrite generated.tf: %w", err)
+		return nil, nil, fmt.Errorf("rewrite generated.tf: %w", err)
 	}
 
 	progressf(opts.Stdout, "genconfig: %s: validating generated terraform config…\n", scope)
 	if err := runner.Validate(ctx); err != nil {
-		return nil, fmt.Errorf("terraform validate: %w", err)
+		return nil, nil, fmt.Errorf("terraform validate: %w", err)
 	}
 
 	progressf(opts.Stdout, "genconfig: %s: extracting generated attributes…\n", scope)
 	out, err := extractAttributes(cleaned, resources)
 	if err != nil {
-		return nil, fmt.Errorf("extract attributes: %w", err)
+		return nil, nil, fmt.Errorf("extract attributes: %w", err)
 	}
 	progressf(opts.Stdout, "genconfig: %s: complete (%d resource(s) retained)\n", scope, len(out))
-	return out, nil
+	return out, skipped, nil
 }
 
 func progressScope(opts Options) string {
