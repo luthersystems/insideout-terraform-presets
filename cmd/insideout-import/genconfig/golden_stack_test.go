@@ -70,7 +70,7 @@ func TestGoldenStackValidates(t *testing.T) {
 	}
 
 	opts := Options{Workdir: work, Region: "us-east-1", Provider: ProviderAWS}
-	out, err := cleanValidateExtract(ctx, opts, runner, ProviderAWS, "golden:dario",
+	out, _, err := cleanValidateExtract(ctx, opts, runner, ProviderAWS, "golden:dario",
 		filepath.Join(work, generatedFile), resources)
 	if err != nil {
 		t.Fatalf("golden Dario stack failed the cleanup+validate pipeline — this is the #708 regression:\n%v", err)

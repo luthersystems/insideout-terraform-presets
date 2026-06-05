@@ -9,6 +9,8 @@ import (
 	"strings"
 	"time"
 
+	tfjson "github.com/hashicorp/terraform-json"
+
 	"github.com/luthersystems/insideout-terraform-presets/cmd/insideout-import/depchase"
 	"github.com/luthersystems/insideout-terraform-presets/cmd/insideout-import/driftfix"
 	"github.com/luthersystems/insideout-terraform-presets/cmd/insideout-import/genconfig"
@@ -96,6 +98,14 @@ func Run(ctx context.Context, req job.Request, opts Options) (job.Result, error)
 		Stdout:         opts.Stdout,
 	}
 
+	// Snapshot the identities entering config generation so any that
+	// genconfig drops (un-importable / orphan imports it can't render a body
+	// for) can be surfaced as ResourceStatusSkipped rather than vanishing
+	// from the import set (#732). depchase may pull in additional resources
+	// after this point; those are not in this snapshot and so are never
+	// mis-reported as user-requested skips.
+	preGenconfigIdentities := identitiesByAddress(resources)
+	skips := newSkipTracker()
 	opts.progressf("reverse-import: generating terraform config for %d resource(s)…\n", len(resources))
 	var gcRes *genconfig.Result
 	if err := opts.runPhase("generating terraform config", func() error {
@@ -105,6 +115,9 @@ func Run(ctx context.Context, req job.Request, opts Options) (job.Result, error)
 	}); err != nil {
 		return result, fmt.Errorf("genconfig: %w", err)
 	}
+	// Fold genconfig's own skip manifest (with reason codes) in first, then
+	// safety-net any dropped identity the manifest missed.
+	skips.addOrphanImports(preGenconfigIdentities, gcRes.Skipped)
 	resources = gcRes.Resources
 	opts.progressf("reverse-import: terraform config generated\n")
 
@@ -160,61 +173,107 @@ func Run(ctx context.Context, req job.Request, opts Options) (job.Result, error)
 		opts.progressf("reverse-import: dependency chase complete (%d resource(s) total)\n", len(resources))
 	}
 
+	// Safety net: any identity that entered config generation but is absent
+	// from the post-genconfig/depchase set was dropped without a manifest
+	// entry. Record it as skipped so nothing disappears silently (#732).
+	skips.addMissing(preGenconfigIdentities, resources)
+
 	if err := writeJSON(filepath.Join(opts.OutputDir, importedJSONFile), resources); err != nil {
 		return result, err
 	}
-	result.Imported = resources
-	result.Resources = resourceResults(resources, dependenciesByAddress)
 
 	emitOpts := composer.EmitImportedOpts{
 		ImportProjectID: opts.ImportProjectID,
 		ImportSessionID: opts.ImportSessionID,
 		ImportedAt:      importedAtOrNow(opts.ImportedAt),
 	}
-	if err := writeImportedTerraformArtifacts(opts.OutputDir, cloud, region, gcpProjectID, opts.AWSEndpointURL, awsAuth, resources, emitOpts); err != nil {
-		return result, err
-	}
 
 	planPath := filepath.Join(opts.OutputDir, tfplanFile)
 	validateJSONPath := filepath.Join(opts.OutputDir, validateJSONFile)
 	tfplanJSONPath := filepath.Join(opts.OutputDir, tfplanJSONFile)
-	planJSON, err := runFinalPlanJSON(ctx, opts, planPath, validateJSONPath, tfplanJSONPath)
-	if err != nil {
-		return result, err
-	}
-	plan, err := job.DecodeTerraformPlan(bytes.NewReader(planJSON))
-	if err != nil {
-		return result, err
-	}
-	backfilled, changed, err := BackfillImportedAttrsFromPlan(resources, plan)
-	if err != nil {
-		return result, err
-	}
-	if changed {
-		opts.progressf("reverse-import: enriching imported attributes from final plan…\n")
-		resources = backfilled
-		if err := writeJSON(filepath.Join(opts.OutputDir, importedJSONFile), resources); err != nil {
-			return result, err
+
+	// Iterative final plan/validate (#732): emit imported.tf, run
+	// validate+plan, and on a failure attributable to specific resource(s)
+	// drop them, record them as failed, and re-plan with the remainder. A
+	// failure with no attributable resource is systemic (provider/auth/global)
+	// and aborts. Bounded by maxFinalPlanIterations.
+	var (
+		plan     *tfjson.Plan
+		fpErr    error
+		attempts int
+	)
+	for attempts = 1; attempts <= maxFinalPlanIterations; attempts++ {
+		if len(resources) == 0 {
+			fpErr = fmt.Errorf("reverse-import: all selected resources were dropped as non-plannable")
+			break
 		}
-		result.Imported = resources
-		result.Resources = resourceResults(resources, dependenciesByAddress)
 		if err := writeImportedTerraformArtifacts(opts.OutputDir, cloud, region, gcpProjectID, opts.AWSEndpointURL, awsAuth, resources, emitOpts); err != nil {
 			return result, err
 		}
-		planJSON, err = runFinalPlanJSON(ctx, opts, planPath, validateJSONPath, tfplanJSONPath)
+		planJSON, validateJSON, planErr := runFinalPlanJSON(ctx, opts, planPath, validateJSONPath, tfplanJSONPath)
+		if planErr != nil {
+			addresses := identitiesByAddress(resources)
+			failures, attributable := attributeFinalPlanError(validateJSON, planErr, addresses)
+			if !attributable {
+				// Systemic failure — preserve the existing abort behavior.
+				fpErr = planErr
+				break
+			}
+			for _, f := range failures {
+				skips.markFailed(addresses[f.address], f.diagnostic)
+			}
+			resources = dropResources(resources, failures)
+			opts.progressf("reverse-import: dropped %d non-plannable resource(s); re-planning with %d remaining…\n", len(failures), len(resources))
+			continue
+		}
+
+		decoded, err := job.DecodeTerraformPlan(bytes.NewReader(planJSON))
 		if err != nil {
 			return result, err
 		}
-		plan, err = job.DecodeTerraformPlan(bytes.NewReader(planJSON))
+		// Backfill enriched attrs from the plan, then re-emit + re-plan once
+		// so imported.tf carries the plan-derived attributes (unchanged from
+		// the prior single-shot behavior, just inside the loop).
+		backfilled, changed, err := BackfillImportedAttrsFromPlan(resources, decoded)
 		if err != nil {
 			return result, err
 		}
+		if changed {
+			opts.progressf("reverse-import: enriching imported attributes from final plan…\n")
+			resources = backfilled
+			if err := writeJSON(filepath.Join(opts.OutputDir, importedJSONFile), resources); err != nil {
+				return result, err
+			}
+			if err := writeImportedTerraformArtifacts(opts.OutputDir, cloud, region, gcpProjectID, opts.AWSEndpointURL, awsAuth, resources, emitOpts); err != nil {
+				return result, err
+			}
+			planJSON, _, planErr = runFinalPlanJSON(ctx, opts, planPath, validateJSONPath, tfplanJSONPath)
+			if planErr != nil {
+				// The backfilled config no longer plans cleanly. Re-attribute
+				// and loop; if un-attributable, abort.
+				addresses := identitiesByAddress(resources)
+				failures, attributable := attributeFinalPlanError(nil, planErr, addresses)
+				if !attributable {
+					fpErr = planErr
+					break
+				}
+				for _, f := range failures {
+					skips.markFailed(addresses[f.address], f.diagnostic)
+				}
+				resources = dropResources(resources, failures)
+				continue
+			}
+			decoded, err = job.DecodeTerraformPlan(bytes.NewReader(planJSON))
+			if err != nil {
+				return result, err
+			}
+		}
+		plan = decoded
+		break
 	}
-	result.PlanSummary = job.PlanSummaryFromTerraformPlan(plan)
-	result.ValidationIssues = issuesFromComposer(composer.ValidateFirstImportPlan(plan, composer.ValidateFirstImportPlanOpts{
-		ExpectedImports:     len(resources),
-		ProvenanceLabelKeys: composer.FirstImportProvenanceKeys(cloud),
-	}))
+	if attempts > maxFinalPlanIterations && plan == nil && fpErr == nil {
+		fpErr = fmt.Errorf("reverse-import: final plan did not converge after %d iteration(s)", maxFinalPlanIterations)
+	}
 
 	if dcRes != nil && len(dcRes.Edges) > 0 {
 		if err := writeJSON(filepath.Join(opts.OutputDir, graphJSONFile), dcRes.Edges); err != nil {
@@ -230,6 +289,84 @@ func Run(ctx context.Context, req job.Request, opts Options) (job.Result, error)
 			})
 		}
 	}
+
+	if fpErr != nil {
+		// Un-attributable / non-convergent failure: abort as before. Persist
+		// what we have (including any skips already recorded) for debugging.
+		result.Status = job.StatusFailed
+		result.Imported = resources
+		result.Resources = combinedResourceResults(resources, dependenciesByAddress, skips)
+		_ = writeResult(opts.OutputDir, &result)
+		return result, fpErr
+	}
+
+	// Downgrade attributable first-import-plan contract issues to per-resource
+	// skips (#732): a single resource that imports with an unexpected
+	// create/destroy/replace/unauthorized-change is dropped + reported rather
+	// than failing the whole job. Un-attributable issues (wrong import count,
+	// nil plan) still fail.
+	planIssues := composer.ValidateFirstImportPlan(plan, composer.ValidateFirstImportPlanOpts{
+		ExpectedImports:     len(resources),
+		ProvenanceLabelKeys: composer.FirstImportProvenanceKeys(cloud),
+	})
+	if len(planIssues) > 0 {
+		addresses := identitiesByAddress(resources)
+		perResource, unattributable := attributeFirstImportPlanIssues(planIssues, addresses)
+		if len(perResource) > 0 {
+			for _, f := range perResource {
+				skips.markFailed(addresses[f.address], f.diagnostic)
+			}
+			resources = dropResources(resources, perResource)
+			opts.progressf("reverse-import: dropped %d resource(s) failing the first-import contract; re-planning with %d remaining…\n", len(perResource), len(resources))
+			if len(resources) == 0 {
+				result.Status = job.StatusFailed
+				result.ValidationIssues = issuesFromComposer(planIssues)
+				result.Resources = combinedResourceResults(resources, dependenciesByAddress, skips)
+				_ = writeResult(opts.OutputDir, &result)
+				return result, fmt.Errorf("first-import plan validation dropped every resource")
+			}
+			if err := writeJSON(filepath.Join(opts.OutputDir, importedJSONFile), resources); err != nil {
+				return result, err
+			}
+			if err := writeImportedTerraformArtifacts(opts.OutputDir, cloud, region, gcpProjectID, opts.AWSEndpointURL, awsAuth, resources, emitOpts); err != nil {
+				return result, err
+			}
+			planJSON, _, planErr := runFinalPlanJSON(ctx, opts, planPath, validateJSONPath, tfplanJSONPath)
+			if planErr != nil {
+				result.Status = job.StatusFailed
+				result.Resources = combinedResourceResults(resources, dependenciesByAddress, skips)
+				_ = writeResult(opts.OutputDir, &result)
+				return result, planErr
+			}
+			plan, err = job.DecodeTerraformPlan(bytes.NewReader(planJSON))
+			if err != nil {
+				return result, err
+			}
+			// Re-validate the trimmed plan; only un-attributable issues remain
+			// fatal now.
+			planIssues = composer.ValidateFirstImportPlan(plan, composer.ValidateFirstImportPlanOpts{
+				ExpectedImports:     len(resources),
+				ProvenanceLabelKeys: composer.FirstImportProvenanceKeys(cloud),
+			})
+			_, unattributable = attributeFirstImportPlanIssues(planIssues, identitiesByAddress(resources))
+		}
+		if len(unattributable) > 0 {
+			result.PlanSummary = job.PlanSummaryFromTerraformPlan(plan)
+			result.ValidationIssues = issuesFromComposer(unattributable)
+			result.Status = job.StatusFailed
+			result.Imported = resources
+			result.Resources = combinedResourceResults(resources, dependenciesByAddress, skips)
+			if err := writeResult(opts.OutputDir, &result); err != nil {
+				return result, err
+			}
+			return result, fmt.Errorf("final plan validation failed with %d un-attributable issue(s)", len(unattributable))
+		}
+	}
+
+	result.Imported = resources
+	result.PlanSummary = job.PlanSummaryFromTerraformPlan(plan)
+	result.Resources = combinedResourceResults(resources, dependenciesByAddress, skips)
+
 	planSummaryPath := filepath.Join(opts.OutputDir, planSummaryJSONFile)
 	if err := writeJSON(planSummaryPath, result.PlanSummary); err != nil {
 		return result, err
@@ -237,13 +374,11 @@ func Run(ctx context.Context, req job.Request, opts Options) (job.Result, error)
 	if err := populateArtifacts(&result, opts.OutputDir, gcRes.GeneratedPath, dcRes); err != nil {
 		return result, err
 	}
-	if len(result.ValidationIssues) > 0 {
-		if err := writeResult(opts.OutputDir, &result); err != nil {
-			return result, err
-		}
-		return result, fmt.Errorf("final plan validation failed with %d issue(s)", len(result.ValidationIssues))
-	}
-	result.Status = job.StatusSucceeded
+	// Surface the genconfig skip manifest as an artifact when present so
+	// ui-core/reliable can see which imports were dropped (#732).
+	addSkipManifestArtifact(&result, workdir)
+
+	result.Status = finalStatus(len(resources), skips)
 	if err := writeResult(opts.OutputDir, &result); err != nil {
 		return result, err
 	}
@@ -327,15 +462,21 @@ func writeImportedTerraformArtifacts(outputDir, cloud, region, gcpProjectID, aws
 	return nil
 }
 
-func runFinalPlanJSON(ctx context.Context, opts Options, planPath, validateJSONPath, tfplanJSONPath string) ([]byte, error) {
+// runFinalPlanJSON runs terraform init → validate → plan → show against
+// opts.OutputDir and returns the plan JSON. It also returns the raw validate
+// JSON (when produced) so the partial-tolerance loop can attribute a failure
+// to a specific resource via the validate diagnostics. The returned error is
+// non-nil on a validate or plan failure; the validate JSON is still returned
+// in that case so the caller can parse diagnostics. Init/show failures are
+// infrastructure errors and are returned wrapped (never attributable).
+func runFinalPlanJSON(ctx context.Context, opts Options, planPath, validateJSONPath, tfplanJSONPath string) (planJSON, validateJSON []byte, err error) {
 	opts.progressf("reverse-import: terraform init…\n")
-	if err := opts.runPhase("terraform init", func() error {
+	if initErr := opts.runPhase("terraform init", func() error {
 		return opts.deps.tf.Init(ctx, opts.OutputDir)
-	}); err != nil {
-		return nil, fmt.Errorf("terraform init final: %w", err)
+	}); initErr != nil {
+		return nil, nil, fmt.Errorf("terraform init final: %w", initErr)
 	}
 	opts.progressf("reverse-import: terraform validate…\n")
-	var validateJSON []byte
 	validateErr := opts.runPhase("terraform validate", func() error {
 		var verr error
 		validateJSON, verr = opts.deps.tf.Validate(ctx, opts.OutputDir)
@@ -343,31 +484,30 @@ func runFinalPlanJSON(ctx context.Context, opts Options, planPath, validateJSONP
 	})
 	if len(validateJSON) > 0 {
 		if writeErr := writeFileAtomic(validateJSONPath, validateJSON, 0o644); writeErr != nil {
-			return nil, fmt.Errorf("write validate.json: %w", writeErr)
+			return nil, validateJSON, fmt.Errorf("write validate.json: %w", writeErr)
 		}
 	}
 	if validateErr != nil {
-		return nil, fmt.Errorf("terraform validate final: %w", validateErr)
+		return nil, validateJSON, fmt.Errorf("terraform validate final: %w", validateErr)
 	}
 	opts.progressf("reverse-import: terraform plan…\n")
-	if err := opts.runPhase("terraform plan", func() error {
+	if planErr := opts.runPhase("terraform plan", func() error {
 		return opts.deps.tf.Plan(ctx, opts.OutputDir, planPath)
-	}); err != nil {
-		return nil, fmt.Errorf("terraform plan final: %w", err)
+	}); planErr != nil {
+		return nil, validateJSON, fmt.Errorf("terraform plan final: %w", planErr)
 	}
-	var planJSON []byte
-	if err := opts.runPhase("terraform show plan", func() error {
-		var showErr error
-		planJSON, showErr = opts.deps.tf.ShowPlanJSON(ctx, opts.OutputDir, planPath)
-		return showErr
-	}); err != nil {
-		return nil, fmt.Errorf("terraform show final plan: %w", err)
+	if showErr := opts.runPhase("terraform show plan", func() error {
+		var serr error
+		planJSON, serr = opts.deps.tf.ShowPlanJSON(ctx, opts.OutputDir, planPath)
+		return serr
+	}); showErr != nil {
+		return nil, validateJSON, fmt.Errorf("terraform show final plan: %w", showErr)
 	}
 	opts.progressf("reverse-import: plan complete\n")
-	if err := writeFileAtomic(tfplanJSONPath, planJSON, 0o644); err != nil {
-		return nil, fmt.Errorf("write tfplan.json: %w", err)
+	if writeErr := writeFileAtomic(tfplanJSONPath, planJSON, 0o644); writeErr != nil {
+		return planJSON, validateJSON, fmt.Errorf("write tfplan.json: %w", writeErr)
 	}
-	return planJSON, nil
+	return planJSON, validateJSON, nil
 }
 
 func populateArtifacts(result *job.Result, outputDir, generatedPath string, dcRes *depchase.Result) error {
@@ -414,20 +554,6 @@ func populateArtifacts(result *job.Result, outputDir, generatedPath string, dcRe
 		}
 	}
 	return nil
-}
-
-func resourceResults(resources []imported.ImportedResource, dependenciesByAddress map[string][]imported.ResourceIdentity) []job.ResourceResult {
-	out := make([]job.ResourceResult, 0, len(resources))
-	for _, r := range resources {
-		rr := r
-		out = append(out, job.ResourceResult{
-			Identity:     r.Identity,
-			Status:       job.ResourceStatusImported,
-			Imported:     &rr,
-			Dependencies: dependenciesByAddress[r.Identity.Address],
-		})
-	}
-	return out
 }
 
 func appendDepChaseDependencies(dependenciesByAddress map[string][]imported.ResourceIdentity, resources []imported.ImportedResource, edges []depchase.GraphEdge) {
