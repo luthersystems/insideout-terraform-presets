@@ -151,9 +151,13 @@ var cloudControlTypeConfigs = []cloudControlConfig{
 			}
 			return identifier
 		},
-		NativeIDsFromProperties: func(identifier string, _ map[string]any) map[string]string {
+		// Lift the topic's CMK (CFN `KmsMasterKeyId`) into NativeIDs so the
+		// closure resolver recovers the sns→aws_kms_key edge (presets#733).
+		NativeIDsFromProperties: fkNativeIDs(func(identifier string, _ map[string]any) map[string]string {
 			return map[string]string{"arn": identifier}
 		},
+			fkRef{cfnProp: "KmsMasterKeyId", nativeKey: "kms_master_key_id"},
+		),
 		TagsFromProperties: tagsFromKey("Tags"),
 	},
 	{
@@ -165,13 +169,17 @@ var cloudControlTypeConfigs = []cloudControlConfig{
 		// aws_sqs_queue also takes the URL — passthrough.
 		ImportIDFromIdentifier: passthroughImportID,
 		NameHintFromProperties: nameOrIdentifier("QueueName"),
-		NativeIDsFromProperties: func(_ string, props map[string]any) map[string]string {
+		// Lift the queue's CMK (CFN `KmsMasterKeyId`) into NativeIDs so the
+		// closure resolver recovers the sqs→aws_kms_key edge (presets#733).
+		NativeIDsFromProperties: fkNativeIDs(func(_ string, props map[string]any) map[string]string {
 			arn := extractString(props, "Arn")
 			if arn == "" {
 				return nil
 			}
 			return map[string]string{"arn": arn}
 		},
+			fkRef{cfnProp: "KmsMasterKeyId", nativeKey: "kms_master_key_id"},
+		),
 		TagsFromProperties: tagsFromKey("Tags"),
 		// #501 Normalizer: CFN AWS::SQS::Queue uses primary-name
 		// `QueueName` (TF: `name`), seconds-suffix-elided
@@ -216,10 +224,15 @@ var cloudControlTypeConfigs = []cloudControlConfig{
 		Slug:               "cloudwatchlogs",
 		// Cloud Control identifier = LogGroupName. Terraform import
 		// also takes LogGroupName — passthrough.
-		ImportIDFromIdentifier:  passthroughImportID,
-		NameHintFromProperties:  nameOrIdentifier("LogGroupName"),
-		NativeIDsFromProperties: arnUnderKey("Arn"),
-		TagsFromProperties:      tagsFromKey("Tags"),
+		ImportIDFromIdentifier: passthroughImportID,
+		NameHintFromProperties: nameOrIdentifier("LogGroupName"),
+		// Lift the log group's CMK (CFN `KmsKeyId`, an ARN) into NativeIDs
+		// so the closure resolver recovers the log_group→aws_kms_key edge
+		// (presets#733).
+		NativeIDsFromProperties: fkNativeIDs(arnUnderKey("Arn"),
+			fkRef{cfnProp: "KmsKeyId", nativeKey: "kms_key_id"},
+		),
+		TagsFromProperties: tagsFromKey("Tags"),
 		// #501/#502 Normalizer: CFN AWS::Logs::LogGroup uses primary-name
 		// `LogGroupName` (TF: `name`), an `Arn` that includes the
 		// trailing `:*` log-stream wildcard (TF strips it), and a
@@ -362,13 +375,22 @@ var cloudControlTypeConfigs = []cloudControlConfig{
 	// Compute — Lambda
 	// =====================================================================
 	{
-		TFType:                  "aws_lambda_function",
-		CloudFormationType:      "AWS::Lambda::Function",
-		Slug:                    "lambda",
-		ImportIDFromIdentifier:  passthroughImportID,
-		NameHintFromProperties:  nameOrIdentifier("FunctionName"),
-		NativeIDsFromProperties: arnUnderKey("Arn"),
-		TagsFromProperties:      tagsFromKey("Tags"),
+		TFType:                 "aws_lambda_function",
+		CloudFormationType:     "AWS::Lambda::Function",
+		Slug:                   "lambda",
+		ImportIDFromIdentifier: passthroughImportID,
+		NameHintFromProperties: nameOrIdentifier("FunctionName"),
+		// Lift the execution-role ARN (CFN `Role`) and CMK ARN (CFN
+		// `KmsKeyArn`) into NativeIDs so the enrich-free closure resolver
+		// recovers the lambda→aws_iam_role and lambda→aws_kms_key edges
+		// reliable's picker shows today (presets#733). `Role` is a top-
+		// level required property carrying the full role ARN; `KmsKeyArn`
+		// is the optional CMK that encrypts env vars / snapshots.
+		NativeIDsFromProperties: fkNativeIDs(arnUnderKey("Arn"),
+			fkRef{cfnProp: "Role", nativeKey: "role_arn"},
+			fkRef{cfnProp: "KmsKeyArn", nativeKey: "kms_key_arn"},
+		),
+		TagsFromProperties: tagsFromKey("Tags"),
 		// Normalizer: CFN AWS::Lambda::Function models each singleton
 		// nested config (Environment, TracingConfig, VpcConfig, …) as a
 		// plain JSON *object*, but the Terraform provider exposes them as
@@ -456,13 +478,17 @@ var cloudControlTypeConfigs = []cloudControlConfig{
 		),
 	},
 	{
-		TFType:                  "aws_dynamodb_table",
-		CloudFormationType:      "AWS::DynamoDB::Table",
-		Slug:                    "dynamodb",
-		ImportIDFromIdentifier:  passthroughImportID,
-		NameHintFromProperties:  nameOrIdentifier("TableName"),
-		NativeIDsFromProperties: arnUnderKey("Arn"),
-		TagsFromProperties:      tagsFromKey("Tags"),
+		TFType:                 "aws_dynamodb_table",
+		CloudFormationType:     "AWS::DynamoDB::Table",
+		Slug:                   "dynamodb",
+		ImportIDFromIdentifier: passthroughImportID,
+		NameHintFromProperties: nameOrIdentifier("TableName"),
+		// Lift the table's SSE CMK (CFN nested
+		// `SSESpecification.KMSMasterKeyId`) into NativeIDs so the closure
+		// resolver recovers the dynamodb→aws_kms_key edge (presets#733).
+		NativeIDsFromProperties: fkNativeIDsNested(arnUnderKey("Arn"),
+			"SSESpecification", "KMSMasterKeyId", "kms_key_arn"),
+		TagsFromProperties: tagsFromKey("Tags"),
 	},
 	{
 		TFType:             "aws_secretsmanager_secret",
@@ -472,9 +498,13 @@ var cloudControlTypeConfigs = []cloudControlConfig{
 		// the ARN — passthrough.
 		ImportIDFromIdentifier: passthroughImportID,
 		NameHintFromProperties: nameOrIdentifier("Name"),
-		NativeIDsFromProperties: func(identifier string, _ map[string]any) map[string]string {
+		// Lift the secret's CMK (CFN `KmsKeyId`) into NativeIDs so the
+		// closure resolver recovers the secret→aws_kms_key edge (presets#733).
+		NativeIDsFromProperties: fkNativeIDs(func(identifier string, _ map[string]any) map[string]string {
 			return map[string]string{"arn": identifier}
 		},
+			fkRef{cfnProp: "KmsKeyId", nativeKey: "kms_key_id"},
+		),
 		TagsFromProperties: tagsFromKey("Tags"),
 	},
 
@@ -791,8 +821,14 @@ var cloudControlTypeConfigs = []cloudControlConfig{
 		// the #650 parent-instance resolver can link an
 		// aws_db_parameter_group child back to the instance that uses
 		// it (the parameter group's own model has no instance back-ref).
-		NativeIDsFromProperties: arnAndKey("DBInstanceArn", "DBParameterGroupName", "db_parameter_group"),
-		TagsFromProperties:      tagsFromKey("Tags"),
+		// Additionally lift the storage CMK (CFN `KmsKeyId`, an ARN) into
+		// NativeIDs so the closure resolver recovers the
+		// db_instance→aws_kms_key edge (presets#733).
+		NativeIDsFromProperties: fkNativeIDs(
+			arnAndKey("DBInstanceArn", "DBParameterGroupName", "db_parameter_group"),
+			fkRef{cfnProp: "KmsKeyId", nativeKey: "kms_key_id"},
+		),
+		TagsFromProperties: tagsFromKey("Tags"),
 	},
 	{
 		TFType:                 "aws_db_subnet_group",
@@ -2961,6 +2997,95 @@ func arnAndKey(arnKey, extraKey, extraNativeKey string) func(string, map[string]
 		}
 		if len(out) == 0 {
 			return nil
+		}
+		return out
+	}
+}
+
+// fkRef pairs a CloudFormation property name with the NativeIDs key it
+// is lifted under at discover time. The NativeIDs key MUST be a
+// dependencies.FieldRefs() cross-ref field (role_arn, kms_key_arn,
+// kms_key_id, kms_master_key_id, vpc_id, subnet_id, …) so the enrich-free
+// closure resolver (composer/imported.DependencyEdges →
+// dependencies.ResolveFromIdentities) can recover the same free-form FK
+// edges reliable's Attrs-based picker closure produces today
+// (presets#733). The CloudFormation property carrying the FK value is
+// usually a different casing than the Terraform attribute (e.g. CFN
+// `Role` → TF `role` → FieldRefs `role_arn`); fkRef makes the mapping
+// explicit and testable.
+type fkRef struct {
+	// cfnProp is the CloudFormation GetResource property name carrying
+	// the foreign-key value (an ARN / id / name pointing at another
+	// resource), e.g. "Role", "KmsKeyArn", "KmsMasterKeyId".
+	cfnProp string
+	// nativeKey is the NativeIDs key to stamp the value under. It must
+	// be a dependencies.FieldRefs() key so the closure resolver matches
+	// it; TestFKLift_PerType pins this invariant for every wired type.
+	nativeKey string
+}
+
+// fkNativeIDs returns a NativeIDsFromProperties extractor that lifts
+// the cross-reference foreign-key fields in refs into NativeIDs at
+// discover time, in addition to the resource's own canonical
+// identifiers built by base. base may be nil for source types that have
+// no own native identifiers worth carrying beyond the FK fields.
+//
+// Lifting these FK fields is the core presets#733 change: it makes the
+// picker's free-form dependency closure (role → iam_role, kms_key_arn →
+// kms_key, …) derivable from Identity alone, with no per-resource
+// EnrichAttributes describe call. The FK value comes straight from the
+// Cloud Control GetResource payload the discoverer already fetches.
+//
+// AWS allows a KMS FK to be a key id, key ARN, or alias — the closure
+// resolver indexes the parent aws_kms_key by both its ImportID (key id)
+// and NativeIDs["arn"], so a key-id or key-ARN reference joins; an
+// alias-only reference resolves only when that alias is itself a
+// discovered aws_kms_alias of the same target type (it is not, so an
+// alias FK is conservatively dropped — matching reliable's Attrs path,
+// which also only matches against arn/id, never alias).
+func fkNativeIDs(base func(string, map[string]any) map[string]string, refs ...fkRef) func(string, map[string]any) map[string]string {
+	return func(identifier string, props map[string]any) map[string]string {
+		var out map[string]string
+		if base != nil {
+			out = base(identifier, props)
+		}
+		for _, r := range refs {
+			val := extractString(props, r.cfnProp)
+			if val == "" {
+				continue
+			}
+			if out == nil {
+				out = map[string]string{}
+			}
+			// First writer wins: never clobber a canonical identifier a
+			// base extractor already set under the same key.
+			if _, exists := out[r.nativeKey]; !exists {
+				out[r.nativeKey] = val
+			}
+		}
+		return out
+	}
+}
+
+// fkNativeIDsNested is fkNativeIDs for a single FK value that lives one
+// level down in the Cloud Control payload (e.g.
+// AWS::DynamoDB::Table.SSESpecification.KMSMasterKeyId). objKey is the
+// parent object property; cfnProp/nativeKey are as in fkRef.
+func fkNativeIDsNested(base func(string, map[string]any) map[string]string, objKey, cfnProp, nativeKey string) func(string, map[string]any) map[string]string {
+	return func(identifier string, props map[string]any) map[string]string {
+		var out map[string]string
+		if base != nil {
+			out = base(identifier, props)
+		}
+		if obj, ok := props[objKey].(map[string]any); ok {
+			if val := extractString(obj, cfnProp); val != "" {
+				if out == nil {
+					out = map[string]string{}
+				}
+				if _, exists := out[nativeKey]; !exists {
+					out[nativeKey] = val
+				}
+			}
 		}
 		return out
 	}
