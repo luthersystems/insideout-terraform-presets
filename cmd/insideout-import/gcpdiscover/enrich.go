@@ -36,20 +36,21 @@ import (
 // a parallel one without unbounded fan-out hammering the GCP API rate
 // limits.
 //
-// Originally pinned to 4 to mirror awsdiscover.defaultDiscoverTypesConcurrency,
+// Pinned to 4 to mirror awsdiscover.defaultDiscoverTypesConcurrency,
 // which was lowered from 8 to 4 in #632 after 8 simultaneous t=0
 // kickoffs tripped CloudControl's per-account rate budget with a
-// ThrottlingException. Since then the enrich path retries rate-limit
-// errors with exponential backoff (enrichWithRetry) and aggregates
-// per-resource failures into partial results rather than failing the
-// whole scan — so a transient rate-limit costs a backoff sleep, not an
-// aborted pass. With that safety net a fan-out of 4 became the dominant
-// bottleneck on large accounts. Raised to 16 (mirroring the AWS default)
-// to cut enrich wall time roughly 4x; the per-resource backoff plus the
-// partial-result degradation make the higher fan-out safe. Callers that
-// need a different ceiling pass EnrichOpts.Concurrency, which flows down
-// to enrichConcurrency below.
-const defaultEnrichConcurrency = 16
+// ThrottlingException.
+//
+// We briefly raised this to 16 (mirroring the AWS default) on the
+// assumption enrich was goroutine-bound, but AWS benchmarking
+// (`insideout-import bench`) showed enrich wall time is flat across
+// concurrency 4 / 16 / 32 — the phase is bound by the SDK client-side
+// rate limiter, not the worker count. A higher default buys nothing on
+// throttling accounts and only risks tripping limits harder, so it stays
+// at 4 to keep parity with AWS. Callers with a quiet account that want
+// more fan-out can still pass EnrichOpts.Concurrency, which flows down to
+// enrichConcurrency below.
+const defaultEnrichConcurrency = 4
 
 // defaultEnrichStartupJitterMax bounds the random sleep applied before
 // the first defaultEnrichConcurrency enrich goroutines issue their

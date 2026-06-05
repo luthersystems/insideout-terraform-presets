@@ -53,21 +53,23 @@ import (
 // a parallel one without unbounded fan-out hammering the AWS API rate
 // limits.
 //
-// Originally pinned to 4 to mirror awsdiscover.defaultDiscoverTypesConcurrency,
+// Pinned to 4 to mirror awsdiscover.defaultDiscoverTypesConcurrency,
 // which was lowered from 8 to 4 in #632 after 8 simultaneous t=0
 // kickoffs tripped CloudControl's per-account rate budget with a
-// ThrottlingException. Since then the SDK runs with the adaptive retry
-// mode (#632) and the enrich/discover paths soft-skip throttles into
-// partial results rather than failing the scan — so transient
-// ThrottlingExceptions are absorbed by backoff instead of aborting the
-// pass. With that safety net in place a fan-out of 4 became the dominant
-// bottleneck: a ~600-resource account spends ~8 minutes in this phase at
-// 4. Raised to 16 to cut that wall time roughly 4x; the adaptive token
-// bucket plus the soft-skip degradation make the higher fan-out safe
-// (throttles cost a backoff sleep, never a failed scan). Callers that
-// need a different ceiling pass EnrichOpts.Concurrency, which flows down
-// to enrichConcurrency below.
-const defaultEnrichConcurrency = 16
+// ThrottlingException.
+//
+// We briefly raised this to 16 on the assumption the enrich phase was
+// goroutine-bound, but benchmarking (`insideout-import bench`) against a
+// real ~600-resource account disproved it: enrich wall time was flat
+// across concurrency 4 / 16 / 32 (~85s / 80s / 77s, with the same
+// 241 enriched / 366 failed at every setting). The phase is bound by the
+// SDK adaptive-retry client-side rate limiter, not the worker count —
+// once the account throttles, extra goroutines just wait on the same
+// token bucket. A higher default buys nothing on the accounts that are
+// actually slow and only risks tripping throttles harder, so it stays at
+// 4. Callers with a quiet account that want more fan-out can still pass
+// EnrichOpts.Concurrency, which flows down to enrichConcurrency below.
+const defaultEnrichConcurrency = 4
 
 // defaultEnrichStartupJitterMax bounds the random sleep applied before
 // the first defaultEnrichConcurrency enrich goroutines issue their

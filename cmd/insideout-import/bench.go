@@ -22,6 +22,8 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"sort"
+	"strings"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -142,8 +144,8 @@ Exit codes:
 	provider := fs.String("provider", "aws", "cloud provider to benchmark (aws). gcp is not yet supported by bench.")
 	regions := fs.String("regions", "", "comma-separated AWS regions to scan in one invocation (required). Pass `all` to expand to the InsideOut-supported region set.")
 	resourceTypes := fs.String("resource-types", "", "comma-separated subset of types to scan; default: all supported types for the provider")
-	enrichConcurrency := fs.Int("enrich-concurrency", 16, "enrich fan-out concurrency passed as EnrichOpts.Concurrency (#731); the knob this tool exists to tune. 0 uses the package default.")
-	fs.IntVar(enrichConcurrency, "p", 16, "shorthand for --enrich-concurrency")
+	enrichConcurrency := fs.Int("enrich-concurrency", 4, "enrich fan-out concurrency passed as EnrichOpts.Concurrency (#731); the knob this tool exists to tune. Default 4 matches the package default. 0 also uses the package default.")
+	fs.IntVar(enrichConcurrency, "p", 4, "shorthand for --enrich-concurrency")
 	maxConcurrency := fs.Int("max-concurrency", awsdiscover.DefaultMaxConcurrency, "max in-flight per-resource AWS API calls inside the discover phase (DiscoverTypes), mirroring `discover --max-concurrency`")
 	awsEndpointURL := fs.String("aws-endpoint-url", "", "override the AWS endpoint URL for the SDK clients (e.g. http://localhost:4566 for LocalStack). Empty (default) uses real AWS.")
 
@@ -227,9 +229,67 @@ type benchResult struct {
 	typeCount        int
 	enrichedCount    int
 	enrichErrorCount int
-	discoverDuration time.Duration
-	enrichDuration   time.Duration
-	totalDuration    time.Duration
+	// enrichErrorsByCategory tallies failed enrich resources by error
+	// category (Throttling / NotFound / AccessDenied / Unsupported /
+	// Validation / Timeout / other) so the summary can answer "are these
+	// rate-limit errors or structural?" without re-running.
+	enrichErrorsByCategory map[string]int
+	discoverDuration       time.Duration
+	enrichDuration         time.Duration
+	totalDuration          time.Duration
+}
+
+// categorizeEnrichErrors buckets every failed-enrich resource by the kind of
+// error it hit, read from Identity.EnrichErrors (the per-resource strings the
+// enricher stamps, which include the downgraded ErrNotFound / client-
+// unavailable cases that never reach the joined error). Priority-ordered
+// substring matching keeps it robust against the verbose AWS SDK error text.
+func categorizeEnrichErrors(irs []composerimported.ImportedResource) map[string]int {
+	counts := map[string]int{}
+	for i := range irs {
+		if irs[i].Identity.EnrichmentStatus != composerimported.EnrichmentStatusFailed {
+			continue
+		}
+		msg := ""
+		if len(irs[i].Identity.EnrichErrors) > 0 {
+			msg = strings.ToLower(irs[i].Identity.EnrichErrors[0])
+		}
+		counts[classifyEnrichError(msg)]++
+	}
+	return counts
+}
+
+// classifyEnrichError maps one (lowercased) error string to a coarse category.
+// Order matters: throttling is checked first so a throttle that also mentions a
+// resource id isn't miscounted as NotFound.
+func classifyEnrichError(msg string) string {
+	switch {
+	case msg == "":
+		return "unknown"
+	case containsAny(msg, "throttl", "rate exceeded", "toomanyrequests", "slowdown", "429"):
+		return "Throttling"
+	case containsAny(msg, "accessdenied", "not authorized", "unauthorized", "forbidden", "403"):
+		return "AccessDenied"
+	case containsAny(msg, "not found", "notfound", "nosuch", "does not exist", "404"):
+		return "NotFound"
+	case containsAny(msg, "unsupported", "not supported", "invalidaction", "not implemented"):
+		return "Unsupported"
+	case containsAny(msg, "validation", "invalidparameter", "invalid request", "malformed"):
+		return "Validation"
+	case containsAny(msg, "timeout", "deadline", "context canceled", "context deadline"):
+		return "Timeout"
+	default:
+		return "other"
+	}
+}
+
+func containsAny(s string, subs ...string) bool {
+	for _, sub := range subs {
+		if strings.Contains(s, sub) {
+			return true
+		}
+	}
+	return false
 }
 
 // runBenchAWS drives the two-phase scan and times each phase. It mirrors
@@ -287,6 +347,7 @@ func runBenchAWS(ctx context.Context, cfg benchConfig, endpointURL string, deps 
 	_ = enrichErr // surfaced via the per-resource counts below
 
 	res.enrichedCount, res.enrichErrorCount = countEnrichOutcomes(irs)
+	res.enrichErrorsByCategory = categorizeEnrichErrors(irs)
 	res.totalDuration = time.Since(wallStart)
 	return res, nil
 }
@@ -324,14 +385,41 @@ func countEnrichOutcomes(irs []composerimported.ImportedResource) (enriched, fai
 // One line per phase, one totals line. Durations are rounded to 0.1s so the
 // output stays scannable; sub-second phases still show as e.g. 0.3s.
 func (r benchResult) summaryLines() []string {
-	return []string{
+	lines := []string{
 		fmt.Sprintf("bench: phase=discover concurrency=%d resources=%d types=%d duration=%s",
 			r.discoverConc, r.resourceCount, r.typeCount, roundDur(r.discoverDuration)),
 		fmt.Sprintf("bench: phase=enrich concurrency=%d resources=%d enriched=%d errors=%d duration=%s",
 			r.enrichConc, r.resourceCount, r.enrichedCount, r.enrichErrorCount, roundDur(r.enrichDuration)),
-		fmt.Sprintf("bench: total provider=%s discover_concurrency=%d enrich_concurrency=%d resources=%d duration=%s",
-			r.provider, r.discoverConc, r.enrichConc, r.resourceCount, roundDur(r.totalDuration)),
 	}
+	// One line per enrich-error category, highest count first, so the
+	// summary answers "are these throttles or structural?" at a glance.
+	for _, kv := range sortedCategoryCounts(r.enrichErrorsByCategory) {
+		lines = append(lines, fmt.Sprintf("bench: enrich-error category=%s count=%d", kv.category, kv.count))
+	}
+	lines = append(lines, fmt.Sprintf("bench: total provider=%s discover_concurrency=%d enrich_concurrency=%d resources=%d duration=%s",
+		r.provider, r.discoverConc, r.enrichConc, r.resourceCount, roundDur(r.totalDuration)))
+	return lines
+}
+
+type categoryCount struct {
+	category string
+	count    int
+}
+
+// sortedCategoryCounts orders the breakdown by count desc, then category name
+// for a stable tie-break (deterministic output across runs).
+func sortedCategoryCounts(m map[string]int) []categoryCount {
+	out := make([]categoryCount, 0, len(m))
+	for cat, n := range m {
+		out = append(out, categoryCount{category: cat, count: n})
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].count != out[j].count {
+			return out[i].count > out[j].count
+		}
+		return out[i].category < out[j].category
+	})
+	return out
 }
 
 // roundDur rounds a duration to the nearest 0.1s for human-scannable output.
