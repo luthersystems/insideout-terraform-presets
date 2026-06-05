@@ -177,8 +177,13 @@ type DiscoverProgress struct {
 //   - Progress: optional per-Terraform-type completion sink, the enrich
 //     counterpart to DiscoverOpts.Progress. Events carry Phase="enrich".
 //     Nil = no progress.
+//   - Concurrency: bounds the per-resource enrich fan-out. 0 means use
+//     the package default.
 type EnrichOpts struct {
 	Progress func(DiscoverProgress)
+	// Concurrency bounds the per-resource enrich fan-out. 0 means use
+	// the package default.
+	Concurrency int
 }
 
 // TagSelector is a single operator-supplied tag/label equality

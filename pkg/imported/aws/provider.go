@@ -229,10 +229,12 @@ func (p *Provider) EnrichAttributes(ctx context.Context, irs []imported.Imported
 		return err
 	}
 	var sink func(imp.DiscoverProgress)
+	var concurrency int
 	if len(opts) > 0 {
 		sink = opts[0].Progress
+		concurrency = opts[0].Concurrency
 	}
-	return p.d.EnrichAttributes(ctx, irs, aws, imp.NewProgressEmitter(sink))
+	return p.d.EnrichAttributes(ctx, irs, aws, imp.NewProgressEmitter(sink), awsdiscover.EnrichAttrOpts{Concurrency: concurrency})
 }
 
 // EnrichByID delegates to AWSDiscoverer.EnrichByID, mapping the

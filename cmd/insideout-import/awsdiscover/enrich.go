@@ -24,6 +24,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/apigatewayv2"
 	"github.com/aws/aws-sdk-go-v2/service/autoscaling"
 	"github.com/aws/aws-sdk-go-v2/service/bedrock"
@@ -46,7 +47,8 @@ import (
 )
 
 // defaultEnrichConcurrency bounds the per-resource cloud-API fan-out of
-// EnrichAttributes. Each enricher issues one or more AWS SDK round-trips
+// EnrichAttributes when the caller does not override it (EnrichOpts.
+// Concurrency == 0). Each enricher issues one or more AWS SDK round-trips
 // per resource; running them under a bounded worker pool turns the
 // previously serial ~1m30s pass on large accounts (~224 resources) into
 // a parallel one without unbounded fan-out hammering the AWS API rate
@@ -55,11 +57,19 @@ import (
 // Pinned to 4 to mirror awsdiscover.defaultDiscoverTypesConcurrency,
 // which was lowered from 8 to 4 in #632 after 8 simultaneous t=0
 // kickoffs tripped CloudControl's per-account rate budget with a
-// ThrottlingException. The enrich phase issues the same flavor of
-// per-account AWS calls, so it inherits the same ceiling. 4 still
-// delivers roughly a 4x wall-time saving over the old serial pass —
-// the marginal speedup from 8 isn't worth re-introducing the throttle
-// risk.
+// ThrottlingException.
+//
+// We briefly raised this to 16 on the assumption the enrich phase was
+// goroutine-bound, but benchmarking (`insideout-import bench`) against a
+// real ~600-resource account disproved it: enrich wall time was flat
+// across concurrency 4 / 16 / 32 (~85s / 80s / 77s, with the same
+// 241 enriched / 366 failed at every setting). The phase is bound by the
+// SDK adaptive-retry client-side rate limiter, not the worker count —
+// once the account throttles, extra goroutines just wait on the same
+// token bucket. A higher default buys nothing on the accounts that are
+// actually slow and only risks tripping throttles harder, so it stays at
+// 4. Callers with a quiet account that want more fan-out can still pass
+// EnrichOpts.Concurrency, which flows down to enrichConcurrency below.
 const defaultEnrichConcurrency = 4
 
 // defaultEnrichStartupJitterMax bounds the random sleep applied before
@@ -273,6 +283,37 @@ type EnrichClients struct {
 	AccountID string
 }
 
+// NewEnrichClients constructs the complete EnrichClients bundle from a single
+// aws.Config. Every per-type enricher's SDK client is wired here, so the
+// bundle is complete by construction.
+//
+// This is the single source of truth for the bundle. A nil client field is
+// tolerated but surfaces as ErrEnrichClientUnavailable at Enrich time, which
+// silently drops that resource type from the enriched set — so partial wiring
+// is a latent gap, not an obvious error. Callers (reliable's
+// buildAWSImportedProvider, the insideout-import bench subcommand) must use
+// this constructor rather than hand-building the struct, so they cannot drift
+// out of parity. The SDK client structs are stateless wrappers over the
+// aws.Config, so constructing all of them costs effectively nothing.
+func NewEnrichClients(cfg aws.Config, accountID string) EnrichClients {
+	return EnrichClients{
+		S3:                s3.NewFromConfig(cfg),
+		DynamoDB:          dynamodb.NewFromConfig(cfg),
+		SecretsManager:    secretsmanager.NewFromConfig(cfg),
+		Bedrock:           bedrock.NewFromConfig(cfg),
+		ServiceDiscovery:  servicediscovery.NewFromConfig(cfg),
+		CloudControl:      cloudcontrol.NewFromConfig(cfg),
+		ResourceExplorer2: resourceexplorer2.NewFromConfig(cfg),
+		APIGatewayV2:      apigatewayv2.NewFromConfig(cfg),
+		IAM:               iam.NewFromConfig(cfg),
+		Lambda:            lambda.NewFromConfig(cfg),
+		CloudFront:        cloudfront.NewFromConfig(cfg),
+		AutoScaling:       autoscaling.NewFromConfig(cfg),
+		WAFv2:             wafv2.NewFromConfig(cfg),
+		AccountID:         accountID,
+	}
+}
+
 // ErrEnrichClientUnavailable signals that the SDK client an enricher
 // needs is nil on EnrichClients. Distinguishable from a real API error
 // so EnrichAttributes can downgrade it to a per-resource warning (the
@@ -399,6 +440,16 @@ func retryThrottled(ctx context.Context, maxAttempts int, baseDelay, maxDelay ti
 	}
 }
 
+// EnrichAttrOpts carries optional tuning for EnrichAttributes. It is
+// passed variadically so existing four-argument callers
+// (EnrichAttributes(ctx, irs, clients, emitter)) keep compiling and
+// behaving exactly as before — the zero-opts path is unchanged.
+type EnrichAttrOpts struct {
+	// Concurrency overrides the per-resource enrich fan-out. 0 (the zero
+	// value) uses defaultEnrichConcurrency.
+	Concurrency int
+}
+
 // EnrichAttributes populates ir.Attrs in place for every imported
 // resource whose Identity.Type has a registered enricher. Resources of
 // types without a registered enricher are left untouched; the caller
@@ -445,9 +496,17 @@ func retryThrottled(ctx context.Context, maxAttempts int, baseDelay, maxDelay ti
 // aggregation, same progress semantics. Symmetric APIs across clouds
 // keep the consumer-side code (reliable's buildEnrichedAWSImports /
 // buildEnrichedGCSImports) a one-liner per cloud.
-func (a *AWSDiscoverer) EnrichAttributes(ctx context.Context, irs []imported.ImportedResource, clients EnrichClients, emitter progress.Emitter) error {
+//
+// opts is variadic for back-compat: existing four-argument callers
+// (EnrichAttributes(ctx, irs, clients, emitter)) keep compiling and
+// behaving exactly as before — the zero-opts path is unchanged.
+func (a *AWSDiscoverer) EnrichAttributes(ctx context.Context, irs []imported.ImportedResource, clients EnrichClients, emitter progress.Emitter, opts ...EnrichAttrOpts) error {
 	if emitter == nil {
 		emitter = progress.NopEmitter{}
+	}
+	enrichConcurrency := defaultEnrichConcurrency
+	if len(opts) > 0 && opts[0].Concurrency > 0 {
+		enrichConcurrency = opts[0].Concurrency
 	}
 	stageStart := time.Now()
 	emitter.ServiceStart(enrichServiceSlug, "")
@@ -482,17 +541,17 @@ func (a *AWSDiscoverer) EnrichAttributes(ctx context.Context, irs []imported.Imp
 	// cancel early.
 	results := make([]error, len(idx))
 	var g errgroup.Group
-	g.SetLimit(defaultEnrichConcurrency)
+	g.SetLimit(enrichConcurrency)
 	for pos, i := range idx {
 		enr := a.byTypeEnricher[irs[i].Identity.Type]
 		g.Go(func() error {
 			// Jitter only the initial burst: the first
-			// defaultEnrichConcurrency goroutines start simultaneously
+			// enrichConcurrency goroutines start simultaneously
 			// at t=0, so their opening AWS calls would otherwise land
 			// together. Goroutines beyond that batch are already
 			// staggered by errgroup slot availability — jittering all
 			// of them would add tens of seconds of dead wall time.
-			if pos < defaultEnrichConcurrency {
+			if pos < enrichConcurrency {
 				sleep := time.Duration(rand.Int63n(int64(defaultEnrichStartupJitterMax)))
 				t := time.NewTimer(sleep)
 				select {

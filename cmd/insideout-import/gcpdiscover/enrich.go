@@ -29,7 +29,8 @@ import (
 )
 
 // defaultEnrichConcurrency bounds the per-resource cloud-API fan-out of
-// EnrichAttributes. Each enricher issues one or more GCP SDK round-trips
+// EnrichAttributes when the caller does not override it (EnrichOpts.
+// Concurrency == 0). Each enricher issues one or more GCP SDK round-trips
 // per resource; running them under a bounded worker pool turns the
 // previously serial ~1m30s pass on large accounts (~224 resources) into
 // a parallel one without unbounded fan-out hammering the GCP API rate
@@ -38,11 +39,17 @@ import (
 // Pinned to 4 to mirror awsdiscover.defaultDiscoverTypesConcurrency,
 // which was lowered from 8 to 4 in #632 after 8 simultaneous t=0
 // kickoffs tripped CloudControl's per-account rate budget with a
-// ThrottlingException. GCP's per-project quotas are likewise burst-
-// sensitive, so the enrich phase inherits the same ceiling. 4 still
-// delivers roughly a 4x wall-time saving over the old serial pass —
-// the marginal speedup from 8 isn't worth re-introducing the throttle
-// risk.
+// ThrottlingException.
+//
+// We briefly raised this to 16 (mirroring the AWS default) on the
+// assumption enrich was goroutine-bound, but AWS benchmarking
+// (`insideout-import bench`) showed enrich wall time is flat across
+// concurrency 4 / 16 / 32 — the phase is bound by the SDK client-side
+// rate limiter, not the worker count. A higher default buys nothing on
+// throttling accounts and only risks tripping limits harder, so it stays
+// at 4 to keep parity with AWS. Callers with a quiet account that want
+// more fan-out can still pass EnrichOpts.Concurrency, which flows down to
+// enrichConcurrency below.
 const defaultEnrichConcurrency = 4
 
 // defaultEnrichStartupJitterMax bounds the random sleep applied before
@@ -302,6 +309,16 @@ func enrichWithRetry(ctx context.Context, fn func() error) error {
 	}
 }
 
+// EnrichAttrOpts carries optional tuning for EnrichAttributes. It is
+// passed variadically so existing four-argument callers
+// (EnrichAttributes(ctx, irs, clients, emitter)) keep compiling and
+// behaving exactly as before — the zero-opts path is unchanged.
+type EnrichAttrOpts struct {
+	// Concurrency overrides the per-resource enrich fan-out. 0 (the zero
+	// value) uses defaultEnrichConcurrency.
+	Concurrency int
+}
+
 // EnrichAttributes populates ir.Attrs in place for every imported
 // resource whose Identity.Type has a registered enricher. Resources
 // of types without a registered enricher are left untouched; the
@@ -331,9 +348,17 @@ func enrichWithRetry(ctx context.Context, fn func() error) error {
 // ServiceWarn per ErrEnrichClientUnavailable. The standard
 // (ServiceStart, ServiceFinish) pair brackets the whole batch under
 // enrichServiceSlug.
-func (g *GCPDiscoverer) EnrichAttributes(ctx context.Context, irs []imported.ImportedResource, clients EnrichClients, emitter progress.Emitter) error {
+//
+// opts is variadic for back-compat: existing four-argument callers
+// (EnrichAttributes(ctx, irs, clients, emitter)) keep compiling and
+// behaving exactly as before — the zero-opts path is unchanged.
+func (g *GCPDiscoverer) EnrichAttributes(ctx context.Context, irs []imported.ImportedResource, clients EnrichClients, emitter progress.Emitter, opts ...EnrichAttrOpts) error {
 	if emitter == nil {
 		emitter = progress.NopEmitter{}
+	}
+	enrichConcurrency := defaultEnrichConcurrency
+	if len(opts) > 0 && opts[0].Concurrency > 0 {
+		enrichConcurrency = opts[0].Concurrency
 	}
 	stageStart := time.Now()
 	emitter.ServiceStart(enrichServiceSlug, "")
@@ -367,17 +392,17 @@ func (g *GCPDiscoverer) EnrichAttributes(ctx context.Context, irs []imported.Imp
 	// cancel early.
 	results := make([]error, len(idx))
 	var grp errgroup.Group
-	grp.SetLimit(defaultEnrichConcurrency)
+	grp.SetLimit(enrichConcurrency)
 	for pos, i := range idx {
 		enr := g.byTypeEnricher[irs[i].Identity.Type]
 		grp.Go(func() error {
 			// Jitter only the initial burst: the first
-			// defaultEnrichConcurrency goroutines start simultaneously
+			// enrichConcurrency goroutines start simultaneously
 			// at t=0, so their opening GCP calls would otherwise land
 			// together. Goroutines beyond that batch are already
 			// staggered by errgroup slot availability — jittering all
 			// of them would add tens of seconds of dead wall time.
-			if pos < defaultEnrichConcurrency {
+			if pos < enrichConcurrency {
 				sleep := time.Duration(rand.Int63n(int64(defaultEnrichStartupJitterMax)))
 				t := time.NewTimer(sleep)
 				select {
