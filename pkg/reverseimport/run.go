@@ -247,12 +247,16 @@ func Run(ctx context.Context, req job.Request, opts Options) (job.Result, error)
 			if err := writeImportedTerraformArtifacts(opts.OutputDir, cloud, region, gcpProjectID, opts.AWSEndpointURL, awsAuth, resources, emitOpts); err != nil {
 				return result, err
 			}
-			planJSON, _, planErr = runFinalPlanJSON(ctx, opts, planPath, validateJSONPath, tfplanJSONPath)
+			var validateJSON []byte
+			planJSON, validateJSON, planErr = runFinalPlanJSON(ctx, opts, planPath, validateJSONPath, tfplanJSONPath)
 			if planErr != nil {
 				// The backfilled config no longer plans cleanly. Re-attribute
-				// and loop; if un-attributable, abort.
+				// from BOTH the validate diagnostics and the plan stderr (a
+				// backfilled-attr failure commonly surfaces in validate, so
+				// dropping validateJSON here would mis-classify a droppable
+				// resource as systemic and abort). If un-attributable, abort.
 				addresses := identitiesByAddress(resources)
-				failures, attributable := attributeFinalPlanError(nil, planErr, addresses)
+				failures, attributable := attributeFinalPlanError(validateJSON, planErr, addresses)
 				if !attributable {
 					fpErr = planErr
 					break
@@ -305,52 +309,27 @@ func Run(ctx context.Context, req job.Request, opts Options) (job.Result, error)
 	// create/destroy/replace/unauthorized-change is dropped + reported rather
 	// than failing the whole job. Un-attributable issues (wrong import count,
 	// nil plan) still fail.
-	planIssues := composer.ValidateFirstImportPlan(plan, composer.ValidateFirstImportPlanOpts{
-		ExpectedImports:     len(resources),
-		ProvenanceLabelKeys: composer.FirstImportProvenanceKeys(cloud),
-	})
-	if len(planIssues) > 0 {
+	//
+	// Pruning is iterative and bounded (mirrors the final-plan loop): dropping
+	// one contract-violating resource and re-planning can surface a SECOND
+	// resource-attributable contract violation in the trimmed plan. Keep
+	// dropping newly attributable issues + re-planning until none remain. Abort
+	// (failed + error) if every resource is dropped or it does not converge
+	// within maxFinalPlanIterations; only truly un-attributable issues remain
+	// fatal.
+	for fiAttempts := 1; ; fiAttempts++ {
+		planIssues := composer.ValidateFirstImportPlan(plan, composer.ValidateFirstImportPlanOpts{
+			ExpectedImports:     len(resources),
+			ProvenanceLabelKeys: composer.FirstImportProvenanceKeys(cloud),
+		})
+		if len(planIssues) == 0 {
+			break
+		}
 		addresses := identitiesByAddress(resources)
 		perResource, unattributable := attributeFirstImportPlanIssues(planIssues, addresses)
-		if len(perResource) > 0 {
-			for _, f := range perResource {
-				skips.markFailed(addresses[f.address], f.diagnostic)
-			}
-			resources = dropResources(resources, perResource)
-			opts.progressf("reverse-import: dropped %d resource(s) failing the first-import contract; re-planning with %d remaining…\n", len(perResource), len(resources))
-			if len(resources) == 0 {
-				result.Status = job.StatusFailed
-				result.ValidationIssues = issuesFromComposer(planIssues)
-				result.Resources = combinedResourceResults(resources, dependenciesByAddress, skips)
-				_ = writeResult(opts.OutputDir, &result)
-				return result, fmt.Errorf("first-import plan validation dropped every resource")
-			}
-			if err := writeJSON(filepath.Join(opts.OutputDir, importedJSONFile), resources); err != nil {
-				return result, err
-			}
-			if err := writeImportedTerraformArtifacts(opts.OutputDir, cloud, region, gcpProjectID, opts.AWSEndpointURL, awsAuth, resources, emitOpts); err != nil {
-				return result, err
-			}
-			planJSON, _, planErr := runFinalPlanJSON(ctx, opts, planPath, validateJSONPath, tfplanJSONPath)
-			if planErr != nil {
-				result.Status = job.StatusFailed
-				result.Resources = combinedResourceResults(resources, dependenciesByAddress, skips)
-				_ = writeResult(opts.OutputDir, &result)
-				return result, planErr
-			}
-			plan, err = job.DecodeTerraformPlan(bytes.NewReader(planJSON))
-			if err != nil {
-				return result, err
-			}
-			// Re-validate the trimmed plan; only un-attributable issues remain
-			// fatal now.
-			planIssues = composer.ValidateFirstImportPlan(plan, composer.ValidateFirstImportPlanOpts{
-				ExpectedImports:     len(resources),
-				ProvenanceLabelKeys: composer.FirstImportProvenanceKeys(cloud),
-			})
-			_, unattributable = attributeFirstImportPlanIssues(planIssues, identitiesByAddress(resources))
-		}
-		if len(unattributable) > 0 {
+		if len(perResource) == 0 {
+			// Nothing attributable to drop. Only un-attributable issues
+			// remain (wrong import count, nil plan): systemic — abort.
 			result.PlanSummary = job.PlanSummaryFromTerraformPlan(plan)
 			result.ValidationIssues = issuesFromComposer(unattributable)
 			result.Status = job.StatusFailed
@@ -361,6 +340,55 @@ func Run(ctx context.Context, req job.Request, opts Options) (job.Result, error)
 			}
 			return result, fmt.Errorf("final plan validation failed with %d un-attributable issue(s)", len(unattributable))
 		}
+		if fiAttempts > maxFinalPlanIterations {
+			result.Status = job.StatusFailed
+			result.ValidationIssues = issuesFromComposer(planIssues)
+			result.Imported = resources
+			result.Resources = combinedResourceResults(resources, dependenciesByAddress, skips)
+			_ = writeResult(opts.OutputDir, &result)
+			return result, fmt.Errorf("first-import plan validation did not converge after %d iteration(s)", maxFinalPlanIterations)
+		}
+		for _, f := range perResource {
+			skips.markFailed(addresses[f.address], f.diagnostic)
+		}
+		resources = dropResources(resources, perResource)
+		opts.progressf("reverse-import: dropped %d resource(s) failing the first-import contract; re-planning with %d remaining…\n", len(perResource), len(resources))
+		if len(resources) == 0 {
+			result.Status = job.StatusFailed
+			result.ValidationIssues = issuesFromComposer(planIssues)
+			result.Resources = combinedResourceResults(resources, dependenciesByAddress, skips)
+			_ = writeResult(opts.OutputDir, &result)
+			return result, fmt.Errorf("first-import plan validation dropped every resource")
+		}
+		if err := writeJSON(filepath.Join(opts.OutputDir, importedJSONFile), resources); err != nil {
+			return result, err
+		}
+		if err := writeImportedTerraformArtifacts(opts.OutputDir, cloud, region, gcpProjectID, opts.AWSEndpointURL, awsAuth, resources, emitOpts); err != nil {
+			return result, err
+		}
+		planJSON, _, planErr := runFinalPlanJSON(ctx, opts, planPath, validateJSONPath, tfplanJSONPath)
+		if planErr != nil {
+			result.Status = job.StatusFailed
+			result.Resources = combinedResourceResults(resources, dependenciesByAddress, skips)
+			_ = writeResult(opts.OutputDir, &result)
+			return result, planErr
+		}
+		plan, err = job.DecodeTerraformPlan(bytes.NewReader(planJSON))
+		if err != nil {
+			return result, err
+		}
+		// Loop: re-validate the trimmed plan from the top.
+	}
+
+	// imported.json must reflect the converged final resource set. The
+	// final-plan and first-import loops above mutate `resources` in memory but
+	// only rewrite imported.json on a backfill or a re-plan iteration — a run
+	// that dropped resources on the LAST iteration (or via attribution on the
+	// first final-plan failure) could otherwise publish an imported.json that
+	// still lists the dropped resources. Rewrite it from the converged set
+	// before populating artifacts (#732).
+	if err := writeJSON(filepath.Join(opts.OutputDir, importedJSONFile), resources); err != nil {
+		return result, err
 	}
 
 	result.Imported = resources

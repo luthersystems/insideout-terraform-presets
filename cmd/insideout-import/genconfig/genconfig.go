@@ -341,6 +341,16 @@ func runMultiRegion(ctx context.Context, opts Options, groups []regionGroup) (*R
 		// artifact; the real per-region configs are in the subdirs.
 		fmt.Fprintf(os.Stderr, "genconfig: WARN: merged generated.tf: %v\n", err)
 	}
+	// Surface the merged orphan-skip manifest at the top level. Each region
+	// pass writes its own region-*/imports-skipped.json, but downstream
+	// consumers (reverseimport's addSkipManifestArtifact) only look at the
+	// top-level workdir — without this merged copy, multi-region orphan skips
+	// never reach the artifact set (#732).
+	if len(mergedSkipped) > 0 {
+		if _, werr := writeOrphanImportsManifest(opts.Workdir, mergedSkipped); werr != nil {
+			fmt.Fprintf(os.Stderr, "genconfig: WARN: merged imports-skipped.json: %v\n", werr)
+		}
+	}
 	return &Result{GeneratedPath: genPath, Resources: merged, Skipped: mergedSkipped}, nil
 }
 

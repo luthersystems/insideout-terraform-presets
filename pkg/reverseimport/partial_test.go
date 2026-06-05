@@ -2,6 +2,7 @@ package reverseimport
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -238,6 +239,106 @@ func splitAddr(addr string) (typ, name string) {
 func mustType(addr string) string { t, _ := splitAddr(addr); return t }
 func mustName(addr string) string { _, n := splitAddr(addr); return n }
 
+// firstImportContractRunner is a terraform double whose validate + plan always
+// succeed, but whose plan JSON makes designated resources VIOLATE the
+// first-import contract (they appear as a non-import `create` change rather than
+// an import no-op → composer flags imported_plan_unexpected_create, attributable
+// to plan.<address>).
+//
+// violators is ordered and revealed one at a time: violators[i] is emitted as a
+// contract violation only once every violators[<i] has already been dropped from
+// imported.tf. So the FIRST plan flags only violators[0]; after the engine drops
+// it and re-plans, violators[1] surfaces as a NEW attributable violation, and so
+// on. This is the regression model for the iterative first-import-contract
+// pruning fix (#732): the old code rechecked the trimmed plan but discarded the
+// result, so a second-wave contract violation slipped through to a false partial.
+type firstImportContractRunner struct {
+	t         *testing.T
+	dir       string
+	violators []string
+}
+
+func (firstImportContractRunner) Init(context.Context, string) error { return nil }
+
+func (firstImportContractRunner) Validate(context.Context, string) ([]byte, error) {
+	return []byte(`{"valid":true,"diagnostics":[]}`), nil
+}
+
+func (firstImportContractRunner) Plan(context.Context, string, string) error { return nil }
+
+// activeViolator returns the violator that should currently be flagged: the
+// first one in violators that is still declared in imported.tf. Earlier
+// violators must already be gone (dropped) for a later one to activate.
+func (r firstImportContractRunner) activeViolator(surviving map[string]struct{}) string {
+	for _, v := range r.violators {
+		if _, present := surviving[v]; present {
+			return v
+		}
+	}
+	return ""
+}
+
+func (r firstImportContractRunner) ShowPlanJSON(_ context.Context, _, _ string) ([]byte, error) {
+	surviving := survivingAddresses(r.t, r.dir)
+	active := r.activeViolator(surviving)
+	var changes []string
+	for addr := range surviving {
+		typ, name := splitAddr(addr)
+		if addr == active {
+			// Non-import create → violates the first-import contract.
+			changes = append(changes, fmt.Sprintf(`{
+      "address": %q,
+      "mode": "managed",
+      "type": %q,
+      "name": %q,
+      "change": {
+        "actions": ["create"],
+        "before": null,
+        "after": {"name": %q},
+        "after_unknown": {}
+      }
+    }`, addr, typ, name, name))
+			continue
+		}
+		changes = append(changes, fmt.Sprintf(`{
+      "address": %q,
+      "mode": "managed",
+      "type": %q,
+      "name": %q,
+      "change": {
+        "actions": ["no-op"],
+        "before": null,
+        "after": null,
+        "after_unknown": {},
+        "importing": {"id": "id-%s"}
+      }
+    }`, addr, typ, name, name))
+	}
+	return []byte(fmt.Sprintf(`{
+  "format_version": "1.2",
+  "terraform_version": "1.13.0",
+  "resource_changes": [%s]
+}`, strings.Join(changes, ","))), nil
+}
+
+// threeQueueRequest is a three-resource AWS SQS selection used by the
+// iterative first-import-contract pruning test.
+func threeQueueRequest() job.Request {
+	req := twoQueueRequest()
+	req.Resources = append(req.Resources, job.ResourceSpec{
+		Identity: imported.ResourceIdentity{
+			Cloud:    "aws",
+			Type:     "aws_sqs_queue",
+			Address:  "aws_sqs_queue.ugly",
+			ImportID: "https://sqs.us-east-1.amazonaws.com/123/ugly",
+			Region:   "us-east-1",
+		},
+		Tier:   imported.TierImportedFlat,
+		Source: imported.SourceImporter,
+	})
+	return req
+}
+
 // TestRunPartialOnPlanFailure: one resource fails terraform plan; the other
 // imports, the bad one is reported failed with a diagnostic, Status == partial,
 // and Run returns no error (so the mars wrapper exits 0).
@@ -272,6 +373,13 @@ func TestRunPartialOnPlanFailure(t *testing.T) {
 	}
 	if result.PlanSummary.ImportCount != 1 {
 		t.Fatalf("ImportCount = %d, want 1 (only the good resource)", result.PlanSummary.ImportCount)
+	}
+	// imported.json must reflect the converged set after a final-plan drop —
+	// the failed resource must not linger in the published artifact (P1
+	// stale-imported.json fix #732).
+	persisted := readImportedJSON(t, dir)
+	if len(persisted) != 1 || persisted[0].Identity.Address != "aws_sqs_queue.good" {
+		t.Fatalf("imported.json should list only the surviving resource after a final-plan drop, got: %#v", persisted)
 	}
 }
 
@@ -400,4 +508,107 @@ func TestRunSucceedsAllGood(t *testing.T) {
 			t.Fatalf("%s not imported: %#v", addr, rr)
 		}
 	}
+}
+
+// TestRunPartialOnIterativeFirstImportContract is the load-bearing regression
+// for the P1 first-import-contract recheck bug (#732): after dropping a
+// contract-violating resource and re-planning, the trimmed plan can surface a
+// SECOND attributable contract violation. The old code rechecked but discarded
+// the recheck result (`_, unattributable = ...`), so the second violation
+// slipped through to a false partial/clean result with an invalid plan.
+//
+// firstImportContractRunner stages two violators (`bad`, then `ugly`) so the
+// second only becomes attributable after the first is dropped — forcing the
+// pruning loop to iterate. Both must be dropped+reported failed; the one clean
+// resource (`good`) imports; Status == partial; Run returns no error.
+func TestRunPartialOnIterativeFirstImportContract(t *testing.T) {
+	dir := t.TempDir()
+	result, err := Run(context.Background(), threeQueueRequest(), Options{
+		OutputDir:    dir,
+		SkipDepChase: true,
+		deps: deps{
+			runGenconfig: multiResourceGenconfig(),
+			runDriftfix:  fakeDriftfix,
+			runDepChase:  fakeDepChase,
+			tf: firstImportContractRunner{
+				t:         t,
+				dir:       dir,
+				violators: []string{"aws_sqs_queue.bad", "aws_sqs_queue.ugly"},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("Run returned error for an iterative partial result: %v", err)
+	}
+	if result.Status != job.StatusPartial {
+		t.Fatalf("Status = %q, want %q", result.Status, job.StatusPartial)
+	}
+	good, ok := resourceResultByAddress(result.Resources, "aws_sqs_queue.good")
+	if !ok || good.Status != job.ResourceStatusImported {
+		t.Fatalf("good resource not imported: %#v", good)
+	}
+	for _, addr := range []string{"aws_sqs_queue.bad", "aws_sqs_queue.ugly"} {
+		bad, ok := resourceResultByAddress(result.Resources, addr)
+		if !ok || bad.Status != job.ResourceStatusFailed {
+			t.Fatalf("%s not failed after iterative contract pruning: %#v", addr, bad)
+		}
+		if len(bad.Diagnostics) == 0 || bad.Diagnostics[0].Code != "imported_plan_unexpected_create" {
+			t.Fatalf("%s missing first-import contract diagnostic: %#v", addr, bad.Diagnostics)
+		}
+	}
+	if result.PlanSummary.ImportCount != 1 {
+		t.Fatalf("ImportCount = %d, want 1 (only the good resource)", result.PlanSummary.ImportCount)
+	}
+	// imported.json must reflect the converged set — only the surviving
+	// resource, never a dropped contract-violator (the P1 stale-imported.json
+	// fix).
+	persisted := readImportedJSON(t, dir)
+	if len(persisted) != 1 || persisted[0].Identity.Address != "aws_sqs_queue.good" {
+		t.Fatalf("imported.json should list only the surviving resource, got: %#v", persisted)
+	}
+}
+
+// TestRunFailsWhenFirstImportContractDropsEveryResource: when every resource
+// violates the first-import contract across iterations, the engine must abort
+// with failed + error rather than emit an empty false partial.
+func TestRunFailsWhenFirstImportContractDropsEveryResource(t *testing.T) {
+	dir := t.TempDir()
+	result, err := Run(context.Background(), threeQueueRequest(), Options{
+		OutputDir:    dir,
+		SkipDepChase: true,
+		deps: deps{
+			runGenconfig: multiResourceGenconfig(),
+			runDriftfix:  fakeDriftfix,
+			runDepChase:  fakeDepChase,
+			tf: firstImportContractRunner{
+				t:   t,
+				dir: dir,
+				violators: []string{
+					"aws_sqs_queue.good",
+					"aws_sqs_queue.bad",
+					"aws_sqs_queue.ugly",
+				},
+			},
+		},
+	})
+	if err == nil {
+		t.Fatal("Run returned nil error when every resource failed the first-import contract")
+	}
+	if result.Status != job.StatusFailed {
+		t.Fatalf("Status = %q, want %q", result.Status, job.StatusFailed)
+	}
+}
+
+// readImportedJSON decodes the engine's imported.json artifact.
+func readImportedJSON(t *testing.T, dir string) []imported.ImportedResource {
+	t.Helper()
+	raw, err := os.ReadFile(filepath.Join(dir, importedJSONFile))
+	if err != nil {
+		t.Fatalf("read imported.json: %v", err)
+	}
+	var out []imported.ImportedResource
+	if err := json.Unmarshal(raw, &out); err != nil {
+		t.Fatalf("decode imported.json: %v", err)
+	}
+	return out
 }
