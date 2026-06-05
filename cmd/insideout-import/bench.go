@@ -234,9 +234,12 @@ type benchResult struct {
 	// Validation / Timeout / other) so the summary can answer "are these
 	// rate-limit errors or structural?" without re-running.
 	enrichErrorsByCategory map[string]int
-	discoverDuration       time.Duration
-	enrichDuration         time.Duration
-	totalDuration          time.Duration
+	// enrichErrorSamples holds up to 5 distinct sample messages per
+	// category so the operator can see what e.g. "other" actually is.
+	enrichErrorSamples map[string][]string
+	discoverDuration   time.Duration
+	enrichDuration     time.Duration
+	totalDuration      time.Duration
 }
 
 // categorizeEnrichErrors buckets every failed-enrich resource by the kind of
@@ -244,19 +247,40 @@ type benchResult struct {
 // enricher stamps, which include the downgraded ErrNotFound / client-
 // unavailable cases that never reach the joined error). Priority-ordered
 // substring matching keeps it robust against the verbose AWS SDK error text.
-func categorizeEnrichErrors(irs []composerimported.ImportedResource) map[string]int {
-	counts := map[string]int{}
+func categorizeEnrichErrors(irs []composerimported.ImportedResource) (counts map[string]int, samples map[string][]string) {
+	counts = map[string]int{}
+	samples = map[string][]string{}
+	seen := map[string]bool{}
 	for i := range irs {
 		if irs[i].Identity.EnrichmentStatus != composerimported.EnrichmentStatusFailed {
 			continue
 		}
-		msg := ""
+		raw := ""
 		if len(irs[i].Identity.EnrichErrors) > 0 {
-			msg = strings.ToLower(irs[i].Identity.EnrichErrors[0])
+			raw = irs[i].Identity.EnrichErrors[0]
 		}
-		counts[classifyEnrichError(msg)]++
+		cat := classifyEnrichError(strings.ToLower(raw))
+		counts[cat]++
+		// Keep up to 5 distinct truncated sample messages per category so
+		// the operator can see what "other" actually is without a re-run.
+		trunc := truncateMsg(raw, 180)
+		key := cat + "|" + trunc
+		if !seen[key] && len(samples[cat]) < 5 {
+			seen[key] = true
+			samples[cat] = append(samples[cat], trunc)
+		}
 	}
-	return counts
+	return counts, samples
+}
+
+// truncateMsg collapses whitespace/newlines and clips to n runes so a verbose
+// AWS SDK error string renders as one greppable line.
+func truncateMsg(s string, n int) string {
+	s = strings.Join(strings.Fields(s), " ")
+	if len(s) > n {
+		return s[:n] + "…"
+	}
+	return s
 }
 
 // classifyEnrichError maps one (lowercased) error string to a coarse category.
@@ -347,7 +371,7 @@ func runBenchAWS(ctx context.Context, cfg benchConfig, endpointURL string, deps 
 	_ = enrichErr // surfaced via the per-resource counts below
 
 	res.enrichedCount, res.enrichErrorCount = countEnrichOutcomes(irs)
-	res.enrichErrorsByCategory = categorizeEnrichErrors(irs)
+	res.enrichErrorsByCategory, res.enrichErrorSamples = categorizeEnrichErrors(irs)
 	res.totalDuration = time.Since(wallStart)
 	return res, nil
 }
@@ -395,6 +419,9 @@ func (r benchResult) summaryLines() []string {
 	// summary answers "are these throttles or structural?" at a glance.
 	for _, kv := range sortedCategoryCounts(r.enrichErrorsByCategory) {
 		lines = append(lines, fmt.Sprintf("bench: enrich-error category=%s count=%d", kv.category, kv.count))
+		for _, sample := range r.enrichErrorSamples[kv.category] {
+			lines = append(lines, fmt.Sprintf("bench:   sample category=%s msg=%q", kv.category, sample))
+		}
 	}
 	lines = append(lines, fmt.Sprintf("bench: total provider=%s discover_concurrency=%d enrich_concurrency=%d resources=%d duration=%s",
 		r.provider, r.discoverConc, r.enrichConc, r.resourceCount, roundDur(r.totalDuration)))
