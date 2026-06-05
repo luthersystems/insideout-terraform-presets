@@ -105,7 +105,43 @@ func writeManifest(dir, cloud string, resources []imported.ImportedResource) (st
 	})
 
 	if issues := composer.ValidateImportedResources(cloud, resources); len(issues) > 0 {
-		return "", 0, fmt.Errorf("manifest validation failed (%d issue(s)): %s", len(issues), formatIssues(issues))
+		// #736 backstop: the imported_resource_dangling_parent orphan
+		// condition is recoverable — drop the offending child and continue —
+		// not a reason to abort the whole scan. discover.go's cascade-drop
+		// (imported.DropOrphanedChildren) already removes these before
+		// writeManifest, so reaching here with danglers means a future caller
+		// fed an un-cascaded set; rather than re-abort, drop them, warn, and
+		// re-validate the survivors. Every other validation code (wrong cloud,
+		// missing address/import-id, decode failure, address collision, …)
+		// stays fatal.
+		fatal, dangling := composer.PartitionDanglingParentIssues(issues)
+		if len(dangling) > 0 {
+			resources = dropDanglingParents(resources, dangling)
+			fmt.Fprintf(os.Stderr,
+				"manifest: dropped %d orphaned child resource(s) with a dangling ParentAddress (recoverable; continuing): %s\n",
+				len(dangling), formatIssues(dangling))
+			// Re-validate survivors: dropping a child can itself orphan a
+			// grandchild whose parent was that child. ValidateImportedResources
+			// re-derives the full address index, so a second pass catches any
+			// newly-dangling reference; loop until clean or a genuinely-fatal
+			// issue surfaces.
+			for {
+				reIssues := composer.ValidateImportedResources(cloud, resources)
+				if len(reIssues) == 0 {
+					fatal = nil
+					break
+				}
+				reFatal, reDangling := composer.PartitionDanglingParentIssues(reIssues)
+				if len(reDangling) == 0 {
+					fatal = reFatal
+					break
+				}
+				resources = dropDanglingParents(resources, reDangling)
+			}
+		}
+		if len(fatal) > 0 {
+			return "", 0, fmt.Errorf("manifest validation failed (%d issue(s)): %s", len(fatal), formatIssues(fatal))
+		}
 	}
 
 	body, err := json.MarshalIndent(resources, "", "  ")
@@ -122,6 +158,35 @@ func writeManifest(dir, cloud string, resources []imported.ImportedResource) (st
 		return "", 0, fmt.Errorf("write %s: %w", out, err)
 	}
 	return out, len(resources), nil
+}
+
+// dropDanglingParents returns resources with every row flagged by a
+// imported_resource_dangling_parent issue removed (#736). dangling is the
+// subset of ValidationIssues whose Code is
+// composer.CodeImportedDanglingParent; each issue's Field is
+// "imported.<child-address>" (importedField). The orphaned child references a
+// parent no longer in the set, so importing it is wrong and would re-trip the
+// validator — drop it and keep the rest of the manifest importable.
+//
+// The input slice is never mutated; a new slice is returned. Rows with an empty
+// Address (which the validator flags separately as imported_resource_missing_address,
+// a fatal code) are never matched here.
+func dropDanglingParents(resources []imported.ImportedResource, dangling []composer.ValidationIssue) []imported.ImportedResource {
+	if len(dangling) == 0 {
+		return resources
+	}
+	refused := make(map[string]bool, len(dangling))
+	for _, is := range dangling {
+		refused[strings.TrimPrefix(is.Field, "imported.")] = true
+	}
+	out := make([]imported.ImportedResource, 0, len(resources))
+	for _, ir := range resources {
+		if refused[strings.TrimSpace(ir.Identity.Address)] {
+			continue
+		}
+		out = append(out, ir)
+	}
+	return out
 }
 
 // readManifest reads <path> from disk, decodes the JSON array of

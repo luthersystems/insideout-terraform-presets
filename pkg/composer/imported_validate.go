@@ -184,6 +184,41 @@ func ValidateImportedResources(cloud string, irs []imported.ImportedResource) []
 	return issues
 }
 
+// CodeImportedDanglingParent is the validation code emitted by
+// ValidateImportedResources when a resource's Identity.ParentAddress does not
+// resolve to any Address in the set. It is exported so callers can classify it
+// as a per-resource drop-and-continue condition rather than a fatal abort
+// (#736) — see IsDanglingParentIssue and PartitionDanglingParentIssues.
+const CodeImportedDanglingParent = imported.DanglingParentReason
+
+// IsDanglingParentIssue reports whether a ValidationIssue is the
+// imported_resource_dangling_parent orphan condition (#736). That condition is
+// recoverable: the offending child references a parent no longer in the set, so
+// the caller can drop the orphan and continue rather than abort the whole
+// operation. Every other code returned by ValidateImportedResources signals a
+// genuinely malformed resource (wrong cloud, missing address/import-id, decode
+// failure, address collision, …) and stays fatal.
+func IsDanglingParentIssue(i ValidationIssue) bool {
+	return i.Code == CodeImportedDanglingParent
+}
+
+// PartitionDanglingParentIssues splits issues into the genuinely-fatal set and
+// the recoverable imported_resource_dangling_parent orphan set (#736). Callers
+// that want partial tolerance — drop the orphaned child + warn, abort only on
+// fatal issues — use this to scope the non-fatal downgrade narrowly to the
+// dangling-parent case. Both slices preserve input order and are nil when
+// empty.
+func PartitionDanglingParentIssues(issues []ValidationIssue) (fatal []ValidationIssue, dangling []ValidationIssue) {
+	for _, i := range issues {
+		if IsDanglingParentIssue(i) {
+			dangling = append(dangling, i)
+			continue
+		}
+		fatal = append(fatal, i)
+	}
+	return fatal, dangling
+}
+
 // ValidateImportedEmitReadiness runs the emit-time-only checks on irs:
 // checks that are meaningful only once discovery has finished and the
 // composer is about to render `/imported.tf`. Unlike

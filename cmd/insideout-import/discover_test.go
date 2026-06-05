@@ -697,6 +697,78 @@ func TestRunDiscoverWithDeps_ValidatorFailsExitsFatal(t *testing.T) {
 	}
 }
 
+// TestRunDiscoverWithDeps_OrphanedChildrenDoNotAbortScan is the #736
+// regression: an InsideOut-managed S3 bucket carries the imported marker so
+// partitionUnimportable drops it from the importable set, but its discovered
+// S3 sub-resources keep a ParentAddress pointing at the now-absent bucket.
+// Before #736 the dangling ParentAddress tripped
+// composer.ValidateImportedResources and aborted the WHOLE scan (exit 2, no
+// imported.json). After the cascade-drop, the orphaned children are removed,
+// the scan completes (exit 0), imported.json is written, and the orphans are
+// absent from it.
+func TestRunDiscoverWithDeps_OrphanedChildrenDoNotAbortScan(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+
+	const bucket = "aws_s3_bucket.luther_34f220f6_default_tfstate_s3_dwk3"
+	// InsideOut-managed bucket — the imported marker tag makes
+	// imported.UnimportableReason classify it ReasonInsideOutImported, so
+	// partitionUnimportable excludes it from imported.json.
+	insideOutBucket := imported.ImportedResource{
+		Identity: imported.ResourceIdentity{
+			Cloud:    "aws",
+			Type:     "aws_s3_bucket",
+			Address:  bucket,
+			ImportID: "luther-34f220f6-default-tfstate-s3-dwk3",
+			Tags:     map[string]string{"InsideOutImported": "true"},
+		},
+		Tier:   imported.TierImportedFlat,
+		Source: imported.SourceImporter,
+	}
+	child := func(typ, addr string) imported.ImportedResource {
+		ir := validResource(addr)
+		ir.Identity.Type = typ
+		ir.Identity.ParentAddress = bucket
+		return ir
+	}
+	agg := &fakeAggregator{out: []imported.ImportedResource{
+		insideOutBucket,
+		child("aws_s3_bucket_ownership_controls", "aws_s3_bucket_ownership_controls.luther_34f220f6_default_tfstate_s3_dwk3_ownership"),
+		child("aws_s3_bucket_versioning", "aws_s3_bucket_versioning.luther_34f220f6_default_tfstate_s3_dwk3_versioning"),
+		child("aws_s3_bucket_server_side_encryption_configuration", "aws_s3_bucket_server_side_encryption_configuration.luther_34f220f6_default_tfstate_s3_dwk3_sse"),
+		child("aws_s3_bucket_public_access_block", "aws_s3_bucket_public_access_block.luther_34f220f6_default_tfstate_s3_dwk3_public_access_block"),
+		// an unrelated, fully-intact resource must survive.
+		validResource("aws_sqs_queue.dlq"),
+	}}
+
+	rc := runDiscoverWithDeps([]string{
+		"--provider", "aws", "--project", "p", "--region", "us-east-1", "--output-dir", dir, "--no-hcl",
+	}, okDeps(agg))
+	if rc != discoverExitOK {
+		t.Fatalf("rc=%d, want OK — orphaned S3 sub-resources must not abort the scan (#736)", rc)
+	}
+
+	body, err := os.ReadFile(filepath.Join(dir, "imported.json"))
+	if err != nil {
+		t.Fatalf("imported.json must be written (the prior failure mode wrote nothing): %v", err)
+	}
+	var got []imported.ImportedResource
+	if err := json.Unmarshal(body, &got); err != nil {
+		t.Fatalf("imported.json decode: %v", err)
+	}
+	gotAddrs := make([]string, 0, len(got))
+	for _, ir := range got {
+		gotAddrs = append(gotAddrs, ir.Identity.Address)
+	}
+	// Only the unrelated queue survives: the InsideOut bucket is excluded as
+	// un-importable, and every orphaned S3 sub-resource is cascade-dropped.
+	assert.Equal(t, []string{"aws_sqs_queue.dlq"}, gotAddrs,
+		"manifest must contain only the intact, parent-resolvable resource")
+	for _, a := range gotAddrs {
+		assert.NotContains(t, a, "tfstate", "no orphaned S3 sub-resource of the excluded bucket may leak into imported.json")
+	}
+}
+
 // TestRunDiscoverWithDeps_GenconfigInvokedOnHappyPath pins that Stage 2b's
 // HCL pipeline runs by default after a successful manifest write. A mutation
 // that drops the genconfig dispatch (e.g. flipping --no-hcl's default to

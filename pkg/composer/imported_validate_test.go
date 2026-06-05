@@ -284,6 +284,54 @@ func TestDropUncomposable(t *testing.T) {
 	assert.Len(t, dropUncomposable([]imported.ImportedResource{good}, nil), 1)
 }
 
+// TestCodeImportedDanglingParent_WireStable pins that the exported classifier
+// constant matches the literal code ValidateImportedResources emits (#736), so
+// callers that branch on CodeImportedDanglingParent never drift from the
+// validator.
+func TestCodeImportedDanglingParent_WireStable(t *testing.T) {
+	t.Parallel()
+	assert.Equal(t, "imported_resource_dangling_parent", CodeImportedDanglingParent)
+}
+
+// TestIsDanglingParentIssue confirms the classifier flags only the recoverable
+// orphan code and nothing else.
+func TestIsDanglingParentIssue(t *testing.T) {
+	t.Parallel()
+	assert.True(t, IsDanglingParentIssue(ValidationIssue{Code: "imported_resource_dangling_parent"}))
+	assert.False(t, IsDanglingParentIssue(ValidationIssue{Code: "imported_resource_missing_import_id"}))
+	assert.False(t, IsDanglingParentIssue(ValidationIssue{Code: "imported_resource_address_collision"}))
+	assert.False(t, IsDanglingParentIssue(ValidationIssue{}))
+}
+
+// TestPartitionDanglingParentIssues pins the fatal/recoverable split (#736):
+// only the dangling-parent code lands in the recoverable bucket; every other
+// validator code stays fatal, so the backstop can never make validation
+// toothless.
+func TestPartitionDanglingParentIssues(t *testing.T) {
+	t.Parallel()
+	issues := []ValidationIssue{
+		{Code: "imported_resource_missing_import_id", Field: "imported.a"},
+		{Code: "imported_resource_dangling_parent", Field: "imported.b"},
+		{Code: "imported_resource_address_collision", Field: "imported.c"},
+		{Code: "imported_resource_dangling_parent", Field: "imported.d"},
+	}
+	fatal, dangling := PartitionDanglingParentIssues(issues)
+
+	assert.Equal(t, []string{
+		"imported_resource_missing_import_id",
+		"imported_resource_address_collision",
+	}, issueCodes(fatal), "every non-dangling code stays fatal, input order preserved")
+	assert.Equal(t, []string{
+		"imported_resource_dangling_parent",
+		"imported_resource_dangling_parent",
+	}, issueCodes(dangling))
+
+	// Nil-safe: no issues -> both nil.
+	gotFatal, gotDangling := PartitionDanglingParentIssues(nil)
+	assert.Nil(t, gotFatal)
+	assert.Nil(t, gotDangling)
+}
+
 func TestValidateProvenanceConflicts_Empty(t *testing.T) {
 	t.Parallel()
 	assert.Nil(t, ValidateProvenanceConflicts("aws", nil, ProvenanceOpts{ImportProjectID: "io-1"}))

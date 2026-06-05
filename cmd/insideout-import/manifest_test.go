@@ -142,6 +142,123 @@ func TestWriteManifest_AddressCollisionDetectedByValidator(t *testing.T) {
 	}
 }
 
+// validChildIR builds an importable child resource whose ParentAddress points
+// at parent — the S3-sub-resource shape that #736 leaves orphaned when its
+// bucket is excluded from the set.
+func validChildIR(typ, addr, importID, parent string) imported.ImportedResource {
+	ir := validIR(typ, addr, importID)
+	ir.Identity.ParentAddress = parent
+	return ir
+}
+
+// TestWriteManifest_DanglingParentNonFatalBackstop pins the #736 backstop:
+// imported_resource_dangling_parent must NOT abort writeManifest. Before #736
+// the dangling-parent code was fatal (no imported.json written, exit 2 in the
+// CLI). With the backstop, writeManifest drops the orphaned children, writes a
+// clean manifest of the survivors, and never surfaces the dangling-parent code
+// as an error.
+func TestWriteManifest_DanglingParentNonFatalBackstop(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	const bucket = "aws_s3_bucket.luther_tfstate"
+	// bucket itself is NOT in the set (excluded upstream). Its sub-resources
+	// remain with a dangling ParentAddress — the exact pre-#736 fatal case.
+	in := []imported.ImportedResource{
+		validChildIR("aws_s3_bucket_versioning", "aws_s3_bucket_versioning.luther_tfstate_versioning", "luther-tfstate", bucket),
+		validChildIR("aws_s3_bucket_public_access_block", "aws_s3_bucket_public_access_block.luther_tfstate_pab", "luther-tfstate", bucket),
+		validIR("aws_sqs_queue", "aws_sqs_queue.dlq", "https://example/dlq"),
+	}
+
+	path, n, err := writeManifest(dir, "aws", in)
+	if err != nil {
+		t.Fatalf("writeManifest must not abort on a dangling parent (#736); got: %v", err)
+	}
+	if n != 1 {
+		t.Errorf("manifest count=%d, want 1 (orphaned S3 sub-resources dropped, queue kept)", n)
+	}
+
+	// The prior failure mode is gone: imported.json exists and the validator
+	// passes on the survivors.
+	got, rerr := readManifest(path, "aws")
+	if rerr != nil {
+		t.Fatalf("survivors must re-validate clean (no imported_resource_dangling_parent); got: %v", rerr)
+	}
+	if len(got) != 1 || got[0].Identity.Address != "aws_sqs_queue.dlq" {
+		t.Errorf("survivors=%v, want only aws_sqs_queue.dlq", addrsOf(got))
+	}
+}
+
+// TestWriteManifest_DanglingParentTransitiveBackstop covers the transitive
+// re-validation loop: dropping a child can orphan a grandchild whose parent was
+// that child. writeManifest must converge — no grandchild leaks into the
+// manifest, and no fatal dangling-parent error surfaces.
+func TestWriteManifest_DanglingParentTransitiveBackstop(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	// grandparent aws_vpc.gone is absent. child references it; grandchild
+	// references child.
+	in := []imported.ImportedResource{
+		validChildIR("aws_subnet", "aws_subnet.child", "subnet-1", "aws_vpc.gone"),
+		validChildIR("aws_route_table_association", "aws_route_table_association.grandchild", "rtbassoc-1", "aws_subnet.child"),
+		validIR("aws_sqs_queue", "aws_sqs_queue.keep", "https://example/keep"),
+	}
+	path, n, err := writeManifest(dir, "aws", in)
+	if err != nil {
+		t.Fatalf("writeManifest must converge on transitive orphans (#736); got: %v", err)
+	}
+	if n != 1 {
+		t.Errorf("manifest count=%d, want 1 (both orphan + grandchild dropped)", n)
+	}
+	got, rerr := readManifest(path, "aws")
+	if rerr != nil {
+		t.Fatalf("survivors must re-validate clean; got: %v", rerr)
+	}
+	if len(got) != 1 || got[0].Identity.Address != "aws_sqs_queue.keep" {
+		t.Errorf("survivors=%v, want only aws_sqs_queue.keep", addrsOf(got))
+	}
+}
+
+// TestWriteManifest_GenuinelyFatalStillFatalWithDangler proves the backstop is
+// narrowly scoped: a genuinely-fatal issue (missing import id) is NOT swallowed
+// just because a dangling-parent issue is also present. The validator stays
+// toothless-proof — only the dangling-parent code is recoverable.
+func TestWriteManifest_GenuinelyFatalStillFatalWithDangler(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	in := []imported.ImportedResource{
+		// dangling parent — recoverable.
+		validChildIR("aws_s3_bucket_versioning", "aws_s3_bucket_versioning.orphan", "id", "aws_s3_bucket.gone"),
+		// missing import id — genuinely fatal; must still abort.
+		{
+			Identity: imported.ResourceIdentity{Cloud: "aws", Type: "aws_sqs_queue", Address: "aws_sqs_queue.bad"},
+			Tier:     imported.TierImportedFlat,
+			Source:   imported.SourceImporter,
+		},
+	}
+	_, _, err := writeManifest(dir, "aws", in)
+	if err == nil {
+		t.Fatal("a genuinely-fatal issue must still abort even alongside a dangling parent")
+	}
+	if !strings.Contains(err.Error(), "imported_resource_missing_import_id") {
+		t.Errorf("error must mention the fatal missing-import-id code; got: %v", err)
+	}
+	if strings.Contains(err.Error(), "imported_resource_dangling_parent") {
+		t.Errorf("the recoverable dangling-parent code must not be reported as fatal; got: %v", err)
+	}
+	if _, statErr := os.Stat(filepath.Join(dir, "imported.json")); !os.IsNotExist(statErr) {
+		t.Errorf("imported.json must NOT be written when a genuinely-fatal issue remains")
+	}
+}
+
+// addrsOf extracts the Address of each resource for compact assertions.
+func addrsOf(irs []imported.ImportedResource) []string {
+	out := make([]string, 0, len(irs))
+	for _, ir := range irs {
+		out = append(out, ir.Identity.Address)
+	}
+	return out
+}
+
 // readManifest is the inverse of writeManifest: writes-then-reads round
 // trip pins the wire-shape contract end-to-end. A regression that drops
 // the validator (or runs only one direction) would still pass the
