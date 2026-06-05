@@ -24,6 +24,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/apigatewayv2"
 	"github.com/aws/aws-sdk-go-v2/service/autoscaling"
 	"github.com/aws/aws-sdk-go-v2/service/bedrock"
@@ -280,6 +281,37 @@ type EnrichClients struct {
 	// as ErrEnrichClientUnavailable.
 	WAFv2     *wafv2.Client
 	AccountID string
+}
+
+// NewEnrichClients constructs the complete EnrichClients bundle from a single
+// aws.Config. Every per-type enricher's SDK client is wired here, so the
+// bundle is complete by construction.
+//
+// This is the single source of truth for the bundle. A nil client field is
+// tolerated but surfaces as ErrEnrichClientUnavailable at Enrich time, which
+// silently drops that resource type from the enriched set — so partial wiring
+// is a latent gap, not an obvious error. Callers (reliable's
+// buildAWSImportedProvider, the insideout-import bench subcommand) must use
+// this constructor rather than hand-building the struct, so they cannot drift
+// out of parity. The SDK client structs are stateless wrappers over the
+// aws.Config, so constructing all of them costs effectively nothing.
+func NewEnrichClients(cfg aws.Config, accountID string) EnrichClients {
+	return EnrichClients{
+		S3:                s3.NewFromConfig(cfg),
+		DynamoDB:          dynamodb.NewFromConfig(cfg),
+		SecretsManager:    secretsmanager.NewFromConfig(cfg),
+		Bedrock:           bedrock.NewFromConfig(cfg),
+		ServiceDiscovery:  servicediscovery.NewFromConfig(cfg),
+		CloudControl:      cloudcontrol.NewFromConfig(cfg),
+		ResourceExplorer2: resourceexplorer2.NewFromConfig(cfg),
+		APIGatewayV2:      apigatewayv2.NewFromConfig(cfg),
+		IAM:               iam.NewFromConfig(cfg),
+		Lambda:            lambda.NewFromConfig(cfg),
+		CloudFront:        cloudfront.NewFromConfig(cfg),
+		AutoScaling:       autoscaling.NewFromConfig(cfg),
+		WAFv2:             wafv2.NewFromConfig(cfg),
+		AccountID:         accountID,
+	}
 }
 
 // ErrEnrichClientUnavailable signals that the SDK client an enricher

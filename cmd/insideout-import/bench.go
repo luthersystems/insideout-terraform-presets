@@ -28,10 +28,6 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
-	"github.com/aws/aws-sdk-go-v2/service/cloudcontrol"
-	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
-	"github.com/aws/aws-sdk-go-v2/service/s3"
-	"github.com/aws/aws-sdk-go-v2/service/secretsmanager"
 	"github.com/aws/aws-sdk-go-v2/service/sts"
 
 	"github.com/luthersystems/insideout-terraform-presets/cmd/insideout-import/awsdiscover"
@@ -95,15 +91,10 @@ func productionBenchAWSDeps() benchAWSDeps {
 		// so the benchmark times the exact path production runs.
 		newProvider: func(cfg aws.Config, maxConc int, accountID string) (imp.Provider, imp.Clients) {
 			disc := awsdiscover.NewAWSDiscovererWithConcurrency(cfg, maxConc)
-			clients := imp.Clients{
-				AWS: awsdiscover.EnrichClients{
-					S3:             s3.NewFromConfig(cfg),
-					DynamoDB:       dynamodb.NewFromConfig(cfg),
-					SecretsManager: secretsmanager.NewFromConfig(cfg),
-					CloudControl:   cloudcontrol.NewFromConfig(cfg),
-					AccountID:      accountID,
-				},
-			}
+			// Use the centralized constructor so the benchmark wires the
+			// exact same full client bundle reliable does (no drift, true
+			// parity). See awsdiscover.NewEnrichClients.
+			clients := imp.Clients{AWS: awsdiscover.NewEnrichClients(cfg, accountID)}
 			return importedaws.NewProvider(disc, driftimp.Compare), clients
 		},
 	}
