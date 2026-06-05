@@ -70,6 +70,25 @@ func unsupportedFromImported(ir imported.ImportedResource, reason string) Unsupp
 	}
 }
 
+// orphanAddressesSummary renders a compact, deterministic
+// "child.address (-> parent.address)" breakdown for the #736 orphaned-child
+// stderr line. Sorted by child Address so the message is stable across runs.
+// Capped at a handful of entries with a "(+N more)" suffix so a pathological
+// run with hundreds of orphans does not flood stderr.
+func orphanAddressesSummary(rows []imported.ImportedResource) string {
+	const maxShown = 8
+	lines := make([]string, 0, len(rows))
+	for _, ir := range rows {
+		lines = append(lines, fmt.Sprintf("%s (-> %s)", ir.Identity.Address, ir.Identity.ParentAddress))
+	}
+	sort.Strings(lines)
+	if len(lines) <= maxShown {
+		return strings.Join(lines, ", ")
+	}
+	more := len(lines) - maxShown
+	return strings.Join(lines[:maxShown], ", ") + fmt.Sprintf(", (+%d more)", more)
+}
+
 // unimportableReasonsSummary renders a compact, deterministic
 // "<count> <reason>" breakdown (e.g. "5 aws_managed_kms_alias, 1
 // service_managed_eni") for the stderr exclusion line. Sorted by reason code

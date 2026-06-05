@@ -915,6 +915,32 @@ Exit codes:
 			len(unimportableRows), unimportableReasonsSummary(unimportableRows))
 	}
 
+	// #736: cascade-drop orphaned children. partitionUnimportable above (and
+	// the per-region/per-type scope of discovery) can remove a parent from the
+	// set while its sub-resources remain — e.g. an InsideOut-managed
+	// `luther-*-tfstate` S3 bucket is excluded as ReasonInsideOutImported but
+	// its aws_s3_bucket_ownership_controls / _versioning / _sse / _public_access_block
+	// children were discovered independently and still carry a ParentAddress
+	// pointing at the now-absent bucket. Importing a sub-resource whose bucket
+	// you are deliberately not managing is wrong, and left in the set the
+	// dangling ParentAddress would (pre-#736) fail composer.ValidateImportedResources
+	// and abort the whole scan. Drop the orphans transitively (grandparent gone
+	// → child dropped → grandchild orphaned → dropped) and route them into the
+	// unsupported set so the wizard can show why.
+	resources, orphanRows := imported.DropOrphanedChildren(resources)
+	if len(orphanRows) > 0 {
+		orphanUnsupported := make([]UnsupportedResource, 0, len(orphanRows))
+		for _, ir := range orphanRows {
+			orphanUnsupported = append(orphanUnsupported, unsupportedFromImported(ir, imported.DanglingParentReason))
+		}
+		unimportableRows = append(unimportableRows, orphanUnsupported...)
+		fmt.Fprintf(os.Stderr,
+			"discover: dropped %d orphaned child resource(s) from imported.json "+
+				"(parent resource excluded/absent from the set — dangling ParentAddress, "+
+				"e.g. S3 sub-resources of an InsideOut-managed tfstate bucket): %s\n",
+			len(orphanRows), orphanAddressesSummary(orphanRows))
+	}
+
 	out, n, err := writeManifest(*outputDir, cloud, resources)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "discover: %v\n", err)
