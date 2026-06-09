@@ -37,6 +37,7 @@ var untaggableAWS = map[string]struct{}{
 	"aws_autoscaling_group_tag":                          {},
 	"aws_backup_selection":                               {},
 	"aws_bedrock_model_invocation_logging_configuration": {},
+	"aws_bedrockagent_data_source":                       {},
 	"aws_cloudfront_monitoring_subscription":             {},
 	"aws_cloudfront_origin_access_identity":              {},
 	"aws_cloudwatch_dashboard":                           {},
