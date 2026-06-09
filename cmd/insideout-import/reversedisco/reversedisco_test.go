@@ -2,10 +2,16 @@ package reversedisco
 
 import (
 	"context"
+	"fmt"
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"net/url"
 	"reflect"
 	"testing"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/credentials"
 
 	"github.com/luthersystems/insideout-terraform-presets/cmd/insideout-import/awsdiscover"
 	"github.com/luthersystems/insideout-terraform-presets/pkg/composer/imported"
@@ -152,5 +158,64 @@ func TestApplyAWSAssumeRole(t *testing.T) {
 	wrapped := applyAWSAssumeRole(base, AWSAssumeRole{RoleARN: "arn:aws:iam::000000000000:role/x"})
 	if wrapped.Credentials == base.Credentials || wrapped.Credentials == nil {
 		t.Fatalf("non-empty RoleARN did not swap in an assume-role provider: %T", wrapped.Credentials)
+	}
+}
+
+// TestApplyAWSAssumeRoleTargetsRequestedRole closes the qa-professor #770
+// surviving mutation: a provider could be swapped in (passing
+// TestApplyAWSAssumeRole) yet target the WRONG role — the exact #739 defect-2
+// failure mode (SDK calls running as the wrong principal). Drive the wrapped
+// config's credential retrieval against a stub STS transport and assert the
+// sts:AssumeRole request carries the requested RoleArn and ExternalId.
+func TestApplyAWSAssumeRoleTargetsRequestedRole(t *testing.T) {
+	const (
+		wantRole       = "arn:aws:iam::031780745048:role/customer-inspector"
+		wantExternalID = "expected-external-id"
+	)
+	var captured url.Values
+	stub := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		captured, _ = url.ParseQuery(string(body))
+		// Minimal valid AssumeRole XML so Retrieve succeeds end-to-end.
+		w.Header().Set("Content-Type", "text/xml")
+		fmt.Fprint(w, `<AssumeRoleResponse xmlns="https://sts.amazonaws.com/doc/2011-06-15/">
+  <AssumeRoleResult>
+    <Credentials>
+      <AccessKeyId>ASIASTUB</AccessKeyId>
+      <SecretAccessKey>stubsecret</SecretAccessKey>
+      <SessionToken>stubtoken</SessionToken>
+      <Expiration>2030-01-01T00:00:00Z</Expiration>
+    </Credentials>
+    <AssumedRoleUser>
+      <Arn>`+wantRole+`</Arn>
+      <AssumedRoleId>AROASTUB:session</AssumedRoleId>
+    </AssumedRoleUser>
+  </AssumeRoleResult>
+</AssumeRoleResponse>`)
+	}))
+	defer stub.Close()
+
+	base := aws.Config{
+		Region:       "us-east-1",
+		Credentials:  credentials.NewStaticCredentialsProvider("AKIABASE", "basesecret", ""),
+		BaseEndpoint: aws.String(stub.URL),
+	}
+	wrapped := applyAWSAssumeRole(base, AWSAssumeRole{RoleARN: wantRole, ExternalID: wantExternalID})
+
+	creds, err := wrapped.Credentials.Retrieve(context.Background())
+	if err != nil {
+		t.Fatalf("Retrieve through stub STS: %v", err)
+	}
+	if creds.AccessKeyID != "ASIASTUB" {
+		t.Fatalf("Retrieve returned %q, want the stub's assumed-role credentials", creds.AccessKeyID)
+	}
+	if captured == nil {
+		t.Fatal("stub STS never received an AssumeRole request")
+	}
+	if got := captured.Get("RoleArn"); got != wantRole {
+		t.Fatalf("AssumeRole RoleArn = %q, want %q (wrong-principal mutation)", got, wantRole)
+	}
+	if got := captured.Get("ExternalId"); got != wantExternalID {
+		t.Fatalf("AssumeRole ExternalId = %q, want %q", got, wantExternalID)
 	}
 }
