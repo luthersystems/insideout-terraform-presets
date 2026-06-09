@@ -77,7 +77,23 @@ func expandSelectionClosure(ctx context.Context, in selectionClosureInput) (sele
 		ChildTypes:      childTypes,
 	})
 	if err != nil {
-		return out, fmt.Errorf("selection closure: %w", err)
+		// Selection-closure expansion is best-effort enrichment: it pulls a
+		// selected parent's registered children into the import set so the
+		// operator does not have to re-select each one by hand. A discoverer
+		// failure here (e.g. an AccessDenied on a per-parent child read) must
+		// NOT abort the whole plan — the operator's explicitly-selected parents
+		// can still be imported without closure. Degrade exactly like the
+		// nil-discoverer `selection_closure_unavailable` path above: emit a
+		// warning diagnostic naming the underlying error and continue with the
+		// un-expanded selection. This matches the partial-tolerant engine
+		// philosophy (#732/#734) and un-breaks every parent-with-children plan
+		// the hard abort previously killed (#739).
+		out.diagnostics = append(out.diagnostics, job.Diagnostic{
+			Severity: "warning",
+			Code:     "selection_closure_failed",
+			Message:  fmt.Sprintf("selection closure discovery failed; continuing without auto-included child resources: %v", err),
+		})
+		return out, nil
 	}
 	merged, deps, diags := mergeClosureResources(mergeClosureInput{
 		current:         in.resources,

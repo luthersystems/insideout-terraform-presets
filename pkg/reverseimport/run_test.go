@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -440,6 +441,79 @@ func TestRunExpandsSelectedParentClosure(t *testing.T) {
 	}
 }
 
+// TestRunContinuesWhenClosureDiscoveryFails proves the #739 graceful-degradation
+// fix: a DiscoverClosure error must NOT abort the run. The run completes,
+// imports the explicitly-selected parent, and surfaces a
+// `selection_closure_failed` warning diagnostic that names the underlying error.
+// Pre-fix this returned a fatal `selection closure: …` error with zero artifacts.
+func TestRunContinuesWhenClosureDiscoveryFails(t *testing.T) {
+	dir := t.TempDir()
+	discoverer := &errClosureDiscoverer{
+		err: errors.New("s3:ListAllMyBuckets AccessDenied"),
+	}
+	req := job.Request{
+		Version: job.Version,
+		Resources: []job.ResourceSpec{{
+			Identity: imported.ResourceIdentity{
+				Cloud:    "aws",
+				Type:     "aws_s3_bucket",
+				Address:  "aws_s3_bucket.uploads",
+				ImportID: "io-uploads",
+				Region:   "us-east-1",
+			},
+			Tier:   imported.TierImportedFlat,
+			Source: imported.SourceImporter,
+		}},
+	}
+
+	result, err := Run(context.Background(), req, Options{
+		OutputDir:         dir,
+		SkipDepChase:      true,
+		DiscoverRegions:   []string{"us-east-1"},
+		ClosureDiscoverer: discoverer,
+		deps: deps{
+			runGenconfig: fakeGenconfig,
+			runDriftfix:  fakeDriftfix,
+			runDepChase:  fakeDepChase,
+			tf:           fakeTerraformRunner{importCount: 1},
+		},
+	})
+	if err != nil {
+		t.Fatalf("Run returned error, want graceful degradation: %v", err)
+	}
+	// The selected parent still imports — closure failure does not drop it.
+	if result.PlanSummary.ImportCount != 1 {
+		t.Fatalf("ImportCount = %d, want 1", result.PlanSummary.ImportCount)
+	}
+	if len(result.Imported) != 1 {
+		t.Fatalf("Imported len = %d, want 1", len(result.Imported))
+	}
+	// A warning diagnostic names the failure mode and the underlying error.
+	var diag *job.Diagnostic
+	for i := range result.Diagnostics {
+		if result.Diagnostics[i].Code == "selection_closure_failed" {
+			diag = &result.Diagnostics[i]
+			break
+		}
+	}
+	if diag == nil {
+		t.Fatalf("missing selection_closure_failed diagnostic: %#v", result.Diagnostics)
+	}
+	if diag.Severity != "warning" {
+		t.Fatalf("diagnostic severity = %q, want warning", diag.Severity)
+	}
+	if !strings.Contains(diag.Message, "AccessDenied") {
+		t.Fatalf("diagnostic message = %q, want it to include the underlying error", diag.Message)
+	}
+	// Artifacts are written — the hard abort wrote none.
+	if _, err := os.Stat(filepath.Join(dir, "reverse-result.json")); err != nil {
+		t.Fatalf("reverse-result.json not written: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "imported.json")); err != nil {
+		t.Fatalf("imported.json not written: %v", err)
+	}
+}
+
 func TestRunBackfillsImportedAttrsFromFinalPlan(t *testing.T) {
 	dir := t.TempDir()
 	req := job.Request{
@@ -648,6 +722,16 @@ type fakeClosureDiscoverer struct {
 func (f *fakeClosureDiscoverer) DiscoverClosure(_ context.Context, req ClosureRequest) ([]imported.ImportedResource, error) {
 	f.req = req
 	return f.resources, nil
+}
+
+// errClosureDiscoverer always fails DiscoverClosure — models the staging
+// AccessDenied that the #739 hard abort turned into a fatal plan failure.
+type errClosureDiscoverer struct {
+	err error
+}
+
+func (e *errClosureDiscoverer) DiscoverClosure(_ context.Context, _ ClosureRequest) ([]imported.ImportedResource, error) {
+	return nil, e.err
 }
 
 func containsString(values []string, want string) bool {
