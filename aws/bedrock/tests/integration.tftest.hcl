@@ -14,11 +14,17 @@
 #   3. bedrock_with_invocation_logging: re-applies the same module with
 #      enable_invocation_logging = true, asserts the CloudWatch log group,
 #      IAM role + policy, and account-level configuration come up
-#   4. Tears EVERYTHING down at the end (terraform test always destroys)
+#   4. setup_docs_bucket + bedrock_knowledge_base: stands up a real S3 docs
+#      bucket and applies bedrock with enable_knowledge_base = true and the
+#      default S3 Vectors store, asserting the S3 Vectors bucket/index, the
+#      Knowledge Base, and the S3 data source all come up and wire together
+#   5. Tears EVERYTHING down at the end (terraform test always destroys)
 #
-# Bedrock Knowledge Base / vector index creation is intentionally not
-# exercised — see the comment in main.tf for why those are application-
-# layer concerns.
+# The Knowledge Base run (#4) requires the embedding model
+# (amazon.titan-embed-text-v2:0) to be enabled in the target account's
+# Bedrock model access, and an AWS region where S3 Vectors is available.
+# It is the live-apply proof for #757; the credential-free unit.tftest.hcl
+# covers the plan/validation shape.
 #
 # CAUTION: aws_bedrock_model_invocation_logging_configuration is an
 # account+region SINGLETON. Run 3 will overwrite any pre-existing
@@ -271,5 +277,96 @@ run "bedrock_with_invocation_logging" {
   assert {
     condition     = output.invocation_logging_role_arn != null
     error_message = "Invocation logging role ARN output must be populated."
+  }
+}
+
+# --- Setup: real S3 docs bucket -------------------------------------------
+#
+# The Knowledge Base data source ingests from a real S3 bucket. Stand one up
+# via the sibling s3 preset so the KB run has a concrete bucket_arn.
+run "setup_docs_bucket" {
+  command = apply
+
+  module {
+    source = "../s3"
+  }
+
+  variables {
+    project     = var.project
+    environment = var.environment
+    region      = var.region
+  }
+
+  assert {
+    condition     = output.bucket_arn != null
+    error_message = "S3 docs bucket setup must yield a bucket ARN."
+  }
+}
+
+# --- Knowledge Base: S3 Vectors default store -----------------------------
+#
+# The #757 live-apply proof. Provisions the in-module S3 Vectors bucket +
+# index, the Bedrock Knowledge Base wired to the module's IAM role, and the
+# S3 data source pointed at the docs bucket. Guardrail + logging are off so
+# the diff is purely the KB substrate. The time_sleep between the KB role and
+# the KB resource is what makes this reliable on the first apply (IAM
+# eventual consistency).
+run "bedrock_knowledge_base" {
+  command = apply
+
+  variables {
+    enable_guardrail          = false
+    enable_invocation_logging = false
+
+    enable_knowledge_base = true
+    vector_store          = "s3vectors"
+    s3_bucket_arn         = run.setup_docs_bucket.bucket_arn
+    # embedding_model_id + embedding_dimension default to Titan v2 / 1024.
+    # force_destroy so teardown can drop the vector bucket cleanly.
+    knowledge_base_force_destroy = true
+  }
+
+  # S3 Vectors store created in-module.
+  assert {
+    condition     = aws_s3vectors_vector_bucket.kb[0].vector_bucket_name == "${var.project}-br-vectors"
+    error_message = "S3 Vectors bucket must follow the {project}-br-vectors convention."
+  }
+
+  assert {
+    condition     = aws_s3vectors_index.kb[0].dimension == 1024
+    error_message = "S3 Vectors index dimension must be 1024 (Titan v2 default)."
+  }
+
+  # Knowledge Base up and wired to the module role + S3 Vectors store.
+  assert {
+    condition     = aws_bedrockagent_knowledge_base.this[0].name == "${var.project}-kb"
+    error_message = "Knowledge Base name must be {project}-kb."
+  }
+
+  assert {
+    condition     = aws_bedrockagent_knowledge_base.this[0].storage_configuration[0].type == "S3_VECTORS"
+    error_message = "Live KB storage type must be S3_VECTORS for the default store."
+  }
+
+  assert {
+    condition     = aws_bedrockagent_knowledge_base.this[0].role_arn == aws_iam_role.bedrock_kb.arn
+    error_message = "Live KB must use the module's bedrock_kb role."
+  }
+
+  # Data source pointed at the real docs bucket.
+  assert {
+    condition     = aws_bedrockagent_data_source.s3_docs[0].data_source_configuration[0].s3_configuration[0].bucket_arn == run.setup_docs_bucket.bucket_arn
+    error_message = "Live data source must reference the docs bucket ARN."
+  }
+
+  # Outputs populated after apply.
+  assert {
+    condition     = output.knowledge_base_id != null && length(output.knowledge_base_id) > 0
+    error_message = "knowledge_base_id output must be populated after a live KB apply."
+  }
+
+  assert {
+    condition     = output.s3_vectors_index_arn != null && output.data_source_id != null
+    error_message = "s3_vectors_index_arn + data_source_id outputs must be populated after a live KB apply."
   }
 }

@@ -162,10 +162,12 @@ func kitchenSinkConfig() *Config {
 		MultiAZ        *bool  `json:"multiAz,omitempty"`
 	}{DeploymentType: "managed", InstanceType: "t3.medium.search", StorageSize: "1TB", MultiAZ: &t}
 	cfg.AWSBedrock = &struct {
-		KnowledgeBaseName string `json:"knowledgeBaseName,omitempty"`
-		ModelID           string `json:"modelId,omitempty"`
-		EmbeddingModelID  string `json:"embeddingModelId,omitempty"`
-	}{KnowledgeBaseName: "kb", ModelID: "anthropic.claude-3", EmbeddingModelID: "amazon.titan-embed"}
+		KnowledgeBaseName   string `json:"knowledgeBaseName,omitempty"`
+		ModelID             string `json:"modelId,omitempty"`
+		EmbeddingModelID    string `json:"embeddingModelId,omitempty"`
+		EnableKnowledgeBase *bool  `json:"enableKnowledgeBase,omitempty"`
+		VectorStore         string `json:"vectorStore,omitempty"`
+	}{KnowledgeBaseName: "kb", ModelID: "anthropic.claude-3", EmbeddingModelID: "amazon.titan-embed", EnableKnowledgeBase: &t, VectorStore: "s3vectors"}
 	cfg.AWSRoute53 = &struct {
 		DomainName   string   `json:"domainName,omitempty"`
 		CreateZone   *bool    `json:"createZone,omitempty"`

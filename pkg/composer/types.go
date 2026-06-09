@@ -282,9 +282,11 @@ type Config struct {
 	} `json:"aws_opensearch,omitempty"`
 
 	AWSBedrock *struct {
-		KnowledgeBaseName string `json:"knowledgeBaseName,omitempty"`
-		ModelID           string `json:"modelId,omitempty"`
-		EmbeddingModelID  string `json:"embeddingModelId,omitempty"`
+		KnowledgeBaseName   string `json:"knowledgeBaseName,omitempty"`
+		ModelID             string `json:"modelId,omitempty"`
+		EmbeddingModelID    string `json:"embeddingModelId,omitempty"`
+		EnableKnowledgeBase *bool  `json:"enableKnowledgeBase,omitempty"`
+		VectorStore         string `json:"vectorStore,omitempty"`
 	} `json:"aws_bedrock,omitempty"`
 
 	AWSBackups *struct {

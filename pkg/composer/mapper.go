@@ -713,25 +713,38 @@ func (m DefaultMapper) BuildModuleValues(
 
 	case KeyAWSBedrock:
 		if cfg != nil && cfg.AWSBedrock != nil {
-			// KnowledgeBaseName is intentionally NOT plumbed through.
-			// The bedrock preset doesn't create the knowledge base
-			// (that's an application-layer concern; see aws/bedrock/main.tf
-			// header). The mapper used to write it anyway, which the
-			// module silently ignored — surfaced by the
-			// TestMapperKeysSubsetOfModuleVariables gate (#253 follow-up).
+			// KnowledgeBaseName is intentionally NOT plumbed through: the
+			// preset names the KB "{project}-kb" itself, so there is no
+			// knowledge_base_name module variable to map it to. Writing it
+			// anyway would trip the TestMapperKeysSubsetOfModuleVariables
+			// gate (#253 follow-up).
 			if cfg.AWSBedrock.ModelID != "" {
 				vals["model_id"] = cfg.AWSBedrock.ModelID
 			}
 			if cfg.AWSBedrock.EmbeddingModelID != "" {
 				vals["embedding_model_id"] = cfg.AWSBedrock.EmbeddingModelID
 			}
+			// The preset now provisions a real Knowledge Base (#757) — an
+			// S3 Vectors store + aws_bedrockagent_knowledge_base + S3 data
+			// source, gated on enable_knowledge_base. Partial-config: only
+			// emit a field the caller actually populated so the preset's
+			// own defaults (enable_knowledge_base=false, vector_store=
+			// "s3vectors") win when the field is left unset.
+			if cfg.AWSBedrock.EnableKnowledgeBase != nil {
+				vals["enable_knowledge_base"] = *cfg.AWSBedrock.EnableKnowledgeBase
+			}
+			if strings.TrimSpace(cfg.AWSBedrock.VectorStore) != "" {
+				vals["vector_store"] = strings.TrimSpace(cfg.AWSBedrock.VectorStore)
+			}
 		}
 		// s3_bucket_arn and opensearch_collection_arn are optional (default
 		// null) Knowledge Base inputs. In a full stack DefaultWiring supplies
 		// them from module.aws_s3 / module.aws_opensearch when those
-		// components are selected. For single-module preview compose they are
-		// simply left unset — the preset defaults them to null and the role
-		// composes as a plain model-invocation role. No stub needed.
+		// components are selected (the s3_bucket_arn the KB ingests from, the
+		// AOSS collection the opensearch vector store uses). For single-module
+		// preview compose they are left unset — the preset defaults them to
+		// null. The KB itself is off by default, so a preview compose with no
+		// config produces just the plain model-invocation role + guardrail.
 
 	case KeyAWSLambda:
 		vals["runtime"] = "nodejs20.x" // Default to nodejs
