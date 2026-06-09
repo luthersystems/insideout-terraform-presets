@@ -14,7 +14,7 @@ func TestRenderImportedProvidersTF_AWSAssumesProjectRole(t *testing.T) {
 		ProvidersUsed: map[string]bool{
 			composer.ProvidersUsedKeyAWS: true,
 		},
-		AWSAuth: awsProviderAuth{
+		AWSAuth: AWSProviderAuth{
 			RoleARN:    "arn:aws:iam::123456789012:role/io-terraform",
 			ExternalID: "external-123",
 		},
@@ -50,7 +50,7 @@ func TestRenderImportedProvidersTF_MultiRegion(t *testing.T) {
 		ProvidersUsed: map[string]bool{
 			composer.ProvidersUsedKeyAWS: true,
 		},
-		AWSAuth: awsProviderAuth{
+		AWSAuth: AWSProviderAuth{
 			RoleARN: "arn:aws:iam::123456789012:role/io-terraform",
 		},
 	})

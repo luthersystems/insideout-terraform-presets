@@ -4,6 +4,8 @@ import (
 	"context"
 	"testing"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
+
 	"github.com/luthersystems/insideout-terraform-presets/pkg/reverseimport"
 )
 
@@ -19,7 +21,7 @@ var (
 )
 
 func TestNewRejectsUnknownCloud(t *testing.T) {
-	d, cleanup, err := New(context.Background(), "azure", "", "", "")
+	d, cleanup, err := New(context.Background(), "azure", "", "", "", AWSAssumeRole{})
 	if err == nil {
 		t.Fatalf("New(cloud=azure) err = nil, want unknown-cloud error")
 	}
@@ -34,7 +36,7 @@ func TestNewAWSReturnsClosureCapableDiscoverer(t *testing.T) {
 	// The AWS path only loads SDK config (no network call), so it is safe in
 	// a unit test. The point is to prove New returns a value that satisfies
 	// the closure surface — the wiring the Mars job was missing.
-	d, cleanup, err := New(context.Background(), "aws", "us-west-2", "", "")
+	d, cleanup, err := New(context.Background(), "aws", "us-west-2", "", "", AWSAssumeRole{})
 	if err != nil {
 		t.Fatalf("New(cloud=aws) err = %v", err)
 	}
@@ -44,5 +46,64 @@ func TestNewAWSReturnsClosureCapableDiscoverer(t *testing.T) {
 	}
 	if _, ok := d.(reverseimport.ClosureDiscoverer); !ok {
 		t.Fatalf("New(cloud=aws) discoverer %T does not implement reverseimport.ClosureDiscoverer", d)
+	}
+}
+
+// TestNewAWSAssumesRoleWhenAuthPresent proves the #739 credential fix: when a
+// RoleARN is resolved, New wraps the discoverer's AWS config with an STS
+// AssumeRole provider for that role/external-id, so the discoverer's direct SDK
+// calls run as the customer-account role (the same principal Terraform's
+// provider blocks assume) — not the ambient pod/CLI credentials. When no role
+// is present the config is left on ambient credentials so the local CLI keeps
+// working unchanged.
+func TestNewAWSAssumesRoleWhenAuthPresent(t *testing.T) {
+	// Swap the assume-role applier for a recorder so the test asserts the
+	// wiring without standing up a live STS endpoint.
+	var got AWSAssumeRole
+	calls := 0
+	orig := applyAWSAssumeRole
+	applyAWSAssumeRole = func(cfg aws.Config, auth AWSAssumeRole) aws.Config {
+		got = auth
+		calls++
+		return orig(cfg, auth)
+	}
+	t.Cleanup(func() { applyAWSAssumeRole = orig })
+
+	want := AWSAssumeRole{
+		RoleARN:    "arn:aws:iam::031780745048:role/customer-terraform",
+		ExternalID: "io-ext-id",
+	}
+	_, cleanup, err := New(context.Background(), "aws", "us-east-1", "", "", want)
+	if err != nil {
+		t.Fatalf("New(cloud=aws) err = %v", err)
+	}
+	defer cleanup()
+	if calls != 1 {
+		t.Fatalf("applyAWSAssumeRole called %d times, want 1", calls)
+	}
+	if got != want {
+		t.Fatalf("assume-role auth = %#v, want %#v", got, want)
+	}
+}
+
+// TestApplyAWSAssumeRole verifies the credential-provider wiring directly: an
+// empty RoleARN leaves Credentials untouched (ambient, local-CLI path), and a
+// non-empty RoleARN swaps in a distinct provider (the assume-role hop). It does
+// not call STS — construction is lazy — so it is a pure unit test.
+func TestApplyAWSAssumeRole(t *testing.T) {
+	base := aws.Config{Region: "us-east-1", Credentials: aws.AnonymousCredentials{}}
+
+	unchanged := applyAWSAssumeRole(base, AWSAssumeRole{})
+	if unchanged.Credentials != base.Credentials {
+		t.Fatalf("empty RoleARN changed Credentials: %T", unchanged.Credentials)
+	}
+	// Whitespace-only RoleARN is treated as absent.
+	if blank := applyAWSAssumeRole(base, AWSAssumeRole{RoleARN: "   "}); blank.Credentials != base.Credentials {
+		t.Fatalf("whitespace RoleARN changed Credentials: %T", blank.Credentials)
+	}
+
+	wrapped := applyAWSAssumeRole(base, AWSAssumeRole{RoleARN: "arn:aws:iam::000000000000:role/x"})
+	if wrapped.Credentials == base.Credentials || wrapped.Credentials == nil {
+		t.Fatalf("non-empty RoleARN did not swap in an assume-role provider: %T", wrapped.Credentials)
 	}
 }

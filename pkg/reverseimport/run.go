@@ -75,9 +75,9 @@ func Run(ctx context.Context, req job.Request, opts Options) (job.Result, error)
 	dependenciesByAddress := closure.dependencies
 	opts.progressf("reverse-import: selection closure complete (%d resource(s))\n", len(resources))
 
-	var awsAuth awsProviderAuth
+	var awsAuth AWSProviderAuth
 	if cloud == "aws" {
-		awsAuth, err = resolveAWSProviderAuth(opts.OutputDir)
+		awsAuth, err = ResolveAWSProviderAuth(opts.OutputDir)
 		if err != nil {
 			return result, fmt.Errorf("resolve AWS provider auth: %w", err)
 		}
@@ -443,7 +443,7 @@ func selectedUnimportableIssues(resources []imported.ImportedResource) []compose
 	return issues
 }
 
-func writeImportedTerraformArtifacts(outputDir, cloud, region, gcpProjectID, awsEndpointURL string, awsAuth awsProviderAuth, resources []imported.ImportedResource, emitOpts composer.EmitImportedOpts) error {
+func writeImportedTerraformArtifacts(outputDir, cloud, region, gcpProjectID, awsEndpointURL string, awsAuth AWSProviderAuth, resources []imported.ImportedResource, emitOpts composer.EmitImportedOpts) error {
 	importedTF, providersUsed := composer.EmitImportedTF(cloud, resources, emitOpts)
 	if len(importedTF) == 0 {
 		return fmt.Errorf("reverseimport: EmitImportedTF produced no HCL")
