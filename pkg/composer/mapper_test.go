@@ -1073,3 +1073,104 @@ func TestBuildModuleValues_AWSCognito_MFAFactor(t *testing.T) {
 		assert.ErrorContains(t, err, `expected "totp"`)
 	})
 }
+
+// TestBuildModuleValues_AWSEKS_GPU pins the GPU node-group mapping (#759):
+// Config.AWSEKS.GPUEnabled=true must emit the NVIDIA managed AMI type and a
+// GPU instance-type default, while an explicit GPU InstanceType is preserved.
+func TestBuildModuleValues_AWSEKS_GPU(t *testing.T) {
+	m := DefaultMapper{}
+	trueVal := true
+	falseVal := false
+
+	t.Run("GPUEnabled defaults to NVIDIA ami_type + g5.xlarge", func(t *testing.T) {
+		cfg := configWithAWSEKS(awsEKSCfgInput{GPUEnabled: &trueVal})
+		vals, err := m.BuildModuleValues(KeyAWSEKSNodeGroup, nil, cfg, "demo", "")
+		require.NoError(t, err)
+		assert.Equal(t, "AL2023_x86_64_NVIDIA", vals["ami_type"],
+			"GPUEnabled must pin the NVIDIA managed AMI type")
+		assert.Equal(t, []any{"g5.xlarge"}, vals["instance_types"],
+			"GPUEnabled with no explicit instance type must default to g5.xlarge")
+	})
+
+	t.Run("explicit GPU instance type preserved, ami_type still NVIDIA", func(t *testing.T) {
+		cfg := configWithAWSEKS(awsEKSCfgInput{GPUEnabled: &trueVal, InstanceType: "p4d.24xlarge"})
+		vals, err := m.BuildModuleValues(KeyAWSEKSNodeGroup, nil, cfg, "demo", "")
+		require.NoError(t, err)
+		assert.Equal(t, []any{"p4d.24xlarge"}, vals["instance_types"],
+			"explicit GPU instance type must override the g5.xlarge default")
+		assert.Equal(t, "AL2023_x86_64_NVIDIA", vals["ami_type"])
+	})
+
+	t.Run("GPUEnabled=false leaves ami_type unset (preset auto-derive)", func(t *testing.T) {
+		cfg := configWithAWSEKS(awsEKSCfgInput{GPUEnabled: &falseVal})
+		vals, err := m.BuildModuleValues(KeyAWSEKSNodeGroup, nil, cfg, "demo", "")
+		require.NoError(t, err)
+		_, hasAMI := vals["ami_type"]
+		assert.False(t, hasAMI, "GPUEnabled=false must not pin ami_type; preset auto-derives")
+		// Non-GPU default instance type still applies.
+		assert.Equal(t, []any{"c7i.large"}, vals["instance_types"])
+	})
+
+	t.Run("nil GPUEnabled leaves ami_type unset", func(t *testing.T) {
+		cfg := configWithAWSEKS(awsEKSCfgInput{})
+		vals, err := m.BuildModuleValues(KeyAWSEKSNodeGroup, nil, cfg, "demo", "")
+		require.NoError(t, err)
+		_, hasAMI := vals["ami_type"]
+		assert.False(t, hasAMI, "nil GPUEnabled must not pin ami_type")
+	})
+}
+
+// TestBuildModuleValues_AWSEC2_GPU pins the GPU instance mapping (#759):
+// Config.AWSEC2.GPUEnabled=true must set gpu_enabled, force arch=x86_64
+// (GPU AMIs are x86_64-only), and default to a GPU instance type.
+func TestBuildModuleValues_AWSEC2_GPU(t *testing.T) {
+	m := DefaultMapper{}
+	trueVal := true
+	falseVal := false
+
+	t.Run("GPUEnabled sets gpu_enabled + x86_64 + g5.xlarge default", func(t *testing.T) {
+		cfg := configWithAWSEC2(awsEC2CfgInput{GPUEnabled: &trueVal})
+		vals, err := m.BuildModuleValues(KeyAWSEC2, nil, cfg, "", "")
+		require.NoError(t, err)
+		assert.Equal(t, true, vals["gpu_enabled"])
+		assert.Equal(t, "x86_64", vals["arch"], "GPU AMIs are x86_64-only")
+		assert.Equal(t, "g5.xlarge", vals["instance_type"],
+			"GPUEnabled with no explicit instance type must default to g5.xlarge")
+	})
+
+	t.Run("GPU overrides ARM component hint (x86_64-only AMI)", func(t *testing.T) {
+		// An ARM component hint would otherwise set arch=arm64; the GPU path
+		// must win because the NVIDIA AMI is x86_64-only.
+		comps := &Components{AWSEC2: "ARM"}
+		cfg := configWithAWSEC2(awsEC2CfgInput{GPUEnabled: &trueVal})
+		vals, err := m.BuildModuleValues(KeyAWSEC2, comps, cfg, "", "")
+		require.NoError(t, err)
+		assert.Equal(t, "x86_64", vals["arch"], "GPU must override the ARM hint")
+		assert.Equal(t, "g5.xlarge", vals["instance_type"])
+	})
+
+	t.Run("explicit GPU instance type preserved", func(t *testing.T) {
+		cfg := configWithAWSEC2(awsEC2CfgInput{GPUEnabled: &trueVal, InstanceType: "g6.2xlarge"})
+		vals, err := m.BuildModuleValues(KeyAWSEC2, nil, cfg, "", "")
+		require.NoError(t, err)
+		assert.Equal(t, "g6.2xlarge", vals["instance_type"],
+			"explicit GPU instance type must override the g5.xlarge default")
+		assert.Equal(t, true, vals["gpu_enabled"])
+	})
+
+	t.Run("GPUEnabled=false does not set gpu_enabled", func(t *testing.T) {
+		cfg := configWithAWSEC2(awsEC2CfgInput{GPUEnabled: &falseVal})
+		vals, err := m.BuildModuleValues(KeyAWSEC2, nil, cfg, "", "")
+		require.NoError(t, err)
+		_, hasKey := vals["gpu_enabled"]
+		assert.False(t, hasKey, "explicit false must not set gpu_enabled")
+	})
+
+	t.Run("nil GPUEnabled does not set gpu_enabled", func(t *testing.T) {
+		cfg := configWithAWSEC2(awsEC2CfgInput{})
+		vals, err := m.BuildModuleValues(KeyAWSEC2, nil, cfg, "", "")
+		require.NoError(t, err)
+		_, hasKey := vals["gpu_enabled"]
+		assert.False(t, hasKey, "nil GPUEnabled must not set gpu_enabled")
+	})
+}

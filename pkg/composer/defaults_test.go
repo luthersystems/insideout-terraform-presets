@@ -264,6 +264,7 @@ func TestApplyPresetDefaults_FillsZeroFieldsOnly(t *testing.T) {
 			CustomIngressPorts    []int  `json:"customIngressPorts,omitempty"`
 			SSHPublicKey          string `json:"sshPublicKey,omitempty"`
 			EnableInstanceConnect *bool  `json:"enableInstanceConnect,omitempty"`
+			GPUEnabled            *bool  `json:"gpuEnabled,omitempty"`
 		}{
 			InstanceType: "m6i.large",                   // user-set: must be preserved
 			UserData:     "echo configured by the user", // user-set: must be preserved
@@ -443,6 +444,7 @@ func TestComputePresetDefaults_ReturnsOverlayOnly(t *testing.T) {
 			CustomIngressPorts    []int  `json:"customIngressPorts,omitempty"`
 			SSHPublicKey          string `json:"sshPublicKey,omitempty"`
 			EnableInstanceConnect *bool  `json:"enableInstanceConnect,omitempty"`
+			GPUEnabled            *bool  `json:"gpuEnabled,omitempty"`
 		}{
 			InstanceType: "m6i.large", // user-set: must NOT echo into overlay
 		},
@@ -483,6 +485,7 @@ func TestComputePresetDefaults_DoesNotMutateInput(t *testing.T) {
 				CustomIngressPorts    []int  `json:"customIngressPorts,omitempty"`
 				SSHPublicKey          string `json:"sshPublicKey,omitempty"`
 				EnableInstanceConnect *bool  `json:"enableInstanceConnect,omitempty"`
+				GPUEnabled            *bool  `json:"gpuEnabled,omitempty"`
 			}{
 				InstanceType: "m6i.large",
 			},
@@ -622,6 +625,7 @@ func TestComputePresetDefaults_ProvenanceDistinguishesUserSetEqualToDefault(t *t
 				CustomIngressPorts    []int  `json:"customIngressPorts,omitempty"`
 				SSHPublicKey          string `json:"sshPublicKey,omitempty"`
 				EnableInstanceConnect *bool  `json:"enableInstanceConnect,omitempty"`
+				GPUEnabled            *bool  `json:"gpuEnabled,omitempty"`
 			}{
 				EnableInstanceConnect: enable,
 			},
@@ -686,6 +690,7 @@ func TestMergeConfigs_NilGuards(t *testing.T) {
 			CustomIngressPorts    []int  `json:"customIngressPorts,omitempty"`
 			SSHPublicKey          string `json:"sshPublicKey,omitempty"`
 			EnableInstanceConnect *bool  `json:"enableInstanceConnect,omitempty"`
+			GPUEnabled            *bool  `json:"gpuEnabled,omitempty"`
 		}{InstanceType: "t3.medium"},
 	}
 
@@ -718,6 +723,7 @@ func TestMergeConfigs_AllocatesAndFills(t *testing.T) {
 			CustomIngressPorts    []int  `json:"customIngressPorts,omitempty"`
 			SSHPublicKey          string `json:"sshPublicKey,omitempty"`
 			EnableInstanceConnect *bool  `json:"enableInstanceConnect,omitempty"`
+			GPUEnabled            *bool  `json:"gpuEnabled,omitempty"`
 		}{InstanceType: "m6i.large"},
 	}
 	dst := &Config{}
@@ -743,6 +749,7 @@ func TestMergeConfigs_PreservesNonZero(t *testing.T) {
 			CustomIngressPorts    []int  `json:"customIngressPorts,omitempty"`
 			SSHPublicKey          string `json:"sshPublicKey,omitempty"`
 			EnableInstanceConnect *bool  `json:"enableInstanceConnect,omitempty"`
+			GPUEnabled            *bool  `json:"gpuEnabled,omitempty"`
 		}{InstanceType: "m6i.large", SSHPublicKey: "src-key", EnableInstanceConnect: &trueVal},
 	}
 	dst := &Config{
@@ -756,6 +763,7 @@ func TestMergeConfigs_PreservesNonZero(t *testing.T) {
 			CustomIngressPorts    []int  `json:"customIngressPorts,omitempty"`
 			SSHPublicKey          string `json:"sshPublicKey,omitempty"`
 			EnableInstanceConnect *bool  `json:"enableInstanceConnect,omitempty"`
+			GPUEnabled            *bool  `json:"gpuEnabled,omitempty"`
 		}{InstanceType: "t3.medium"},
 	}
 
@@ -782,6 +790,7 @@ func TestMergeConfigs_PartialFill(t *testing.T) {
 			CustomIngressPorts    []int  `json:"customIngressPorts,omitempty"`
 			SSHPublicKey          string `json:"sshPublicKey,omitempty"`
 			EnableInstanceConnect *bool  `json:"enableInstanceConnect,omitempty"`
+			GPUEnabled            *bool  `json:"gpuEnabled,omitempty"`
 		}{InstanceType: "m6i.large", SSHPublicKey: "ssh-ed25519 AAAA..."},
 	}
 	dst := &Config{
@@ -795,6 +804,7 @@ func TestMergeConfigs_PartialFill(t *testing.T) {
 			CustomIngressPorts    []int  `json:"customIngressPorts,omitempty"`
 			SSHPublicKey          string `json:"sshPublicKey,omitempty"`
 			EnableInstanceConnect *bool  `json:"enableInstanceConnect,omitempty"`
+			GPUEnabled            *bool  `json:"gpuEnabled,omitempty"`
 		}{InstanceType: "t3.medium"},
 	}
 
@@ -820,6 +830,7 @@ func TestMergeConfigs_CrossCloudIsolation(t *testing.T) {
 			CustomIngressPorts    []int  `json:"customIngressPorts,omitempty"`
 			SSHPublicKey          string `json:"sshPublicKey,omitempty"`
 			EnableInstanceConnect *bool  `json:"enableInstanceConnect,omitempty"`
+			GPUEnabled            *bool  `json:"gpuEnabled,omitempty"`
 		}{InstanceType: "t3.medium"},
 	}
 	existingEKS := &struct {
@@ -829,6 +840,7 @@ func TestMergeConfigs_CrossCloudIsolation(t *testing.T) {
 		MaxSize                string `json:"maxSize,omitempty"`
 		MinSize                string `json:"minSize,omitempty"`
 		InstanceType           string `json:"instanceType,omitempty"`
+		GPUEnabled             *bool  `json:"gpuEnabled,omitempty"`
 	}{InstanceType: "m6i.xlarge", DesiredSize: "3"}
 	dst := &Config{AWSEKS: existingEKS}
 
@@ -861,6 +873,7 @@ func TestMergeConfigs_BoolPointerFill(t *testing.T) {
 			CustomIngressPorts    []int  `json:"customIngressPorts,omitempty"`
 			SSHPublicKey          string `json:"sshPublicKey,omitempty"`
 			EnableInstanceConnect *bool  `json:"enableInstanceConnect,omitempty"`
+			GPUEnabled            *bool  `json:"gpuEnabled,omitempty"`
 		}{EnableInstanceConnect: &falseVal},
 	}
 	dst := &Config{
@@ -874,6 +887,7 @@ func TestMergeConfigs_BoolPointerFill(t *testing.T) {
 			CustomIngressPorts    []int  `json:"customIngressPorts,omitempty"`
 			SSHPublicKey          string `json:"sshPublicKey,omitempty"`
 			EnableInstanceConnect *bool  `json:"enableInstanceConnect,omitempty"`
+			GPUEnabled            *bool  `json:"gpuEnabled,omitempty"`
 		}{},
 	}
 
@@ -900,6 +914,7 @@ func TestMergeConfigs_AllocatedButEmptySrc_RevertsToNil(t *testing.T) {
 			CustomIngressPorts    []int  `json:"customIngressPorts,omitempty"`
 			SSHPublicKey          string `json:"sshPublicKey,omitempty"`
 			EnableInstanceConnect *bool  `json:"enableInstanceConnect,omitempty"`
+			GPUEnabled            *bool  `json:"gpuEnabled,omitempty"`
 		}{}, // all fields zero
 	}
 	dst := &Config{}
@@ -926,6 +941,7 @@ func TestMergeConfigs_SliceFields(t *testing.T) {
 			CustomIngressPorts    []int  `json:"customIngressPorts,omitempty"`
 			SSHPublicKey          string `json:"sshPublicKey,omitempty"`
 			EnableInstanceConnect *bool  `json:"enableInstanceConnect,omitempty"`
+			GPUEnabled            *bool  `json:"gpuEnabled,omitempty"`
 		}{CustomIngressPorts: populated},
 	}
 
@@ -941,6 +957,7 @@ func TestMergeConfigs_SliceFields(t *testing.T) {
 			CustomIngressPorts    []int  `json:"customIngressPorts,omitempty"`
 			SSHPublicKey          string `json:"sshPublicKey,omitempty"`
 			EnableInstanceConnect *bool  `json:"enableInstanceConnect,omitempty"`
+			GPUEnabled            *bool  `json:"gpuEnabled,omitempty"`
 		}{},
 	}
 	MergeConfigs(dstA, src)
@@ -959,6 +976,7 @@ func TestMergeConfigs_SliceFields(t *testing.T) {
 			CustomIngressPorts    []int  `json:"customIngressPorts,omitempty"`
 			SSHPublicKey          string `json:"sshPublicKey,omitempty"`
 			EnableInstanceConnect *bool  `json:"enableInstanceConnect,omitempty"`
+			GPUEnabled            *bool  `json:"gpuEnabled,omitempty"`
 		}{CustomIngressPorts: []int{}},
 	}
 	MergeConfigs(dstB, src)
@@ -1026,6 +1044,7 @@ func TestMergeConfigs_Idempotent(t *testing.T) {
 			CustomIngressPorts    []int  `json:"customIngressPorts,omitempty"`
 			SSHPublicKey          string `json:"sshPublicKey,omitempty"`
 			EnableInstanceConnect *bool  `json:"enableInstanceConnect,omitempty"`
+			GPUEnabled            *bool  `json:"gpuEnabled,omitempty"`
 		}{InstanceType: "m6i.large", SSHPublicKey: "ssh-ed25519 ABC", EnableInstanceConnect: &trueVal},
 	}
 	dst := &Config{}

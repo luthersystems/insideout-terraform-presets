@@ -1,3 +1,14 @@
+# EKS managed node group preset.
+#
+# GPU note (#759): selecting an NVIDIA GPU instance family (g4dn/g5/g6/g6e/
+# gr6/p3/p4d/p5, ...) auto-derives a GPU AMI type (AL2023_x86_64_NVIDIA), so
+# the worker boots with the NVIDIA kernel driver present. This preset only
+# provisions GPU-CAPABLE nodes. The in-cluster NVIDIA k8s device plugin that
+# advertises `nvidia.com/gpu` to the scheduler is APP-LAYER and intentionally
+# out of preset scope — EKS has no first-party managed addon for it and Helm
+# is excluded from this repo, so it is installed by the deploying application.
+# g/p families are quota-gated; surface capacity errors to the operator.
+
 terraform {
   required_version = ">= 1.5"
   required_providers {
@@ -36,7 +47,35 @@ locals {
   _instance_family     = split(".", local._first_instance_type)[0]
   _is_arm_family       = can(regex("^[a-z]+[0-9]+g(d|n|en|ad|adn)?$", local._instance_family))
 
-  derived_ami_type  = local._is_arm_family ? "AL2023_ARM_64_STANDARD" : "AL2023_x86_64_STANDARD"
+  # NVIDIA-GPU EC2 families (#759): g4dn, g5, g5g, g6, g6e, gr6, p3, p3dn,
+  # p4d, p4de, p5, p5e, p5en. These need a GPU-bundled AMI type so the
+  # NVIDIA kernel driver + container runtime are present on the node — a
+  # plain AL2023_x86_64_STANDARD AMI on a g5.xlarge brings the worker up
+  # but exposes no /dev/nvidia* devices, so GPU pods sit Pending forever
+  # (the GPU analogue of the #207 arch mismatch). We match the family with
+  # an explicit allow-list rather than a loose regex so that non-GPU
+  # families that merely start with `g`/`p` (none today, but e.g. a future
+  # general-purpose `g`-prefixed family) don't get misclassified.
+  #
+  # g5g is Graviton (ARM) + NVIDIA T4G — it ends in `g`, so the ARM regex
+  # above already claims it; we deliberately leave g5g on the ARM path
+  # (AL2023_ARM_64_STANDARD) because EKS has no ARM NVIDIA managed AMI type.
+  # All other GPU families here are x86_64 → AL2023_x86_64_NVIDIA.
+  _gpu_x86_families = [
+    "g4dn", "g5", "g6", "g6e", "gr6",
+    "p3", "p3dn", "p4d", "p4de", "p5", "p5e", "p5en",
+  ]
+  _is_gpu_x86_family = contains(local._gpu_x86_families, local._instance_family)
+
+  # GPU x86 wins over the generic x86 default; ARM (incl. g5g) keeps the ARM
+  # standard AMI. The NVIDIA in-cluster device plugin that advertises
+  # nvidia.com/gpu to the scheduler is app-layer and intentionally out of
+  # preset scope (no first-party EKS managed addon; see README + #759).
+  derived_ami_type = (
+    local._is_arm_family ? "AL2023_ARM_64_STANDARD" : (
+      local._is_gpu_x86_family ? "AL2023_x86_64_NVIDIA" : "AL2023_x86_64_STANDARD"
+    )
+  )
   resolved_ami_type = coalesce(var.ami_type, local.derived_ami_type)
 }
 

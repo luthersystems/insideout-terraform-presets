@@ -158,6 +158,7 @@ func TestConfig_Normalize_ClearsAWSFieldsForGCP(t *testing.T) {
 			MaxSize                string `json:"maxSize,omitempty"`
 			MinSize                string `json:"minSize,omitempty"`
 			InstanceType           string `json:"instanceType,omitempty"`
+			GPUEnabled             *bool  `json:"gpuEnabled,omitempty"`
 		}{
 			DesiredSize: "3",
 		},

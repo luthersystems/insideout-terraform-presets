@@ -279,6 +279,19 @@ func (m DefaultMapper) BuildModuleValues(
 			if cfg.AWSEKS.InstanceType != "" {
 				vals["instance_types"] = []any{cfg.AWSEKS.InstanceType}
 			}
+			// GPU node group (#759): default to a g5.xlarge (cheapest
+			// single-A10G NVIDIA family) when the caller didn't pick an
+			// explicit GPU instance type, and pin ami_type to the NVIDIA
+			// managed AMI so the node comes up GPU-capable regardless of
+			// what the preset's instance-family auto-derive would infer.
+			// The in-cluster NVIDIA device plugin (advertises
+			// nvidia.com/gpu) is app-layer and out of preset scope.
+			if cfg.AWSEKS.GPUEnabled != nil && *cfg.AWSEKS.GPUEnabled {
+				if _, ok := vals["instance_types"]; !ok {
+					vals["instance_types"] = []any{"g5.xlarge"}
+				}
+				vals["ami_type"] = "AL2023_x86_64_NVIDIA"
+			}
 		}
 
 		if _, ok := vals["desired_size"]; !ok {
@@ -340,6 +353,15 @@ func (m DefaultMapper) BuildModuleValues(
 			if cfg.AWSEC2.EnableInstanceConnect != nil && *cfg.AWSEC2.EnableInstanceConnect {
 				vals["enable_instance_connect"] = true
 			}
+			// GPU instance (#759): select the NVIDIA GPU AMI and force
+			// arch=x86_64 (AWS GPU AMIs are x86_64-only, so a GPU pick
+			// overrides any ARM component hint above). Pair with a GPU
+			// InstanceType (g4dn/g5/g6/p4d/p5). g/p families are
+			// quota-gated — surfaced to operators at deploy time.
+			if cfg.AWSEC2.GPUEnabled != nil && *cfg.AWSEC2.GPUEnabled {
+				vals["gpu_enabled"] = true
+				vals["arch"] = "x86_64"
+			}
 			if cfg.AWSEC2.DiskSizePerServer != "" {
 				n, err := strconv.Atoi(strings.TrimSpace(cfg.AWSEC2.DiskSizePerServer))
 				if err != nil {
@@ -353,10 +375,16 @@ func (m DefaultMapper) BuildModuleValues(
 		}
 		// Default instance type based on architecture if not explicitly configured
 		if _, ok := vals["instance_type"]; !ok {
-			if vals["arch"] == "arm64" {
+			switch {
+			case vals["gpu_enabled"] == true:
+				// GPU AMI on the preset default t3.medium would waste the
+				// image; default to g5.xlarge (cheapest single-A10G NVIDIA
+				// family) to match the EKS GPU node-group default (#759).
+				vals["instance_type"] = "g5.xlarge"
+			case vals["arch"] == "arm64":
 				vals["instance_type"] = "t4g.medium"
 			}
-			// Intel defaults handled by preset (t3.medium)
+			// Intel non-GPU defaults handled by preset (t3.medium)
 		}
 
 	case KeyAWSALB:

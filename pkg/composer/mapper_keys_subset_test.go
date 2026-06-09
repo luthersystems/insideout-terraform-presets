@@ -53,6 +53,7 @@ func kitchenSinkConfig() *Config {
 		CustomIngressPorts    []int  `json:"customIngressPorts,omitempty"`
 		SSHPublicKey          string `json:"sshPublicKey,omitempty"`
 		EnableInstanceConnect *bool  `json:"enableInstanceConnect,omitempty"`
+		GPUEnabled            *bool  `json:"gpuEnabled,omitempty"`
 	}{
 		InstanceType:          "t3.medium",
 		DiskSizePerServer:     "100",
@@ -60,6 +61,9 @@ func kitchenSinkConfig() *Config {
 		CustomIngressPorts:    []int{8080},
 		SSHPublicKey:          "ssh-rsa AAAA...",
 		EnableInstanceConnect: &t,
+		// GPUEnabled exercises the #759 gpu_enabled tfvar emission so the
+		// keys-subset gate confirms it is a declared module variable.
+		GPUEnabled: &t,
 	}
 	cfg.AWSEKS = &struct {
 		HaControlPlane         *bool  `json:"haControlPlane,omitempty"`
@@ -68,6 +72,7 @@ func kitchenSinkConfig() *Config {
 		MaxSize                string `json:"maxSize,omitempty"`
 		MinSize                string `json:"minSize,omitempty"`
 		InstanceType           string `json:"instanceType,omitempty"`
+		GPUEnabled             *bool  `json:"gpuEnabled,omitempty"`
 	}{
 		HaControlPlane:         &t,
 		ControlPlaneVisibility: "private",
@@ -75,6 +80,9 @@ func kitchenSinkConfig() *Config {
 		MinSize:                "1",
 		MaxSize:                "3",
 		InstanceType:           "t3.medium",
+		// GPUEnabled exercises the #759 ami_type tfvar emission so the
+		// keys-subset gate confirms it is a declared module variable.
+		GPUEnabled: &t,
 	}
 	cfg.AWSECS = &struct {
 		EnableContainerInsights *bool    `json:"enableContainerInsights,omitempty"`

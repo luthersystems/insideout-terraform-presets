@@ -113,6 +113,10 @@ type Config struct {
 		CustomIngressPorts    []int  `json:"customIngressPorts,omitempty"`
 		SSHPublicKey          string `json:"sshPublicKey,omitempty"`
 		EnableInstanceConnect *bool  `json:"enableInstanceConnect,omitempty"`
+		// GPUEnabled selects an NVIDIA-GPU AMI for the instance (#759). Pair
+		// with a GPU InstanceType (g4dn/g5/g6/p4d/p5, ...). GPU AMIs are
+		// x86_64-only; the preset rejects gpu_enabled with arm64.
+		GPUEnabled *bool `json:"gpuEnabled,omitempty"`
 	} `json:"aws_ec2,omitempty"`
 
 	AWSEKS *struct {
@@ -122,6 +126,12 @@ type Config struct {
 		MaxSize                string `json:"maxSize,omitempty"`
 		MinSize                string `json:"minSize,omitempty"`
 		InstanceType           string `json:"instanceType,omitempty"`
+		// GPUEnabled provisions a GPU node group (#759): when true and no
+		// explicit GPU InstanceType is given, the mapper defaults
+		// instance_types to g5.xlarge and sets ami_type to
+		// AL2023_x86_64_NVIDIA. The in-cluster NVIDIA device plugin is
+		// app-layer and out of preset scope.
+		GPUEnabled *bool `json:"gpuEnabled,omitempty"`
 	} `json:"aws_eks,omitempty"`
 
 	AWSECS *struct {
