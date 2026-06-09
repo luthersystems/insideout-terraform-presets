@@ -514,13 +514,22 @@ func TestRunContinuesWhenClosureDiscoveryFails(t *testing.T) {
 	}
 }
 
-// TestRunPropagatesClosureCancellation proves the codex #770 follow-up: a
-// context cancellation / deadline during closure discovery is NOT downgraded to
-// a warning — it propagates so the run stops promptly instead of continuing
-// into genconfig/import after the context is already done.
+// TestRunPropagatesClosureCancellation proves the codex #770 follow-up: when
+// the RUN's context is cancelled during closure discovery (operator cancelled
+// the import / overall deadline expired), the error is NOT downgraded to a
+// warning — it propagates so the run stops promptly instead of continuing
+// into genconfig/import after the context is already done. The discoverer
+// cancels the run context itself, modeling the genuine operator-cancel: the
+// engine gates on ctx.Err(), not on unwrapping the returned error (see
+// TestRunDegradesOnSDKWrappedDeadline for why).
 func TestRunPropagatesClosureCancellation(t *testing.T) {
 	dir := t.TempDir()
-	discoverer := &errClosureDiscoverer{err: fmt.Errorf("discover aborted: %w", context.Canceled)}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	discoverer := &cancelingClosureDiscoverer{
+		cancel: cancel,
+		err:    fmt.Errorf("discover aborted: %w", context.Canceled),
+	}
 	req := job.Request{
 		Version: job.Version,
 		Resources: []job.ResourceSpec{{
@@ -536,7 +545,7 @@ func TestRunPropagatesClosureCancellation(t *testing.T) {
 		}},
 	}
 
-	_, err := Run(context.Background(), req, Options{
+	_, err := Run(ctx, req, Options{
 		OutputDir:         dir,
 		SkipDepChase:      true,
 		DiscoverRegions:   []string{"us-east-1"},
@@ -553,6 +562,62 @@ func TestRunPropagatesClosureCancellation(t *testing.T) {
 	}
 	if !errors.Is(err, context.Canceled) {
 		t.Fatalf("Run err = %v, want errors.Is(err, context.Canceled)", err)
+	}
+}
+
+// TestRunDegradesOnSDKWrappedDeadline locks the ctx.Err() gating of the
+// cancellation carve-out: AWS SDK attempt/HTTP timeouts wrap
+// context.DeadlineExceeded even when the run's context is alive. Such a
+// transient per-call timeout must DEGRADE (selection_closure_failed warning,
+// run continues) — unwrapping the returned error instead would resurrect the
+// #739 hard abort for any slow type.
+func TestRunDegradesOnSDKWrappedDeadline(t *testing.T) {
+	dir := t.TempDir()
+	discoverer := &errClosureDiscoverer{
+		err: fmt.Errorf("operation error S3: ListBuckets, request canceled: %w", context.DeadlineExceeded),
+	}
+	req := job.Request{
+		Version: job.Version,
+		Resources: []job.ResourceSpec{{
+			Identity: imported.ResourceIdentity{
+				Cloud:    "aws",
+				Type:     "aws_s3_bucket",
+				Address:  "aws_s3_bucket.uploads",
+				ImportID: "io-uploads",
+				Region:   "us-east-1",
+			},
+			Tier:   imported.TierImportedFlat,
+			Source: imported.SourceImporter,
+		}},
+	}
+
+	result, err := Run(context.Background(), req, Options{
+		OutputDir:         dir,
+		SkipDepChase:      true,
+		DiscoverRegions:   []string{"us-east-1"},
+		ClosureDiscoverer: discoverer,
+		deps: deps{
+			runGenconfig: fakeGenconfig,
+			runDriftfix:  fakeDriftfix,
+			runDepChase:  fakeDepChase,
+			tf:           fakeTerraformRunner{importCount: 1},
+		},
+	})
+	if err != nil {
+		t.Fatalf("Run returned error for SDK-wrapped deadline with live run context, want graceful degradation: %v", err)
+	}
+	if result.PlanSummary.ImportCount != 1 {
+		t.Fatalf("ImportCount = %d, want 1", result.PlanSummary.ImportCount)
+	}
+	found := false
+	for _, d := range result.Diagnostics {
+		if d.Code == "selection_closure_failed" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("missing selection_closure_failed diagnostic: %#v", result.Diagnostics)
 	}
 }
 
@@ -774,6 +839,19 @@ type errClosureDiscoverer struct {
 
 func (e *errClosureDiscoverer) DiscoverClosure(_ context.Context, _ ClosureRequest) ([]imported.ImportedResource, error) {
 	return nil, e.err
+}
+
+// cancelingClosureDiscoverer cancels the run's context before failing — models
+// the genuine operator-cancel/run-deadline case the engine must propagate
+// (gated on ctx.Err(), see expandSelectionClosure).
+type cancelingClosureDiscoverer struct {
+	cancel context.CancelFunc
+	err    error
+}
+
+func (c *cancelingClosureDiscoverer) DiscoverClosure(_ context.Context, _ ClosureRequest) ([]imported.ImportedResource, error) {
+	c.cancel()
+	return nil, c.err
 }
 
 func containsString(values []string, want string) bool {

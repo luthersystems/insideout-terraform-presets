@@ -2,7 +2,6 @@ package reverseimport
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -78,11 +77,15 @@ func expandSelectionClosure(ctx context.Context, in selectionClosureInput) (sele
 		ChildTypes:      childTypes,
 	})
 	if err != nil {
-		// Cancellation / deadline is NOT a best-effort failure: the operator
-		// cancelled the import or the overall run deadline expired. Propagate
-		// it so the run stops promptly instead of continuing into
-		// genconfig/driftfix/import after the context is already done.
-		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		// Cancellation / deadline of the RUN's context is NOT a best-effort
+		// failure: the operator cancelled the import or the overall run
+		// deadline expired. Propagate it so the run stops promptly instead of
+		// continuing into genconfig/driftfix/import after the context is
+		// already done. Gate on ctx.Err() — not errors.Is on the returned
+		// error — because AWS SDK attempt/HTTP timeouts wrap
+		// context.DeadlineExceeded even when the run's context is alive, and
+		// those transient per-call timeouts must degrade, not abort.
+		if ctx.Err() != nil {
 			return out, fmt.Errorf("selection closure: %w", err)
 		}
 		// Selection-closure expansion is best-effort enrichment: it pulls a
