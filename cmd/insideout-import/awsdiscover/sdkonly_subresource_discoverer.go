@@ -317,12 +317,19 @@ func (d *sdkOnlySubresourceDiscoverer) Discover(ctx context.Context, args Discov
 func (d *sdkOnlySubresourceDiscoverer) enumerateParents(ctx context.Context, region string, args DiscoverArgs) ([]string, error) {
 	// Selection-closure scoping (#739): when the caller restricted this
 	// discoverer's parent CFN type to a fixed set of selected parents, use
-	// those identifiers DIRECTLY as the parent set. This skips the
+	// the parents in THIS region DIRECTLY as the parent set. This skips the
 	// account-wide ListParents enumeration (e.g. s3:ListBuckets) entirely —
 	// scoping the closure to the selected parents AND removing the need for
 	// account-wide list permissions. The per-parent FetchItem fan-out below
 	// reads only the selected parents' sub-resources.
-	if scoped, ok := args.scopedParents(d.cfg.ParentCFNType); ok {
+	//
+	// Region-aware (#739 codex follow-up): scopedParents returns only the
+	// parents that live in `region` (plus region-less parents in the first
+	// region). When the type is scoped but NO parents match this region it
+	// returns (empty, true) — we return the empty slice WITHOUT falling
+	// through to the account-wide sweep, so a multi-region closure does not
+	// re-fetch a us-east-1 parent's sub-resources in eu-west-1.
+	if scoped, ok := args.scopedParents(d.cfg.ParentCFNType, region); ok {
 		return scoped, nil
 	}
 	if !d.cfg.SkipProjectTagFilter && d.cfg.ParentCFNType != "" {

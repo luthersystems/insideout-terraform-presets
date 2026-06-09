@@ -289,6 +289,38 @@ func (d *cloudControlDiscoverer) Discover(ctx context.Context, args DiscoverArgs
 		}
 		var refs []itemRef
 
+		// Selection-closure scoping (#739): when the caller restricted this
+		// type to a fixed set of selected identifiers, those ARE the work set
+		// — the operator already chose exactly these parents. Use them as refs
+		// directly (each flows through the standard GetResource fan-out below)
+		// and SKIP the account-wide ListResources / SDKLister / ParentLister
+		// enumeration. This scopes a parent type's closure re-discovery to the
+		// selected parents and removes the need for account-wide list
+		// permissions (s3:ListAllMyBuckets, …). Tag filtering is bypassed for
+		// scoped refs — the operator's explicit selection already won.
+		//
+		// Checked BEFORE the RGT cache (#739 codex follow-up, P2-2): the
+		// explicit selection is the strongest signal. The RGT prefetch only
+		// surfaces ARNs that match args.Project / args.TagSelectors, so a
+		// scoped parent that lacks the Project tag would be ABSENT from the
+		// cache; letting the cache win would silently drop a parent the
+		// operator explicitly selected and break its scoped children. So when
+		// the type is scoped we take the scope and never consult the cache.
+		//
+		// Region-aware (#739 codex follow-up): scopedParents returns only the
+		// identifiers that live in THIS region (plus region-less parents in the
+		// first region). When the type is scoped but NO parents match this
+		// region it returns (empty, true): scopeUsed stays true so we still
+		// SKIP the account-wide sweep — a multi-region closure must not
+		// re-GetResource a us-east-1 bucket in eu-west-1.
+		scopeUsed := false
+		if scoped, ok := args.scopedParents(d.cfg.CloudFormationType, region); ok {
+			for _, id := range scoped {
+				refs = append(refs, itemRef{identifier: id})
+			}
+			scopeUsed = true
+		}
+
 		// RGT prefetch cache short-circuit: when the orchestrator's
 		// pre-pass found ARNs for our CloudFormation type, skip
 		// ListResources entirely. The cache is empty (or absent) for
@@ -297,7 +329,8 @@ func (d *cloudControlDiscoverer) Discover(ctx context.Context, args DiscoverArgs
 		// failed (downgraded to warn, not error). See rgt_prefetcher.go
 		// and #406. The cache also bypasses the ParentLister branch —
 		// each cached ARN is a self-contained CC identifier, no
-		// parent context required.
+		// parent context required. Skipped entirely when the type is
+		// scoped (above) — the scope already chose the exact work set.
 		//
 		// Untaggable types (SkipProjectTagFilter=true) bypass the cache
 		// entirely. RGT can only see tagged ARNs, so for genuinely
@@ -307,7 +340,7 @@ func (d *cloudControlDiscoverer) Discover(ctx context.Context, args DiscoverArgs
 		// only path that can surface these; the legacy Project filter
 		// further down is already skipped for these types.
 		cacheUsed := false
-		if !d.cfg.SkipProjectTagFilter {
+		if !scopeUsed && !d.cfg.SkipProjectTagFilter {
 			if d.cfg.IsGlobal {
 				if cached, ok := args.RGTCacheForGlobalCFN(d.cfg.CloudFormationType); ok {
 					for _, info := range cached {
@@ -320,25 +353,6 @@ func (d *cloudControlDiscoverer) Discover(ctx context.Context, args DiscoverArgs
 					refs = append(refs, itemRef{identifier: info.Identifier, rgtTags: info.Tags})
 				}
 				cacheUsed = true
-			}
-		}
-
-		// Selection-closure scoping (#739): when the caller restricted this
-		// type to a fixed set of selected identifiers, those ARE the work set
-		// — the operator already chose exactly these parents. Use them as refs
-		// directly (each flows through the standard GetResource fan-out below)
-		// and SKIP the account-wide ListResources / SDKLister / ParentLister
-		// enumeration. This scopes a parent type's closure re-discovery to the
-		// selected parents and removes the need for account-wide list
-		// permissions (s3:ListAllMyBuckets, …). Tag filtering is bypassed for
-		// scoped refs — the operator's explicit selection already won.
-		scopeUsed := false
-		if !cacheUsed {
-			if scoped, ok := args.scopedParents(d.cfg.CloudFormationType); ok {
-				for _, id := range scoped {
-					refs = append(refs, itemRef{identifier: id})
-				}
-				scopeUsed = true
 			}
 		}
 

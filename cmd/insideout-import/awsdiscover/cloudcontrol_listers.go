@@ -1077,11 +1077,20 @@ func listCloudWatchLogGroupsWithClient(ctx context.Context, client cloudWatchLog
 // pipeline (#255 contract).
 func listCloudWatchLogGroupsAsResourceModels(ctx context.Context, awsCfg aws.Config, region string, args DiscoverArgs) ([]string, error) {
 	// Selection-closure scoping (#739): when the caller restricted the parent
-	// log groups to a fixed set of selected names, wrap those directly into
-	// resource models and SKIP the account-wide logs:DescribeLogGroups call.
-	// This scopes the LogStream closure to the selected parents and removes
-	// the need for the account-wide logs:DescribeLogGroups permission.
-	if scoped, ok := args.scopedParents(logGroupParentCFNType); ok {
+	// log groups to a fixed set of selected names, wrap the names in THIS
+	// region directly into resource models and SKIP the account-wide
+	// logs:DescribeLogGroups call. This scopes the LogStream closure to the
+	// selected parents and removes the need for the account-wide
+	// logs:DescribeLogGroups permission.
+	//
+	// Region-aware (#739 codex follow-up): scopedParents returns only the log
+	// groups in `region` (plus region-less parents in the first region). When
+	// the type is scoped but NO names match this region it returns
+	// (empty, true): we return the empty (non-nil) resource-model slice and
+	// the CC LogStream discoverer skips this region — no account-wide
+	// DescribeLogGroups fallback, so a multi-region closure does not re-list a
+	// us-east-1 log group's streams in eu-west-1.
+	if scoped, ok := args.scopedParents(logGroupParentCFNType, region); ok {
 		return logGroupNamesAsResourceModels(scoped), nil
 	}
 	client := cloudwatchlogs.NewFromConfig(awsCfg, func(o *cloudwatchlogs.Options) {

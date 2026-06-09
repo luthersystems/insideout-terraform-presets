@@ -147,13 +147,20 @@ func (a awsAggAdapter) DiscoverClosure(ctx context.Context, req reverseimport.Cl
 // #739 closure-scoping fix uses to restrict child + parent re-discovery to the
 // operator's selected parents. For each selected parent whose Terraform type is
 // a known Cloud Control type it records the parent's identifier (its ImportID,
-// falling back to NameHint) under the parent's CloudFormation type. Parent types
-// not routed through Cloud Control are skipped — their children are discovered
-// account-wide and the engine's mergeClosureResources still filters them to the
-// selected parents, so closure semantics are unchanged. Returns nil when no
-// usable scope can be built (the caller then sweeps account-wide as before).
+// falling back to NameHint) AND its region (Identity.Region) under the parent's
+// CloudFormation type. Parent types not routed through Cloud Control are
+// skipped — their children are discovered account-wide and the engine's
+// mergeClosureResources still filters them to the selected parents, so closure
+// semantics are unchanged. Returns nil when no usable scope can be built (the
+// caller then sweeps account-wide as before).
+//
+// The region is load-bearing for multi-region closures: each scoped seam
+// enumerates a parent's sub-resources only in the parent's region, so the same
+// bucket / log group is not re-fetched once per requested region. A region-less
+// parent (Identity.Region == "", e.g. a global type) is enumerated exactly once
+// across the request (see ParentScope.scopedParents).
 func awsParentScope(parents []imported.ImportedResource) awsdiscover.ParentScope {
-	byCFN := map[string][]string{}
+	byCFN := map[string][]awsdiscover.ScopedParent{}
 	for _, p := range parents {
 		cfnType, ok := awsdiscover.CloudFormationTypeForTF(p.Identity.Type)
 		if !ok {
@@ -166,14 +173,17 @@ func awsParentScope(parents []imported.ImportedResource) awsdiscover.ParentScope
 		if id == "" {
 			continue
 		}
-		byCFN[cfnType] = append(byCFN[cfnType], id)
+		region := strings.TrimSpace(p.Identity.Region)
+		sp := awsdiscover.ScopedParent{Identifier: id, Region: region}
+		byCFN[cfnType] = append(byCFN[cfnType], sp)
 		// Also scope any child whose CC identifier IS this parent's
 		// identifier (e.g. aws_s3_bucket_policy, whose identifier is the
 		// bucket name) so its discovery is restricted to the selected
-		// parents too — no account-wide list of the child type (#739
-		// codex follow-up).
+		// parents too — no account-wide list of the child type. The child
+		// inherits the parent's region so the per-region enumeration is
+		// scoped identically (#739 codex follow-up).
 		for _, childCFN := range awsdiscover.IdentifierSharedChildCFNTypes(cfnType) {
-			byCFN[childCFN] = append(byCFN[childCFN], id)
+			byCFN[childCFN] = append(byCFN[childCFN], sp)
 		}
 	}
 	return awsdiscover.NewParentScope(byCFN)

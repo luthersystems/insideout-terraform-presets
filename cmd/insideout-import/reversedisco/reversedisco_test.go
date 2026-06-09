@@ -102,26 +102,35 @@ func TestNewAWSAssumesRoleWhenAuthPresent(t *testing.T) {
 // type; parents not routed through Cloud Control are skipped.
 func TestAWSParentScope_KeysByParentCFNType(t *testing.T) {
 	parents := []imported.ImportedResource{
-		{Identity: imported.ResourceIdentity{Type: "aws_s3_bucket", ImportID: "io-uploads"}},
-		{Identity: imported.ResourceIdentity{Type: "aws_s3_bucket", ImportID: "io-logs"}},
-		// NameHint fallback when ImportID is empty.
-		{Identity: imported.ResourceIdentity{Type: "aws_cloudwatch_log_group", NameHint: "/app/api"}},
+		{Identity: imported.ResourceIdentity{Type: "aws_s3_bucket", ImportID: "io-uploads", Region: "us-east-1"}},
+		// Same identifier semantics, a DIFFERENT region — must be carried
+		// through so a multi-region closure scopes each bucket to its own
+		// region (#739 codex follow-up).
+		{Identity: imported.ResourceIdentity{Type: "aws_s3_bucket", ImportID: "io-logs", Region: "eu-west-1"}},
+		// NameHint fallback when ImportID is empty; region carried through.
+		{Identity: imported.ResourceIdentity{Type: "aws_cloudwatch_log_group", NameHint: "/app/api", Region: "us-east-1"}},
 		// A type with no Cloud Control backing is skipped (no panic, no entry).
 		{Identity: imported.ResourceIdentity{Type: "aws_not_a_real_type", ImportID: "x"}},
 	}
 	scope := awsParentScope(parents)
 
-	wantBuckets := []string{"io-logs", "io-uploads"}
+	// Sorted by (identifier, region): io-logs (eu-west-1) before io-uploads
+	// (us-east-1), each tagged with the region the selected bucket lives in.
+	wantBuckets := []awsdiscover.ScopedParent{
+		{Identifier: "io-logs", Region: "eu-west-1"},
+		{Identifier: "io-uploads", Region: "us-east-1"},
+	}
 	if got := scope["AWS::S3::Bucket"]; !reflect.DeepEqual(got, wantBuckets) {
 		t.Errorf("AWS::S3::Bucket scope = %v, want %v", got, wantBuckets)
 	}
-	// The bucket-policy child shares the bucket's identifier, so it is scoped
-	// by the same selected bucket names — no account-wide BucketPolicy list.
+	// The bucket-policy child shares the bucket's identifier AND its region,
+	// so it is scoped by the same selected buckets — no account-wide
+	// BucketPolicy list, and the per-region enumeration matches the parent.
 	if got := scope["AWS::S3::BucketPolicy"]; !reflect.DeepEqual(got, wantBuckets) {
-		t.Errorf("AWS::S3::BucketPolicy scope = %v, want %v (identifier-shared child)", got, wantBuckets)
+		t.Errorf("AWS::S3::BucketPolicy scope = %v, want %v (identifier-shared child inherits region)", got, wantBuckets)
 	}
-	if got := scope["AWS::Logs::LogGroup"]; !reflect.DeepEqual(got, []string{"/app/api"}) {
-		t.Errorf("AWS::Logs::LogGroup scope = %v, want [/app/api]", got)
+	if got := scope["AWS::Logs::LogGroup"]; !reflect.DeepEqual(got, []awsdiscover.ScopedParent{{Identifier: "/app/api", Region: "us-east-1"}}) {
+		t.Errorf("AWS::Logs::LogGroup scope = %v, want [{/app/api us-east-1}]", got)
 	}
 	for cfn := range scope {
 		switch cfn {
