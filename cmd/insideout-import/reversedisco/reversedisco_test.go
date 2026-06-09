@@ -2,10 +2,13 @@ package reversedisco
 
 import (
 	"context"
+	"reflect"
 	"testing"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 
+	"github.com/luthersystems/insideout-terraform-presets/cmd/insideout-import/awsdiscover"
+	"github.com/luthersystems/insideout-terraform-presets/pkg/composer/imported"
 	"github.com/luthersystems/insideout-terraform-presets/pkg/reverseimport"
 )
 
@@ -83,6 +86,43 @@ func TestNewAWSAssumesRoleWhenAuthPresent(t *testing.T) {
 	}
 	if got != want {
 		t.Fatalf("assume-role auth = %#v, want %#v", got, want)
+	}
+}
+
+// TestAWSParentScope_KeysByParentCFNType proves the #739 scoping fix builds the
+// per-CloudFormation-type selected-parent scope from the closure request: each
+// selected parent whose Terraform type is a known Cloud Control type contributes
+// its identifier (ImportID, falling back to NameHint) under the parent's CFN
+// type; parents not routed through Cloud Control are skipped.
+func TestAWSParentScope_KeysByParentCFNType(t *testing.T) {
+	parents := []imported.ImportedResource{
+		{Identity: imported.ResourceIdentity{Type: "aws_s3_bucket", ImportID: "io-uploads"}},
+		{Identity: imported.ResourceIdentity{Type: "aws_s3_bucket", ImportID: "io-logs"}},
+		// NameHint fallback when ImportID is empty.
+		{Identity: imported.ResourceIdentity{Type: "aws_cloudwatch_log_group", NameHint: "/app/api"}},
+		// A type with no Cloud Control backing is skipped (no panic, no entry).
+		{Identity: imported.ResourceIdentity{Type: "aws_not_a_real_type", ImportID: "x"}},
+	}
+	scope := awsParentScope(parents)
+
+	wantBuckets := []string{"io-logs", "io-uploads"}
+	if got := scope["AWS::S3::Bucket"]; !reflect.DeepEqual(got, wantBuckets) {
+		t.Errorf("AWS::S3::Bucket scope = %v, want %v", got, wantBuckets)
+	}
+	if got := scope["AWS::Logs::LogGroup"]; !reflect.DeepEqual(got, []string{"/app/api"}) {
+		t.Errorf("AWS::Logs::LogGroup scope = %v, want [/app/api]", got)
+	}
+	for cfn := range scope {
+		if cfn != "AWS::S3::Bucket" && cfn != "AWS::Logs::LogGroup" {
+			t.Errorf("unexpected scope key %q (unknown-type parent should be skipped)", cfn)
+		}
+	}
+	// Guard the awsdiscover seam this relies on.
+	if cfn, ok := awsdiscover.CloudFormationTypeForTF("aws_s3_bucket"); !ok || cfn != "AWS::S3::Bucket" {
+		t.Errorf("CloudFormationTypeForTF(aws_s3_bucket) = (%q, %v), want (AWS::S3::Bucket, true)", cfn, ok)
+	}
+	if _, ok := awsdiscover.CloudFormationTypeForTF("aws_not_a_real_type"); ok {
+		t.Error("CloudFormationTypeForTF should return false for an unknown type")
 	}
 }
 

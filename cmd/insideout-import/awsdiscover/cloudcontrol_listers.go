@@ -1075,13 +1075,38 @@ func listCloudWatchLogGroupsWithClient(ctx context.Context, client cloudWatchLog
 // Returns a non-nil empty slice on accounts with zero log groups so
 // downstream consumers see "[]" not "null" through the JSON-marshal
 // pipeline (#255 contract).
-func listCloudWatchLogGroupsAsResourceModels(ctx context.Context, awsCfg aws.Config, region string, _ DiscoverArgs) ([]string, error) {
+func listCloudWatchLogGroupsAsResourceModels(ctx context.Context, awsCfg aws.Config, region string, args DiscoverArgs) ([]string, error) {
+	// Selection-closure scoping (#739): when the caller restricted the parent
+	// log groups to a fixed set of selected names, wrap those directly into
+	// resource models and SKIP the account-wide logs:DescribeLogGroups call.
+	// This scopes the LogStream closure to the selected parents and removes
+	// the need for the account-wide logs:DescribeLogGroups permission.
+	if scoped, ok := args.scopedParents(logGroupParentCFNType); ok {
+		return logGroupNamesAsResourceModels(scoped), nil
+	}
 	client := cloudwatchlogs.NewFromConfig(awsCfg, func(o *cloudwatchlogs.Options) {
 		if region != "" {
 			o.Region = region
 		}
 	})
 	return listCloudWatchLogGroupsAsResourceModelsWithClient(ctx, client)
+}
+
+// logGroupParentCFNType is the CloudFormation type of the parent log group an
+// aws_cloudwatch_log_stream closure scopes to. Kept next to the lister so the
+// scope lookup and the ListStream parent-model wrap stay in lockstep.
+const logGroupParentCFNType = "AWS::Logs::LogGroup"
+
+// logGroupNamesAsResourceModels wraps log-group names into the
+// `{"LogGroupName":"…"}` Cloud Control resource models AWS::Logs::LogStream's
+// ListResources handler requires. Shared by the scoped and account-wide paths
+// so both emit byte-identical models.
+func logGroupNamesAsResourceModels(names []string) []string {
+	models := make([]string, 0, len(names))
+	for _, n := range names {
+		models = append(models, fmt.Sprintf(`{"LogGroupName":%q}`, n))
+	}
+	return models
 }
 
 // listCloudWatchLogGroupsAsResourceModelsWithClient is the test seam
@@ -1094,11 +1119,7 @@ func listCloudWatchLogGroupsAsResourceModelsWithClient(ctx context.Context, clie
 	if err != nil {
 		return nil, err
 	}
-	models := make([]string, 0, len(names))
-	for _, n := range names {
-		models = append(models, fmt.Sprintf(`{"LogGroupName":%q}`, n))
-	}
-	return models, nil
+	return logGroupNamesAsResourceModels(names), nil
 }
 
 // =====================================================================

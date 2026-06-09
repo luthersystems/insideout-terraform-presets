@@ -1,6 +1,38 @@
 package awsdiscover
 
-import "strings"
+import (
+	"strings"
+	"sync"
+)
+
+// cfnTypeByTF lazily indexes the Terraform-type → CloudFormation-type map from
+// the production discoverer registries (cloudControlTypeConfigs and the SDK-only
+// sub-resource configs). Built once on first use so the index reflects whatever
+// the registries declare without a second source of truth.
+var cfnTypeByTF = sync.OnceValue(func() map[string]string {
+	out := make(map[string]string)
+	for _, cfg := range cloudControlTypeConfigs {
+		if cfg.TFType != "" && cfg.CloudFormationType != "" {
+			out[cfg.TFType] = cfg.CloudFormationType
+		}
+	}
+	// SDK-only sub-resource types (sdkOnlySubresourceTypeConfigs) are
+	// intentionally excluded: they have no CloudFormation type of their own
+	// (they record their PARENT's CFN type), and this index answers "what CFN
+	// type backs this Terraform type" for Cloud Control resources only.
+	return out
+})
+
+// CloudFormationTypeForTF returns the CloudFormation type that backs the given
+// Terraform type, and true when the type is a Cloud Control resource in the
+// production registry. It exists so closure-scoping callers (reversedisco) can
+// key a parent-scope by the parent's CloudFormation type without duplicating
+// the presets-owned TF↔CFN vocabulary. Returns ("", false) for types not routed
+// through Cloud Control (hand-rolled SDK discoverers, SDK-only sub-resources).
+func CloudFormationTypeForTF(tfType string) (string, bool) {
+	cfn, ok := cfnTypeByTF()[strings.TrimSpace(tfType)]
+	return cfn, ok
+}
 
 // cloudControlTypeConfigs is the registry of Terraform resource types
 // routed through the generic Cloud Control discoverer. Each entry maps

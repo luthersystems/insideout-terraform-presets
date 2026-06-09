@@ -323,7 +323,26 @@ func (d *cloudControlDiscoverer) Discover(ctx context.Context, args DiscoverArgs
 			}
 		}
 
+		// Selection-closure scoping (#739): when the caller restricted this
+		// type to a fixed set of selected identifiers, those ARE the work set
+		// — the operator already chose exactly these parents. Use them as refs
+		// directly (each flows through the standard GetResource fan-out below)
+		// and SKIP the account-wide ListResources / SDKLister / ParentLister
+		// enumeration. This scopes a parent type's closure re-discovery to the
+		// selected parents and removes the need for account-wide list
+		// permissions (s3:ListAllMyBuckets, …). Tag filtering is bypassed for
+		// scoped refs — the operator's explicit selection already won.
+		scopeUsed := false
 		if !cacheUsed {
+			if scoped, ok := args.scopedParents(d.cfg.CloudFormationType); ok {
+				for _, id := range scoped {
+					refs = append(refs, itemRef{identifier: id})
+				}
+				scopeUsed = true
+			}
+		}
+
+		if !cacheUsed && !scopeUsed {
 			if d.cfg.SDKLister != nil {
 				// Native-SDK enumeration: types whose CC ListResources
 				// returns UnsupportedActionException despite CC
@@ -533,11 +552,17 @@ func (d *cloudControlDiscoverer) Discover(ctx context.Context, args DiscoverArgs
 			// item. Operators scoping a discover via --project get all
 			// instances of these types account-wide.
 			cacheUsedForRef := cacheUsed
-			if !cacheUsedForRef && !d.cfg.SkipProjectTagFilter && args.Project != "" && f.tags["Project"] != args.Project {
-				continue
-			}
-			if !MatchesAll(f.tags, args.TagSelectors) {
-				continue
+			// Scoped refs (#739) bypass tag filtering: the operator
+			// selected exactly these parents by identity, so a missing
+			// Project tag or an unrelated --tag-selector must not drop a
+			// resource the closure was explicitly told to pull in.
+			if !scopeUsed {
+				if !cacheUsedForRef && !d.cfg.SkipProjectTagFilter && args.Project != "" && f.tags["Project"] != args.Project {
+					continue
+				}
+				if !MatchesAll(f.tags, args.TagSelectors) {
+					continue
+				}
 			}
 			importID := f.identifier
 			if d.cfg.ImportIDFromIdentifier != nil {

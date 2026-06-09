@@ -1,6 +1,8 @@
 package awsdiscover
 
 import (
+	"sort"
+	"strings"
 	"time"
 
 	"github.com/luthersystems/insideout-terraform-presets/cmd/insideout-import/progress"
@@ -53,6 +55,25 @@ type DiscoverArgs struct {
 	// the right shape for a best-effort discovery survey.
 	PerTypeTimeout time.Duration
 
+	// ParentScope, when non-empty, restricts parent-scoped child discovery
+	// to a fixed set of selected parent identifiers per parent CloudFormation
+	// type — the #739 selection-closure scoping fix. It is keyed by the
+	// parent's CloudFormation type (e.g. "AWS::S3::Bucket") and lists the
+	// parent identifiers the operator selected (e.g. the bucket names of the
+	// selected aws_s3_bucket resources).
+	//
+	// When set, parent-scoped discoverers (the SDK-only sub-resource
+	// discoverer's ListParents path and the Cloud Control discoverer's
+	// ParentLister path) use these identifiers DIRECTLY as the parent set
+	// instead of issuing an account-wide parent enumeration
+	// (s3:ListBuckets, logs:DescribeLogGroups, …). This both scopes the
+	// closure to the selected parents and removes the need for account-wide
+	// list permissions. An empty/absent ParentScope preserves the
+	// pre-#739 account-wide sweep (top-level discovery surveys, the local
+	// CLI's full account scan, and any parent type not represented in the
+	// scope all still enumerate account-wide).
+	ParentScope ParentScope
+
 	// rgtCache is the package-internal RGT prefetch result threaded
 	// through DiscoverTypes (#406). Per-type discoverers that opt into
 	// the unified RGT path read this via the package-private accessor
@@ -61,6 +82,62 @@ type DiscoverArgs struct {
 	// and so tests that construct DiscoverArgs directly default to
 	// nil cache (per-type list fallback).
 	rgtCache *rgtCache
+}
+
+// ParentScope maps a parent CloudFormation type to the set of selected parent
+// identifiers a closure run should restrict child discovery to. See
+// DiscoverArgs.ParentScope. Construct with NewParentScope.
+type ParentScope map[string][]string
+
+// NewParentScope builds a ParentScope from (parentCFNType, identifier) pairs,
+// de-duplicating identifiers per type and dropping empties. Returns nil when
+// no usable pair is supplied so callers can leave DiscoverArgs.ParentScope
+// at its zero value (which means "no scoping — account-wide sweep").
+func NewParentScope(byCFNType map[string][]string) ParentScope {
+	out := ParentScope{}
+	for cfnType, ids := range byCFNType {
+		cfnType = strings.TrimSpace(cfnType)
+		if cfnType == "" {
+			continue
+		}
+		seen := map[string]struct{}{}
+		var deduped []string
+		for _, id := range ids {
+			id = strings.TrimSpace(id)
+			if id == "" {
+				continue
+			}
+			if _, ok := seen[id]; ok {
+				continue
+			}
+			seen[id] = struct{}{}
+			deduped = append(deduped, id)
+		}
+		if len(deduped) == 0 {
+			continue
+		}
+		sort.Strings(deduped)
+		out[cfnType] = deduped
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
+// scopedParents returns the selected parent identifiers for parentCFNType and
+// true when ParentScope restricts this type, otherwise (nil, false) so the
+// caller falls back to its account-wide enumeration. A nil/empty ParentScope
+// always returns (nil, false).
+func (a DiscoverArgs) scopedParents(parentCFNType string) ([]string, bool) {
+	if len(a.ParentScope) == 0 {
+		return nil, false
+	}
+	ids, ok := a.ParentScope[strings.TrimSpace(parentCFNType)]
+	if !ok || len(ids) == 0 {
+		return nil, false
+	}
+	return append([]string(nil), ids...), true
 }
 
 // withRGTCache returns a copy of args with rgtCache set. Used once at

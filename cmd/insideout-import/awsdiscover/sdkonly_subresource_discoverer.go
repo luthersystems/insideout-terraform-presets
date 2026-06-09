@@ -315,6 +315,16 @@ func (d *sdkOnlySubresourceDiscoverer) Discover(ctx context.Context, args Discov
 // intentionally agnostic to parent taggability so the same code path
 // handles future families whose parents are also untaggable.
 func (d *sdkOnlySubresourceDiscoverer) enumerateParents(ctx context.Context, region string, args DiscoverArgs) ([]string, error) {
+	// Selection-closure scoping (#739): when the caller restricted this
+	// discoverer's parent CFN type to a fixed set of selected parents, use
+	// those identifiers DIRECTLY as the parent set. This skips the
+	// account-wide ListParents enumeration (e.g. s3:ListBuckets) entirely —
+	// scoping the closure to the selected parents AND removing the need for
+	// account-wide list permissions. The per-parent FetchItem fan-out below
+	// reads only the selected parents' sub-resources.
+	if scoped, ok := args.scopedParents(d.cfg.ParentCFNType); ok {
+		return scoped, nil
+	}
 	if !d.cfg.SkipProjectTagFilter && d.cfg.ParentCFNType != "" {
 		var (
 			cached []arnInfo

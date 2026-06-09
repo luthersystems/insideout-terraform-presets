@@ -136,10 +136,39 @@ func (a awsAggAdapter) DiscoverByID(ctx context.Context, tfType, id, region, acc
 func (a awsAggAdapter) DiscoverClosure(ctx context.Context, req reverseimport.ClosureRequest) ([]imported.ImportedResource, error) {
 	types := unionStrings(req.ParentTypes, req.ChildTypes)
 	return a.d.DiscoverTypes(ctx, types, awsdiscover.DiscoverArgs{
-		Project:   req.Project,
-		Regions:   req.Regions,
-		AccountID: req.AccountID,
+		Project:     req.Project,
+		Regions:     req.Regions,
+		AccountID:   req.AccountID,
+		ParentScope: awsParentScope(req.ParentResources),
 	})
+}
+
+// awsParentScope builds the per-CloudFormation-type selected-parent scope the
+// #739 closure-scoping fix uses to restrict child + parent re-discovery to the
+// operator's selected parents. For each selected parent whose Terraform type is
+// a known Cloud Control type it records the parent's identifier (its ImportID,
+// falling back to NameHint) under the parent's CloudFormation type. Parent types
+// not routed through Cloud Control are skipped — their children are discovered
+// account-wide and the engine's mergeClosureResources still filters them to the
+// selected parents, so closure semantics are unchanged. Returns nil when no
+// usable scope can be built (the caller then sweeps account-wide as before).
+func awsParentScope(parents []imported.ImportedResource) awsdiscover.ParentScope {
+	byCFN := map[string][]string{}
+	for _, p := range parents {
+		cfnType, ok := awsdiscover.CloudFormationTypeForTF(p.Identity.Type)
+		if !ok {
+			continue
+		}
+		id := strings.TrimSpace(p.Identity.ImportID)
+		if id == "" {
+			id = strings.TrimSpace(p.Identity.NameHint)
+		}
+		if id == "" {
+			continue
+		}
+		byCFN[cfnType] = append(byCFN[cfnType], id)
+	}
+	return awsdiscover.NewParentScope(byCFN)
 }
 
 // gcpAggAdapter is the GCP analogue of awsAggAdapter.
