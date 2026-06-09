@@ -1,6 +1,8 @@
 package awsdiscover
 
 import (
+	"sort"
+	"strings"
 	"time"
 
 	"github.com/luthersystems/insideout-terraform-presets/cmd/insideout-import/progress"
@@ -53,6 +55,31 @@ type DiscoverArgs struct {
 	// the right shape for a best-effort discovery survey.
 	PerTypeTimeout time.Duration
 
+	// ParentScope, when non-empty, restricts parent-scoped child discovery
+	// to a fixed set of selected parents per parent CloudFormation type —
+	// the #739 selection-closure scoping fix. It is keyed by the parent's
+	// CloudFormation type (e.g. "AWS::S3::Bucket") and lists the parents the
+	// operator selected (e.g. the bucket names of the selected aws_s3_bucket
+	// resources), each carrying the region it lives in (ScopedParent).
+	//
+	// When set, parent-scoped discoverers (the SDK-only sub-resource
+	// discoverer's ListParents path and the Cloud Control discoverer's
+	// ParentLister path) use these identifiers DIRECTLY as the parent set
+	// instead of issuing an account-wide parent enumeration
+	// (s3:ListBuckets, logs:DescribeLogGroups, …). This both scopes the
+	// closure to the selected parents and removes the need for account-wide
+	// list permissions. An empty/absent ParentScope preserves the
+	// pre-#739 account-wide sweep (top-level discovery surveys, the local
+	// CLI's full account scan, and any parent type not represented in the
+	// scope all still enumerate account-wide).
+	//
+	// The scope is REGION-AWARE: each per-region enumeration pass asks
+	// scopedParents only for the parents in the region being swept, so a
+	// multi-region closure fetches a parent's sub-resources once (in the
+	// parent's region) rather than once per region. See ParentScope and
+	// scopedParents.
+	ParentScope ParentScope
+
 	// rgtCache is the package-internal RGT prefetch result threaded
 	// through DiscoverTypes (#406). Per-type discoverers that opt into
 	// the unified RGT path read this via the package-private accessor
@@ -61,6 +88,152 @@ type DiscoverArgs struct {
 	// and so tests that construct DiscoverArgs directly default to
 	// nil cache (per-type list fallback).
 	rgtCache *rgtCache
+}
+
+// ScopedParent is one selected parent in a ParentScope: an identifier (e.g. a
+// bucket name or log-group name) paired with the AWS region it lives in. The
+// Region is load-bearing for multi-region closure requests — see ParentScope
+// and DiscoverArgs.scopedParents. A region-less parent (Region == "") is a
+// global / region-agnostic type (e.g. a future IAM parent) that must be
+// enumerated exactly once across a multi-region request rather than once per
+// region.
+type ScopedParent struct {
+	Identifier string
+	Region     string
+}
+
+// ParentScope maps a parent CloudFormation type to the set of selected parents
+// a closure run should restrict child discovery to, each carrying the region it
+// was discovered in. See DiscoverArgs.ParentScope. Construct with
+// NewParentScope.
+//
+// The Region is load-bearing: the per-region enumeration loop in each scoped
+// seam (sdkOnlySubresourceDiscoverer, cloudControlDiscoverer, the CloudWatch
+// Logs lister) asks scopedParents for the parents belonging to the region it is
+// currently sweeping. Without the region, a multi-region closure would fetch
+// every selected parent's sub-resources once PER region — duplicating (and
+// mis-region-tagging) the closure imports, because pre-#739 the account-wide
+// listers were region-filtered (s3:ListBuckets then filter by bucket region;
+// per-region logs:DescribeLogGroups).
+type ParentScope map[string][]ScopedParent
+
+// NewParentScope builds a ParentScope from (parentCFNType -> ScopedParent)
+// pairs, de-duplicating parents per type by (identifier, region), trimming
+// whitespace, dropping empties, and sorting by (identifier, region). Returns
+// nil when no usable pair is supplied so callers can leave
+// DiscoverArgs.ParentScope at its zero value (which means "no scoping —
+// account-wide sweep").
+func NewParentScope(byCFNType map[string][]ScopedParent) ParentScope {
+	out := ParentScope{}
+	for cfnType, parents := range byCFNType {
+		cfnType = strings.TrimSpace(cfnType)
+		if cfnType == "" {
+			continue
+		}
+		type key struct{ id, region string }
+		seen := map[key]struct{}{}
+		var deduped []ScopedParent
+		for _, p := range parents {
+			id := strings.TrimSpace(p.Identifier)
+			if id == "" {
+				continue
+			}
+			region := strings.TrimSpace(p.Region)
+			k := key{id: id, region: region}
+			if _, ok := seen[k]; ok {
+				continue
+			}
+			seen[k] = struct{}{}
+			deduped = append(deduped, ScopedParent{Identifier: id, Region: region})
+		}
+		if len(deduped) == 0 {
+			continue
+		}
+		sort.Slice(deduped, func(i, j int) bool {
+			if deduped[i].Identifier != deduped[j].Identifier {
+				return deduped[i].Identifier < deduped[j].Identifier
+			}
+			return deduped[i].Region < deduped[j].Region
+		})
+		out[cfnType] = deduped
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
+// scopedParents returns the selected parent identifiers for parentCFNType that
+// belong to the given enumeration region, plus true when ParentScope restricts
+// this type. When the type is NOT in the scope it returns (nil, false) so the
+// caller falls back to its account-wide enumeration. A nil/empty ParentScope
+// always returns (nil, false).
+//
+// Region matching depends on whether the enumeration is a SINGLE pass or a
+// per-region loop:
+//
+//   - region == "" is the SINGLE-pass enumeration: either an IsGlobal-
+//     enumerated type (the discoverer scans once with region="", e.g.
+//     aws_s3_bucket / aws_iam_role) or the empty-Regions back-compat path
+//     ("" means "the configured region"). There is exactly one pass and no
+//     per-region duplication to guard against, so EVERY scoped parent is
+//     included — regardless of the region stamped on it. This is load-bearing
+//     for IsGlobal types that still carry a real Identity.Region: an
+//     aws_s3_bucket is enumerated region-less but stored under its TRUE region
+//     (us-west-2, …) by its PostDiscover, so region-filtering the single ""
+//     pass would drop the selected bucket entirely (codex #770 P1).
+//
+//   - region != "" is a PER-REGION loop pass. A parent is included when
+//     p.Region == region (it lives in the region being swept). A region-less
+//     parent (p.Region == "") is included in EXACTLY ONE region — the first of
+//     args.Regions — so it is fetched once, never duplicated across the loop.
+//     Any other parent is excluded for this region.
+//
+// CRITICAL: when the CFN type IS present in the scope but ZERO parents match
+// this region, scopedParents returns ([]string{}, true) — an EMPTY slice with
+// ok=true. The caller MUST treat (empty, true) as "no parents in this region,
+// skip enumeration" and NOT fall back to the account-wide sweep. Returning ok
+// here is what scopes a multi-region closure: the type is owned by the scope,
+// there just are no selected parents in this particular region.
+func (a DiscoverArgs) scopedParents(parentCFNType, region string) ([]string, bool) {
+	if len(a.ParentScope) == 0 {
+		return nil, false
+	}
+	parents, ok := a.ParentScope[strings.TrimSpace(parentCFNType)]
+	if !ok || len(parents) == 0 {
+		return nil, false
+	}
+	// Single-pass enumeration (IsGlobal type, or empty-Regions back-compat):
+	// include every scoped parent once. No per-region duplication to guard.
+	if region == "" {
+		out := make([]string, 0, len(parents))
+		for _, p := range parents {
+			out = append(out, p.Identifier)
+		}
+		return out, true
+	}
+	// Per-region loop: include the parents in THIS region, plus region-less
+	// parents in the first region (so they enumerate exactly once).
+	out := make([]string, 0, len(parents))
+	for _, p := range parents {
+		switch {
+		case p.Region == region:
+			out = append(out, p.Identifier)
+		case p.Region == "" && a.regionLessParentEnumeratesHere(region):
+			out = append(out, p.Identifier)
+		}
+	}
+	return out, true
+}
+
+// regionLessParentEnumeratesHere reports whether the given (non-empty)
+// enumeration region is the first of args.Regions — the single region a
+// region-less (Region == "") scoped parent should be emitted in during a
+// per-region loop, so such a parent is fetched exactly once across a
+// multi-region request. (The region == "" single-pass case is handled
+// directly in scopedParents and never reaches here.)
+func (a DiscoverArgs) regionLessParentEnumeratesHere(region string) bool {
+	return len(a.Regions) > 0 && region == a.Regions[0]
 }
 
 // withRGTCache returns a copy of args with rgtCache set. Used once at

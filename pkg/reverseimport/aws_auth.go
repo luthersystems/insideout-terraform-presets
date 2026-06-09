@@ -15,13 +15,29 @@ const (
 	tfEnvPrefix        = "TF_VAR_"
 )
 
-type awsProviderAuth struct {
+// AWSProviderAuth is the customer-account assume-role identity the
+// reverse-import engine reaches the customer's AWS account with. Terraform's
+// generated provider blocks assume RoleARN (with the optional ExternalID); the
+// closure/dep-chase discoverer MUST assume the same role so its direct AWS SDK
+// calls run as the same principal rather than the ambient pod/CLI credentials
+// (#739). Exported so the discoverer-construction site (reversedisco / Mars /
+// the CLI) and the engine share one resolution path.
+type AWSProviderAuth struct {
 	RoleARN    string
 	ExternalID string
 }
 
-func resolveAWSProviderAuth(outputDir string) (awsProviderAuth, error) {
-	auth := awsProviderAuth{
+// ResolveAWSProviderAuth resolves the customer-account assume-role identity
+// from (in priority order) the TF_VAR_bootstrap_role / TF_VAR_aws_external_id
+// environment, the generated outputs/cloud-provision.json terraform_role
+// output, and the tf/auto-vars bundle — the same sources Terraform's provider
+// blocks use. outputDir is any path inside the generated stack; the project
+// root is discovered by walking upward. A zero-value result (empty RoleARN) is
+// not an error: it means "no assume-role hop" — the caller then uses ambient
+// credentials, which is the correct behavior for the local CLI run directly
+// with customer creds.
+func ResolveAWSProviderAuth(outputDir string) (AWSProviderAuth, error) {
+	auth := AWSProviderAuth{
 		RoleARN:    strings.TrimSpace(os.Getenv(tfEnvPrefix + tfVarBootstrapRole)),
 		ExternalID: strings.TrimSpace(os.Getenv(tfEnvPrefix + tfVarAWSExternalID)),
 	}
