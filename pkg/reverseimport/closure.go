@@ -2,6 +2,7 @@ package reverseimport
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -77,6 +78,13 @@ func expandSelectionClosure(ctx context.Context, in selectionClosureInput) (sele
 		ChildTypes:      childTypes,
 	})
 	if err != nil {
+		// Cancellation / deadline is NOT a best-effort failure: the operator
+		// cancelled the import or the overall run deadline expired. Propagate
+		// it so the run stops promptly instead of continuing into
+		// genconfig/driftfix/import after the context is already done.
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+			return out, fmt.Errorf("selection closure: %w", err)
+		}
 		// Selection-closure expansion is best-effort enrichment: it pulls a
 		// selected parent's registered children into the import set so the
 		// operator does not have to re-select each one by hand. A discoverer

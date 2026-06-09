@@ -95,6 +95,49 @@ func TestCloudControlDiscover_ParentScopeSkipsListResources(t *testing.T) {
 	}
 }
 
+// TestCloudControlDiscover_IdentifierSharedChildScoped proves the codex #770
+// follow-up: aws_s3_bucket_policy (CFN AWS::S3::BucketPolicy), whose CC
+// identifier IS the bucket name, is scoped by the selected bucket names too —
+// it GetResources only the selected buckets' policies and never lists the
+// AWS::S3::BucketPolicy type account-wide.
+func TestCloudControlDiscover_IdentifierSharedChildScoped(t *testing.T) {
+	t.Parallel()
+	if got := IdentifierSharedChildCFNTypes("AWS::S3::Bucket"); !reflect.DeepEqual(got, []string{"AWS::S3::BucketPolicy"}) {
+		t.Fatalf("IdentifierSharedChildCFNTypes(AWS::S3::Bucket) = %v, want [AWS::S3::BucketPolicy]", got)
+	}
+	fake := &fakeCloudControlClient{
+		listPages: []cloudcontrol.ListResourcesOutput{
+			listPage("", "bucket-a", "bucket-b", "bucket-unselected"),
+		},
+		propsByIdentifier: map[string]map[string]any{
+			"bucket-a":          {},
+			"bucket-unselected": {},
+		},
+	}
+	cfg := testConfig()
+	cfg.CloudFormationType = "AWS::S3::BucketPolicy"
+	cfg.SkipProjectTagFilter = true
+	d := &cloudControlDiscoverer{
+		cfg:            cfg,
+		new:            func(_ string) cloudControlClient { return fake },
+		maxConcurrency: DefaultMaxConcurrency,
+	}
+	got, err := d.Discover(context.Background(), DiscoverArgs{
+		Regions:     []string{"us-east-1"},
+		AccountID:   "123",
+		ParentScope: NewParentScope(map[string][]string{"AWS::S3::BucketPolicy": {"bucket-a"}}),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fake.listCalls != 0 {
+		t.Errorf("ListResources calls = %d, want 0 (scoped child must skip the account-wide list)", fake.listCalls)
+	}
+	if ids := importIDs(got); !reflect.DeepEqual(ids, []string{"bucket-a"}) {
+		t.Errorf("discovered = %v, want only the selected bucket's policy [bucket-a]", ids)
+	}
+}
+
 // TestCloudControlDiscover_ParentScopeBypassesTagFilter proves a scoped parent
 // is NOT dropped by the Project tag filter — the operator selected it by
 // identity, so a missing Project tag must not exclude it.

@@ -109,11 +109,18 @@ func TestAWSParentScope_KeysByParentCFNType(t *testing.T) {
 	if got := scope["AWS::S3::Bucket"]; !reflect.DeepEqual(got, wantBuckets) {
 		t.Errorf("AWS::S3::Bucket scope = %v, want %v", got, wantBuckets)
 	}
+	// The bucket-policy child shares the bucket's identifier, so it is scoped
+	// by the same selected bucket names — no account-wide BucketPolicy list.
+	if got := scope["AWS::S3::BucketPolicy"]; !reflect.DeepEqual(got, wantBuckets) {
+		t.Errorf("AWS::S3::BucketPolicy scope = %v, want %v (identifier-shared child)", got, wantBuckets)
+	}
 	if got := scope["AWS::Logs::LogGroup"]; !reflect.DeepEqual(got, []string{"/app/api"}) {
 		t.Errorf("AWS::Logs::LogGroup scope = %v, want [/app/api]", got)
 	}
 	for cfn := range scope {
-		if cfn != "AWS::S3::Bucket" && cfn != "AWS::Logs::LogGroup" {
+		switch cfn {
+		case "AWS::S3::Bucket", "AWS::S3::BucketPolicy", "AWS::Logs::LogGroup":
+		default:
 			t.Errorf("unexpected scope key %q (unknown-type parent should be skipped)", cfn)
 		}
 	}

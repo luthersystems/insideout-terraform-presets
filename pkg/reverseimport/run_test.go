@@ -514,6 +514,48 @@ func TestRunContinuesWhenClosureDiscoveryFails(t *testing.T) {
 	}
 }
 
+// TestRunPropagatesClosureCancellation proves the codex #770 follow-up: a
+// context cancellation / deadline during closure discovery is NOT downgraded to
+// a warning — it propagates so the run stops promptly instead of continuing
+// into genconfig/import after the context is already done.
+func TestRunPropagatesClosureCancellation(t *testing.T) {
+	dir := t.TempDir()
+	discoverer := &errClosureDiscoverer{err: fmt.Errorf("discover aborted: %w", context.Canceled)}
+	req := job.Request{
+		Version: job.Version,
+		Resources: []job.ResourceSpec{{
+			Identity: imported.ResourceIdentity{
+				Cloud:    "aws",
+				Type:     "aws_s3_bucket",
+				Address:  "aws_s3_bucket.uploads",
+				ImportID: "io-uploads",
+				Region:   "us-east-1",
+			},
+			Tier:   imported.TierImportedFlat,
+			Source: imported.SourceImporter,
+		}},
+	}
+
+	_, err := Run(context.Background(), req, Options{
+		OutputDir:         dir,
+		SkipDepChase:      true,
+		DiscoverRegions:   []string{"us-east-1"},
+		ClosureDiscoverer: discoverer,
+		deps: deps{
+			runGenconfig: fakeGenconfig,
+			runDriftfix:  fakeDriftfix,
+			runDepChase:  fakeDepChase,
+			tf:           fakeTerraformRunner{importCount: 1},
+		},
+	})
+	if err == nil {
+		t.Fatal("Run returned nil, want cancellation to propagate")
+	}
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("Run err = %v, want errors.Is(err, context.Canceled)", err)
+	}
+}
+
 func TestRunBackfillsImportedAttrsFromFinalPlan(t *testing.T) {
 	dir := t.TempDir()
 	req := job.Request{

@@ -167,6 +167,14 @@ func awsParentScope(parents []imported.ImportedResource) awsdiscover.ParentScope
 			continue
 		}
 		byCFN[cfnType] = append(byCFN[cfnType], id)
+		// Also scope any child whose CC identifier IS this parent's
+		// identifier (e.g. aws_s3_bucket_policy, whose identifier is the
+		// bucket name) so its discovery is restricted to the selected
+		// parents too — no account-wide list of the child type (#739
+		// codex follow-up).
+		for _, childCFN := range awsdiscover.IdentifierSharedChildCFNTypes(cfnType) {
+			byCFN[childCFN] = append(byCFN[childCFN], id)
+		}
 	}
 	return awsdiscover.NewParentScope(byCFN)
 }
