@@ -10,11 +10,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/aws/aws-sdk-go-v2/config"
-
-	"github.com/luthersystems/insideout-terraform-presets/cmd/insideout-import/awsdiscover"
 	"github.com/luthersystems/insideout-terraform-presets/cmd/insideout-import/depchase"
-	"github.com/luthersystems/insideout-terraform-presets/cmd/insideout-import/gcpdiscover"
+	"github.com/luthersystems/insideout-terraform-presets/cmd/insideout-import/reversedisco"
 	"github.com/luthersystems/insideout-terraform-presets/pkg/reverseimport"
 	reversejob "github.com/luthersystems/insideout-terraform-presets/pkg/reverseimport/job"
 )
@@ -102,7 +99,7 @@ Flags:`)
 	ctx, cancel := context.WithTimeout(context.Background(), discoverTimeoutOverall)
 	defer cancel()
 
-	discoverer, cleanup, err := newReverseDiscoverer(ctx, cloud, firstReqRegion(req, *region), firstReqProjectID(req, *gcpProjectID), *awsEndpointURL)
+	discoverer, cleanup, err := reversedisco.New(ctx, cloud, firstReqRegion(req, *region), firstReqProjectID(req, *gcpProjectID), *awsEndpointURL)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "reverse: build discoverer: %v\n", err)
 		return reverseExitFatal
@@ -142,33 +139,6 @@ Flags:`)
 		result.PlanSummary.ChangeCount,
 		result.PlanSummary.DestroyCount)
 	return reverseExitOK
-}
-
-func newReverseDiscoverer(ctx context.Context, cloud, region, gcpProjectID, awsEndpointURL string) (reverseimport.Discoverer, func(), error) {
-	switch cloud {
-	case "aws":
-		opts := []func(*config.LoadOptions) error{
-			config.WithRegion(region),
-			config.WithRetryMaxAttempts(discoverRetryMaxAttempts),
-			config.WithRetryMode(discoverRetryMode),
-		}
-		if awsEndpointURL != "" {
-			opts = append(opts, config.WithBaseEndpoint(awsEndpointURL))
-		}
-		cfg, err := config.LoadDefaultConfig(ctx, opts...)
-		if err != nil {
-			return nil, func() {}, err
-		}
-		return awsAggAdapter{d: awsdiscover.NewAWSDiscovererWithConcurrency(cfg, awsdiscover.DefaultMaxConcurrency)}, func() {}, nil
-	case "gcp":
-		searcher, err := gcpdiscover.NewRealAssetSearcher(ctx)
-		if err != nil {
-			return nil, func() {}, err
-		}
-		return gcpAggAdapter{d: gcpdiscover.NewGCPDiscoverer(searcher, gcpProjectID, gcpdiscover.GCPDiscovererOpts{})}, func() { _ = searcher.Close() }, nil
-	default:
-		return nil, func() {}, fmt.Errorf("unknown cloud %q", cloud)
-	}
 }
 
 func firstReqRegion(req reversejob.Request, fallback string) string {
