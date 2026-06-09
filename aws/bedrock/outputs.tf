@@ -28,6 +28,31 @@ output "invocation_logging_role_arn" {
   description = "ARN of the IAM role Bedrock assumes to write invocation logs. null when disabled."
 }
 
+output "knowledge_base_id" {
+  value       = var.enable_knowledge_base ? aws_bedrockagent_knowledge_base.this[0].id : null
+  description = "ID of the Bedrock Knowledge Base. null when enable_knowledge_base is false. Pass to aws_bedrockagent_agent_knowledge_base_association or RetrieveAndGenerate at runtime."
+}
+
+output "knowledge_base_arn" {
+  value       = var.enable_knowledge_base ? aws_bedrockagent_knowledge_base.this[0].arn : null
+  description = "ARN of the Bedrock Knowledge Base. null when disabled."
+}
+
+output "data_source_id" {
+  value       = var.enable_knowledge_base ? aws_bedrockagent_data_source.s3_docs[0].data_source_id : null
+  description = "ID of the S3 data source attached to the Knowledge Base. null when disabled. Pass to StartIngestionJob to (re)ingest the S3 docs bucket."
+}
+
+output "s3_vectors_bucket_arn" {
+  value       = local.use_s3vectors ? aws_s3vectors_vector_bucket.kb[0].vector_bucket_arn : null
+  description = "ARN of the in-module S3 Vectors bucket backing the Knowledge Base. null unless vector_store=s3vectors and the KB is enabled."
+}
+
+output "s3_vectors_index_arn" {
+  value       = local.use_s3vectors ? aws_s3vectors_index.kb[0].index_arn : null
+  description = "ARN of the in-module S3 Vectors index. null unless vector_store=s3vectors and the KB is enabled."
+}
+
 output "guardrail_id" {
   value       = var.enable_guardrail ? aws_bedrock_guardrail.this[0].guardrail_id : null
   description = "ID of the Bedrock guardrail. null when disabled. Pass to InvokeModel/Converse along with guardrail_version to apply this policy at runtime."

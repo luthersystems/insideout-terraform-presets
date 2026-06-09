@@ -5,6 +5,10 @@ terraform {
       source  = "hashicorp/aws"
       version = ">= 6.0"
     }
+    time = {
+      source  = "hashicorp/time"
+      version = ">= 0.9"
+    }
   }
 }
 
@@ -103,6 +107,29 @@ locals {
       Resource = var.opensearch_collection_arn
     }
   ]
+
+  # When the KB uses the in-module S3 Vectors store, the KB service role needs
+  # data-plane access on the vector bucket + index it was given. Granted only
+  # for the s3vectors path; the opensearch path uses the aoss statement above.
+  use_s3vectors = var.enable_knowledge_base && var.vector_store == "s3vectors"
+
+  bedrock_s3vectors_statements = local.use_s3vectors ? [
+    {
+      Action = [
+        "s3vectors:GetIndex",
+        "s3vectors:QueryVectors",
+        "s3vectors:GetVectors",
+        "s3vectors:PutVectors",
+        "s3vectors:ListVectors",
+        "s3vectors:DeleteVectors",
+      ]
+      Effect = "Allow"
+      Resource = [
+        aws_s3vectors_vector_bucket.kb[0].vector_bucket_arn,
+        aws_s3vectors_index.kb[0].index_arn,
+      ]
+    }
+  ] : []
 }
 
 resource "aws_iam_role_policy" "bedrock_kb" {
@@ -115,21 +142,156 @@ resource "aws_iam_role_policy" "bedrock_kb" {
       [local.bedrock_invoke_statement],
       local.bedrock_s3_statements,
       local.bedrock_aoss_statements,
+      local.bedrock_s3vectors_statements,
     )
   })
 }
 
-# The Bedrock Knowledge Base (aws_bedrockagent_knowledge_base) and its S3
-# data source are intentionally NOT managed by this module. Creating the KB
-# at terraform time requires (1) a pre-existing AOSS vector index with the
-# k-NN field mapping Bedrock expects keyed to a chosen embedding model and
-# dimension, and (2) resolving assumed-role session ARNs to their underlying
-# roles. Both are application-layer concerns — the application that ingests
-# data into the KB is the right place to create the KB and the vector index,
-# because only it knows which embedding model / dimension / field names it
-# needs. This module provisions the IAM role + AOSS data-access policy +
-# invocation logging + guardrail so the application has a usable, observable
-# substrate to call CreateKnowledgeBase and StartIngestionJob against.
+# --- Knowledge Base + vector store -----------------------------------------
+#
+# When enable_knowledge_base is true this module provisions a real managed-RAG
+# Knowledge Base: a vector store, the aws_bedrockagent_knowledge_base wired to
+# the KB IAM role above, and an aws_bedrockagent_data_source pointed at the S3
+# docs bucket. This reverses the earlier "KB is app-layer" decision (#757):
+# with the S3 Vectors store the dimension/field-mapping bootstrapping that used
+# to require an application is now a couple of plain terraform resources, so
+# the whole RAG substrate composes declaratively.
+#
+# Two vector stores are supported:
+#   - s3vectors (default): an aws_s3vectors_vector_bucket + aws_s3vectors_index
+#     created here. Cheapest managed option, no cluster. Bedrock's s3_vectors
+#     storage type does NOT need a field_mapping block — the index schema is
+#     fixed by the s3vectors index itself.
+#   - opensearch: the AOSS collection wired via opensearch_collection_arn. The
+#     vector index (with the field mapping Bedrock expects) must already exist
+#     on that collection; this module grants the data-access policy below.
+
+locals {
+  embedding_model_arn = "arn:aws:bedrock:${var.region}::foundation-model/${var.embedding_model_id}"
+
+  # Field names Bedrock writes/reads on the AOSS vector index. These are the
+  # conventional names the application's index-creation step must mirror.
+  aoss_vector_field   = "bedrock-knowledge-base-default-vector"
+  aoss_text_field     = "AMAZON_BEDROCK_TEXT_CHUNK"
+  aoss_metadata_field = "AMAZON_BEDROCK_METADATA"
+}
+
+# S3 Vectors store (default). force_destroy defaults false so a destroy of a
+# populated KB fails loud instead of silently dropping ingested vectors.
+resource "aws_s3vectors_vector_bucket" "kb" {
+  count              = local.use_s3vectors ? 1 : 0
+  vector_bucket_name = "${var.project}-br-vectors"
+  force_destroy      = var.knowledge_base_force_destroy
+  tags               = merge(module.name.tags, var.tags)
+}
+
+resource "aws_s3vectors_index" "kb" {
+  count              = local.use_s3vectors ? 1 : 0
+  vector_bucket_name = aws_s3vectors_vector_bucket.kb[0].vector_bucket_name
+  index_name         = "${var.project}-br-index"
+  data_type          = "float32"
+  dimension          = var.embedding_dimension
+  # Cosine is the metric Bedrock's Titan embeddings are tuned for.
+  distance_metric = "cosine"
+  tags            = merge(module.name.tags, var.tags)
+
+  lifecycle {
+    # Cross-check the index dimension against the known Titan models so a wrong
+    # pairing fails at plan time rather than producing a non-retrievable index.
+    # Unknown/custom models skip the check (any in-range dimension is accepted).
+    precondition {
+      condition = (
+        var.embedding_model_id == "amazon.titan-embed-text-v2:0" ? var.embedding_dimension == 1024 :
+        var.embedding_model_id == "amazon.titan-embed-text-v1" ? var.embedding_dimension == 1536 :
+        true
+      )
+      error_message = "embedding_dimension must match embedding_model_id: amazon.titan-embed-text-v2:0 → 1024, amazon.titan-embed-text-v1 → 1536."
+    }
+  }
+}
+
+# IAM is eventually consistent: the KB role/policy created above can take a few
+# seconds to propagate before Bedrock's CreateKnowledgeBase will accept it,
+# otherwise it 403s on the first apply. A short sleep between the policy and the
+# KB resource turns a flaky first apply into a reliable one.
+resource "time_sleep" "kb_iam_propagation" {
+  count           = var.enable_knowledge_base ? 1 : 0
+  depends_on      = [aws_iam_role_policy.bedrock_kb]
+  create_duration = "20s"
+}
+
+resource "aws_bedrockagent_knowledge_base" "this" {
+  count    = var.enable_knowledge_base ? 1 : 0
+  name     = "${var.project}-kb"
+  role_arn = aws_iam_role.bedrock_kb.arn
+
+  knowledge_base_configuration {
+    type = "VECTOR"
+    vector_knowledge_base_configuration {
+      embedding_model_arn = local.embedding_model_arn
+    }
+  }
+
+  storage_configuration {
+    type = local.use_s3vectors ? "S3_VECTORS" : "OPENSEARCH_SERVERLESS"
+
+    dynamic "s3_vectors_configuration" {
+      for_each = local.use_s3vectors ? [1] : []
+      content {
+        index_arn = aws_s3vectors_index.kb[0].index_arn
+      }
+    }
+
+    dynamic "opensearch_serverless_configuration" {
+      for_each = local.use_s3vectors ? [] : [1]
+      content {
+        collection_arn    = var.opensearch_collection_arn
+        vector_index_name = "${var.project}-br-index"
+        field_mapping {
+          vector_field   = local.aoss_vector_field
+          text_field     = local.aoss_text_field
+          metadata_field = local.aoss_metadata_field
+        }
+      }
+    }
+  }
+
+  tags = merge(module.name.tags, var.tags)
+
+  # Wait for the KB role/policy to propagate, and (opensearch path) for the
+  # AOSS data-access policy to exist before Bedrock validates index access.
+  depends_on = [
+    time_sleep.kb_iam_propagation,
+    aws_opensearchserverless_access_policy.bedrock,
+  ]
+
+  lifecycle {
+    # The S3 docs source is mandatory for any KB regardless of vector store.
+    precondition {
+      condition     = var.s3_bucket_arn != null
+      error_message = "enable_knowledge_base=true requires s3_bucket_arn (the S3 docs source the Knowledge Base ingests from)."
+    }
+    # The opensearch store needs the AOSS collection ARN wired.
+    precondition {
+      condition     = var.vector_store != "opensearch" || var.opensearch_collection_arn != null
+      error_message = "vector_store=opensearch requires opensearch_collection_arn to be set (wire from aws/opensearch.collection_arn)."
+    }
+  }
+}
+
+resource "aws_bedrockagent_data_source" "s3_docs" {
+  count             = var.enable_knowledge_base ? 1 : 0
+  knowledge_base_id = aws_bedrockagent_knowledge_base.this[0].id
+  name              = "${var.project}-kb-s3"
+
+  data_source_configuration {
+    type = "S3"
+    s3_configuration {
+      bucket_arn         = var.s3_bucket_arn
+      inclusion_prefixes = length(var.knowledge_base_inclusion_prefixes) > 0 ? var.knowledge_base_inclusion_prefixes : null
+    }
+  }
+}
 
 # --- AOSS data-access policy -----------------------------------------------
 #

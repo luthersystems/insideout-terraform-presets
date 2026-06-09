@@ -29,8 +29,8 @@ variable "model_id" {
 
 variable "embedding_model_id" {
   type        = string
-  description = "Bedrock embedding model ID the role may invoke. Granted via the IAM policy so the application can ingest into a Knowledge Base backed by this role."
-  default     = "amazon.titan-embed-text-v1"
+  description = "Bedrock embedding model ID the role may invoke and that the Knowledge Base uses to embed chunks. Granted via the IAM policy. Default amazon.titan-embed-text-v2:0 (1024-dim, the current recommended Titan embedder) — its output dimension must match embedding_dimension."
+  default     = "amazon.titan-embed-text-v2:0"
 }
 
 variable "s3_bucket_arn" {
@@ -66,6 +66,59 @@ variable "aoss_additional_principal_arns" {
   validation {
     condition     = alltrue([for arn in var.aoss_additional_principal_arns : can(regex("^arn:aws[a-z-]*:iam::[0-9]{12}:(role|user)/", arn))])
     error_message = "aoss_additional_principal_arns must all be IAM role or user ARNs (arn:aws:iam::<account>:role/... or :user/...). Assumed-role session ARNs (arn:aws:sts::...:assumed-role/...) are not valid in AOSS data-access policies."
+  }
+}
+
+# --- Knowledge Base --------------------------------------------------------
+
+variable "enable_knowledge_base" {
+  type        = bool
+  description = "Provision a Bedrock Knowledge Base (aws_bedrockagent_knowledge_base) + an S3 data source (aws_bedrockagent_data_source) backed by a vector store. Default false — opt in deliberately. When true, s3_bucket_arn is required (the docs source the KB ingests from), and either an S3 Vectors store is created in-module (vector_store=s3vectors, the default) or the wired AOSS collection is used (vector_store=opensearch). The KB IAM role + policy this module already creates is the KB's role_arn."
+  default     = false
+}
+
+variable "vector_store" {
+  type        = string
+  description = "Vector store backing the Knowledge Base. 's3vectors' (default) provisions an aws_s3vectors_vector_bucket + aws_s3vectors_index in this module — the cheapest managed option, no cluster to run. 'opensearch' uses the AOSS collection wired via opensearch_collection_arn (requires the application/terraform-runner to have pre-created a vector index with the field mapping Bedrock expects). Ignored when enable_knowledge_base is false."
+  default     = "s3vectors"
+  validation {
+    condition     = contains(["s3vectors", "opensearch"], var.vector_store)
+    error_message = "vector_store must be one of s3vectors, opensearch."
+  }
+  # Cross-variable constraints (KB requires s3_bucket_arn; opensearch store
+  # requires opensearch_collection_arn) can't live here — a variable
+  # validation must reference its own variable. They are enforced as
+  # preconditions on aws_bedrockagent_knowledge_base in main.tf, which only
+  # evaluate when the KB is actually being created.
+}
+
+variable "embedding_dimension" {
+  type        = number
+  description = "Dimension of the embedding vectors the S3 Vectors index stores. MUST match the output dimension of embedding_model_id: Amazon Titan Text Embeddings V2 (amazon.titan-embed-text-v2:0) = 1024 (default), Titan V1 (amazon.titan-embed-text-v1) = 1536, Cohere Embed = 1024. A mismatch makes ingestion silently produce zero retrievable chunks. Only used for the s3vectors store; the AOSS index dimension is set by whoever created that index."
+  default     = 1024
+  validation {
+    condition     = var.embedding_dimension >= 1 && var.embedding_dimension <= 4096
+    error_message = "embedding_dimension must be between 1 and 4096 (S3 Vectors index limit)."
+  }
+  # The dimension-must-match-the-embedding-model cross-check references
+  # embedding_model_id, so it can't live here (a variable validation must
+  # reference its own variable). It's enforced as a precondition on the
+  # s3vectors index in main.tf, which only fires when that store is built.
+}
+
+variable "knowledge_base_force_destroy" {
+  type        = bool
+  description = "force_destroy on the in-module S3 Vectors bucket. When true, terraform destroy deletes the vector bucket even if it still contains indexes/vectors. Default false so a destroy of a populated KB fails loud rather than silently dropping ingested data. Ignored when vector_store != s3vectors."
+  default     = false
+}
+
+variable "knowledge_base_inclusion_prefixes" {
+  type        = list(string)
+  description = "Optional S3 key prefix the data source restricts ingestion to (e.g. [\"docs/\"]). Empty (default) ingests the whole bucket. The Bedrock S3 data source accepts at most ONE inclusion prefix, so this list may hold 0 or 1 element. Ignored when enable_knowledge_base is false."
+  default     = []
+  validation {
+    condition     = length(var.knowledge_base_inclusion_prefixes) <= 1
+    error_message = "knowledge_base_inclusion_prefixes accepts at most one prefix (Bedrock S3 data source limit)."
   }
 }
 

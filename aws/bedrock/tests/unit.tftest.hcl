@@ -18,6 +18,26 @@ mock_provider "aws" {
       user_id    = "AIDACKCEVSQ6C2EXAMPLE"
     }
   }
+
+  # The Knowledge Base feeds aws_iam_role.bedrock_kb.arn into role_arn and the
+  # s3vectors index/bucket ARNs into storage_configuration. The provider parses
+  # those as ARNs at apply time, and mock_provider's default random string is
+  # not a valid ARN — so give these computed attributes ARN-shaped mocks.
+  mock_resource "aws_iam_role" {
+    defaults = {
+      arn = "arn:aws:iam::111111111111:role/iotest-br-bedrock-role"
+    }
+  }
+  mock_resource "aws_s3vectors_vector_bucket" {
+    defaults = {
+      vector_bucket_arn = "arn:aws:s3vectors:us-east-1:111111111111:bucket/iotest-br-br-vectors"
+    }
+  }
+  mock_resource "aws_s3vectors_index" {
+    defaults = {
+      index_arn = "arn:aws:s3vectors:us-east-1:111111111111:bucket/iotest-br-br-vectors/index/iotest-br-br-index"
+    }
+  }
 }
 
 variables {
@@ -305,6 +325,285 @@ run "aoss_access_policy_with_no_extra_principals" {
     condition     = length(jsondecode(aws_opensearchserverless_access_policy.bedrock[0].policy)[0].Principal) == 1
     error_message = "AOSS principal list must contain exactly the bedrock role when no additional principals are passed."
   }
+}
+
+# --- Knowledge Base --------------------------------------------------------
+
+run "kb_disabled_by_default" {
+  command = plan
+
+  assert {
+    condition     = length(aws_bedrockagent_knowledge_base.this) == 0
+    error_message = "Knowledge Base must NOT be created when enable_knowledge_base is false (default)."
+  }
+
+  assert {
+    condition     = length(aws_s3vectors_vector_bucket.kb) == 0 && length(aws_s3vectors_index.kb) == 0
+    error_message = "S3 Vectors store must NOT be created when the KB is disabled."
+  }
+
+  assert {
+    condition     = length(aws_bedrockagent_data_source.s3_docs) == 0
+    error_message = "Data source must NOT be created when the KB is disabled."
+  }
+
+  assert {
+    condition     = length(time_sleep.kb_iam_propagation) == 0
+    error_message = "IAM-propagation sleep must NOT be created when the KB is disabled."
+  }
+
+  assert {
+    condition     = output.knowledge_base_id == null && output.knowledge_base_arn == null && output.data_source_id == null
+    error_message = "KB outputs must be null when enable_knowledge_base is false."
+  }
+
+  assert {
+    condition     = output.s3_vectors_bucket_arn == null && output.s3_vectors_index_arn == null
+    error_message = "S3 Vectors outputs must be null when the KB is disabled."
+  }
+}
+
+run "kb_default_s3vectors" {
+  # apply: the KB storage_configuration embeds aws_s3vectors_index.kb.index_arn,
+  # which is "(known after apply)" at plan time. mock_provider populates a mock
+  # ARN at apply time and never calls AWS, so this stays credential-free.
+  command = apply
+
+  variables {
+    enable_knowledge_base = true
+    # vector_store defaults to s3vectors; s3_bucket_arn comes from file vars.
+  }
+
+  assert {
+    condition     = length(aws_bedrockagent_knowledge_base.this) == 1
+    error_message = "Knowledge Base must be created when enable_knowledge_base is true."
+  }
+
+  # The default store is S3 Vectors: bucket + index created in-module.
+  assert {
+    condition     = length(aws_s3vectors_vector_bucket.kb) == 1 && length(aws_s3vectors_index.kb) == 1
+    error_message = "S3 Vectors bucket + index must be created for the default s3vectors store."
+  }
+
+  assert {
+    condition     = aws_s3vectors_vector_bucket.kb[0].vector_bucket_name == "iotest-br-br-vectors"
+    error_message = "S3 Vectors bucket name must follow the {project}-br-vectors convention."
+  }
+
+  assert {
+    condition     = aws_s3vectors_index.kb[0].dimension == 1024
+    error_message = "S3 Vectors index dimension must default to 1024 (Titan v2)."
+  }
+
+  assert {
+    condition     = aws_s3vectors_index.kb[0].data_type == "float32" && aws_s3vectors_index.kb[0].distance_metric == "cosine"
+    error_message = "S3 Vectors index must be float32 / cosine."
+  }
+
+  # Storage config must select S3_VECTORS and NOT emit an opensearch block.
+  assert {
+    condition     = aws_bedrockagent_knowledge_base.this[0].storage_configuration[0].type == "S3_VECTORS"
+    error_message = "KB storage type must be S3_VECTORS for the default store."
+  }
+
+  assert {
+    condition     = length(aws_bedrockagent_knowledge_base.this[0].storage_configuration[0].s3_vectors_configuration) == 1
+    error_message = "s3_vectors_configuration block must be present for the s3vectors store."
+  }
+
+  assert {
+    condition     = length(aws_bedrockagent_knowledge_base.this[0].storage_configuration[0].opensearch_serverless_configuration) == 0
+    error_message = "opensearch_serverless_configuration must be absent for the s3vectors store."
+  }
+
+  # KB wired to the module's own IAM role + embedding model ARN built from region.
+  assert {
+    condition     = aws_bedrockagent_knowledge_base.this[0].role_arn == aws_iam_role.bedrock_kb.arn
+    error_message = "KB role_arn must be the module's bedrock_kb role."
+  }
+
+  assert {
+    condition     = aws_bedrockagent_knowledge_base.this[0].knowledge_base_configuration[0].vector_knowledge_base_configuration[0].embedding_model_arn == "arn:aws:bedrock:us-east-1::foundation-model/amazon.titan-embed-text-v2:0"
+    error_message = "embedding_model_arn must be built from region + embedding_model_id."
+  }
+
+  # Data source points at the S3 docs bucket.
+  assert {
+    condition     = length(aws_bedrockagent_data_source.s3_docs) == 1
+    error_message = "S3 data source must be created when the KB is enabled."
+  }
+
+  assert {
+    condition     = aws_bedrockagent_data_source.s3_docs[0].data_source_configuration[0].s3_configuration[0].bucket_arn == "arn:aws:s3:::iotest-br-bucket"
+    error_message = "Data source must reference the wired s3_bucket_arn."
+  }
+
+  # IAM-propagation sleep created exactly once.
+  assert {
+    condition     = length(time_sleep.kb_iam_propagation) == 1
+    error_message = "IAM-propagation sleep must be created when the KB is enabled."
+  }
+
+  # KB role policy must include the s3vectors data-plane statement.
+  assert {
+    condition = anytrue([
+      for s in jsondecode(aws_iam_role_policy.bedrock_kb.policy).Statement :
+      contains(try(s.Action, []), "s3vectors:QueryVectors")
+    ])
+    error_message = "KB role policy must grant s3vectors:QueryVectors when the s3vectors store is used."
+  }
+}
+
+run "kb_inclusion_prefixes" {
+  command = apply
+
+  variables {
+    enable_knowledge_base             = true
+    knowledge_base_inclusion_prefixes = ["docs/"]
+  }
+
+  assert {
+    condition     = one(aws_bedrockagent_data_source.s3_docs[0].data_source_configuration[0].s3_configuration[0].inclusion_prefixes) == "docs/"
+    error_message = "inclusion_prefixes must pass through to the data source s3_configuration."
+  }
+}
+
+run "rejects_multiple_inclusion_prefixes" {
+  command = plan
+
+  variables {
+    knowledge_base_inclusion_prefixes = ["docs/", "policies/"]
+  }
+
+  expect_failures = [var.knowledge_base_inclusion_prefixes]
+}
+
+run "kb_opensearch" {
+  command = apply
+
+  variables {
+    enable_knowledge_base = true
+    vector_store          = "opensearch"
+    # opensearch_collection_arn comes from file vars (a valid AOSS ARN).
+  }
+
+  assert {
+    condition     = length(aws_bedrockagent_knowledge_base.this) == 1
+    error_message = "Knowledge Base must be created for the opensearch store."
+  }
+
+  # No S3 Vectors store when opensearch is selected.
+  assert {
+    condition     = length(aws_s3vectors_vector_bucket.kb) == 0 && length(aws_s3vectors_index.kb) == 0
+    error_message = "S3 Vectors store must NOT be created when vector_store=opensearch."
+  }
+
+  assert {
+    condition     = aws_bedrockagent_knowledge_base.this[0].storage_configuration[0].type == "OPENSEARCH_SERVERLESS"
+    error_message = "KB storage type must be OPENSEARCH_SERVERLESS for the opensearch store."
+  }
+
+  assert {
+    condition     = aws_bedrockagent_knowledge_base.this[0].storage_configuration[0].opensearch_serverless_configuration[0].collection_arn == "arn:aws:aoss:us-east-1:111111111111:collection/abc123def456"
+    error_message = "opensearch_serverless_configuration must reference the wired collection ARN."
+  }
+
+  assert {
+    condition     = length(aws_bedrockagent_knowledge_base.this[0].storage_configuration[0].s3_vectors_configuration) == 0
+    error_message = "s3_vectors_configuration must be absent for the opensearch store."
+  }
+
+  # opensearch path must NOT add the s3vectors IAM statement.
+  assert {
+    condition = !anytrue([
+      for s in jsondecode(aws_iam_role_policy.bedrock_kb.policy).Statement :
+      contains(try(s.Action, []), "s3vectors:QueryVectors")
+    ])
+    error_message = "KB role policy must NOT grant s3vectors actions when the opensearch store is used."
+  }
+}
+
+run "kb_outputs_populated" {
+  command = apply
+
+  variables {
+    enable_knowledge_base = true
+  }
+
+  assert {
+    condition     = output.knowledge_base_id != null && output.knowledge_base_arn != null
+    error_message = "KB id/arn outputs must be populated when the KB is enabled."
+  }
+
+  assert {
+    condition     = output.data_source_id != null
+    error_message = "data_source_id output must be populated when the KB is enabled."
+  }
+
+  assert {
+    condition     = output.s3_vectors_bucket_arn != null && output.s3_vectors_index_arn != null
+    error_message = "S3 Vectors outputs must be populated for the default s3vectors store."
+  }
+}
+
+# --- Knowledge Base validation ---------------------------------------------
+
+run "rejects_invalid_vector_store" {
+  command = plan
+
+  variables {
+    vector_store = "pinecone"
+  }
+
+  expect_failures = [var.vector_store]
+}
+
+run "rejects_kb_without_s3_bucket" {
+  # precondition on aws_bedrockagent_knowledge_base fires at plan time.
+  command = plan
+
+  variables {
+    enable_knowledge_base = true
+    s3_bucket_arn         = null
+  }
+
+  expect_failures = [aws_bedrockagent_knowledge_base.this]
+}
+
+run "rejects_opensearch_store_without_collection_arn" {
+  command = plan
+
+  variables {
+    enable_knowledge_base     = true
+    vector_store              = "opensearch"
+    opensearch_collection_arn = null
+  }
+
+  expect_failures = [aws_bedrockagent_knowledge_base.this]
+}
+
+run "rejects_dimension_model_mismatch" {
+  # Titan v2 must be 1024; 1536 is the v1 dimension. Precondition on the
+  # s3vectors index catches the mismatch at plan time.
+  command = plan
+
+  variables {
+    enable_knowledge_base = true
+    embedding_model_id    = "amazon.titan-embed-text-v2:0"
+    embedding_dimension   = 1536
+  }
+
+  expect_failures = [aws_s3vectors_index.kb]
+}
+
+run "rejects_out_of_range_dimension" {
+  command = plan
+
+  variables {
+    embedding_dimension = 5000
+  }
+
+  expect_failures = [var.embedding_dimension]
 }
 
 # --- Guardrail variants ----------------------------------------------------

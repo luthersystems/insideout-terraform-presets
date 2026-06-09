@@ -627,3 +627,105 @@ func TestComposeStack_BedrockOpenSearchAOSSEndToEnd(t *testing.T) {
 		mainTF,
 		"bedrock must depends_on the opensearch module")
 }
+
+// bedrockCfg builds a *Config carrying the (anonymous) AWSBedrock sub-struct.
+// The struct shape is duplicated from types.go; keeping a single builder here
+// means the Knowledge Base mapper tests below don't each restate it.
+func bedrockCfg(modelID, embeddingModelID string, enableKB *bool, vectorStore string) *Config {
+	return &Config{
+		AWSBedrock: &struct {
+			KnowledgeBaseName   string `json:"knowledgeBaseName,omitempty"`
+			ModelID             string `json:"modelId,omitempty"`
+			EmbeddingModelID    string `json:"embeddingModelId,omitempty"`
+			EnableKnowledgeBase *bool  `json:"enableKnowledgeBase,omitempty"`
+			VectorStore         string `json:"vectorStore,omitempty"`
+		}{
+			ModelID:             modelID,
+			EmbeddingModelID:    embeddingModelID,
+			EnableKnowledgeBase: enableKB,
+			VectorStore:         vectorStore,
+		},
+	}
+}
+
+// TestMapper_AWSBedrock_DefaultConfig pins that with an empty cfg the mapper
+// emits NONE of the optional bedrock variables, so every preset default —
+// including enable_knowledge_base=false and vector_store="s3vectors" — wins.
+// A regression that unconditionally emitted enable_knowledge_base=false would
+// be indistinguishable from the default here but would clobber a stack that
+// turns the KB on via a different path; pinning "absent" guards that.
+func TestMapper_AWSBedrock_DefaultConfig(t *testing.T) {
+	m := DefaultMapper{}
+	vals, err := m.BuildModuleValues(KeyAWSBedrock, &Components{}, &Config{}, "demo", "us-east-1")
+	require.NoError(t, err)
+
+	for _, key := range []string{"model_id", "embedding_model_id", "enable_knowledge_base", "vector_store"} {
+		_, has := vals[key]
+		require.Falsef(t, has,
+			"mapper must NOT emit %q when caller left cfg.AWSBedrock nil — preset default must win", key)
+	}
+}
+
+// TestMapper_AWSBedrock_KnowledgeBaseConfig confirms the new #757 fields flow
+// through to the namespaced module variables when the caller supplies them.
+func TestMapper_AWSBedrock_KnowledgeBaseConfig(t *testing.T) {
+	m := DefaultMapper{}
+	vals, err := m.BuildModuleValues(
+		KeyAWSBedrock, &Components{},
+		bedrockCfg("anthropic.claude-3-sonnet", "amazon.titan-embed-text-v2:0", ptrBool(true), "opensearch"),
+		"demo", "us-east-1",
+	)
+	require.NoError(t, err)
+
+	require.Equal(t, "anthropic.claude-3-sonnet", vals["model_id"])
+	require.Equal(t, "amazon.titan-embed-text-v2:0", vals["embedding_model_id"])
+	require.Equal(t, true, vals["enable_knowledge_base"],
+		"enable_knowledge_base must propagate when the caller sets it")
+	require.Equal(t, "opensearch", vals["vector_store"],
+		"vector_store must propagate when the caller sets it")
+}
+
+// TestMapper_AWSBedrock_PartialConfig is the partial-config gate: the caller
+// flips the KB on but leaves vector_store unset, so the mapper must emit
+// enable_knowledge_base=true and NOT emit vector_store — letting the preset
+// default it to "s3vectors". Catches the class of bug where the mapper writes
+// an empty-string vector_store that would override (and fail) the preset's
+// enum validation.
+func TestMapper_AWSBedrock_PartialConfig(t *testing.T) {
+	m := DefaultMapper{}
+	vals, err := m.BuildModuleValues(
+		KeyAWSBedrock, &Components{},
+		bedrockCfg("", "", ptrBool(true), "   "), // whitespace vector_store == unset
+		"demo", "us-east-1",
+	)
+	require.NoError(t, err)
+
+	require.Equal(t, true, vals["enable_knowledge_base"])
+
+	_, hasVectorStore := vals["vector_store"]
+	require.False(t, hasVectorStore,
+		"mapper must NOT emit vector_store when caller left it blank — preset default s3vectors must win")
+
+	for _, key := range []string{"model_id", "embedding_model_id"} {
+		_, has := vals[key]
+		require.Falsef(t, has, "mapper must NOT emit %q when caller left it blank", key)
+	}
+}
+
+// TestMapper_AWSBedrock_EnableKBFalseIsExplicit pins that an explicit
+// EnableKnowledgeBase=false (pointer set to false, not nil) DOES flow through.
+// The pointer type is what makes "unset" (nil) and "explicitly off" (false)
+// distinguishable; this test guards that distinction.
+func TestMapper_AWSBedrock_EnableKBFalseIsExplicit(t *testing.T) {
+	m := DefaultMapper{}
+	vals, err := m.BuildModuleValues(
+		KeyAWSBedrock, &Components{},
+		bedrockCfg("", "", ptrBool(false), ""),
+		"demo", "us-east-1",
+	)
+	require.NoError(t, err)
+
+	got, has := vals["enable_knowledge_base"]
+	require.True(t, has, "explicit EnableKnowledgeBase=false must be emitted, not dropped")
+	require.Equal(t, false, got)
+}
