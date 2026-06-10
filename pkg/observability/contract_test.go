@@ -92,13 +92,19 @@ func TestObservabilityDeferred_OnlyForUnalarmedComponents(t *testing.T) {
 		}
 		anyUnalarmed := false
 		hasAnyMetric := false
-		if o.AWS != nil {
-			for _, m := range o.AWS.Metrics {
+		// Walk every AWS group (primary + AWSExtra) so a multi-namespace
+		// component (aws_opensearch's AOSS group, #778) is judged on its
+		// full metric surface, not just the primary group.
+		for _, g := range o.AWSGroups() {
+			for _, m := range g.Metrics {
 				hasAnyMetric = true
 				if !m.Alarmed {
 					anyUnalarmed = true
 					break
 				}
+			}
+			if anyUnalarmed {
+				break
 			}
 		}
 		if !anyUnalarmed && o.GCP != nil {

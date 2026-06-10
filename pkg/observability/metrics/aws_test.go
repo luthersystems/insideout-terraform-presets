@@ -79,6 +79,26 @@ func awsSpecForService(t *testing.T, key composer.ComponentKey, wantService stri
 	return o.AWS
 }
 
+// awsGroups pulls the full set of AWS namespace/dimension groups for a
+// key (primary + AWSExtra) — the slice the production Fetch /
+// BuildGetMetricDataQueries callers pass. Most keys yield exactly one
+// group; multi-namespace components (aws_opensearch, #778) yield more.
+func awsGroups(t *testing.T, key composer.ComponentKey) []*observability.AWSObs {
+	t.Helper()
+	o, ok := observability.Lookup(key)
+	require.True(t, ok, "Lookup(%q) must return a record", key)
+	groups := o.AWSGroups()
+	require.NotEmpty(t, groups, "%q must have at least one AWS group", key)
+	return groups
+}
+
+// oneGroup wraps a single *AWSObs into the slice the multi-group
+// BuildGetMetricDataQueries / Fetch signatures expect, so single-group
+// tests read cleanly.
+func oneGroup(obs *observability.AWSObs) []*observability.AWSObs {
+	return []*observability.AWSObs{obs}
+}
+
 // --- ParseMetricsFilter (from the InsideOut backend aws_metrics_test.go:163) ---
 
 func TestParseMetricsFilter(t *testing.T) {
@@ -157,7 +177,7 @@ func TestBuildGetMetricDataQueries_VerifiesDimensionValues(t *testing.T) {
 			t.Parallel()
 			obs := awsSpecForService(t, tt.key, tt.service)
 			res := ResourceID{ID: tt.resourceID, DimensionName: obs.DimensionName}
-			queries := BuildGetMetricDataQueries(obs, res, tt.service)
+			queries := BuildGetMetricDataQueries(oneGroup(obs), res, tt.service)
 
 			require.Len(t, queries, tt.wantCount)
 
@@ -193,7 +213,7 @@ func TestBuildGetMetricDataQueries_CloudFrontRegionGlobal(t *testing.T) {
 	t.Parallel()
 	obs := awsSpecForService(t, composer.KeyAWSCloudfront, "cloudfront")
 	res := ResourceID{ID: "E123456", DimensionName: "DistributionId"}
-	queries := BuildGetMetricDataQueries(obs, res, "cloudfront")
+	queries := BuildGetMetricDataQueries(oneGroup(obs), res, "cloudfront")
 
 	for _, q := range queries {
 		dims := q.MetricStat.Metric.Dimensions
@@ -214,7 +234,7 @@ func TestBuildGetMetricDataQueries_APIGatewayHTTPv2MetricNames(t *testing.T) {
 	t.Parallel()
 	obs := awsSpecForService(t, composer.KeyAWSAPIGateway, "apigateway")
 	res := ResourceID{ID: "abc123def4", DimensionName: "ApiId"}
-	queries := BuildGetMetricDataQueries(obs, res, "apigateway")
+	queries := BuildGetMetricDataQueries(oneGroup(obs), res, "apigateway")
 
 	got := make(map[string]struct{}, len(queries))
 	for _, q := range queries {
@@ -240,7 +260,7 @@ func TestBuildGetMetricDataQueries_CloudFrontAdditionalMetrics(t *testing.T) {
 	t.Parallel()
 	obs := awsSpecForService(t, composer.KeyAWSCloudfront, "cloudfront")
 	res := ResourceID{ID: "E1234567890", DimensionName: "DistributionId"}
-	queries := BuildGetMetricDataQueries(obs, res, "cloudfront")
+	queries := BuildGetMetricDataQueries(oneGroup(obs), res, "cloudfront")
 
 	got := make(map[string]struct{}, len(queries))
 	for _, q := range queries {
@@ -271,7 +291,7 @@ func TestBuildGetMetricDataQueries_S3StorageType(t *testing.T) {
 	t.Parallel()
 	obs := awsSpecForService(t, composer.KeyAWSS3, "s3")
 	res := ResourceID{ID: "my-bucket", DimensionName: "BucketName"}
-	queries := BuildGetMetricDataQueries(obs, res, "s3")
+	queries := BuildGetMetricDataQueries(oneGroup(obs), res, "s3")
 
 	for _, q := range queries {
 		dims := q.MetricStat.Metric.Dimensions
@@ -307,11 +327,81 @@ func TestBuildGetMetricDataQueries_NilObs(t *testing.T) {
 func TestBuildGetMetricDataQueries_DimensionFallback(t *testing.T) {
 	t.Parallel()
 	obs := awsSpec(t, composer.KeyAWSEC2)
-	queries := BuildGetMetricDataQueries(obs, ResourceID{ID: "i-blank"}, "ec2")
+	queries := BuildGetMetricDataQueries(oneGroup(obs), ResourceID{ID: "i-blank"}, "ec2")
 	require.NotEmpty(t, queries)
 	dims := queries[0].MetricStat.Metric.Dimensions
 	require.NotEmpty(t, dims)
 	assert.Equal(t, "InstanceId", aws.ToString(dims[0].Name))
+}
+
+// TestBuildGetMetricDataQueries_OpenSearchMultiGroup is the #778
+// multi-group contract: aws_opensearch carries the managed AWS/ES group
+// (DomainName) AND the serverless AWS/AOSS group (ClientId), so a single
+// resource emits queries across BOTH namespaces in one call.
+//
+// This doubles as the mutation guard for the multi-group query builder:
+// the assertions on the AOSS half (AWS/AOSS namespace, ClientId
+// dimension, SearchOCU + IndexingOCU metrics) fail if BuildGetMetricDataQueries
+// ever stops iterating past the first group — drop the AWSExtra group and
+// the wantNamespaces/wantDims maps below go unsatisfied.
+func TestBuildGetMetricDataQueries_OpenSearchMultiGroup(t *testing.T) {
+	t.Parallel()
+	groups := awsGroups(t, composer.KeyAWSOpenSearch)
+	require.Len(t, groups, 2,
+		"aws_opensearch must expose two AWS groups: managed AWS/ES + serverless AWS/AOSS (#778)")
+
+	// The primary group's dimension override is honored; the AOSS group
+	// keeps its own ClientId regardless of the per-resource dimension.
+	res := ResourceID{ID: "io-projx-search", DimensionName: "DomainName"}
+	queries := BuildGetMetricDataQueries(groups, res, "opensearch")
+
+	totalMetrics := len(groups[0].Metrics) + len(groups[1].Metrics)
+	require.Len(t, queries, totalMetrics,
+		"query count must span both groups (managed + AOSS)")
+
+	// Query IDs must be globally unique across groups — CloudWatch
+	// rejects duplicate IDs in one GetMetricData request.
+	seenIDs := make(map[string]bool, len(queries))
+	// Map each metric name to the (namespace, dimensionName) it must carry.
+	wantNamespace := map[string]string{}
+	wantDim := map[string]string{}
+	for _, m := range groups[0].Metrics { // AWS/ES + DomainName
+		wantNamespace[m.Name] = "AWS/ES"
+		wantDim[m.Name] = "DomainName"
+	}
+	for _, m := range groups[1].Metrics { // AWS/AOSS + ClientId
+		wantNamespace[m.Name] = "AWS/AOSS"
+		wantDim[m.Name] = "ClientId"
+	}
+	// Assert the AOSS half is actually present (guards a one-group regression).
+	require.Contains(t, wantNamespace, "SearchOCU", "AOSS group must carry SearchOCU")
+	require.Contains(t, wantNamespace, "IndexingOCU", "AOSS group must carry IndexingOCU")
+
+	gotAOSS := 0
+	for _, q := range queries {
+		require.NotNil(t, q.MetricStat)
+		id := aws.ToString(q.Id)
+		assert.False(t, seenIDs[id], "duplicate query ID %q across groups", id)
+		seenIDs[id] = true
+
+		name := aws.ToString(q.MetricStat.Metric.MetricName)
+		ns := aws.ToString(q.MetricStat.Metric.Namespace)
+		dims := q.MetricStat.Metric.Dimensions
+		require.NotEmpty(t, dims, "metric %q must carry a dimension", name)
+
+		assert.Equal(t, wantNamespace[name], ns,
+			"metric %q must publish under namespace %q", name, wantNamespace[name])
+		assert.Equal(t, wantDim[name], aws.ToString(dims[0].Name),
+			"metric %q must carry dimension %q", name, wantDim[name])
+
+		if ns == "AWS/AOSS" {
+			gotAOSS++
+			assert.Equal(t, "Sum", aws.ToString(q.MetricStat.Stat),
+				"AOSS OCU metric %q must use the Sum stat", name)
+		}
+	}
+	assert.Equal(t, len(groups[1].Metrics), gotAOSS,
+		"every AOSS metric must produce exactly one query (the second group must be iterated)")
 }
 
 // --- getMetricData (the unexported CW response shaper) ---
@@ -340,7 +430,7 @@ func TestGetMetricData_HappyPath(t *testing.T) {
 	}
 
 	obs := awsSpec(t, composer.KeyAWSEC2)
-	queries := BuildGetMetricDataQueries(obs, ResourceID{ID: "i-abc123"}, "ec2")
+	queries := BuildGetMetricDataQueries(oneGroup(obs), ResourceID{ID: "i-abc123"}, "ec2")
 	results, err := getMetricData(context.Background(), mock, queries, now.Add(-time.Hour), now, 300)
 
 	require.NoError(t, err)
@@ -387,7 +477,7 @@ func TestGetMetricData_MismatchedTimestampsAndValues(t *testing.T) {
 	}
 
 	obs := awsSpec(t, composer.KeyAWSEC2)
-	queries := BuildGetMetricDataQueries(obs, ResourceID{ID: "i-abc"}, "ec2")
+	queries := BuildGetMetricDataQueries(oneGroup(obs), ResourceID{ID: "i-abc"}, "ec2")
 	results, err := getMetricData(context.Background(), mock, queries, now.Add(-time.Hour), now, 300)
 
 	require.NoError(t, err)
@@ -405,7 +495,7 @@ func TestGetMetricData_EmptyResults(t *testing.T) {
 
 	now := time.Now().UTC()
 	obs := awsSpec(t, composer.KeyAWSEC2)
-	queries := BuildGetMetricDataQueries(obs, ResourceID{ID: "i-abc"}, "ec2")
+	queries := BuildGetMetricDataQueries(oneGroup(obs), ResourceID{ID: "i-abc"}, "ec2")
 	results, err := getMetricData(context.Background(), mock, queries, now.Add(-time.Hour), now, 300)
 
 	require.NoError(t, err)
@@ -418,7 +508,7 @@ func TestGetMetricData_APIError(t *testing.T) {
 
 	now := time.Now().UTC()
 	obs := awsSpec(t, composer.KeyAWSEC2)
-	queries := BuildGetMetricDataQueries(obs, ResourceID{ID: "i-abc"}, "ec2")
+	queries := BuildGetMetricDataQueries(oneGroup(obs), ResourceID{ID: "i-abc"}, "ec2")
 	_, err := getMetricData(context.Background(), mock, queries, now.Add(-time.Hour), now, 300)
 
 	require.Error(t, err)
@@ -430,7 +520,7 @@ func TestGetMetricData_APIError(t *testing.T) {
 func TestFetch_NilClients(t *testing.T) {
 	t.Parallel()
 	obs := awsSpec(t, composer.KeyAWSEC2)
-	_, err := Fetch(context.Background(), nil, "ec2", obs, []ResourceID{{ID: "i-abc"}}, MetricsFilter{Hours: 6, Period: 300})
+	_, err := Fetch(context.Background(), nil, "ec2", oneGroup(obs), []ResourceID{{ID: "i-abc"}}, MetricsFilter{Hours: 6, Period: 300})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "clients is required")
 }
@@ -438,9 +528,18 @@ func TestFetch_NilClients(t *testing.T) {
 func TestFetch_NilObs(t *testing.T) {
 	t.Parallel()
 	c := clientsWithCW(&fakeCloudWatch{})
-	_, err := Fetch(context.Background(), c, "ec2", nil, []ResourceID{{ID: "i-abc"}}, MetricsFilter{Hours: 6, Period: 300})
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "obs is required")
+	// Both a nil slice and a slice of only-nil groups must be rejected —
+	// the multi-group signature can't build any query from either.
+	for name, groups := range map[string][]*observability.AWSObs{
+		"nil slice":          nil,
+		"slice of nil group": {nil},
+	} {
+		t.Run(name, func(t *testing.T) {
+			_, err := Fetch(context.Background(), c, "ec2", groups, []ResourceID{{ID: "i-abc"}}, MetricsFilter{Hours: 6, Period: 300})
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), "at least one obs group is required")
+		})
+	}
 }
 
 func TestFetch_ZeroResources(t *testing.T) {
@@ -448,7 +547,7 @@ func TestFetch_ZeroResources(t *testing.T) {
 	mock := &fakeCloudWatch{}
 	c := clientsWithCW(mock)
 	obs := awsSpec(t, composer.KeyAWSEC2)
-	result, err := Fetch(context.Background(), c, "ec2", obs, nil, MetricsFilter{Hours: 6, Period: 300})
+	result, err := Fetch(context.Background(), c, "ec2", oneGroup(obs), nil, MetricsFilter{Hours: 6, Period: 300})
 
 	require.NoError(t, err)
 	assert.Equal(t, "ec2", result.Service)
@@ -476,7 +575,7 @@ func TestFetch_S3PeriodAndHoursOverride(t *testing.T) {
 
 	c := clientsWithCW(mock)
 	obs := awsSpecForService(t, composer.KeyAWSS3, "s3")
-	result, err := Fetch(context.Background(), c, "s3", obs,
+	result, err := Fetch(context.Background(), c, "s3", oneGroup(obs),
 		[]ResourceID{{ID: "my-bucket", DimensionName: "BucketName"}},
 		MetricsFilter{Hours: 6, Period: 300})
 
@@ -505,7 +604,7 @@ func TestFetch_S3DoesNotShortenLongerHours(t *testing.T) {
 	mock := &fakeCloudWatch{output: &cloudwatch.GetMetricDataOutput{}}
 	c := clientsWithCW(mock)
 	obs := awsSpecForService(t, composer.KeyAWSS3, "s3")
-	result, err := Fetch(context.Background(), c, "s3", obs,
+	result, err := Fetch(context.Background(), c, "s3", oneGroup(obs),
 		[]ResourceID{{ID: "my-bucket", DimensionName: "BucketName"}},
 		MetricsFilter{Hours: 72, Period: 300})
 
@@ -552,7 +651,7 @@ func TestFetch_CloudFrontRoutesToUSEast1AndReturnsAllMetrics(t *testing.T) {
 	cfMock := &fakeCloudWatch{output: &cloudwatch.GetMetricDataOutput{MetricDataResults: cfResults}}
 
 	c := clientsWithCFOverride(defaultMock, cfMock)
-	result, err := Fetch(context.Background(), c, "cloudfront", cfObs,
+	result, err := Fetch(context.Background(), c, "cloudfront", oneGroup(cfObs),
 		[]ResourceID{{ID: "E123", DimensionName: "DistributionId"}},
 		MetricsFilter{Hours: 6, Period: 300})
 
@@ -581,7 +680,7 @@ func TestFetch_PartialResourceFailure_Skips(t *testing.T) {
 	mock := &fakeCloudWatch{err: errors.New("throttled")}
 	c := clientsWithCW(mock)
 	obs := awsSpec(t, composer.KeyAWSEC2)
-	result, err := Fetch(context.Background(), c, "ec2", obs,
+	result, err := Fetch(context.Background(), c, "ec2", oneGroup(obs),
 		[]ResourceID{{ID: "i-good"}, {ID: "i-bad"}},
 		MetricsFilter{Hours: 6, Period: 300})
 
@@ -610,7 +709,7 @@ func TestFetch_EC2_EndToEnd(t *testing.T) {
 
 	c := clientsWithCW(mock)
 	obs := awsSpec(t, composer.KeyAWSEC2)
-	result, err := Fetch(context.Background(), c, "ec2", obs,
+	result, err := Fetch(context.Background(), c, "ec2", oneGroup(obs),
 		[]ResourceID{{ID: "i-abc123", DimensionName: "InstanceId"}},
 		MetricsFilter{Hours: 12, Period: 600})
 
@@ -625,6 +724,72 @@ func TestFetch_EC2_EndToEnd(t *testing.T) {
 	assert.Equal(t, "CPUUtilization", result.Resources[0].Metrics[0].Name)
 }
 
+// TestFetch_OpenSearchMultiGroup_RoundTripsBothNamespaces is the #778
+// end-to-end multi-group exercise: aws_opensearch's managed AWS/ES
+// metrics and serverless AWS/AOSS OCU metrics must BOTH issue in a single
+// GetMetricData call and round-trip by name → value through Fetch. The
+// fake echoes one value per metric in the request, so a regression that
+// stops iterating past the first group drops the AOSS metrics and the
+// round-trip map comes up short.
+func TestFetch_OpenSearchMultiGroup_RoundTripsBothNamespaces(t *testing.T) {
+	t.Parallel()
+	now := time.Now().UTC()
+
+	groups := awsGroups(t, composer.KeyAWSOpenSearch)
+	require.Len(t, groups, 2, "aws_opensearch must expose managed + AOSS groups (#778)")
+
+	// Build one MetricDataResult per metric across both groups, with a
+	// unique value so cross-wiring is caught.
+	var results []cwtypes.MetricDataResult
+	wantValues := map[string]float64{}
+	i := 0
+	for _, g := range groups {
+		for _, m := range g.Metrics {
+			i++
+			v := float64(i)
+			wantValues[m.Name] = v
+			results = append(results, cwtypes.MetricDataResult{
+				Label:      aws.String(m.Name),
+				Timestamps: []time.Time{now},
+				Values:     []float64{v},
+			})
+		}
+	}
+	mock := &fakeCloudWatch{output: &cloudwatch.GetMetricDataOutput{MetricDataResults: results}}
+	c := clientsWithCW(mock)
+
+	result, err := Fetch(context.Background(), c, "opensearch", groups,
+		[]ResourceID{{ID: "io-projx-search", DimensionName: "DomainName"}},
+		MetricsFilter{Hours: 6, Period: 300})
+	require.NoError(t, err)
+	require.Len(t, result.Resources, 1)
+
+	// A single GetMetricData call carries queries from BOTH namespaces.
+	require.NotNil(t, mock.lastInput)
+	sawES, sawAOSS := false, false
+	for _, q := range mock.lastInput.MetricDataQueries {
+		switch aws.ToString(q.MetricStat.Metric.Namespace) {
+		case "AWS/ES":
+			sawES = true
+		case "AWS/AOSS":
+			sawAOSS = true
+		}
+	}
+	assert.True(t, sawES, "request must carry AWS/ES (managed) queries")
+	assert.True(t, sawAOSS, "request must carry AWS/AOSS (serverless OCU) queries")
+
+	gotValues := map[string]float64{}
+	for _, m := range result.Resources[0].Metrics {
+		require.Len(t, m.Datapoints, 1, "metric %q should have one datapoint", m.Name)
+		gotValues[m.Name] = m.Datapoints[0].Average
+	}
+	assert.Equal(t, wantValues, gotValues,
+		"every metric across both namespaces must round-trip by name → value")
+	// Spot-check the AOSS metrics are present specifically.
+	assert.Contains(t, gotValues, "SearchOCU")
+	assert.Contains(t, gotValues, "IndexingOCU")
+}
+
 // TestFetch_ClampsHugePeriodToOneDay locks the period clamp at 86400
 // (the max GetMetricData accepts). Anyone passing Period=999999 (an
 // older default in some inspector code paths) gets the supported
@@ -636,7 +801,7 @@ func TestFetch_ClampsHugePeriodToOneDay(t *testing.T) {
 	}
 	c := clientsWithCW(mock)
 	obs := awsSpec(t, composer.KeyAWSEC2)
-	_, err := Fetch(context.Background(), c, "ec2", obs,
+	_, err := Fetch(context.Background(), c, "ec2", oneGroup(obs),
 		[]ResourceID{{ID: "i-abc", DimensionName: "InstanceId"}},
 		MetricsFilter{Hours: 6, Period: 9_999_999})
 
@@ -650,11 +815,15 @@ func TestFetch_ClampsHugePeriodToOneDay(t *testing.T) {
 
 // --- Spec-coverage drift tests ---
 
-// TestEveryAlarmedAWSSpecHasMetricFetchCoverage walks every component
-// key whose AWS spec has at least one metric and confirms the spec
-// passes through BuildGetMetricDataQueries to a non-empty query slice
-// with the expected dimension. Catches drift between the per-component
-// authority (observability.AWSObs) and the metric-fetch builder.
+// TestEveryAWSSpecBuildsValidQueries walks every component key whose AWS
+// surface has at least one metric and confirms EVERY namespace/dimension
+// group (primary + AWSExtra) passes through BuildGetMetricDataQueries
+// with its own namespace, dimension name, metric name, and stat intact.
+// Catches drift between the per-component authority
+// (observability.ComponentObservability.AWSGroups) and the metric-fetch
+// builder — including a multi-namespace component (aws_opensearch's AOSS
+// group, #778) whose extra group must survive the builder under its own
+// AWS/AOSS + ClientId shape, not the primary AWS/ES + DomainName shape.
 //
 // Stops short of asserting Fetch end-to-end per key (that's covered
 // for ec2/s3/cloudfront above) — the drift this test catches is "a key
@@ -664,27 +833,47 @@ func TestEveryAWSSpecBuildsValidQueries(t *testing.T) {
 	t.Parallel()
 	for _, k := range composer.AllComponentKeys {
 		o, ok := observability.Lookup(k)
-		if !ok || o.AWS == nil || len(o.AWS.Metrics) == 0 {
+		groups := o.AWSGroups()
+		if !ok || len(groups) == 0 {
+			continue
+		}
+		totalMetrics := 0
+		for _, g := range groups {
+			totalMetrics += len(g.Metrics)
+		}
+		if totalMetrics == 0 {
 			continue
 		}
 		t.Run(string(k), func(t *testing.T) {
 			t.Parallel()
-			res := ResourceID{ID: "test-id", DimensionName: o.AWS.DimensionName}
-			queries := BuildGetMetricDataQueries(o.AWS, res, o.Service)
-			require.Len(t, queries, len(o.AWS.Metrics),
-				"%s: query count must match spec metric count", k)
-			for i, q := range queries {
-				require.NotNil(t, q.MetricStat, "%s metric[%d]: MetricStat must be set", k, i)
-				assert.Equal(t, o.AWS.Namespace, aws.ToString(q.MetricStat.Metric.Namespace),
-					"%s metric[%d]: namespace drift", k, i)
-				assert.Equal(t, o.AWS.Metrics[i].Name, aws.ToString(q.MetricStat.Metric.MetricName),
-					"%s metric[%d]: name drift", k, i)
-				assert.Equal(t, o.AWS.Metrics[i].Stat, aws.ToString(q.MetricStat.Stat),
-					"%s metric[%d]: stat drift", k, i)
-				dims := q.MetricStat.Metric.Dimensions
-				require.NotEmpty(t, dims, "%s metric[%d]: must carry the resource dimension", k, i)
-				assert.Equal(t, o.AWS.DimensionName, aws.ToString(dims[0].Name),
-					"%s metric[%d]: dimension name drift", k, i)
+			// Leave res.DimensionName empty so each group falls back to
+			// its own DimensionName — the whole point of the multi-group
+			// shape is that the AOSS group keeps ClientId even though the
+			// primary group is DomainName.
+			res := ResourceID{ID: "test-id"}
+			queries := BuildGetMetricDataQueries(groups, res, o.Service)
+			require.Len(t, queries, totalMetrics,
+				"%s: query count must match the sum of metrics across all groups", k)
+
+			// Walk groups in order; queries are emitted group-by-group so
+			// the running index stays aligned with (group, metric).
+			qi := 0
+			for gi, g := range groups {
+				for mi, m := range g.Metrics {
+					q := queries[qi]
+					require.NotNil(t, q.MetricStat, "%s group[%d] metric[%d]: MetricStat must be set", k, gi, mi)
+					assert.Equal(t, g.Namespace, aws.ToString(q.MetricStat.Metric.Namespace),
+						"%s group[%d] metric[%d]: namespace drift", k, gi, mi)
+					assert.Equal(t, m.Name, aws.ToString(q.MetricStat.Metric.MetricName),
+						"%s group[%d] metric[%d]: name drift", k, gi, mi)
+					assert.Equal(t, m.Stat, aws.ToString(q.MetricStat.Stat),
+						"%s group[%d] metric[%d]: stat drift", k, gi, mi)
+					dims := q.MetricStat.Metric.Dimensions
+					require.NotEmpty(t, dims, "%s group[%d] metric[%d]: must carry the resource dimension", k, gi, mi)
+					assert.Equal(t, g.DimensionName, aws.ToString(dims[0].Name),
+						"%s group[%d] metric[%d]: dimension name drift", k, gi, mi)
+					qi++
+				}
 			}
 		})
 	}
@@ -700,12 +889,16 @@ func TestAllSpecsHaveValidStats(t *testing.T) {
 	}
 	for _, k := range composer.AllComponentKeys {
 		o, ok := observability.Lookup(k)
-		if !ok || o.AWS == nil {
+		if !ok {
 			continue
 		}
-		for _, m := range o.AWS.Metrics {
-			assert.True(t, validStats[m.Stat],
-				"key %s metric %s has invalid stat: %s", k, m.Name, m.Stat)
+		// Validate every group, not just the primary — the AOSS group's
+		// SearchOCU / IndexingOCU stats (Sum) must be checked too (#778).
+		for _, g := range o.AWSGroups() {
+			for _, m := range g.Metrics {
+				assert.True(t, validStats[m.Stat],
+					"key %s metric %s (namespace %s) has invalid stat: %s", k, m.Name, g.Namespace, m.Stat)
+			}
 		}
 	}
 }
