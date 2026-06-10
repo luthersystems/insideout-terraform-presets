@@ -70,6 +70,13 @@ func ParseMetricsFilter(filtersJSON string) MetricsFilter {
 //  2. service=="s3" — daily metrics; we override mf.Period to 86400 and
 //     bump mf.Hours to >=48 so the chart has at least two datapoints.
 //
+// mf.AccountID supplies the dimension VALUE for account-keyed groups
+// (the AOSS OCU group, #778, whose AWS/AOSS ClientId dimension is the
+// account ID, not the collection ID). The caller resolves it once at
+// dispatch (sts.GetCallerIdentity) and passes it in — Fetch issues no
+// STS call of its own. When it's empty, account-keyed groups are skipped
+// by the query builder; non-account groups are unaffected.
+//
 // Per-resource GetMetricData failures log+skip rather than aborting the
 // whole call — mirrors the InsideOut backend (aws_metrics.go:692). Returning a
 // partial result is preferable to losing every datapoint when one
@@ -143,7 +150,7 @@ func Fetch(
 
 	var out []ResourceMetrics
 	for _, res := range resources {
-		queries := BuildGetMetricDataQueries(groups, res, service)
+		queries := BuildGetMetricDataQueries(groups, res, service, mf.AccountID)
 		series, err := getMetricData(ctx, cw, queries, startTime, endTime, int32(clampedPeriod)) //nolint:gosec // clamped to [1, 86400]
 		if err != nil {
 			// Per-resource failures log and skip; matches the InsideOut backend's
@@ -185,6 +192,15 @@ func Fetch(
 // group's account-level ClientId), which is fixed by the namespace, not
 // by the per-resource override.
 //
+// The dimension VALUE is res.ID for every normal group. A group whose
+// AWSObs.DimensionValueAccountID is set (the AOSS OCU group, #778)
+// instead keys on accountID — AWS/AOSS publishes OCU account-wide under
+// ClientId=<account-id>, so res.ID (the collection/domain ID) returns an
+// empty series. When such a group is present but accountID is empty, its
+// queries are SKIPPED entirely: emitting a query with an empty dimension
+// value silently matches nothing (the exact bug this guards), so a clean
+// skip is preferable to a bogus, empty-result query.
+//
 // Two service-shaped quirks survive intact:
 //
 //   - CloudFront requires an extra Region=Global dimension — AWS uses
@@ -197,28 +213,43 @@ func Fetch(
 // Period on each MetricStat is a placeholder (300); getMetricData
 // overwrites it with the caller's clamped period before issuing the
 // CloudWatch call.
-func BuildGetMetricDataQueries(groups []*observability.AWSObs, res ResourceID, service string) []cwtypes.MetricDataQuery {
+func BuildGetMetricDataQueries(groups []*observability.AWSObs, res ResourceID, service, accountID string) []cwtypes.MetricDataQuery {
 	var queries []cwtypes.MetricDataQuery
 	primary := true
 	for _, obs := range groups {
 		if obs == nil {
 			continue
 		}
-		// The per-resource dimension override only applies to the primary
-		// group; extra groups carry a namespace-fixed dimension of their
-		// own (the AOSS group's ClientId, #778).
+		isPrimary := primary
+		primary = false
+
+		// Resolve this group's dimension value source. Account-keyed groups
+		// (the AOSS OCU group, #778) take the account ID; everything else
+		// takes the per-resource ID. An account-keyed group with no account
+		// ID is skipped — an empty dimension value silently matches nothing,
+		// so emitting the query would just hand back an empty series.
+		dimValue := res.ID
+		if obs.DimensionValueAccountID {
+			if accountID == "" {
+				continue
+			}
+			dimValue = accountID
+		}
+
+		// The per-resource dimension-NAME override only applies to the
+		// primary group; extra groups carry a namespace-fixed dimension of
+		// their own (the AOSS group's ClientId, #778).
 		dimName := obs.DimensionName
-		if primary && res.DimensionName != "" {
+		if isPrimary && res.DimensionName != "" {
 			dimName = res.DimensionName
 		}
-		primary = false
 
 		for _, m := range obs.Metrics {
 			id := fmt.Sprintf("m%d", len(queries))
 
 			dimensions := []cwtypes.Dimension{{
 				Name:  aws.String(dimName),
-				Value: aws.String(res.ID),
+				Value: aws.String(dimValue),
 			}}
 
 			if service == serviceCloudFront {

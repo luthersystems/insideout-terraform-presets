@@ -218,16 +218,13 @@ func TestObservability_AlarmedSpecsHaveAuthorityEntry(t *testing.T) {
 		}
 		// Walk every AWS group (primary + AWSExtra) so an Alarmed flip in a
 		// multi-namespace component's extra group (the AOSS SearchOCU /
-		// IndexingOCU, #778) is held to the same authority contract.
-		for _, g := range o.AWSGroups() {
-			for _, m := range g.Metrics {
-				if !m.Alarmed {
-					continue
-				}
-				assert.True(t, awsAuthority[m.Name],
-					"Observability[%s].AWS group (namespace %s) metric %q has Alarmed=true but %q not in alarmedAWSMetrics[%s] — service catalog must remain Alarmed=false; flips happen via the per-key authority map",
-					k, g.Namespace, m.Name, m.Name, k)
-			}
+		// IndexingOCU, #778) is held to the same authority contract. Shares
+		// the alarmedSpecHasAuthority predicate with the synthetic negative
+		// in TestAlarmedSpecHasAuthority_RejectsExtraGroup.
+		if name, ns, ok := alarmedSpecHasAuthority(o, awsAuthority); !ok {
+			assert.Failf(t, "Alarmed spec lacks authority entry",
+				"Observability[%s].AWS group (namespace %s) metric %q has Alarmed=true but %q not in alarmedAWSMetrics[%s] — service catalog must remain Alarmed=false; flips happen via the per-key authority map",
+				k, ns, name, name, k)
 		}
 		if o.GCP != nil {
 			for _, m := range o.GCP.Metrics {
@@ -240,6 +237,78 @@ func TestObservability_AlarmedSpecsHaveAuthorityEntry(t *testing.T) {
 			}
 		}
 	}
+}
+
+// alarmedSpecHasAuthority is the predicate
+// TestObservability_AlarmedSpecsHaveAuthorityEntry enforces against the
+// real catalog: for every Alarmed=true AWS spec across all of a record's
+// groups (primary + AWSExtra), the metric name must appear in the
+// per-key authority set. It returns (offendingMetric, namespace, ok) —
+// ok=false names the first Alarmed spec lacking authority. Factored out
+// so the live gate and the synthetic negative below share one
+// implementation.
+func alarmedSpecHasAuthority(o ComponentObservability, authority map[string]bool) (string, string, bool) {
+	for _, g := range o.AWSGroups() {
+		for _, m := range g.Metrics {
+			if m.Alarmed && !authority[m.Name] {
+				return m.Name, g.Namespace, false
+			}
+		}
+	}
+	return "", "", true
+}
+
+// TestAlarmedSpecHasAuthority_RejectsExtraGroup is the P2 synthetic
+// negative for the extra-group Alarmed-rejection gate (#778 review). The
+// live gate (TestObservability_AlarmedSpecsHaveAuthorityEntry) only ever
+// sees a catalog that already satisfies the contract, so its rejection
+// arm is never actually taken. This test feeds the predicate a
+// hand-built ComponentObservability whose AWSExtra group carries an
+// Alarmed=true metric absent from the authority set, and confirms the
+// gate rejects it — proving the extra-group walk is load-bearing,
+// independent of what the real catalog happens to contain.
+func TestAlarmedSpecHasAuthority_RejectsExtraGroup(t *testing.T) {
+	t.Parallel()
+
+	// Authority set covers the primary group's alarmed metric only — the
+	// extra group's alarmed metric is deliberately NOT authorized.
+	authority := map[string]bool{"PrimaryAlarmed": true}
+
+	synthetic := ComponentObservability{
+		Service: "synthetic",
+		AWS: &AWSObs{
+			Namespace:     "AWS/Primary",
+			DimensionName: "PrimaryId",
+			Metrics: []AWSMetricSpec{
+				{Name: "PrimaryAlarmed", Stat: "Sum", Alarmed: true},
+				{Name: "PrimaryQuiet", Stat: "Average"},
+			},
+		},
+		AWSExtra: []*AWSObs{{
+			Namespace:     "AWS/Extra",
+			DimensionName: "ExtraId",
+			Metrics: []AWSMetricSpec{
+				// Unauthorized Alarmed=true spec living ONLY in the extra
+				// group — the gate must catch this.
+				{Name: "ExtraAlarmedNoAuthority", Stat: "Sum", Alarmed: true},
+			},
+		}},
+	}
+
+	name, ns, ok := alarmedSpecHasAuthority(synthetic, authority)
+	require.False(t, ok,
+		"gate must reject an Alarmed=true metric in an extra group with no authority entry")
+	assert.Equal(t, "ExtraAlarmedNoAuthority", name,
+		"the rejected metric must be the unauthorized extra-group spec")
+	assert.Equal(t, "AWS/Extra", ns,
+		"rejection must point at the extra group's namespace — proving AWSExtra was walked")
+
+	// Sanity: once the extra-group metric is authorized, the same record
+	// passes — confirming the gate isn't rejecting unconditionally.
+	authority["ExtraAlarmedNoAuthority"] = true
+	_, _, ok = alarmedSpecHasAuthority(synthetic, authority)
+	assert.True(t, ok,
+		"with every Alarmed spec authorized (both groups), the gate must accept the record")
 }
 
 // TestServicesForKeys_ReturnsKnownServices verifies that with C2's

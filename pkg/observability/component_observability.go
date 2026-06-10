@@ -77,6 +77,17 @@ type AWSObs struct {
 	Namespace     string
 	DimensionName string
 	Metrics       []AWSMetricSpec
+
+	// DimensionValueAccountID, when true, sources this group's dimension
+	// VALUE from the AWS account ID rather than the per-resource ID. AOSS
+	// (AWS/AOSS, #778) publishes account-level OCU under a ClientId
+	// dimension whose value is the account ID — not the collection/domain
+	// ID the rest of the catalog keys on. Every other group leaves this
+	// false and the dimension value is res.ID. The query builder skips a
+	// group with this flag set when no account ID is available, rather
+	// than emitting a query with an empty (and silently-non-matching)
+	// dimension value.
+	DimensionValueAccountID bool
 }
 
 type AWSMetricSpec struct {
@@ -265,6 +276,13 @@ var awsServiceMetrics = map[string]AWSObs{
 	"opensearch_aoss": {
 		Namespace:     "AWS/AOSS",
 		DimensionName: "ClientId",
+		// The ClientId dimension's VALUE is the AWS account ID, not the
+		// collection/domain ID — AOSS OCU is published account-wide, so the
+		// query builder must source this group's dimension value from the
+		// account ID (DimensionValueAccountID) rather than res.ID. Without
+		// this flag the live OCU fetch sets ClientId=<collection-id> and the
+		// series comes back empty (#778 review).
+		DimensionValueAccountID: true,
 		Metrics: []AWSMetricSpec{
 			{Name: "SearchOCU", Stat: "Sum"},
 			{Name: "IndexingOCU", Stat: "Sum"},

@@ -177,7 +177,7 @@ func TestBuildGetMetricDataQueries_VerifiesDimensionValues(t *testing.T) {
 			t.Parallel()
 			obs := awsSpecForService(t, tt.key, tt.service)
 			res := ResourceID{ID: tt.resourceID, DimensionName: obs.DimensionName}
-			queries := BuildGetMetricDataQueries(oneGroup(obs), res, tt.service)
+			queries := BuildGetMetricDataQueries(oneGroup(obs), res, tt.service, "")
 
 			require.Len(t, queries, tt.wantCount)
 
@@ -213,7 +213,7 @@ func TestBuildGetMetricDataQueries_CloudFrontRegionGlobal(t *testing.T) {
 	t.Parallel()
 	obs := awsSpecForService(t, composer.KeyAWSCloudfront, "cloudfront")
 	res := ResourceID{ID: "E123456", DimensionName: "DistributionId"}
-	queries := BuildGetMetricDataQueries(oneGroup(obs), res, "cloudfront")
+	queries := BuildGetMetricDataQueries(oneGroup(obs), res, "cloudfront", "")
 
 	for _, q := range queries {
 		dims := q.MetricStat.Metric.Dimensions
@@ -234,7 +234,7 @@ func TestBuildGetMetricDataQueries_APIGatewayHTTPv2MetricNames(t *testing.T) {
 	t.Parallel()
 	obs := awsSpecForService(t, composer.KeyAWSAPIGateway, "apigateway")
 	res := ResourceID{ID: "abc123def4", DimensionName: "ApiId"}
-	queries := BuildGetMetricDataQueries(oneGroup(obs), res, "apigateway")
+	queries := BuildGetMetricDataQueries(oneGroup(obs), res, "apigateway", "")
 
 	got := make(map[string]struct{}, len(queries))
 	for _, q := range queries {
@@ -260,7 +260,7 @@ func TestBuildGetMetricDataQueries_CloudFrontAdditionalMetrics(t *testing.T) {
 	t.Parallel()
 	obs := awsSpecForService(t, composer.KeyAWSCloudfront, "cloudfront")
 	res := ResourceID{ID: "E1234567890", DimensionName: "DistributionId"}
-	queries := BuildGetMetricDataQueries(oneGroup(obs), res, "cloudfront")
+	queries := BuildGetMetricDataQueries(oneGroup(obs), res, "cloudfront", "")
 
 	got := make(map[string]struct{}, len(queries))
 	for _, q := range queries {
@@ -291,7 +291,7 @@ func TestBuildGetMetricDataQueries_S3StorageType(t *testing.T) {
 	t.Parallel()
 	obs := awsSpecForService(t, composer.KeyAWSS3, "s3")
 	res := ResourceID{ID: "my-bucket", DimensionName: "BucketName"}
-	queries := BuildGetMetricDataQueries(oneGroup(obs), res, "s3")
+	queries := BuildGetMetricDataQueries(oneGroup(obs), res, "s3", "")
 
 	for _, q := range queries {
 		dims := q.MetricStat.Metric.Dimensions
@@ -316,7 +316,7 @@ func TestBuildGetMetricDataQueries_S3StorageType(t *testing.T) {
 // future direct callers (e.g. dashboard preview tooling).
 func TestBuildGetMetricDataQueries_NilObs(t *testing.T) {
 	t.Parallel()
-	got := BuildGetMetricDataQueries(nil, ResourceID{ID: "i-abc"}, "ec2")
+	got := BuildGetMetricDataQueries(nil, ResourceID{ID: "i-abc"}, "ec2", "")
 	assert.Nil(t, got)
 }
 
@@ -327,7 +327,7 @@ func TestBuildGetMetricDataQueries_NilObs(t *testing.T) {
 func TestBuildGetMetricDataQueries_DimensionFallback(t *testing.T) {
 	t.Parallel()
 	obs := awsSpec(t, composer.KeyAWSEC2)
-	queries := BuildGetMetricDataQueries(oneGroup(obs), ResourceID{ID: "i-blank"}, "ec2")
+	queries := BuildGetMetricDataQueries(oneGroup(obs), ResourceID{ID: "i-blank"}, "ec2", "")
 	require.NotEmpty(t, queries)
 	dims := queries[0].MetricStat.Metric.Dimensions
 	require.NotEmpty(t, dims)
@@ -350,10 +350,22 @@ func TestBuildGetMetricDataQueries_OpenSearchMultiGroup(t *testing.T) {
 	require.Len(t, groups, 2,
 		"aws_opensearch must expose two AWS groups: managed AWS/ES + serverless AWS/AOSS (#778)")
 
+	// The AOSS group must declare itself account-keyed; the managed AWS/ES
+	// group must not. This is the catalog half of the dimension-value
+	// contract the value assertions below depend on.
+	require.False(t, groups[0].DimensionValueAccountID,
+		"managed AWS/ES group must key its dimension VALUE on res.ID, not the account ID")
+	require.True(t, groups[1].DimensionValueAccountID,
+		"serverless AWS/AOSS group must key its ClientId dimension VALUE on the account ID (#778)")
+
 	// The primary group's dimension override is honored; the AOSS group
-	// keeps its own ClientId regardless of the per-resource dimension.
+	// keeps its own ClientId regardless of the per-resource dimension. The
+	// AOSS dimension VALUE must be the account ID (ClientId=<account>), the
+	// managed group's must be the resource ID — the bug #778 review fixes
+	// is the AOSS query going out with ClientId=<collection-id>.
+	const acctID = "123456789012"
 	res := ResourceID{ID: "io-projx-search", DimensionName: "DomainName"}
-	queries := BuildGetMetricDataQueries(groups, res, "opensearch")
+	queries := BuildGetMetricDataQueries(groups, res, "opensearch", acctID)
 
 	totalMetrics := len(groups[0].Metrics) + len(groups[1].Metrics)
 	require.Len(t, queries, totalMetrics,
@@ -362,16 +374,21 @@ func TestBuildGetMetricDataQueries_OpenSearchMultiGroup(t *testing.T) {
 	// Query IDs must be globally unique across groups — CloudWatch
 	// rejects duplicate IDs in one GetMetricData request.
 	seenIDs := make(map[string]bool, len(queries))
-	// Map each metric name to the (namespace, dimensionName) it must carry.
+	// Map each metric name to the (namespace, dimensionName, dimensionValue)
+	// it must carry. The dimension VALUE is the load-bearing #778-review
+	// assertion: account ID for AOSS, resource ID for managed.
 	wantNamespace := map[string]string{}
 	wantDim := map[string]string{}
-	for _, m := range groups[0].Metrics { // AWS/ES + DomainName
+	wantDimValue := map[string]string{}
+	for _, m := range groups[0].Metrics { // AWS/ES + DomainName, value=res.ID
 		wantNamespace[m.Name] = "AWS/ES"
 		wantDim[m.Name] = "DomainName"
+		wantDimValue[m.Name] = res.ID
 	}
-	for _, m := range groups[1].Metrics { // AWS/AOSS + ClientId
+	for _, m := range groups[1].Metrics { // AWS/AOSS + ClientId, value=accountID
 		wantNamespace[m.Name] = "AWS/AOSS"
 		wantDim[m.Name] = "ClientId"
+		wantDimValue[m.Name] = acctID
 	}
 	// Assert the AOSS half is actually present (guards a one-group regression).
 	require.Contains(t, wantNamespace, "SearchOCU", "AOSS group must carry SearchOCU")
@@ -393,15 +410,50 @@ func TestBuildGetMetricDataQueries_OpenSearchMultiGroup(t *testing.T) {
 			"metric %q must publish under namespace %q", name, wantNamespace[name])
 		assert.Equal(t, wantDim[name], aws.ToString(dims[0].Name),
 			"metric %q must carry dimension %q", name, wantDim[name])
+		assert.Equal(t, wantDimValue[name], aws.ToString(dims[0].Value),
+			"metric %q dimension VALUE must be %q (account ID for AOSS, resource ID for managed)",
+			name, wantDimValue[name])
 
 		if ns == "AWS/AOSS" {
 			gotAOSS++
 			assert.Equal(t, "Sum", aws.ToString(q.MetricStat.Stat),
 				"AOSS OCU metric %q must use the Sum stat", name)
+			assert.Equal(t, acctID, aws.ToString(dims[0].Value),
+				"AOSS OCU metric %q ClientId must be the account ID, not the collection ID (#778 review)", name)
 		}
 	}
 	assert.Equal(t, len(groups[1].Metrics), gotAOSS,
 		"every AOSS metric must produce exactly one query (the second group must be iterated)")
+}
+
+// TestBuildGetMetricDataQueries_OpenSearchAOSSSkippedWhenNoAccountID pins
+// the empty-account-ID behavior of the #778-review fix: an account-keyed
+// group (AWS/AOSS) is SKIPPED entirely when no account ID is available,
+// rather than emitting a query with an empty (silently-non-matching)
+// ClientId dimension value. The managed AWS/ES group is unaffected and
+// still emits its full metric set against res.ID.
+func TestBuildGetMetricDataQueries_OpenSearchAOSSSkippedWhenNoAccountID(t *testing.T) {
+	t.Parallel()
+	groups := awsGroups(t, composer.KeyAWSOpenSearch)
+	require.Len(t, groups, 2)
+
+	res := ResourceID{ID: "io-projx-search", DimensionName: "DomainName"}
+	queries := BuildGetMetricDataQueries(groups, res, "opensearch", "")
+
+	// Only the managed AWS/ES group survives — the AOSS group is dropped.
+	require.Len(t, queries, len(groups[0].Metrics),
+		"with no account ID, only the managed AWS/ES group's queries must be emitted")
+
+	for _, q := range queries {
+		require.NotNil(t, q.MetricStat)
+		ns := aws.ToString(q.MetricStat.Metric.Namespace)
+		assert.NotEqual(t, "AWS/AOSS", ns,
+			"no AWS/AOSS query may be emitted without an account ID — an empty ClientId matches nothing")
+		dims := q.MetricStat.Metric.Dimensions
+		require.NotEmpty(t, dims)
+		assert.Equal(t, res.ID, aws.ToString(dims[0].Value),
+			"surviving managed queries must still key on the resource ID")
+	}
 }
 
 // --- getMetricData (the unexported CW response shaper) ---
@@ -430,7 +482,7 @@ func TestGetMetricData_HappyPath(t *testing.T) {
 	}
 
 	obs := awsSpec(t, composer.KeyAWSEC2)
-	queries := BuildGetMetricDataQueries(oneGroup(obs), ResourceID{ID: "i-abc123"}, "ec2")
+	queries := BuildGetMetricDataQueries(oneGroup(obs), ResourceID{ID: "i-abc123"}, "ec2", "")
 	results, err := getMetricData(context.Background(), mock, queries, now.Add(-time.Hour), now, 300)
 
 	require.NoError(t, err)
@@ -477,7 +529,7 @@ func TestGetMetricData_MismatchedTimestampsAndValues(t *testing.T) {
 	}
 
 	obs := awsSpec(t, composer.KeyAWSEC2)
-	queries := BuildGetMetricDataQueries(oneGroup(obs), ResourceID{ID: "i-abc"}, "ec2")
+	queries := BuildGetMetricDataQueries(oneGroup(obs), ResourceID{ID: "i-abc"}, "ec2", "")
 	results, err := getMetricData(context.Background(), mock, queries, now.Add(-time.Hour), now, 300)
 
 	require.NoError(t, err)
@@ -495,7 +547,7 @@ func TestGetMetricData_EmptyResults(t *testing.T) {
 
 	now := time.Now().UTC()
 	obs := awsSpec(t, composer.KeyAWSEC2)
-	queries := BuildGetMetricDataQueries(oneGroup(obs), ResourceID{ID: "i-abc"}, "ec2")
+	queries := BuildGetMetricDataQueries(oneGroup(obs), ResourceID{ID: "i-abc"}, "ec2", "")
 	results, err := getMetricData(context.Background(), mock, queries, now.Add(-time.Hour), now, 300)
 
 	require.NoError(t, err)
@@ -508,7 +560,7 @@ func TestGetMetricData_APIError(t *testing.T) {
 
 	now := time.Now().UTC()
 	obs := awsSpec(t, composer.KeyAWSEC2)
-	queries := BuildGetMetricDataQueries(oneGroup(obs), ResourceID{ID: "i-abc"}, "ec2")
+	queries := BuildGetMetricDataQueries(oneGroup(obs), ResourceID{ID: "i-abc"}, "ec2", "")
 	_, err := getMetricData(context.Background(), mock, queries, now.Add(-time.Hour), now, 300)
 
 	require.Error(t, err)
@@ -758,21 +810,36 @@ func TestFetch_OpenSearchMultiGroup_RoundTripsBothNamespaces(t *testing.T) {
 	mock := &fakeCloudWatch{output: &cloudwatch.GetMetricDataOutput{MetricDataResults: results}}
 	c := clientsWithCW(mock)
 
+	// mf.AccountID rides into the AOSS group's ClientId dimension value;
+	// the managed AWS/ES group still keys on the resource ID.
+	const acctID = "123456789012"
+	const domainID = "io-projx-search"
 	result, err := Fetch(context.Background(), c, "opensearch", groups,
-		[]ResourceID{{ID: "io-projx-search", DimensionName: "DomainName"}},
-		MetricsFilter{Hours: 6, Period: 300})
+		[]ResourceID{{ID: domainID, DimensionName: "DomainName"}},
+		MetricsFilter{Hours: 6, Period: 300, AccountID: acctID})
 	require.NoError(t, err)
 	require.Len(t, result.Resources, 1)
 
-	// A single GetMetricData call carries queries from BOTH namespaces.
+	// A single GetMetricData call carries queries from BOTH namespaces, and
+	// each namespace's dimension VALUE is sourced correctly: AWS/AOSS keys
+	// ClientId on the account ID, AWS/ES keys DomainName on the resource ID
+	// (the #778-review fix — the AOSS query previously went out with
+	// ClientId=<collection-id> and returned an empty series).
 	require.NotNil(t, mock.lastInput)
 	sawES, sawAOSS := false, false
 	for _, q := range mock.lastInput.MetricDataQueries {
+		require.NotNil(t, q.MetricStat)
+		dims := q.MetricStat.Metric.Dimensions
+		require.NotEmpty(t, dims)
 		switch aws.ToString(q.MetricStat.Metric.Namespace) {
 		case "AWS/ES":
 			sawES = true
+			assert.Equal(t, domainID, aws.ToString(dims[0].Value),
+				"managed AWS/ES query must key DomainName on the resource ID")
 		case "AWS/AOSS":
 			sawAOSS = true
+			assert.Equal(t, acctID, aws.ToString(dims[0].Value),
+				"serverless AWS/AOSS query must key ClientId on the account ID (#778 review)")
 		}
 	}
 	assert.True(t, sawES, "request must carry AWS/ES (managed) queries")
@@ -788,6 +855,59 @@ func TestFetch_OpenSearchMultiGroup_RoundTripsBothNamespaces(t *testing.T) {
 	// Spot-check the AOSS metrics are present specifically.
 	assert.Contains(t, gotValues, "SearchOCU")
 	assert.Contains(t, gotValues, "IndexingOCU")
+}
+
+// TestFetch_OpenSearchMultiGroup_NoAccountIDDropsAOSS is the Fetch-level
+// empty-account-ID case: with mf.AccountID unset, the AOSS OCU group is
+// skipped end-to-end — the issued GetMetricData request carries only the
+// managed AWS/ES queries, never an AWS/AOSS query with an empty ClientId.
+// The managed metrics still round-trip normally.
+func TestFetch_OpenSearchMultiGroup_NoAccountIDDropsAOSS(t *testing.T) {
+	t.Parallel()
+	now := time.Now().UTC()
+
+	groups := awsGroups(t, composer.KeyAWSOpenSearch)
+	require.Len(t, groups, 2)
+
+	// Echo a value for every managed metric only — the AOSS group must not
+	// be queried, so no AOSS labels are expected back.
+	var results []cwtypes.MetricDataResult
+	wantManaged := map[string]float64{}
+	for i, m := range groups[0].Metrics {
+		v := float64(i + 1)
+		wantManaged[m.Name] = v
+		results = append(results, cwtypes.MetricDataResult{
+			Label:      aws.String(m.Name),
+			Timestamps: []time.Time{now},
+			Values:     []float64{v},
+		})
+	}
+	mock := &fakeCloudWatch{output: &cloudwatch.GetMetricDataOutput{MetricDataResults: results}}
+	c := clientsWithCW(mock)
+
+	result, err := Fetch(context.Background(), c, "opensearch", groups,
+		[]ResourceID{{ID: "io-projx-search", DimensionName: "DomainName"}},
+		MetricsFilter{Hours: 6, Period: 300}) // AccountID empty
+	require.NoError(t, err)
+	require.Len(t, result.Resources, 1)
+
+	// The request must carry the managed queries and NO AWS/AOSS query.
+	require.NotNil(t, mock.lastInput)
+	require.Len(t, mock.lastInput.MetricDataQueries, len(groups[0].Metrics),
+		"only the managed AWS/ES group's queries may be issued without an account ID")
+	for _, q := range mock.lastInput.MetricDataQueries {
+		require.NotNil(t, q.MetricStat)
+		assert.NotEqual(t, "AWS/AOSS", aws.ToString(q.MetricStat.Metric.Namespace),
+			"no AWS/AOSS query may be issued without an account ID")
+	}
+
+	gotValues := map[string]float64{}
+	for _, m := range result.Resources[0].Metrics {
+		gotValues[m.Name] = m.Datapoints[0].Average
+	}
+	assert.Equal(t, wantManaged, gotValues, "managed metrics must still round-trip")
+	assert.NotContains(t, gotValues, "SearchOCU", "AOSS metric must be absent")
+	assert.NotContains(t, gotValues, "IndexingOCU", "AOSS metric must be absent")
 }
 
 // TestFetch_ClampsHugePeriodToOneDay locks the period clamp at 86400
@@ -850,8 +970,13 @@ func TestEveryAWSSpecBuildsValidQueries(t *testing.T) {
 			// its own DimensionName — the whole point of the multi-group
 			// shape is that the AOSS group keeps ClientId even though the
 			// primary group is DomainName.
+			//
+			// A non-empty account ID is required so account-keyed groups
+			// (the AOSS OCU group, #778) are NOT skipped — totalMetrics
+			// counts every group, AOSS included.
+			const testAcct = "123456789012"
 			res := ResourceID{ID: "test-id"}
-			queries := BuildGetMetricDataQueries(groups, res, o.Service)
+			queries := BuildGetMetricDataQueries(groups, res, o.Service, testAcct)
 			require.Len(t, queries, totalMetrics,
 				"%s: query count must match the sum of metrics across all groups", k)
 
@@ -859,6 +984,12 @@ func TestEveryAWSSpecBuildsValidQueries(t *testing.T) {
 			// the running index stays aligned with (group, metric).
 			qi := 0
 			for gi, g := range groups {
+				// Account-keyed groups key the dimension VALUE on the account
+				// ID; every other group keys on res.ID.
+				wantDimValue := res.ID
+				if g.DimensionValueAccountID {
+					wantDimValue = testAcct
+				}
 				for mi, m := range g.Metrics {
 					q := queries[qi]
 					require.NotNil(t, q.MetricStat, "%s group[%d] metric[%d]: MetricStat must be set", k, gi, mi)
@@ -872,6 +1003,8 @@ func TestEveryAWSSpecBuildsValidQueries(t *testing.T) {
 					require.NotEmpty(t, dims, "%s group[%d] metric[%d]: must carry the resource dimension", k, gi, mi)
 					assert.Equal(t, g.DimensionName, aws.ToString(dims[0].Name),
 						"%s group[%d] metric[%d]: dimension name drift", k, gi, mi)
+					assert.Equal(t, wantDimValue, aws.ToString(dims[0].Value),
+						"%s group[%d] metric[%d]: dimension value source drift", k, gi, mi)
 					qi++
 				}
 			}
