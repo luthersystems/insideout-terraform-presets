@@ -120,3 +120,75 @@ run "bogus_ami_type_fails_validation" {
 
   expect_failures = [var.ami_type]
 }
+
+# GPU node group (#759): an NVIDIA x86 instance family must auto-derive the
+# NVIDIA managed AMI type so the node comes up GPU-capable. Without this, a
+# g5.xlarge on the AL2023_x86_64_STANDARD default exposes no /dev/nvidia*
+# devices and GPU pods sit Pending — the GPU analogue of the #207 arch
+# mismatch.
+run "gpu_nodegroup" {
+  command = plan
+
+  variables {
+    instance_types = ["g5.xlarge"]
+  }
+
+  assert {
+    condition     = output.ami_type == "AL2023_x86_64_NVIDIA"
+    error_message = "GPU x86 family g5.xlarge must derive AL2023_x86_64_NVIDIA (#759)"
+  }
+  assert {
+    condition     = aws_eks_node_group.this.ami_type == "AL2023_x86_64_NVIDIA"
+    error_message = "node group resource ami_type must be AL2023_x86_64_NVIDIA for a GPU instance family (#759)"
+  }
+  assert {
+    condition     = tolist(aws_eks_node_group.this.instance_types)[0] == "g5.xlarge"
+    error_message = "node group must use the requested GPU instance type g5.xlarge"
+  }
+}
+
+# p-family GPU instances also resolve the NVIDIA AMI.
+run "gpu_p_family_derives_nvidia_ami" {
+  command = plan
+
+  variables {
+    instance_types = ["p4d.24xlarge"]
+  }
+
+  assert {
+    condition     = output.ami_type == "AL2023_x86_64_NVIDIA"
+    error_message = "GPU p-family p4d.24xlarge must derive AL2023_x86_64_NVIDIA (#759)"
+  }
+}
+
+# g5g is Graviton (ARM) + NVIDIA T4G. EKS has no ARM NVIDIA managed AMI type,
+# so g5g stays on the ARM standard AMI — locks that the GPU allow-list does
+# not steal ARM families ending in `g`.
+run "g5g_arm_stays_arm_standard" {
+  command = plan
+
+  variables {
+    instance_types = ["g5g.xlarge"]
+  }
+
+  assert {
+    condition     = output.ami_type == "AL2023_ARM_64_STANDARD"
+    error_message = "g5g (Graviton NVIDIA) must keep AL2023_ARM_64_STANDARD — no ARM NVIDIA managed AMI type exists (#759)"
+  }
+}
+
+# Explicit var.ami_type still overrides the GPU auto-derive (e.g. picking the
+# Bottlerocket NVIDIA variant).
+run "explicit_bottlerocket_nvidia_overrides_gpu_derive" {
+  command = plan
+
+  variables {
+    instance_types = ["g5.xlarge"]
+    ami_type       = "BOTTLEROCKET_x86_64_NVIDIA"
+  }
+
+  assert {
+    condition     = output.ami_type == "BOTTLEROCKET_x86_64_NVIDIA"
+    error_message = "explicit var.ami_type must override the GPU auto-derive"
+  }
+}

@@ -279,6 +279,32 @@ func (m DefaultMapper) BuildModuleValues(
 			if cfg.AWSEKS.InstanceType != "" {
 				vals["instance_types"] = []any{cfg.AWSEKS.InstanceType}
 			}
+			// GPU node group (#759): VALIDATE, don't mask. When the caller
+			// pins an explicit instance type it must be a known x86 NVIDIA
+			// GPU family — otherwise reject at compose time rather than
+			// silently forcing a GPU AMI onto incompatible hardware. When no
+			// instance type is set, supply the default GPU type. We do NOT
+			// emit ami_type here: the preset's family auto-derive
+			// (aws/eks_nodegroup/main.tf `_gpu_x86_families` →
+			// AL2023_x86_64_NVIDIA) is the single source of truth for the AMI
+			// and already produces the right AMI for GPU families. The
+			// in-cluster NVIDIA device plugin (advertises nvidia.com/gpu) is
+			// app-layer and out of preset scope.
+			if cfg.AWSEKS.GPUEnabled != nil && *cfg.AWSEKS.GPUEnabled {
+				if cfg.AWSEKS.InstanceType != "" {
+					if !isGPUX86Family(cfg.AWSEKS.InstanceType) {
+						return nil, NewValidationError(fmt.Sprintf(
+							"AWSEKS.GPUEnabled=true with InstanceType=%q: not a known x86 NVIDIA GPU family "+
+								"(expected one of g4dn/g5/g6/g6e/gr6/p3/p3dn/p4d/p4de/p5/p5e/p5en). "+
+								"GPU AMIs are x86_64-only; clear the instance type to default to %s, "+
+								"or pick a supported GPU family.",
+							cfg.AWSEKS.InstanceType, defaultGPUInstanceType,
+						))
+					}
+				} else {
+					vals["instance_types"] = []any{defaultGPUInstanceType}
+				}
+			}
 		}
 
 		if _, ok := vals["desired_size"]; !ok {
@@ -340,6 +366,39 @@ func (m DefaultMapper) BuildModuleValues(
 			if cfg.AWSEC2.EnableInstanceConnect != nil && *cfg.AWSEC2.EnableInstanceConnect {
 				vals["enable_instance_connect"] = true
 			}
+			// GPU instance (#759): VALIDATE, don't mask. AWS GPU AMIs are
+			// x86_64-only, so a GPU instance type must belong to a known x86
+			// NVIDIA GPU family. When the caller pins an explicit instance
+			// type, reject a non-GPU/ARM family at compose time instead of
+			// silently forcing arch=x86_64 onto an incompatible pick (which
+			// would mask the preset's own gpu_enabled/arch guard). When no
+			// instance type is set, the default GPU type is supplied below.
+			// Setting arch=x86_64 is then consistent-by-construction: every
+			// path that reaches here has (or will get) an x86 GPU family.
+			// g/p families are quota-gated — surfaced to operators at deploy
+			// time.
+			if cfg.AWSEC2.GPUEnabled != nil && *cfg.AWSEC2.GPUEnabled {
+				if cfg.AWSEC2.InstanceType != "" && !isGPUX86Family(cfg.AWSEC2.InstanceType) {
+					return nil, NewValidationError(fmt.Sprintf(
+						"AWSEC2.GPUEnabled=true with InstanceType=%q: not a known x86 NVIDIA GPU family "+
+							"(expected one of g4dn/g5/g6/g6e/gr6/p3/p3dn/p4d/p4de/p5/p5e/p5en). "+
+							"GPU AMIs are x86_64-only; clear the instance type to default to %s, "+
+							"or pick a supported GPU family.",
+						cfg.AWSEC2.InstanceType, defaultGPUInstanceType,
+					))
+				}
+				vals["gpu_enabled"] = true
+				vals["arch"] = "x86_64"
+				// The aws/ec2 preset's os_type defaults to "ubuntu", but the
+				// GPU AMI is Amazon Linux 2023 — so a GPU instance left on the
+				// default os_type trips the module's gpu+ubuntu precondition at
+				// plan (the GPU AMI ignores os_type, and the preset rejects the
+				// silent override). The IR has no os_type field, so pin
+				// amazon-linux here to keep every composer-generated GPU stack
+				// plan-clean. A caller needing an Ubuntu GPU image supplies an
+				// explicit ami_id, which the precondition exempts.
+				vals["os_type"] = "amazon-linux"
+			}
 			if cfg.AWSEC2.DiskSizePerServer != "" {
 				n, err := strconv.Atoi(strings.TrimSpace(cfg.AWSEC2.DiskSizePerServer))
 				if err != nil {
@@ -353,10 +412,17 @@ func (m DefaultMapper) BuildModuleValues(
 		}
 		// Default instance type based on architecture if not explicitly configured
 		if _, ok := vals["instance_type"]; !ok {
-			if vals["arch"] == "arm64" {
+			switch {
+			case vals["gpu_enabled"] == true:
+				// GPU AMI on the preset default t3.medium would waste the
+				// image; default to the shared GPU instance type (cheapest
+				// single-A10G NVIDIA family) to match the EKS GPU node-group
+				// default (#759).
+				vals["instance_type"] = defaultGPUInstanceType
+			case vals["arch"] == "arm64":
 				vals["instance_type"] = "t4g.medium"
 			}
-			// Intel defaults handled by preset (t3.medium)
+			// Intel non-GPU defaults handled by preset (t3.medium)
 		}
 
 	case KeyAWSALB:

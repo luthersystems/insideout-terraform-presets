@@ -20,6 +20,7 @@ type awsEC2CfgInput struct {
 	CustomIngressPorts    []int
 	SSHPublicKey          string
 	EnableInstanceConnect *bool
+	GPUEnabled            *bool
 }
 
 // configWithAWSEC2 returns *Config with AWSEC2 populated from input, eliding
@@ -36,6 +37,7 @@ func configWithAWSEC2(in awsEC2CfgInput) *Config {
 			CustomIngressPorts    []int  `json:"customIngressPorts,omitempty"`
 			SSHPublicKey          string `json:"sshPublicKey,omitempty"`
 			EnableInstanceConnect *bool  `json:"enableInstanceConnect,omitempty"`
+			GPUEnabled            *bool  `json:"gpuEnabled,omitempty"`
 		}{
 			InstanceType:          in.InstanceType,
 			NumServers:            in.NumServers,
@@ -46,6 +48,39 @@ func configWithAWSEC2(in awsEC2CfgInput) *Config {
 			CustomIngressPorts:    in.CustomIngressPorts,
 			SSHPublicKey:          in.SSHPublicKey,
 			EnableInstanceConnect: in.EnableInstanceConnect,
+			GPUEnabled:            in.GPUEnabled,
+		},
+	}
+}
+
+// awsEKSCfgInput mirrors the subset of Config.AWSEKS fields exercised by
+// mapper tests.
+type awsEKSCfgInput struct {
+	DesiredSize  string
+	MaxSize      string
+	MinSize      string
+	InstanceType string
+	GPUEnabled   *bool
+}
+
+// configWithAWSEKS returns *Config with AWSEKS populated from input, eliding
+// the anonymous-struct redeclaration at each call site.
+func configWithAWSEKS(in awsEKSCfgInput) *Config {
+	return &Config{
+		AWSEKS: &struct {
+			HaControlPlane         *bool  `json:"haControlPlane,omitempty"`
+			ControlPlaneVisibility string `json:"controlPlaneVisibility,omitempty"`
+			DesiredSize            string `json:"desiredSize,omitempty"`
+			MaxSize                string `json:"maxSize,omitempty"`
+			MinSize                string `json:"minSize,omitempty"`
+			InstanceType           string `json:"instanceType,omitempty"`
+			GPUEnabled             *bool  `json:"gpuEnabled,omitempty"`
+		}{
+			DesiredSize:  in.DesiredSize,
+			MaxSize:      in.MaxSize,
+			MinSize:      in.MinSize,
+			InstanceType: in.InstanceType,
+			GPUEnabled:   in.GPUEnabled,
 		},
 	}
 }

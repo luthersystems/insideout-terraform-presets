@@ -129,7 +129,7 @@ variable "enable_container_insights" {
 }
 
 variable "ami_type" {
-  description = "EKS node AMI type. When null (default), the module derives the AMI type from var.instance_types: ARM/Graviton families (c7g, m7g, r7g, t4g, c8g, m8g, r8g, etc. — names ending in `g`) get AL2023_ARM_64_STANDARD; all other families get AL2023_x86_64_STANDARD. Set explicitly to override (e.g. BOTTLEROCKET_x86_64, AL2_x86_64_GPU)."
+  description = "EKS node AMI type. When null (default), the module derives the AMI type from var.instance_types: ARM/Graviton families (c7g, m7g, r7g, t4g, c8g, m8g, r8g, etc. — names ending in `g`) get AL2023_ARM_64_STANDARD; x86 NVIDIA-GPU families (g4dn, g5, g6, g6e, gr6, p3, p4d, p5, etc.) get AL2023_x86_64_NVIDIA; all other families get AL2023_x86_64_STANDARD (#759). Set explicitly to override (e.g. BOTTLEROCKET_x86_64, BOTTLEROCKET_x86_64_NVIDIA, AL2_x86_64_GPU). NOTE: the in-cluster NVIDIA k8s device plugin that advertises nvidia.com/gpu is app-layer and out of preset scope — this module only provisions GPU-capable nodes."
   type        = string
   default     = null
 

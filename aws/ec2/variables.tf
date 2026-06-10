@@ -79,6 +79,12 @@ variable "arch" {
   }
 }
 
+variable "gpu_enabled" {
+  description = "Select an NVIDIA-GPU AMI (AWS Deep Learning Base GPU AMI, Amazon Linux 2023) instead of the plain OS AMI when ami_id is null. Use with a GPU instance_type (g4dn/g5/g6/p4d/p5, etc.). The GPU AMI ships the NVIDIA kernel driver + container toolkit baked in. GPU AMIs are x86_64-only, so gpu_enabled=true requires an x86 NVIDIA GPU instance_type (validated on the aws_instance precondition — TF forbids cross-variable conditions in variable validation blocks). NOTE: g/p instance families are quota-gated; an account with a 0 vCPU GPU quota fails at apply with an InsufficientInstanceCapacity / VcpuLimitExceeded error surfaced to the operator (#759)."
+  type        = bool
+  default     = false
+}
+
 variable "key_name" {
   description = "Existing EC2 key pair name for SSH (null to rely on SSM only)"
   type        = string

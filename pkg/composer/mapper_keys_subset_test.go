@@ -53,13 +53,21 @@ func kitchenSinkConfig() *Config {
 		CustomIngressPorts    []int  `json:"customIngressPorts,omitempty"`
 		SSHPublicKey          string `json:"sshPublicKey,omitempty"`
 		EnableInstanceConnect *bool  `json:"enableInstanceConnect,omitempty"`
+		GPUEnabled            *bool  `json:"gpuEnabled,omitempty"`
 	}{
-		InstanceType:          "t3.medium",
+		// GPUEnabled pairs with a real GPU family (g5.xlarge) so the config is
+		// internally consistent: the #759 mapper validation rejects GPUEnabled
+		// with a non-GPU instance type like t3.medium, which would fail this
+		// kitchen-sink mapper invocation outright.
+		InstanceType:          "g5.xlarge",
 		DiskSizePerServer:     "100",
 		UserData:              "#!/bin/bash\necho hello",
 		CustomIngressPorts:    []int{8080},
 		SSHPublicKey:          "ssh-rsa AAAA...",
 		EnableInstanceConnect: &t,
+		// GPUEnabled exercises the #759 gpu_enabled tfvar emission so the
+		// keys-subset gate confirms it is a declared module variable.
+		GPUEnabled: &t,
 	}
 	cfg.AWSEKS = &struct {
 		HaControlPlane         *bool  `json:"haControlPlane,omitempty"`
@@ -68,13 +76,22 @@ func kitchenSinkConfig() *Config {
 		MaxSize                string `json:"maxSize,omitempty"`
 		MinSize                string `json:"minSize,omitempty"`
 		InstanceType           string `json:"instanceType,omitempty"`
+		GPUEnabled             *bool  `json:"gpuEnabled,omitempty"`
 	}{
 		HaControlPlane:         &t,
 		ControlPlaneVisibility: "private",
 		DesiredSize:            "2",
 		MinSize:                "1",
 		MaxSize:                "3",
-		InstanceType:           "t3.medium",
+		// GPUEnabled pairs with a real GPU family (g5.xlarge) so the config is
+		// internally consistent: the #759 mapper validation rejects GPUEnabled
+		// with a non-GPU instance type like t3.medium.
+		InstanceType: "g5.xlarge",
+		// GPUEnabled exercises the #759 instance-type default path. The mapper
+		// deliberately never emits ami_type — the preset's family auto-derive
+		// (_gpu_x86_families → AL2023_x86_64_NVIDIA) owns AMI selection — so
+		// this only confirms gpu-related emitted keys are declared variables.
+		GPUEnabled: &t,
 	}
 	cfg.AWSECS = &struct {
 		EnableContainerInsights *bool    `json:"enableContainerInsights,omitempty"`

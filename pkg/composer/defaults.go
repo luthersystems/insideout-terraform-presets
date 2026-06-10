@@ -188,7 +188,44 @@ func (c *Client) ComputePresetDefaults(cfg Config, comps *Components, selected [
 			outInner.Set(reflect.Zero(outInner.Type()))
 		}
 	}
+
+	// GPU instance-type default (#759): the HCL `default` for instance_type is
+	// the non-GPU type (t3.medium for EC2, c7i.large for EKS), so a GPU stack
+	// with no explicit instance type would otherwise be priced as the non-GPU
+	// default. When the caller enabled GPU but did not pin an instance type,
+	// overlay the shared GPU default so pricing (which reads Config) sees the
+	// instance type the mapper will actually deploy. Only fills when the user's
+	// own cfg left the instance type blank — an explicit pick is preserved.
+	applyGPUInstanceTypeDefault(&cfg, &out)
+
 	return out, nil
+}
+
+// applyGPUInstanceTypeDefault overlays defaultGPUInstanceType onto the EC2/EKS
+// instance-type overlay field when GPU is enabled in the user's config and no
+// explicit instance type was supplied (#759). This keeps the pricing-facing
+// Config in sync with the GPU instance type the mapper defaults to, so a GPU
+// stack is not priced as the non-GPU HCL default. The overlay is later merged
+// zero-only, so writing the value here fills the blank without clobbering an
+// explicit user pick.
+func applyGPUInstanceTypeDefault(cfg, out *Config) {
+	if cfg.AWSEC2 != nil && boolPtrTrue(cfg.AWSEC2.GPUEnabled) && cfg.AWSEC2.InstanceType == "" {
+		// Allocate a zero value of the field's own (anonymous) type via
+		// reflection so this stays correct if the AWSEC2 shape changes —
+		// cfg.AWSEC2 and out.AWSEC2 share the type, so a new(elem) is assignable.
+		if out.AWSEC2 == nil {
+			v := reflect.New(reflect.TypeOf(out.AWSEC2).Elem())
+			reflect.ValueOf(&out.AWSEC2).Elem().Set(v)
+		}
+		out.AWSEC2.InstanceType = defaultGPUInstanceType
+	}
+	if cfg.AWSEKS != nil && boolPtrTrue(cfg.AWSEKS.GPUEnabled) && cfg.AWSEKS.InstanceType == "" {
+		if out.AWSEKS == nil {
+			v := reflect.New(reflect.TypeOf(out.AWSEKS).Elem())
+			reflect.ValueOf(&out.AWSEKS).Elem().Set(v)
+		}
+		out.AWSEKS.InstanceType = defaultGPUInstanceType
+	}
 }
 
 // ApplyPresetDefaults backfills cfg with statically-resolvable HCL defaults

@@ -1096,6 +1096,7 @@ func TestComposeStack_MonolithEC2(t *testing.T) {
 			CustomIngressPorts    []int  `json:"customIngressPorts,omitempty"`
 			SSHPublicKey          string `json:"sshPublicKey,omitempty"`
 			EnableInstanceConnect *bool  `json:"enableInstanceConnect,omitempty"`
+			GPUEnabled            *bool  `json:"gpuEnabled,omitempty"`
 		}{
 			UserData:           "#!/bin/bash\napt-get update && apt-get install -y nodejs",
 			DiskSizePerServer:  "32",
@@ -1275,6 +1276,7 @@ touch /var/log/openclaw-init-complete`
 			CustomIngressPorts    []int  `json:"customIngressPorts,omitempty"`
 			SSHPublicKey          string `json:"sshPublicKey,omitempty"`
 			EnableInstanceConnect *bool  `json:"enableInstanceConnect,omitempty"`
+			GPUEnabled            *bool  `json:"gpuEnabled,omitempty"`
 		}{
 			NumServers:         "1",
 			UserData:           cloudInitScript,
@@ -1410,6 +1412,7 @@ func TestComposeStack_OpenClawDemo_URL(t *testing.T) {
 			CustomIngressPorts    []int  `json:"customIngressPorts,omitempty"`
 			SSHPublicKey          string `json:"sshPublicKey,omitempty"`
 			EnableInstanceConnect *bool  `json:"enableInstanceConnect,omitempty"`
+			GPUEnabled            *bool  `json:"gpuEnabled,omitempty"`
 		}{
 			NumServers:         "1",
 			UserDataURL:        gistURL,
@@ -1466,6 +1469,7 @@ func TestComposeStack_EC2_InstanceConnect(t *testing.T) {
 			CustomIngressPorts    []int  `json:"customIngressPorts,omitempty"`
 			SSHPublicKey          string `json:"sshPublicKey,omitempty"`
 			EnableInstanceConnect *bool  `json:"enableInstanceConnect,omitempty"`
+			GPUEnabled            *bool  `json:"gpuEnabled,omitempty"`
 		}{
 			NumServers:            "1",
 			EnableInstanceConnect: &trueVal,
@@ -1515,6 +1519,7 @@ func TestComposeStack_EC2_NoInstanceConnect(t *testing.T) {
 			CustomIngressPorts    []int  `json:"customIngressPorts,omitempty"`
 			SSHPublicKey          string `json:"sshPublicKey,omitempty"`
 			EnableInstanceConnect *bool  `json:"enableInstanceConnect,omitempty"`
+			GPUEnabled            *bool  `json:"gpuEnabled,omitempty"`
 		}{
 			NumServers: "1",
 		},
