@@ -150,6 +150,7 @@ func emitProviders(dir string, opts providerEmitOptions) error {
 // default provider and every aliased per-region provider render identically.
 func configureAWSProviderBody(b *hclwrite.Body, region string, opts providerEmitOptions) {
 	b.SetAttributeValue("region", cty.StringVal(region))
+	appendAWSRetryTuning(b)
 	if opts.AWSEndpointURL != "" {
 		b.SetAttributeValue("access_key", cty.StringVal("test"))
 		b.SetAttributeValue("secret_key", cty.StringVal("test"))
@@ -163,6 +164,34 @@ func configureAWSProviderBody(b *hclwrite.Body, region string, opts providerEmit
 		}
 	}
 	appendAWSAssumeRole(b, opts.AWSAuth)
+}
+
+// awsProviderMaxRetries is the `max_retries` value emitted on every generated
+// AWS provider block. It equals the AWS provider's own documented default
+// (25), so it is functionally a no-op against today's provider — but emitting
+// it explicitly (a) documents the throttle-resilience intent at the call site
+// and (b) survives any future provider default change. Deliberately NOT
+// lowered (e.g. to 10): the genconfig readback runs at a raised
+// -parallelism (genconfig.DefaultGenconfigParallelism = 25), so the provider
+// must keep at least its default retry budget for the extra concurrent reads
+// to degrade to backoff rather than ThrottlingException failures.
+const awsProviderMaxRetries = 25
+
+// appendAWSRetryTuning emits `retry_mode = "adaptive"` and `max_retries`
+// onto an AWS provider block so the raised plan/refresh -parallelism degrades
+// to throttle backoff instead of failures (luthersystems/ui-core#420).
+//
+// retry_mode = "adaptive" switches the AWS SDK from the default "standard"
+// retryer to the adaptive one: a client-side token-bucket rate limiter that
+// measures throttle responses and paces subsequent calls, so a burst of
+// concurrent Describe/Get reads from the raised parallelism is smoothed back
+// toward the account's real API budget rather than surfacing as a hard
+// ThrottlingException. Both attributes are top-level provider arguments
+// supported by the pinned hashicorp/aws ~> 6.0 provider (retry_mode has been
+// a provider argument since v5.32; max_retries since the SDKv2 migration).
+func appendAWSRetryTuning(b *hclwrite.Body) {
+	b.SetAttributeValue("retry_mode", cty.StringVal("adaptive"))
+	b.SetAttributeValue("max_retries", cty.NumberIntVal(awsProviderMaxRetries))
 }
 
 func appendAWSAssumeRole(body *hclwrite.Body, auth awsProviderAuth) {
