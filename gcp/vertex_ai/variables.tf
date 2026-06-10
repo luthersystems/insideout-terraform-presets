@@ -127,6 +127,19 @@ variable "network" {
   description = "VPC network for a private (VPC-peered) index endpoint. Accepts the project-ID path (projects/<project_id>/global/networks/<name>, as emitted by gcp/vpc.vpc_id), the project-number path, or a bare network name — the preset extracts the network name and rebuilds the project-NUMBER path the API requires. Only used when enable_private_endpoint is also true; otherwise the endpoint is public."
   type        = string
   default     = null
+
+  validation {
+    # Accept null (public path), a bare network name (RFC1035-ish: starts with
+    # a lowercase letter, lowercase letters/digits/hyphens), or the exact
+    # projects/<project-id-or-number>/global/networks/<name> resource form.
+    # Reject "" and malformed paths (trailing slash, wrong segments) at plan
+    # time so local.network_name never silently parses to an empty/wrong name.
+    condition = var.network == null ? true : (
+      can(regex("^[a-z]([-a-z0-9]*[a-z0-9])?$", var.network)) ||
+      can(regex("^projects/[a-z0-9-]+/global/networks/[a-z]([-a-z0-9]*[a-z0-9])?$", var.network))
+    )
+    error_message = "network must be null, a bare network name, or an exact projects/<id-or-number>/global/networks/<name> path."
+  }
 }
 
 variable "enable_private_endpoint" {

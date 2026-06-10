@@ -445,7 +445,7 @@ var gcpServiceMetrics = map[string]GCPObs{
 			// gcp/vertex_ai query-latency alert policy alarms on (#764). Lives
 			// here so componentObs() can flip Alarmed=true; without it the
 			// inspector is blind to the alarmed metric.
-			{MetricType: "aiplatform.googleapis.com/matching_engine/query_latencies", ResourceType: "aiplatform.googleapis.com/MatchingEngineIndexEndpoint", LabelKey: "index_endpoint_id", Aligner: "ALIGN_PERCENTILE_99", DisplayName: "Vector Search Query Latency (p99)"},
+			{MetricType: "aiplatform.googleapis.com/matching_engine/query/latencies", ResourceType: "aiplatform.googleapis.com/IndexEndpoint", LabelKey: "index_endpoint_id", Aligner: "ALIGN_PERCENTILE_99", DisplayName: "Vector Search Query Latency (p99)"},
 		},
 	},
 }
@@ -573,7 +573,7 @@ var alarmedGCPMetrics = map[composer.ComponentKey]AlarmAuthor{
 	composer.KeyGCPLoadbalancer:   {Module: "gcp/loadbalancer", Metrics: []string{"loadbalancing.googleapis.com/https/backend_latencies"}},
 	composer.KeyGCPMemorystore:    {Module: "gcp/memorystore", Metrics: []string{"redis.googleapis.com/stats/cpu_utilization"}},
 	composer.KeyGCPPubSub:         {Module: "gcp/pubsub", Metrics: []string{"pubsub.googleapis.com/subscription/num_undelivered_messages"}},
-	composer.KeyGCPVertexAI:       {Module: "gcp/vertex_ai", Metrics: []string{"aiplatform.googleapis.com/matching_engine/query_latencies"}},
+	composer.KeyGCPVertexAI:       {Module: "gcp/vertex_ai", Metrics: []string{"aiplatform.googleapis.com/matching_engine/query/latencies"}},
 }
 
 // AlarmedAWSMetrics returns a defensive copy of the AWS authority entry

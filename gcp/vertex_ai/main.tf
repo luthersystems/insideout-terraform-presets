@@ -56,7 +56,17 @@ locals {
   # whatever was supplied (full project-ID path, full project-number path, or a
   # bare name) and rebuild the canonical path with the project number. Only
   # evaluated on the private path; null otherwise.
-  network_name = var.network == null ? null : element(split("/", var.network), length(split("/", var.network)) - 1)
+  #
+  # Parse the name out of the .../networks/<name> path with a regex capture so a
+  # malformed value can't silently yield the wrong segment (var.network is
+  # validated to be a bare name or an exact projects/.../networks/<name> path,
+  # so a non-match here means it was a bare name — fall back to the value
+  # itself). element()-last was unsafe: a trailing slash or short path would
+  # parse to "" or the wrong segment with no plan-time signal.
+  network_name = var.network == null ? null : try(
+    regex("/networks/([^/]+)$", var.network)[0],
+    var.network,
+  )
   network_canonical = local.vector_search_private ? (
     "projects/${data.google_project.this.number}/global/networks/${local.network_name}"
   ) : null

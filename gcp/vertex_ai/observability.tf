@@ -55,7 +55,12 @@ resource "google_monitoring_alert_policy" "vector_search_query_latency_high" {
     display_name = "Vector Search p99 query latency above ${local._obs_thresholds["query_latency_p99_ms"]}ms"
     condition_threshold {
       # Public metric on the Matching Engine index endpoint serving surface.
-      filter          = "metric.type=\"aiplatform.googleapis.com/matching_engine/query_latencies\" AND resource.type=\"aiplatform.googleapis.com/MatchingEngineIndexEndpoint\""
+      # Metric path + monitored resource verified against Google's official
+      # list (cloud.google.com/monitoring/api/metrics_gcp_a_b#gcp-aiplatform):
+      # the metric is matching_engine/query/latencies (slashes, not an
+      # underscore) reported on aiplatform.googleapis.com/IndexEndpoint
+      # (NOT MatchingEngineIndexEndpoint, which is not a real resource type).
+      filter          = "metric.type=\"aiplatform.googleapis.com/matching_engine/query/latencies\" AND resource.type=\"aiplatform.googleapis.com/IndexEndpoint\""
       duration        = "300s"
       comparison      = "COMPARISON_GT"
       threshold_value = local._obs_thresholds["query_latency_p99_ms"]

@@ -117,12 +117,25 @@ run "vector_search" {
 run "vector_search_private_opt_in" {
   command = plan
 
+  # Pin data.google_project.this.number to a fixed value so the rebuilt
+  # canonical network path can be asserted as an EXACT literal (otherwise the
+  # mock provider supplies a random computed number and the test could only
+  # assert prefix/suffix — which a passthrough rebuild would survive).
+  override_data {
+    target = data.google_project.this
+    values = {
+      number = "123456789012"
+    }
+  }
+
   variables {
     project                 = "test"
     project_id              = "test-project"
     enable_vector_search    = true
     enable_private_endpoint = true
-    network                 = "projects/test-project/global/networks/test-vpc"
+    # Project-ID full path: the parser must keep the network NAME and the
+    # rebuild must swap the project ID for the pinned project NUMBER.
+    network = "projects/test-project/global/networks/test-vpc"
   }
 
   # network + enable_private_endpoint -> private endpoint (public disabled).
@@ -132,17 +145,39 @@ run "vector_search_private_opt_in" {
   }
 
   # The endpoint network is rebuilt into the project-NUMBER path the API
-  # requires. The mock provider supplies a computed project number, so assert
-  # the structure (prefix + the parsed network name) rather than the exact
-  # number.
+  # requires: the name survives, the pinned number replaces the project ID.
+  # Asserting the EXACT literal kills a passthrough mutation of the rebuild.
   assert {
-    condition     = startswith(google_vertex_ai_index_endpoint.this[0].network, "projects/")
-    error_message = "private endpoint network must be a projects/<number>/global/networks/<name> path."
+    condition     = google_vertex_ai_index_endpoint.this[0].network == "projects/123456789012/global/networks/test-vpc"
+    error_message = "private endpoint network must rebuild to projects/<number>/global/networks/<name> using the project NUMBER (not the project ID)."
+  }
+}
+
+run "vector_search_private_bare_network_name" {
+  command = plan
+
+  # Bare-name input ("my-vpc") with the project number pinned so the rebuilt
+  # path can be asserted EXACTLY. Exercises the regex bare-name fallback and
+  # the project-NUMBER rebuild — a passthrough that skipped the rebuild would
+  # leave network = "my-vpc" and fail this assert.
+  override_data {
+    target = data.google_project.this
+    values = {
+      number = "123456789012"
+    }
+  }
+
+  variables {
+    project                 = "test"
+    project_id              = "test-project"
+    enable_vector_search    = true
+    enable_private_endpoint = true
+    network                 = "my-vpc"
   }
 
   assert {
-    condition     = endswith(google_vertex_ai_index_endpoint.this[0].network, "/global/networks/test-vpc")
-    error_message = "private endpoint network must carry the parsed network NAME (test-vpc)."
+    condition     = google_vertex_ai_index_endpoint.this[0].network == "projects/123456789012/global/networks/my-vpc"
+    error_message = "a bare network name must be rebuilt to the full projects/<number>/global/networks/<name> form."
   }
 }
 
@@ -186,6 +221,95 @@ run "vector_search_public_endpoint_without_network" {
   assert {
     condition     = google_vertex_ai_index_endpoint.this[0].network == null
     error_message = "endpoint network must be null when no network is wired."
+  }
+}
+
+run "deployed_index_id_sanitizes_dirty_project" {
+  command = plan
+
+  variables {
+    # Project with uppercase + a dot: both are illegal in a deployed_index_id
+    # (must start with a letter, only [a-z0-9_]). The default "test" project is
+    # already clean and never exercised the replace(); this one does.
+    project              = "My-Proj.1"
+    project_id           = "test-project"
+    enable_vector_search = true
+  }
+
+  assert {
+    condition     = google_vertex_ai_index_endpoint_deployed_index.this[0].deployed_index_id == "idx_my_proj_1_vector"
+    error_message = "deployed_index_id must lowercase var.project and replace every non-[a-z0-9_] char with '_' (My-Proj.1 -> my_proj_1)."
+  }
+}
+
+run "deployed_index_min_eq_max_composes" {
+  command = plan
+
+  variables {
+    project              = "test"
+    project_id           = "test-project"
+    enable_vector_search = true
+    # Equal floor/ceiling is the >= boundary: it MUST compose (pins the
+    # precondition against a strict-> mutation that would reject min == max).
+    deployed_index_min_replicas = 2
+    deployed_index_max_replicas = 2
+  }
+
+  assert {
+    condition     = length(google_vertex_ai_index_endpoint_deployed_index.this) == 1
+    error_message = "deployed index must compose when max_replicas == min_replicas (the >= boundary is inclusive)."
+  }
+
+  assert {
+    condition     = google_vertex_ai_index_endpoint_deployed_index.this[0].automatic_resources[0].min_replica_count == 2
+    error_message = "min_replica_count must flow through to automatic_resources."
+  }
+}
+
+# -----------------------------------------------------------------------------
+# Alert policy: the per-component query-latency alarm is emitted only when
+# Vector Search AND observability are both on, and carries the verified metric.
+# -----------------------------------------------------------------------------
+
+run "alert_policy_emitted_when_vector_search_and_observability_on" {
+  command = plan
+
+  variables {
+    project              = "test"
+    project_id           = "test-project"
+    enable_vector_search = true
+    enable_observability = true
+  }
+
+  assert {
+    condition     = length(google_monitoring_alert_policy.vector_search_query_latency_high) == 1
+    error_message = "query-latency alert policy must be emitted when Vector Search AND observability are both enabled."
+  }
+
+  # The filter must carry the metric.type verified against Google's official
+  # metrics list (matching_engine/query/latencies, slashes not underscore).
+  assert {
+    condition = strcontains(
+      google_monitoring_alert_policy.vector_search_query_latency_high["0"].conditions[0].condition_threshold[0].filter,
+      "metric.type=\"aiplatform.googleapis.com/matching_engine/query/latencies\""
+    )
+    error_message = "alert policy filter must reference the verified matching_engine/query/latencies metric type."
+  }
+}
+
+run "alert_policy_absent_when_vector_search_off" {
+  command = plan
+
+  variables {
+    project              = "test"
+    project_id           = "test-project"
+    enable_vector_search = false
+    enable_observability = true
+  }
+
+  assert {
+    condition     = length(google_monitoring_alert_policy.vector_search_query_latency_high) == 0
+    error_message = "no alert policy when Vector Search is off — the bare dataset has no serving surface to alarm on."
   }
 }
 
@@ -239,6 +363,32 @@ run "rejects_non_gcs_contents_uri" {
   }
 
   expect_failures = [var.contents_delta_uri]
+}
+
+run "rejects_empty_network" {
+  command = plan
+
+  variables {
+    project    = "test"
+    project_id = "test-project"
+    network    = "" # would parse to an empty network name with no signal
+  }
+
+  expect_failures = [var.network]
+}
+
+run "rejects_malformed_network_path" {
+  command = plan
+
+  variables {
+    project    = "test"
+    project_id = "test-project"
+    # Trailing slash -> last-segment parse would yield "" ; not a valid bare
+    # name nor the exact projects/.../networks/<name> form.
+    network = "projects/test-project/global/networks/"
+  }
+
+  expect_failures = [var.network]
 }
 
 run "rejects_max_replicas_below_min" {
