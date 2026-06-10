@@ -46,6 +46,12 @@ var excludedFromAuthority = map[string]string{
 	// gke entry to gcpServiceMetrics in a follow-up to retire this
 	// exclusion.
 	"gcp/gke:kubernetes.io/node/cpu/allocatable_utilization": "#204",
+	// aws/opensearch AOSS OCU alarms (#758) live in namespace AWS/AOSS with
+	// the account-level ClientId dimension; the catalog's "opensearch"
+	// service group is AWS/ES + DomainName (managed domains), so these are
+	// HCL-only until an AOSS-scoped AWSMetricSpec group exists (#778).
+	"aws/opensearch:SearchOCU":   "#778",
+	"aws/opensearch:IndexingOCU": "#778",
 }
 
 // awsModuleAuthor inverts alarmedAWSMetrics by module path so the reverse
