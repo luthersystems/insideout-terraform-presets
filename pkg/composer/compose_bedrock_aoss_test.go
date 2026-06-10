@@ -100,6 +100,76 @@ func TestMapper_OpenSearchDeploymentTypeOverride(t *testing.T) {
 	// serverless override).
 }
 
+// TestMapper_OpenSearchDeploymentTypeOverride_758 hardens the
+// bedrock-forces-serverless override (mapper.go) for the #758 production
+// vector-store surfacing. The original override test (above) pins the
+// managed→serverless flip and the no-bedrock passthrough. These cases pin
+// the two paths that override miss:
+//
+//   - empty/unset DeploymentType + Bedrock must STILL force serverless. The
+//     override writes vals["deployment_type"] unconditionally when Bedrock is
+//     present, but a refactor that moved the write inside the
+//     `if cfg.AWSOpenSearch.DeploymentType != ""` block would silently drop
+//     it for the empty-config case — exactly the Bedrock-KB default path.
+//   - explicit serverless + Bedrock is idempotent (stays serverless, no error).
+//
+// Without these, a mutation that gated the override on a non-empty user
+// DeploymentType would pass the original test (which always sets "managed")
+// yet break the real default flow where the user configures nothing.
+func TestMapper_OpenSearchDeploymentTypeOverride_758(t *testing.T) {
+	m := DefaultMapper{}
+
+	t.Run("empty deployment_type plus bedrock still forces serverless", func(t *testing.T) {
+		// cfg.AWSOpenSearch is nil entirely — the Bedrock-KB default path,
+		// where the user selects Bedrock + OpenSearch and configures neither.
+		vals, err := m.BuildModuleValues(
+			KeyAWSOpenSearch,
+			&Components{AWSBedrock: ptrBool(true), AWSOpenSearch: ptrBool(true)},
+			&Config{},
+			"demo", "us-east-1",
+		)
+		require.NoError(t, err)
+		require.Equal(t, "serverless", vals["deployment_type"],
+			"Bedrock must force serverless even when the user supplies no OpenSearch config — this is the KB default path")
+	})
+
+	t.Run("explicit serverless plus bedrock is idempotent", func(t *testing.T) {
+		vals, err := m.BuildModuleValues(
+			KeyAWSOpenSearch,
+			&Components{AWSBedrock: ptrBool(true), AWSOpenSearch: ptrBool(true)},
+			&Config{
+				AWSOpenSearch: &struct {
+					DeploymentType string `json:"deploymentType,omitempty"`
+					InstanceType   string `json:"instanceType,omitempty"`
+					StorageSize    string `json:"storageSize,omitempty"`
+					MultiAZ        *bool  `json:"multiAz,omitempty"`
+				}{DeploymentType: "serverless"},
+			},
+			"demo", "us-east-1",
+		)
+		require.NoError(t, err)
+		require.Equal(t, "serverless", vals["deployment_type"],
+			"explicit serverless + Bedrock must remain serverless (override is idempotent, not an error)")
+	})
+
+	t.Run("no bedrock plus empty config leaves deployment_type unset", func(t *testing.T) {
+		// Negative companion: with no Bedrock and no user config, the mapper
+		// must NOT emit deployment_type at all so the preset default
+		// ("managed") wins. A mutation that hard-wrote serverless
+		// unconditionally would be caught here.
+		vals, err := m.BuildModuleValues(
+			KeyAWSOpenSearch,
+			&Components{AWSOpenSearch: ptrBool(true)},
+			&Config{},
+			"demo", "us-east-1",
+		)
+		require.NoError(t, err)
+		_, has := vals["deployment_type"]
+		require.False(t, has,
+			"mapper must not emit deployment_type when neither Bedrock nor user config sets it — preset default 'managed' must win")
+	})
+}
+
 // TestMapper_BedrockNoKBStub confirms the mapper does NOT inject the
 // Knowledge Base inputs (s3_bucket_arn / opensearch_collection_arn) for a
 // Bedrock-only preview. Both preset inputs are optional (default null) since
