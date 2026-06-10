@@ -40,6 +40,7 @@ run "gpu_enabled_selects_gpu_ami" {
   variables {
     gpu_enabled   = true
     arch          = "x86_64"
+    os_type       = "amazon-linux"
     instance_type = "g5.xlarge"
   }
 
@@ -104,4 +105,64 @@ run "gpu_with_arm64_fails_validation" {
   }
 
   expect_failures = [var.gpu_enabled]
+}
+
+# os_type override (#759): gpu_enabled selects the Amazon Linux 2023 GPU AMI
+# and ignores os_type. Previously os_type="ubuntu" was silently dropped on the
+# GPU path — a caller asking for Ubuntu got an Amazon Linux node with no
+# warning. The aws_instance precondition now rejects the combination loudly so
+# the mismatch surfaces at plan instead of booting an unexpected OS.
+run "gpu_with_ubuntu_os_type_fails_precondition" {
+  command = plan
+
+  override_data {
+    target = data.aws_iam_policy_document.ec2_assume_role
+    values = {
+      json = "{\"Version\":\"2012-10-17\",\"Statement\":[]}"
+    }
+  }
+
+  override_data {
+    target = data.aws_ami.gpu[0]
+    values = {
+      id = "ami-0gpu00000000000ab"
+    }
+  }
+
+  variables {
+    gpu_enabled   = true
+    arch          = "x86_64"
+    os_type       = "ubuntu"
+    instance_type = "g5.xlarge"
+  }
+
+  expect_failures = [aws_instance.this]
+}
+
+# Explicit ami_id with gpu_enabled + os_type="ubuntu" is allowed: the caller
+# supplied their own (e.g. Ubuntu GPU) AMI, so the precondition's ami_id==null
+# guard does not trip. Locks that the precondition only fires on the
+# silent-override path, not on the bring-your-own-AMI path.
+run "gpu_with_ubuntu_and_explicit_ami_id_passes" {
+  command = plan
+
+  override_data {
+    target = data.aws_iam_policy_document.ec2_assume_role
+    values = {
+      json = "{\"Version\":\"2012-10-17\",\"Statement\":[]}"
+    }
+  }
+
+  variables {
+    gpu_enabled   = true
+    arch          = "x86_64"
+    os_type       = "ubuntu"
+    instance_type = "g5.xlarge"
+    ami_id        = "ami-ubuntugpu0000000"
+  }
+
+  assert {
+    condition     = aws_instance.this.ami == "ami-ubuntugpu0000000"
+    error_message = "explicit ami_id must be honored even with gpu_enabled + os_type=ubuntu"
+  }
 }

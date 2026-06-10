@@ -237,6 +237,20 @@ resource "aws_instance" "this" {
       condition     = !(var.user_data != "" && var.user_data_url != "")
       error_message = "user_data and user_data_url are mutually exclusive. Set one or the other, not both."
     }
+
+    # GPU AMI is os_type-independent (#759): when gpu_enabled and no explicit
+    # ami_id, the module always boots the AWS Deep Learning Base GPU AMI
+    # (Amazon Linux 2023) regardless of os_type. Previously os_type="ubuntu"
+    # was silently ignored on the GPU path — a caller asking for Ubuntu got an
+    # Amazon Linux node with no warning. Reject the combination loudly so the
+    # caller either drops os_type (accept the AL2023 GPU AMI) or supplies their
+    # own Ubuntu GPU ami_id. Not enforceable as a var validation block — TF
+    # forbids cross-variable conditions there — so it lives as a resource
+    # precondition.
+    precondition {
+      condition     = !(var.gpu_enabled && var.ami_id == null && var.os_type == "ubuntu")
+      error_message = "gpu_enabled=true selects the Amazon Linux 2023 GPU AMI and ignores os_type=\"ubuntu\". Drop os_type (or set it to \"amazon-linux\") to use the built-in GPU AMI, or supply an explicit Ubuntu GPU ami_id."
+    }
   }
 
   root_block_device {

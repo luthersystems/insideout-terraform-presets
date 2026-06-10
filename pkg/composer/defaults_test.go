@@ -529,6 +529,55 @@ func TestComputePresetDefaults_NilNestedStructInInput_AllocatesInOverlay(t *test
 	assert.Equal(t, "t3.medium", overlay.AWSEC2.InstanceType)
 }
 
+// TestComputePresetDefaults_GPUInstanceTypeDefault pins the pricing fix (#759):
+// a GPU-enabled EC2/EKS config with no explicit instance type must overlay the
+// GPU default instance type (g5.xlarge), NOT the non-GPU HCL default
+// (t3.medium / c7i.large). Pricing reads Config, so without this a GPU stack
+// would be priced as the non-GPU default.
+func TestComputePresetDefaults_GPUInstanceTypeDefault(t *testing.T) {
+	c := New()
+	trueVal := true
+
+	t.Run("EC2 GPU with no instance type overlays g5.xlarge", func(t *testing.T) {
+		cfg := configWithAWSEC2(awsEC2CfgInput{GPUEnabled: &trueVal})
+		overlay, err := c.ComputePresetDefaults(*cfg, &Components{Cloud: "aws"}, []ComponentKey{KeyAWSEC2})
+		require.NoError(t, err)
+		require.NotNil(t, overlay.AWSEC2)
+		assert.Equal(t, defaultGPUInstanceType, overlay.AWSEC2.InstanceType,
+			"GPU EC2 must overlay the GPU default, not the non-GPU t3.medium HCL default")
+	})
+
+	t.Run("EKS GPU with no instance type overlays g5.xlarge", func(t *testing.T) {
+		cfg := configWithAWSEKS(awsEKSCfgInput{GPUEnabled: &trueVal})
+		overlay, err := c.ComputePresetDefaults(*cfg, &Components{Cloud: "aws"}, []ComponentKey{KeyAWSEKSNodeGroup})
+		require.NoError(t, err)
+		require.NotNil(t, overlay.AWSEKS)
+		assert.Equal(t, defaultGPUInstanceType, overlay.AWSEKS.InstanceType,
+			"GPU EKS node group must overlay the GPU default instance type")
+	})
+
+	t.Run("explicit GPU instance type is preserved (not overwritten)", func(t *testing.T) {
+		cfg := configWithAWSEC2(awsEC2CfgInput{GPUEnabled: &trueVal, InstanceType: "p4d.24xlarge"})
+		overlay, err := c.ComputePresetDefaults(*cfg, &Components{Cloud: "aws"}, []ComponentKey{KeyAWSEC2})
+		require.NoError(t, err)
+		// The overlay is the back-fill only; an explicit user pick is in cfg,
+		// so the overlay's instance type must NOT be the GPU default (the
+		// zero-only merge keeps the user's explicit value).
+		assert.NotEqual(t, defaultGPUInstanceType, "p4d.24xlarge")
+		require.NotNil(t, overlay.AWSEC2)
+		assert.NotEqual(t, defaultGPUInstanceType, overlay.AWSEC2.InstanceType,
+			"explicit user instance type must not trigger the GPU default overlay")
+	})
+
+	t.Run("non-GPU EC2 keeps the t3.medium HCL default", func(t *testing.T) {
+		overlay, err := c.ComputePresetDefaults(Config{}, &Components{Cloud: "aws"}, []ComponentKey{KeyAWSEC2})
+		require.NoError(t, err)
+		require.NotNil(t, overlay.AWSEC2)
+		assert.Equal(t, "t3.medium", overlay.AWSEC2.InstanceType,
+			"non-GPU EC2 must keep the non-GPU HCL default")
+	})
+}
+
 // TestComputePresetDefaults_UnselectedComponentsAbsentFromOverlay pins the
 // scope rule: only the selected components contribute to the overlay.
 func TestComputePresetDefaults_UnselectedComponentsAbsentFromOverlay(t *testing.T) {
