@@ -91,7 +91,7 @@ func TestEmitImportedTF_TypedAWS(t *testing.T) {
 	require.False(t, diags.HasErrors(), "imported.tf must parse: %s", diags.Error())
 }
 
-func TestEmitImportedTF_S3ImportIDUsesBareBucketName(t *testing.T) {
+func TestEmitImportedTF_S3ImportIDCarriesBucketRegion(t *testing.T) {
 	t.Parallel()
 	attrs, err := json.Marshal(&generated.AWSS3Bucket{
 		Bucket: generated.LiteralOf("io-uploads"),
@@ -114,7 +114,9 @@ func TestEmitImportedTF_S3ImportIDUsesBareBucketName(t *testing.T) {
 	require.NotNil(t, out)
 	s := string(out)
 	assert.Contains(t, s, "to = aws_s3_bucket.io_uploads")
-	assert.Contains(t, s, `id = "io-uploads"`)
+	// The @region suffix must use the enriched true bucket region from
+	// Attrs (us-west-2), not Identity.Region (the us-east-1 scan region).
+	assert.Contains(t, s, `id = "io-uploads@us-west-2"`)
 	assert.True(t, hasAttr(t, s, "region", `"us-west-2"`), "region attr missing in:\n%s", s)
 	_, diags := hclsyntax.ParseConfig(out, "imported.tf", hcl.InitialPos)
 	require.False(t, diags.HasErrors(), "imported.tf must parse: %s", diags.Error())
