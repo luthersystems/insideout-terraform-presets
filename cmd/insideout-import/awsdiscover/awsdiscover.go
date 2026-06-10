@@ -14,7 +14,7 @@
 // can mock the SDK boundary without depending on real AWS credentials.
 // The aggregator (AWSDiscoverer) wires real SDK clients in production and
 // fans out to the registered per-type discoverers concurrently under a
-// bounded errgroup (defaultDiscoverTypesConcurrency).
+// bounded errgroup (DiscoverTypesConcurrency).
 package awsdiscover
 
 import (
@@ -24,6 +24,7 @@ import (
 	"log"
 	"math/rand"
 	"sort"
+	"sync"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -34,11 +35,23 @@ import (
 	"github.com/luthersystems/insideout-terraform-presets/pkg/composer/imported"
 )
 
-// defaultDiscoverTypesConcurrency caps the number of per-service
-// discoverers DiscoverTypes runs concurrently. Each selected
-// Discoverer already has its own internal bounded fan-out for per-item
-// SDK calls (tag fetches, GetResource walks); this constant bounds the
-// service-level layer on top.
+// DiscoverTypesConcurrency caps the number of per-service discoverers
+// DiscoverTypes runs concurrently — the TYPE-level fan-out limit. Each
+// selected Discoverer already has its own internal bounded fan-out for
+// per-item SDK calls (tag fetches, GetResource walks); this constant
+// bounds the service-level layer on top of that.
+//
+// NOT to be confused with DefaultMaxConcurrency (= 10), which is the
+// PER-RESOURCE GetResource / tag-fetch fan-out cap inside a single
+// discoverer. The two govern different layers: DiscoverTypesConcurrency
+// is "how many resource TYPES discover at once", DefaultMaxConcurrency
+// is "how many per-item SDK calls one type issues at once". A downstream
+// consumer that fans out single-type DiscoverTypes calls itself (e.g.
+// reliable's streaming discover path, which issues one call per type to
+// receive per-type results as they land) should bound its own fan-out by
+// THIS constant, not DefaultMaxConcurrency — using the per-resource cap
+// there would 2.5× the intended type-level control-plane call rate (the
+// confusion that produced reliable#2065 codex round 2).
 //
 // Originally 8 (#629); lowered to 4 (#632) after staging hit a
 // ThrottlingException from CloudControl ListResources during the
@@ -48,7 +61,7 @@ import (
 // without multiplying account-wide QPS by the registered-type count.
 // See also: defaultDiscoverStartupJitterMax for the per-goroutine
 // jitter applied before the first AWS call.
-const defaultDiscoverTypesConcurrency = 4
+const DiscoverTypesConcurrency = 4
 
 // defaultDiscoverStartupJitterMax bounds the random sleep applied
 // before each per-service goroutine's first AWS call. Without
@@ -480,7 +493,7 @@ func (a *AWSDiscoverer) DiscoverByID(ctx context.Context, tfType, id, region, ac
 
 // DiscoverTypes runs the selected per-service discoverers concurrently
 // under a bounded errgroup (default concurrency:
-// defaultDiscoverTypesConcurrency). Per-item concurrency already lives
+// DiscoverTypesConcurrency). Per-item concurrency already lives
 // inside each discoverer (tag-fanout, sub-resource walks); adding
 // service-level fan-out shortens wall time for multi-service imports
 // without changing per-service throttle behavior. Unknown type names
@@ -567,8 +580,40 @@ func (a *AWSDiscoverer) DiscoverTypes(ctx context.Context, types []string, args 
 		}
 	}
 
+	// Per-type RESULTS callback (#739 follow-up / reliable#2060). When the
+	// caller sets args.OnTypeDiscovered, deliver each type's discovered
+	// resources as that type completes — the streaming counterpart to the
+	// count-only emitTypeDone above. The per-type Discover calls run
+	// concurrently under the errgroup below, so onTypeDiscovered SERIALIZES
+	// invocations under cbMu: the documented contract promises consumers
+	// don't need their own locking. A timed-out (downgraded) type is
+	// delivered with an empty, non-nil slice so the consumer's progress
+	// denominator still advances. A nil callback short-circuits before the
+	// lock so the back-compat path takes zero overhead.
+	//
+	// The delivered slice is an ISOLATED snapshot, not an alias of the
+	// returned rows: the cross-type augmentation passes that run after
+	// g.Wait() (resolveVPCChildVPCIDs mutates Identity.NativeIDs["vpc_id"];
+	// resolveParentAddresses sets Identity.ParentAddress) would otherwise
+	// mutate structs already handed to the callback — a hazard for a consumer
+	// that retains or asynchronously processes the batch (codex reliable#2065
+	// round 2). snapshotForCallback copies each element by value (isolating
+	// every scalar, including ParentAddress) and clones the NativeIDs map
+	// (the only map a post-Wait pass mutates today), so the callback's view
+	// is frozen at discovery time regardless of later augmentation.
+	var cbMu sync.Mutex
+	onTypeDiscovered := func(tfType string, resources []imported.ImportedResource) {
+		if args.OnTypeDiscovered == nil {
+			return
+		}
+		snapshot := snapshotForCallback(resources)
+		cbMu.Lock()
+		defer cbMu.Unlock()
+		args.OnTypeDiscovered(tfType, snapshot)
+	}
+
 	g, gctx := errgroup.WithContext(ctx)
-	g.SetLimit(defaultDiscoverTypesConcurrency)
+	g.SetLimit(DiscoverTypesConcurrency)
 	// Per-goroutine startup jitter (#632). Without this, all N
 	// service goroutines unblock at t=0 and their first
 	// ListResources / Describe* calls land in the same burst,
@@ -613,6 +658,19 @@ func (a *AWSDiscoverer) DiscoverTypes(ctx context.Context, types []string, args 
 			// Non-timeout errors still propagate through the errgroup
 			// so a genuine API failure (Throttling, invalid creds)
 			// continues to fail-fast as before.
+			//
+			// Fence scope (reliable#2065 audit): the ONLY per-type work in
+			// this goroutine is d.Discover(callCtx, args), so wrapping that
+			// single call covers the type's entire unit of work. The two
+			// SDK-backed augmentation passes — resolveVPCChildVPCIDs and
+			// resolveParentAddresses — run ONCE over the fully-assembled set
+			// AFTER g.Wait() (below), not per type, and the RGT prefetch runs
+			// ONCE up front before the fan-out. None of them is per-type, so
+			// there is nothing per-type sitting outside this fence to widen
+			// it over. (Downstream reliable's old per-call fan-out needed an
+			// extra outer fence only because IT re-ran the prefetch + VPC pass
+			// for every single-type call; that is an artifact of fanning out
+			// single-type calls, not a gap here.)
 			callCtx := gctx
 			var cancel context.CancelFunc
 			if args.PerTypeTimeout > 0 {
@@ -638,14 +696,18 @@ func (a *AWSDiscoverer) DiscoverTypes(ctx context.Context, types []string, args 
 					results[i] = nil
 					// This type completed (with a partial / empty
 					// result); count it toward N-of-total so the
-					// progress denominator still reaches the total.
+					// progress denominator still reaches the total, and
+					// stream an empty result slice to the per-type
+					// RESULTS callback so its denominator advances too.
 					emitTypeDone(d.ResourceType(), 0)
+					onTypeDiscovered(d.ResourceType(), nil)
 					return nil
 				}
 				return fmt.Errorf("%s: %w", d.ResourceType(), err)
 			}
 			results[i] = entries
 			emitTypeDone(d.ResourceType(), len(entries))
+			onTypeDiscovered(d.ResourceType(), entries)
 			return nil
 		})
 	}
@@ -686,4 +748,38 @@ func (a *AWSDiscoverer) DiscoverTypes(ctx context.Context, types []string, args 
 	resolveParentAddresses(all)
 	args.Emitter.StageFinish("discover", len(all), time.Since(stageStart))
 	return all, nil
+}
+
+// snapshotForCallback returns an isolated copy of a per-type result slice
+// for delivery to DiscoverArgs.OnTypeDiscovered, so the post-g.Wait()
+// cross-type augmentation passes can't mutate structs already handed to a
+// streaming consumer (codex reliable#2065 round 2).
+//
+// It copies every element by VALUE — which already isolates all scalar
+// fields, notably Identity.ParentAddress (set by resolveParentAddresses) —
+// and additionally clones Identity.NativeIDs, the only map a post-Wait pass
+// mutates today (resolveVPCChildVPCIDs stamps NativeIDs["vpc_id"]). The
+// other reference fields (Tags, Attributes, ProviderIdentity, Attrs, the
+// *PresetMatch / *ForceTakeover pointers, …) are NOT touched by any
+// post-Wait augmentation, so they are intentionally shared rather than
+// deep-copied — a full deep copy would be a maintenance hazard that goes
+// stale every time the IR grows a field. INVARIANT: if a future post-Wait
+// pass mutates an additional reference field on a delivered resource, clone
+// it here too (and extend TestOnTypeDiscovered_SnapshotIsolatesNativeIDs).
+//
+// nil/empty in → non-nil empty slice out, so consumers get a stable
+// "delivered, zero rows" shape for downgraded / empty types.
+func snapshotForCallback(in []imported.ImportedResource) []imported.ImportedResource {
+	out := make([]imported.ImportedResource, len(in))
+	copy(out, in)
+	for i := range out {
+		if src := out[i].Identity.NativeIDs; src != nil {
+			clone := make(map[string]string, len(src))
+			for k, v := range src {
+				clone[k] = v
+			}
+			out[i].Identity.NativeIDs = clone
+		}
+	}
+	return out
 }

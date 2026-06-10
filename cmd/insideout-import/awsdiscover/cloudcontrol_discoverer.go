@@ -240,7 +240,7 @@ func (d *cloudControlDiscoverer) ResourceType() string { return d.cfg.TFType }
 
 // listRetry* bound the throttle backoff retryThrottled applies around each
 // CloudControl ListResources page. Discovery fans up to
-// defaultDiscoverTypesConcurrency resource types across a shared per-region
+// DiscoverTypesConcurrency resource types across a shared per-region
 // CloudControl rate budget, so a downstream service throttle — surfaced as a
 // 400 handler-FAILED "Rate exceeded" the SDK adaptive retryer does not
 // classify as retryable — is retried here before we give up and skip the

@@ -36,6 +36,7 @@ import (
 	"os"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/luthersystems/insideout-terraform-presets/cmd/insideout-import/progress"
@@ -524,6 +525,33 @@ func (g *GCPDiscoverer) DiscoverTypes(ctx context.Context, types []string, args 
 		}
 	}
 
+	// Per-type RESULTS callback (reliable#2060) — the GCP twin of
+	// awsdiscover's hook. Delivers each type's resources as it completes;
+	// the count-only emitTypeDone above and this RESULTS callback fire
+	// together at every per-type completion point. The GCP path is mostly
+	// sequential after the bulk CAI search, but the non-CAI listers' own
+	// fan-out (and any future parallelism) means we still serialize under
+	// cbMu so the documented "no consumer-side locking" contract holds.
+	// A zero-result type is delivered with an empty, non-nil slice. A nil
+	// callback short-circuits before the lock (zero back-compat overhead).
+	//
+	// As with the AWS twin, the delivered slice is an ISOLATED SNAPSHOT
+	// (fresh slice, value-copied elements, cloned NativeIDs) so a consumer
+	// may retain and process it asynchronously. GCP runs no post-completion
+	// augmentation pass, so today nothing mutates the originals — but the
+	// snapshot keeps the cross-cloud contract uniform and future-proofs
+	// against a later per-type augmentation.
+	var cbMu sync.Mutex
+	onTypeDiscovered := func(tfType string, resources []imported.ImportedResource) {
+		if args.OnTypeDiscovered == nil {
+			return
+		}
+		snapshot := snapshotForCallback(resources)
+		cbMu.Lock()
+		defer cbMu.Unlock()
+		args.OnTypeDiscovered(tfType, snapshot)
+	}
+
 	stageStart := time.Now()
 	args.Emitter.ServiceStart(gcpServiceSlug, "")
 	results, err := g.searchBuckets(ctx, scope, args, labelsBucket, namePrefixBucket, parentBucket)
@@ -545,7 +573,10 @@ func (g *GCPDiscoverer) DiscoverTypes(ctx context.Context, types []string, args 
 	for _, d := range selected {
 		bucket := byAsset[d.AssetType()]
 		sort.SliceStable(bucket, func(i, j int) bool { return bucket[i].Name < bucket[j].Name })
-		typeFound := 0
+		// Per-type rows for the OnTypeDiscovered callback (reliable#2060):
+		// collect this type's translated resources so we can stream them as
+		// the type completes, in addition to appending to the shared `out`.
+		var typeRows []imported.ImportedResource
 		for _, r := range bucket {
 			imp := d.FromAsset(book, r, g.projectID)
 			// A discoverer that returns a zero-valued ImportedResource
@@ -559,14 +590,16 @@ func (g *GCPDiscoverer) DiscoverTypes(ctx context.Context, types []string, args 
 			}
 			args.Emitter.ItemFound(gcpServiceSlug, r.Location, imp.Identity.Type, imp.Identity.ImportID)
 			out = append(out, imp)
-			typeFound++
+			typeRows = append(typeRows, imp)
 		}
-		// Per-type progress (#699): emit one event per CAI-backed type as
-		// its assets finish translating. Non-CAI types are handled in the
-		// dedicated phase below, so skip them here — that keeps each type
-		// emitting exactly once and the N-of-total count accurate.
+		// Per-type progress (#699) + results (reliable#2060): emit one event
+		// per CAI-backed type as its assets finish translating. Non-CAI types
+		// are handled in the dedicated phase below, so skip them here — that
+		// keeps each type emitting exactly once and the N-of-total count
+		// accurate.
 		if d.ScopeStyle() != ScopeStyleNonCAI {
-			emitTypeDone(d.ResourceType(), typeFound)
+			emitTypeDone(d.ResourceType(), len(typeRows))
+			onTypeDiscovered(d.ResourceType(), typeRows)
 		}
 	}
 	args.Emitter.ServiceFinish(gcpServiceSlug, "", len(out), time.Since(stageStart))
@@ -602,7 +635,7 @@ func (g *GCPDiscoverer) DiscoverTypes(ctx context.Context, types []string, args 
 				args.Emitter.ServiceFinish(nonCAIServiceSlug, "", len(nonCAIResults), time.Since(nonCAIStart))
 				return nil, fmt.Errorf("non-CAI list for %q: %w", d.ResourceType(), err)
 			}
-			typeFound := 0
+			var typeRows []imported.ImportedResource
 			for _, r := range rs {
 				if r.Identity.Type == "" {
 					continue
@@ -614,11 +647,13 @@ func (g *GCPDiscoverer) DiscoverTypes(ctx context.Context, types []string, args 
 				book.add(r.Identity.Address)
 				args.Emitter.ItemFound(nonCAIServiceSlug, r.Identity.Location, r.Identity.Type, r.Identity.ImportID)
 				nonCAIResults = append(nonCAIResults, r)
-				typeFound++
+				typeRows = append(typeRows, r)
 			}
-			// Per-type progress (#699): non-CAI types complete one at a
-			// time after their service-specific lister returns.
-			emitTypeDone(d.ResourceType(), typeFound)
+			// Per-type progress (#699) + results (reliable#2060): non-CAI
+			// types complete one at a time after their service-specific
+			// lister returns.
+			emitTypeDone(d.ResourceType(), len(typeRows))
+			onTypeDiscovered(d.ResourceType(), typeRows)
 		}
 		args.Emitter.ServiceFinish(nonCAIServiceSlug, "", len(nonCAIResults), time.Since(nonCAIStart))
 		out = append(out, nonCAIResults...)
@@ -626,6 +661,28 @@ func (g *GCPDiscoverer) DiscoverTypes(ctx context.Context, types []string, args 
 
 	args.Emitter.StageFinish("discover", len(out), time.Since(stageStart))
 	return out, nil
+}
+
+// snapshotForCallback returns an isolated copy of a per-type result slice
+// for delivery to DiscoverArgs.OnTypeDiscovered — the GCP twin of
+// awsdiscover.snapshotForCallback. It copies every element by value and
+// clones Identity.NativeIDs so a streaming consumer may retain the batch
+// without aliasing the rows in the returned slice. The GCP path runs no
+// post-completion augmentation pass, so this is defensive symmetry rather
+// than a fix for an observed mutation. nil/empty in → non-nil empty out.
+func snapshotForCallback(in []imported.ImportedResource) []imported.ImportedResource {
+	out := make([]imported.ImportedResource, len(in))
+	copy(out, in)
+	for i := range out {
+		if src := out[i].Identity.NativeIDs; src != nil {
+			clone := make(map[string]string, len(src))
+			for k, v := range src {
+				clone[k] = v
+			}
+			out[i].Identity.NativeIDs = clone
+		}
+	}
+	return out
 }
 
 // nonCAIDiscovererHasLister checks each non-CAI discoverer's

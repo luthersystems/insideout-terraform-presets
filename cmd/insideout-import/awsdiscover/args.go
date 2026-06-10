@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/luthersystems/insideout-terraform-presets/cmd/insideout-import/progress"
+	"github.com/luthersystems/insideout-terraform-presets/pkg/composer/imported"
 )
 
 // DiscoverArgs is the per-call input shape consumed by the aggregator's
@@ -37,6 +38,72 @@ type DiscoverArgs struct {
 	TagSelectors []TagSelector
 	AccountID    string
 	Emitter      progress.Emitter
+
+	// OnTypeDiscovered, when non-nil, is invoked by DiscoverTypes exactly
+	// once per requested type AS THAT TYPE COMPLETES its Discover phase,
+	// carrying the type's discovered resources. It is the per-type RESULTS
+	// counterpart to the Emitter's TypeProgressEmitter.TypeDone (which
+	// reports only the type's COUNT). A consumer that needs to STREAM each
+	// type's resources as the scan progresses — rather than waiting for
+	// the whole DiscoverTypes call to return its flattened slice — sets
+	// this callback. The flagship consumer is reliable's streaming discover
+	// path (luthersystems/reliable#2060), which previously fanned out one
+	// single-type DiscoverTypes call per type purely to observe per-type
+	// completion; this hook lets it collapse that fan-out back to a single
+	// call. See reliable#2065 for the re-implementation that motivated this.
+	//
+	// Contract:
+	//
+	//   - INVOKED ONCE PER REQUESTED TYPE. Every type passed to (or
+	//     defaulted by) DiscoverTypes fires exactly one callback, including
+	//     a type whose Discover yielded nothing and a type DOWNGRADED by the
+	//     PerTypeTimeout fence (delivered with an EMPTY, non-nil slice) — so
+	//     a consumer driving a progress denominator off the callbacks still
+	//     advances to 100%.
+	//
+	//   - SERIALIZED. DiscoverTypes serializes callback invocations under an
+	//     internal mutex, so the callback does NOT need its own locking even
+	//     though the per-type Discover calls run concurrently under the
+	//     aggregator's errgroup. Invocations are NOT ordered by selection
+	//     order — they fire in TYPE-COMPLETION order, so a fast type's
+	//     callback can run while a slow type is still in flight (that is the
+	//     point: it enables streaming). The flattened slice DiscoverTypes
+	//     RETURNS is still ordered by selection order, unchanged.
+	//
+	//   - tfType is the Terraform resource type (e.g. "aws_s3_bucket"). The
+	//     delivered slice is an ISOLATED SNAPSHOT — a fresh slice whose
+	//     elements are value copies with a cloned Identity.NativeIDs map — so
+	//     the callback may retain it and process it asynchronously without
+	//     racing the aggregator's later mutation (see next bullet).
+	//
+	//   - DISCOVERY-PHASE results, NOT the fully-resolved terminal set. The
+	//     callback fires as each type finishes its per-type Discover, which is
+	//     BEFORE DiscoverTypes runs its cross-type augmentation passes —
+	//     resolveVPCChildVPCIDs (stamps NativeIDs["vpc_id"] on
+	//     aws_internet_gateway / aws_vpc_dhcp_options) and
+	//     resolveParentAddresses (stamps Identity.ParentAddress). Those passes
+	//     need the FULL cross-type set, so they cannot run per type and only
+	//     execute after every type has completed; they mutate the slice
+	//     DiscoverTypes RETURNS, never the isolated snapshot. A consumer that
+	//     needs the resolved parent linkage (FK closure / parent addresses)
+	//     must therefore read it from the returned slice, not from the
+	//     streamed callbacks. This matches how the streaming consumer already
+	//     treats per-type batches: reliable's resource_batch sink is the live
+	//     "services as we find them" progress feed and explicitly defers
+	//     dependency resolution to the terminal result.
+	//
+	//   - FAILURE SEMANTICS (matches streaming): the callback is NOT invoked
+	//     after DiscoverTypes returns an error. On a fail-fast abort (a
+	//     non-timeout per-type error or parent-ctx cancellation cancels the
+	//     errgroup), types that COMPLETED before the failure MAY already have
+	//     fired their callback — that is inherent to streaming and the
+	//     consumer must tolerate a partial set of callbacks followed by a
+	//     non-nil error. Types that never started, and the failing type
+	//     itself, do NOT fire. No type ever fires more than once.
+	//
+	// Nil OnTypeDiscovered is the back-compat default: zero behavior change
+	// for the CLI and mars, which consume DiscoverTypes today without it.
+	OnTypeDiscovered func(tfType string, resources []imported.ImportedResource)
 
 	// PerTypeTimeout, when > 0, bounds the wall time a single per-type
 	// Discoverer.Discover call may consume inside DiscoverTypes's

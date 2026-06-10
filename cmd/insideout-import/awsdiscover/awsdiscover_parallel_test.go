@@ -71,8 +71,8 @@ func TestDiscoverTypes_RunsServicesConcurrently(t *testing.T) {
 	}
 	t.Parallel()
 
-	if defaultDiscoverTypesConcurrency < 2 {
-		t.Fatalf("defaultDiscoverTypesConcurrency=%d; this test requires >=2 to assert parallel execution", defaultDiscoverTypesConcurrency)
+	if DiscoverTypesConcurrency < 2 {
+		t.Fatalf("DiscoverTypesConcurrency=%d; this test requires >=2 to assert parallel execution", DiscoverTypesConcurrency)
 	}
 
 	var concurrent, maxObserved int32
@@ -190,7 +190,7 @@ func TestDiscoverTypes_ErrorWrapShapeMatchesPreParallel(t *testing.T) {
 }
 
 // TestDiscoverTypes_ConcurrencyCappedAtDefault pins
-// defaultDiscoverTypesConcurrency (= 4 per #632, lowered from 8 in
+// DiscoverTypesConcurrency (= 4 per #632, lowered from 8 in
 // #629) by registering more services than the cap and asserting the
 // observed-concurrent max never exceeds the limit. Catches an
 // accidental g.SetLimit() drop or a future bump that re-introduces
@@ -204,8 +204,8 @@ func TestDiscoverTypes_ConcurrencyCappedAtDefault(t *testing.T) {
 	// Pin the expected cap. If the constant changes intentionally,
 	// update the literal here so the failure mode is obvious.
 	const wantCap = 4
-	if defaultDiscoverTypesConcurrency != wantCap {
-		t.Fatalf("defaultDiscoverTypesConcurrency=%d, want %d — if you intentionally changed the cap, update this test and TestProductionLoadConfig retry pins to match (#632)", defaultDiscoverTypesConcurrency, wantCap)
+	if DiscoverTypesConcurrency != wantCap {
+		t.Fatalf("DiscoverTypesConcurrency=%d, want %d — if you intentionally changed the cap, update this test and TestProductionLoadConfig retry pins to match (#632)", DiscoverTypesConcurrency, wantCap)
 	}
 
 	const services = wantCap * 2 // 8: enough to expose any cap > wantCap
@@ -237,7 +237,7 @@ func TestDiscoverTypes_ConcurrencyCappedAtDefault(t *testing.T) {
 	}
 	got := atomic.LoadInt32(&maxObserved)
 	if int(got) > wantCap {
-		t.Errorf("maxObserved=%d, want <=%d (cap exceeded — g.SetLimit(defaultDiscoverTypesConcurrency) regressed)", got, wantCap)
+		t.Errorf("maxObserved=%d, want <=%d (cap exceeded — g.SetLimit(DiscoverTypesConcurrency) regressed)", got, wantCap)
 	}
 	// And it must have actually saturated the cap — otherwise the
 	// test isn't asserting anything (e.g. accidental serialization
