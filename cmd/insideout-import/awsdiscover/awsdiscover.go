@@ -24,6 +24,7 @@ import (
 	"log"
 	"math/rand"
 	"sort"
+	"sync"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -579,6 +580,31 @@ func (a *AWSDiscoverer) DiscoverTypes(ctx context.Context, types []string, args 
 		}
 	}
 
+	// Per-type RESULTS callback (#739 follow-up / reliable#2060). When the
+	// caller sets args.OnTypeDiscovered, deliver each type's discovered
+	// resources as that type completes — the streaming counterpart to the
+	// count-only emitTypeDone above. The per-type Discover calls run
+	// concurrently under the errgroup below, so onTypeDiscovered SERIALIZES
+	// invocations under cbMu: the documented contract promises consumers
+	// don't need their own locking. A timed-out (downgraded) type is
+	// delivered with an empty, non-nil slice so the consumer's progress
+	// denominator still advances. A nil callback short-circuits before the
+	// lock so the back-compat path takes zero overhead.
+	var cbMu sync.Mutex
+	onTypeDiscovered := func(tfType string, resources []imported.ImportedResource) {
+		if args.OnTypeDiscovered == nil {
+			return
+		}
+		if resources == nil {
+			// Normalize the downgraded/empty case to a non-nil empty slice
+			// so consumers can rely on a stable "delivered, zero rows" shape.
+			resources = []imported.ImportedResource{}
+		}
+		cbMu.Lock()
+		defer cbMu.Unlock()
+		args.OnTypeDiscovered(tfType, resources)
+	}
+
 	g, gctx := errgroup.WithContext(ctx)
 	g.SetLimit(DiscoverTypesConcurrency)
 	// Per-goroutine startup jitter (#632). Without this, all N
@@ -625,6 +651,19 @@ func (a *AWSDiscoverer) DiscoverTypes(ctx context.Context, types []string, args 
 			// Non-timeout errors still propagate through the errgroup
 			// so a genuine API failure (Throttling, invalid creds)
 			// continues to fail-fast as before.
+			//
+			// Fence scope (reliable#2065 audit): the ONLY per-type work in
+			// this goroutine is d.Discover(callCtx, args), so wrapping that
+			// single call covers the type's entire unit of work. The two
+			// SDK-backed augmentation passes — resolveVPCChildVPCIDs and
+			// resolveParentAddresses — run ONCE over the fully-assembled set
+			// AFTER g.Wait() (below), not per type, and the RGT prefetch runs
+			// ONCE up front before the fan-out. None of them is per-type, so
+			// there is nothing per-type sitting outside this fence to widen
+			// it over. (Downstream reliable's old per-call fan-out needed an
+			// extra outer fence only because IT re-ran the prefetch + VPC pass
+			// for every single-type call; that is an artifact of fanning out
+			// single-type calls, not a gap here.)
 			callCtx := gctx
 			var cancel context.CancelFunc
 			if args.PerTypeTimeout > 0 {
@@ -650,14 +689,18 @@ func (a *AWSDiscoverer) DiscoverTypes(ctx context.Context, types []string, args 
 					results[i] = nil
 					// This type completed (with a partial / empty
 					// result); count it toward N-of-total so the
-					// progress denominator still reaches the total.
+					// progress denominator still reaches the total, and
+					// stream an empty result slice to the per-type
+					// RESULTS callback so its denominator advances too.
 					emitTypeDone(d.ResourceType(), 0)
+					onTypeDiscovered(d.ResourceType(), nil)
 					return nil
 				}
 				return fmt.Errorf("%s: %w", d.ResourceType(), err)
 			}
 			results[i] = entries
 			emitTypeDone(d.ResourceType(), len(entries))
+			onTypeDiscovered(d.ResourceType(), entries)
 			return nil
 		})
 	}
