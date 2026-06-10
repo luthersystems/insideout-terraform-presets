@@ -59,6 +59,13 @@ var AWSIAMActions = map[ComponentKey][]string{
 	// create. Specific create permissions catch the fail-fast surface
 	// before terraform hits AWS.
 	KeyAWSSageMaker: {
+		// CloudWatch alarms (#761 review MED-2). observability.tf creates the
+		// invocation-5XX + model-latency alarms by default (enable_observability
+		// defaults true) whenever inference is on, so the deploy principal needs
+		// PutMetricAlarm to create them and DeleteAlarms so `terraform destroy`
+		// can tear them down. Mirrors KeyAWSCloudWatchMonitoring's PutMetricAlarm.
+		"cloudwatch:DeleteAlarms",
+		"cloudwatch:PutMetricAlarm",
 		"iam:AttachRolePolicy",
 		"iam:CreateRole",
 		"iam:PassRole",
