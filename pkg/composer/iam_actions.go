@@ -69,6 +69,14 @@ var AWSIAMActions = map[ComponentKey][]string{
 		"s3:PutEncryptionConfiguration",
 		"sagemaker:CreateDomain",
 		"sagemaker:CreateUserProfile",
+		// Real-time inference endpoint (#761). Only exercised when
+		// enable_inference is set, but listed unconditionally so the
+		// pre-deploy SimulatePrincipalPolicy check (ui-core #192) confirms
+		// the deploy principal can create the model / endpoint-config /
+		// endpoint trio before a deploy attempts it.
+		"sagemaker:CreateModel",
+		"sagemaker:CreateEndpointConfig",
+		"sagemaker:CreateEndpoint",
 	},
 	KeyAWSALB:                  {"elasticloadbalancing:CreateLoadBalancer", "elasticloadbalancing:CreateTargetGroup"},
 	KeyAWSCloudfront:           {"cloudfront:CreateDistribution"},

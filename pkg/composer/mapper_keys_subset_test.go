@@ -190,6 +190,23 @@ func kitchenSinkConfig() *Config {
 		Instruction     string `json:"instruction,omitempty"`
 		AgentName       string `json:"agentName,omitempty"`
 	}{FoundationModel: "anthropic.claude-3-5-sonnet-20240620-v1:0", Instruction: "You are a helpful assistant that answers questions about the customer's documents.", AgentName: "support-agent"}
+	// AWSSageMaker exercises both the #615 Studio fields and the #761
+	// inference fields so the keys-subset gate confirms every emitted tfvar
+	// (network_mode … enable_inference / model_image / model_data_url /
+	// endpoint_instance_type) is a declared aws/sagemaker variable. Values
+	// are internally consistent with the preset's validations: EnableInference
+	// pairs with a non-empty model_image, an s3:// model_data_url, and an ml.*
+	// endpoint_instance_type so the config would also pass a real plan.
+	cfg.AWSSageMaker = &AWSSageMakerConfig{
+		NetworkMode:               "VpcOnly",
+		WorkspaceBucket:           "kitchen-sink-ml-bucket",
+		StudioUsers:               []string{"alice"},
+		SageMakerManagedPolicyARN: "arn:aws:iam::123456789012:policy/MyScopedSagemaker",
+		EnableInference:           &t,
+		ModelImage:                "123456789012.dkr.ecr.us-east-1.amazonaws.com/llm-serve:latest",
+		ModelDataURL:              "s3://kitchen-sink-ml-bucket/model.tar.gz",
+		EndpointInstanceType:      "ml.g5.xlarge",
+	}
 	cfg.AWSRoute53 = &struct {
 		DomainName   string   `json:"domainName,omitempty"`
 		CreateZone   *bool    `json:"createZone,omitempty"`

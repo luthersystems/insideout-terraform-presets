@@ -558,6 +558,18 @@ type AWSSageMakerConfig struct {
 	WorkspaceBucketForceDestroy *bool    `json:"workspaceBucketForceDestroy,omitempty"`
 	StudioUsers                 []string `json:"studioUsers,omitempty"`
 	SageMakerManagedPolicyARN   string   `json:"sagemakerManagedPolicyArn,omitempty"`
+
+	// Real-time inference endpoint (#761). When EnableInference is set, the
+	// preset adds an aws_sagemaker_model + endpoint-configuration + endpoint
+	// trio hosting ModelImage. The Studio domain stays unconditional.
+	// ModelImage is required (validated non-empty in the preset) when
+	// inference is on; ModelDataURL is optional (images may bundle weights).
+	// Unset / nil fields defer to the preset's variables.tf defaults, same
+	// partial-config contract as every other field above.
+	EnableInference      *bool  `json:"enableInference,omitempty"`
+	ModelImage           string `json:"modelImage,omitempty"`
+	ModelDataURL         string `json:"modelDataUrl,omitempty"`
+	EndpointInstanceType string `json:"endpointInstanceType,omitempty"`
 }
 
 // AWSCodeBuildConfig is the caller-facing config for the aws/codebuild

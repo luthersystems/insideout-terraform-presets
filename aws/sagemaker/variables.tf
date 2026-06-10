@@ -113,6 +113,49 @@ variable "studio_users" {
 }
 
 # -----------------------------------------------------------------------------
+# Real-time inference endpoint (#761) — gated on enable_inference. When off,
+# the preset stays Studio-only (the #615 behavior); when on, it adds a
+# model + endpoint-configuration + endpoint trio hosting a servable container.
+# -----------------------------------------------------------------------------
+
+variable "enable_inference" {
+  description = "When true, provision a real-time inference slice (aws_sagemaker_model + aws_sagemaker_endpoint_configuration + aws_sagemaker_endpoint) hosting model_image. When false (default) the preset stays Studio-only and none of the inference resources are created. The Studio domain + execution role are always provisioned regardless."
+  type        = bool
+  default     = false
+}
+
+variable "model_image" {
+  description = "ECR / SageMaker container image URI for the model's primary container (e.g. a Deep Learning Container or an LLM serving image). Required (non-empty) when enable_inference is true — SageMaker cannot host a model without a servable container. Ignored when enable_inference is false."
+  type        = string
+  default     = ""
+}
+
+variable "model_data_url" {
+  description = "Optional S3 URI to the model artifact tarball (model.tar.gz) loaded into the container at startup. Leave empty for images that bundle their own weights (many LLM serving images pull from the hub at runtime). Only consumed when enable_inference is true."
+  type        = string
+  default     = ""
+
+  validation {
+    condition     = var.model_data_url == "" ? true : can(regex("^s3://", var.model_data_url))
+    error_message = "model_data_url must be an s3:// URI (or empty to let the container supply its own weights)."
+  }
+}
+
+variable "endpoint_instance_type" {
+  description = "Instance type for the real-time endpoint's production variant (e.g. ml.m5.xlarge, ml.g5.xlarge for GPU LLM serving). Must be an ml.* family — SageMaker hosting only accepts ml-prefixed instance types. Only consumed when enable_inference is true."
+  type        = string
+  default     = "ml.m5.xlarge"
+
+  validation {
+    # SageMaker hosting instance types are always ml.<family>.<size>. A bare
+    # EC2 type (m5.xlarge) or a typo is rejected at plan so callers don't
+    # discover it only when the endpoint create fails at apply.
+    condition     = can(regex("^ml\\.[a-z0-9]+\\.[a-z0-9]+$", var.endpoint_instance_type))
+    error_message = "endpoint_instance_type must be a SageMaker ml.* hosting instance type (e.g. ml.m5.xlarge, ml.g5.xlarge)."
+  }
+}
+
+# -----------------------------------------------------------------------------
 # IAM policy override
 # -----------------------------------------------------------------------------
 
