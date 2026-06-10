@@ -14,6 +14,13 @@ import (
 // resources Terraform's import block expects the remote ID to be suffixed with
 // "@<region>"; using the bare ID can make the provider search the wrong
 // regional endpoint and report a live object as missing.
+//
+// aws_s3_bucket is NOT exempt (the #676 bare-ID carve-out is gone): provider
+// v6.50.0 stopped resolving a bare bucket name across regions, so a bucket
+// living outside the provider's region fails import with "Cannot import
+// non-existent remote object". regionForImport prefers the enriched true
+// bucket region (Attrs/Attributes — see d4b01e0), so the suffix is reliable
+// even though discovery scans tag buckets by scan region (#1860).
 func ForResource(ir imported.ImportedResource) string {
 	id := strings.TrimSpace(ir.Identity.ImportID)
 	if id == "" {
@@ -31,9 +38,6 @@ func ForResource(ir imported.ImportedResource) string {
 }
 
 func needsAWSRegionSuffix(ir imported.ImportedResource, tfType string) bool {
-	if usesBareImportID(tfType) {
-		return false
-	}
 	cloud := strings.ToLower(strings.TrimSpace(ir.Identity.Cloud))
 	if cloud != "" && cloud != "aws" {
 		return false
@@ -47,15 +51,6 @@ func needsAWSRegionSuffix(ir imported.ImportedResource, tfType string) bool {
 	}
 	field, ok := schema["region"]
 	return ok && field.Configurable()
-}
-
-func usesBareImportID(tfType string) bool {
-	switch tfType {
-	case "aws_s3_bucket":
-		return true
-	default:
-		return false
-	}
 }
 
 func terraformType(id imported.ResourceIdentity) string {
