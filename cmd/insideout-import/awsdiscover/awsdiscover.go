@@ -14,7 +14,7 @@
 // can mock the SDK boundary without depending on real AWS credentials.
 // The aggregator (AWSDiscoverer) wires real SDK clients in production and
 // fans out to the registered per-type discoverers concurrently under a
-// bounded errgroup (defaultDiscoverTypesConcurrency).
+// bounded errgroup (DiscoverTypesConcurrency).
 package awsdiscover
 
 import (
@@ -34,11 +34,23 @@ import (
 	"github.com/luthersystems/insideout-terraform-presets/pkg/composer/imported"
 )
 
-// defaultDiscoverTypesConcurrency caps the number of per-service
-// discoverers DiscoverTypes runs concurrently. Each selected
-// Discoverer already has its own internal bounded fan-out for per-item
-// SDK calls (tag fetches, GetResource walks); this constant bounds the
-// service-level layer on top.
+// DiscoverTypesConcurrency caps the number of per-service discoverers
+// DiscoverTypes runs concurrently — the TYPE-level fan-out limit. Each
+// selected Discoverer already has its own internal bounded fan-out for
+// per-item SDK calls (tag fetches, GetResource walks); this constant
+// bounds the service-level layer on top of that.
+//
+// NOT to be confused with DefaultMaxConcurrency (= 10), which is the
+// PER-RESOURCE GetResource / tag-fetch fan-out cap inside a single
+// discoverer. The two govern different layers: DiscoverTypesConcurrency
+// is "how many resource TYPES discover at once", DefaultMaxConcurrency
+// is "how many per-item SDK calls one type issues at once". A downstream
+// consumer that fans out single-type DiscoverTypes calls itself (e.g.
+// reliable's streaming discover path, which issues one call per type to
+// receive per-type results as they land) should bound its own fan-out by
+// THIS constant, not DefaultMaxConcurrency — using the per-resource cap
+// there would 2.5× the intended type-level control-plane call rate (the
+// confusion that produced reliable#2065 codex round 2).
 //
 // Originally 8 (#629); lowered to 4 (#632) after staging hit a
 // ThrottlingException from CloudControl ListResources during the
@@ -48,7 +60,7 @@ import (
 // without multiplying account-wide QPS by the registered-type count.
 // See also: defaultDiscoverStartupJitterMax for the per-goroutine
 // jitter applied before the first AWS call.
-const defaultDiscoverTypesConcurrency = 4
+const DiscoverTypesConcurrency = 4
 
 // defaultDiscoverStartupJitterMax bounds the random sleep applied
 // before each per-service goroutine's first AWS call. Without
@@ -480,7 +492,7 @@ func (a *AWSDiscoverer) DiscoverByID(ctx context.Context, tfType, id, region, ac
 
 // DiscoverTypes runs the selected per-service discoverers concurrently
 // under a bounded errgroup (default concurrency:
-// defaultDiscoverTypesConcurrency). Per-item concurrency already lives
+// DiscoverTypesConcurrency). Per-item concurrency already lives
 // inside each discoverer (tag-fanout, sub-resource walks); adding
 // service-level fan-out shortens wall time for multi-service imports
 // without changing per-service throttle behavior. Unknown type names
@@ -568,7 +580,7 @@ func (a *AWSDiscoverer) DiscoverTypes(ctx context.Context, types []string, args 
 	}
 
 	g, gctx := errgroup.WithContext(ctx)
-	g.SetLimit(defaultDiscoverTypesConcurrency)
+	g.SetLimit(DiscoverTypesConcurrency)
 	// Per-goroutine startup jitter (#632). Without this, all N
 	// service goroutines unblock at t=0 and their first
 	// ListResources / Describe* calls land in the same burst,
