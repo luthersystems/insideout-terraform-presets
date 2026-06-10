@@ -57,6 +57,15 @@ run "sagemaker_minimum_inputs" {
     error_message = "app_network_access_type should default to PublicInternetOnly when network_mode is unset (AWS-managed egress)."
   }
 
+  # Home-EFS retention must default to Delete so domain teardown removes the
+  # auto-provisioned EFS + its mount-target ENIs — otherwise those ENIs wedge
+  # VPC subnet deletion and orphan the EFS (caught live on the #761 integration
+  # run; the AWS default of Retain wedges teardown for ~20min then errors).
+  assert {
+    condition     = aws_sagemaker_domain.studio.retention_policy[0].home_efs_file_system == "Delete"
+    error_message = "home_efs_file_system retention must default to Delete so the domain's EFS is removed on destroy and the VPC can be torn down cleanly."
+  }
+
   assert {
     condition     = aws_sagemaker_domain.studio.tags["Project"] == "test"
     error_message = "Project tag must be set on the SageMaker domain so the InsideOut inspector's exact-match filter sees it (CLAUDE.md issue #81)."
@@ -661,6 +670,38 @@ run "inference_endpoint" {
   assert {
     condition     = aws_cloudwatch_metric_alarm.model_latency_high["0"].threshold == 5000000
     error_message = "Latency alarm default threshold must be 5_000_000µs (5s) (#761 P1-6)."
+  }
+}
+
+# model_environment flows into the model's primary_container.environment so a
+# serving image can be configured (e.g. an AWS HuggingFace DLC reads HF_MODEL_ID
+# + HF_TASK to pick the hub model + task). Companion case: an empty
+# model_environment (the default) leaves the attribute null so the env-less
+# Studio-image path stays clean — asserted in inference_endpoint above by the
+# absence of any model_environment var.
+run "inference_model_environment_flows_to_container" {
+  command = plan
+
+  variables {
+    project          = "test"
+    vpc_id           = "vpc-12345"
+    subnet_ids       = ["subnet-aaa"]
+    enable_inference = true
+    model_image      = "763104351884.dkr.ecr.us-east-1.amazonaws.com/huggingface-pytorch-inference:latest"
+    model_environment = {
+      HF_MODEL_ID = "sshleifer/tiny-distilbert-base-cased-distilled-squad"
+      HF_TASK     = "question-answering"
+    }
+  }
+
+  assert {
+    condition     = aws_sagemaker_model.inference[0].primary_container[0].environment["HF_MODEL_ID"] == "sshleifer/tiny-distilbert-base-cased-distilled-squad"
+    error_message = "model_environment must flow into the model's primary_container.environment (HF_MODEL_ID)."
+  }
+
+  assert {
+    condition     = aws_sagemaker_model.inference[0].primary_container[0].environment["HF_TASK"] == "question-answering"
+    error_message = "model_environment must flow into the model's primary_container.environment (HF_TASK)."
   }
 }
 

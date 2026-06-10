@@ -12,6 +12,20 @@
 #     -var 'model_image=<ECR_OR_SAGEMAKER_IMAGE_URI>' \
 #     -var 'model_data_url=s3://<bucket>/<key>/model.tar.gz'
 #
+# PROVEN GREEN against a real account (cust3, us-east-1) with a CPU HuggingFace
+# PyTorch inference DLC and no model_data_url (the image hub-pulls its weights):
+#
+#   IMG=763104351884.dkr.ecr.us-east-1.amazonaws.com/huggingface-pytorch-inference:2.6.0-transformers4.51.3-cpu-py312-ubuntu22.04-v2.1
+#   AWS_REGION=us-east-1 terraform test \
+#     -filter=tests/integration.tftest.hcl \
+#     -var "model_image=$IMG" \
+#     -var 'model_environment={HF_MODEL_ID="sshleifer/tiny-distilbert-base-cased-distilled-squad",HF_TASK="question-answering"}'
+#
+# model_environment is a root module variable, so passing it via -var flows
+# straight into the sagemaker_inference_apply run (no per-run plumbing needed).
+# The HF DLC reads HF_MODEL_ID + HF_TASK from primary_container.environment to
+# pick the hub model + serving task. Endpoint reached InService in ~5min.
+#
 # REQUIRED OPERATOR INPUT — model_image:
 #   SageMaker hosting needs a *servable* container that implements the
 #   /ping + /invocations contract (a SageMaker DLC, a HuggingFace TGI/LMI

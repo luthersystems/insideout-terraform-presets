@@ -1361,6 +1361,16 @@ func (m DefaultMapper) BuildModuleValues(
 			if strings.TrimSpace(sm.EndpointInstanceType) != "" {
 				vals["endpoint_instance_type"] = strings.TrimSpace(sm.EndpointInstanceType)
 			}
+			// Container env vars (#761). Only emit when the caller supplied
+			// entries so the preset's empty-map default wins otherwise — same
+			// partial-config contract, mirroring the apprunner EnvVars path.
+			if len(sm.ModelEnvironment) > 0 {
+				env := make(map[string]any, len(sm.ModelEnvironment))
+				for k, v := range sm.ModelEnvironment {
+					env[k] = v
+				}
+				vals["model_environment"] = env
+			}
 		}
 
 	case KeyAWSCodeBuild:

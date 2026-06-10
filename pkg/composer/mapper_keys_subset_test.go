@@ -206,6 +206,7 @@ func kitchenSinkConfig() *Config {
 		ModelImage:                "123456789012.dkr.ecr.us-east-1.amazonaws.com/llm-serve:latest",
 		ModelDataURL:              "s3://kitchen-sink-ml-bucket/model.tar.gz",
 		EndpointInstanceType:      "ml.g5.xlarge",
+		ModelEnvironment:          map[string]string{"HF_MODEL_ID": "sshleifer/tiny-distilbert-base-cased-distilled-squad", "HF_TASK": "question-answering"},
 	}
 	cfg.AWSRoute53 = &struct {
 		DomainName   string   `json:"domainName,omitempty"`

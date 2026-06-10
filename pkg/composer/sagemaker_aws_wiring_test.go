@@ -85,6 +85,7 @@ func TestMapper_AWSSageMaker_CallerSuppliedConfig(t *testing.T) {
 			ModelImage:                  "123456789012.dkr.ecr.us-east-1.amazonaws.com/llm:latest",
 			ModelDataURL:                "s3://my-bucket/model.tar.gz",
 			EndpointInstanceType:        "ml.g5.xlarge",
+			ModelEnvironment:            map[string]string{"HF_MODEL_ID": "org/model", "HF_TASK": "question-answering"},
 		},
 	}
 	m := DefaultMapper{}
@@ -102,6 +103,7 @@ func TestMapper_AWSSageMaker_CallerSuppliedConfig(t *testing.T) {
 	require.Equal(t, "123456789012.dkr.ecr.us-east-1.amazonaws.com/llm:latest", vals["model_image"])
 	require.Equal(t, "s3://my-bucket/model.tar.gz", vals["model_data_url"])
 	require.Equal(t, "ml.g5.xlarge", vals["endpoint_instance_type"])
+	require.Equal(t, map[string]any{"HF_MODEL_ID": "org/model", "HF_TASK": "question-answering"}, vals["model_environment"])
 }
 
 // TestMapper_AWSSageMaker_InferencePartialConfig pins that the inference
@@ -180,7 +182,7 @@ func TestMapper_AWSSageMaker_PartialConfig(t *testing.T) {
 	require.Equal(t, "vpc-00000000preview", vals["vpc_id"])
 	require.Equal(t, []any{"subnet-00000000preview"}, vals["subnet_ids"])
 
-	for _, key := range []string{"workspace_bucket", "workspace_bucket_force_destroy", "studio_users", "sagemaker_managed_policy_arn", "enable_inference", "model_image", "model_data_url", "endpoint_instance_type"} {
+	for _, key := range []string{"workspace_bucket", "workspace_bucket_force_destroy", "studio_users", "sagemaker_managed_policy_arn", "enable_inference", "model_image", "model_data_url", "endpoint_instance_type", "model_environment"} {
 		_, has := vals[key]
 		require.Falsef(t, has,
 			"mapper must NOT emit %q when caller left it zero — module default must win",

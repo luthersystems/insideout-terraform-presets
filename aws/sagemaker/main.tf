@@ -34,6 +34,10 @@ terraform {
       source  = "hashicorp/random"
       version = ">= 3.5"
     }
+    time = {
+      source  = "hashicorp/time"
+      version = ">= 0.9"
+    }
   }
 }
 
@@ -274,6 +278,23 @@ resource "aws_sagemaker_domain" "studio" {
     execution_role = aws_iam_role.studio_execution.arn
   }
 
+  # Home-EFS retention on domain destroy. SageMaker auto-provisions an EFS
+  # filesystem (+ a mount target per subnet) for every Studio domain, tagged
+  # ManagedByAmazonSageMakerResource. The provider's *default* is Retain, so
+  # destroying the domain leaves that EFS — and its mount-target ENIs — alive
+  # in the caller's VPC. Those ENIs then block the VPC's subnet deletion, so a
+  # `terraform destroy` of a stack that owns both the domain and the VPC
+  # (e.g. the composer wiring KeyAWSSageMaker → KeyAWSVPC, and the integration
+  # test) wedges for ~20min on the subnets and then errors, orphaning the EFS +
+  # VPC. Defaulting to "Delete" makes domain teardown remove the EFS so the
+  # ENIs release and the VPC can be destroyed cleanly. Callers who need to keep
+  # Studio home directories across a domain replace can set
+  # var.home_efs_retention = "Retain" (the AWS default) and clean the EFS
+  # out-of-band.
+  retention_policy {
+    home_efs_file_system = var.home_efs_retention
+  }
+
   tags = local.tags
 }
 
@@ -375,6 +396,14 @@ resource "aws_sagemaker_model" "inference" {
     # an empty ModelDataUrl, which AWS rejects. Images that pull their own
     # weights leave this unset.
     model_data_url = trimspace(var.model_data_url) != "" ? var.model_data_url : null
+    # Container env vars. `environment` is a map(string) attribute on
+    # primary_container (not a nested block — verified via
+    # `terraform providers schema -json`). Only set it when the caller supplied
+    # vars; null leaves the container's own defaults untouched and keeps the
+    # plan clean for the env-less Studio-image case. This is how the serving
+    # image is configured — e.g. an AWS HuggingFace DLC reads HF_MODEL_ID +
+    # HF_TASK from here to pick the hub model and serving task.
+    environment = length(var.model_environment) > 0 ? var.model_environment : null
   }
 
   tags = merge(local.tags, { Name = "${var.project}-model" })
@@ -408,6 +437,37 @@ resource "aws_sagemaker_endpoint_configuration" "inference" {
   tags = merge(local.tags, { Name = "${var.project}-endpoint-config" })
 }
 
+# IAM eventual-consistency gate (#761 — found live on the cust3 integration
+# run). depends_on alone is NOT enough: it orders the endpoint *after* the inline
+# role policies are created, but IAM is eventually consistent — the policies take
+# several seconds to propagate to SageMaker's control plane after the API returns.
+# CreateEndpoint fires within ~1s of the policies being written, before that
+# propagation completes, so SageMaker's first validation of the execution role
+# fails with a transient ValidationException. The provider's create wraps
+# CreateEndpoint in a retry for exactly that transient class — but the first
+# (failed-looking) call has already registered the endpoint, so the provider's
+# retry re-issues CreateEndpoint and hits `Cannot create already existing
+# endpoint`, surfacing as a hard failure that masks the underlying IAM race.
+# This bit BOTH live runs (4-8min in, endpoint never reaching InService). A short
+# sleep between the role grants and the endpoint lets IAM propagate first, turning
+# a deterministically-failing first apply into a reliable one. Mirrors
+# aws/bedrock's time_sleep.kb_iam_propagation (same IAM-propagation race on a
+# control-plane create).
+resource "time_sleep" "inference_iam_propagation" {
+  count = local.enable_inference ? 1 : 0
+
+  create_duration = var.inference_iam_propagation_delay
+
+  # Gate on every grant the endpoint's container relies on, so the sleep starts
+  # only once they're all written. inference_model_data is count-gated (absent
+  # when no model_data_url); depends_on tolerates a zero-instance resource.
+  depends_on = [
+    aws_iam_role_policy.inference_ecr_pull,
+    aws_iam_role_policy.inference_model_data,
+    aws_iam_role_policy_attachment.studio_managed,
+  ]
+}
+
 # Endpoint create blocks until the production variant reaches InService —
 # pulling the image + (optionally) the model artifact and warming the container
 # can take several minutes, longer for large GPU LLM images. The aws provider
@@ -421,26 +481,18 @@ resource "aws_sagemaker_endpoint" "inference" {
   name                 = "${var.project}-endpoint"
   endpoint_config_name = aws_sagemaker_endpoint_configuration.inference[0].name
 
-  # IAM race guard (#761 review HIGH-1). The endpoint create is where AWS
-  # actually instantiates the container: it pulls the model image from ECR
-  # and (when set) reads model.tar.gz from S3 *as the execution role*. The
-  # aws_sagemaker_model resource above only registers metadata (image URI +
-  # role ARN) — no pull happens there — so the real consumer of these grants
-  # is the endpoint. terraform's implicit graph does NOT order the endpoint
-  # after the inline role policies (the endpoint references the model →
-  # config, not the policies), so without an explicit depends_on the endpoint
-  # create can start before the execution role can pull the image / read the
-  # artifact, intermittently failing the InService rollout. The managed-policy
-  # attachment is included for the same reason (AmazonSageMakerFullAccess
-  # carries the ECR/S3 permissions a scoped override might rely on).
-  #
-  # inference_model_data is count-gated (only present when model_data_url is
-  # set); depends_on tolerates a resource that resolves to zero instances, so
-  # listing it unconditionally is safe whether or not the artifact grant exists.
+  # IAM race guard (#761 review HIGH-1, hardened after the live cust3 run). The
+  # endpoint create is where AWS actually instantiates the container: it pulls
+  # the model image from ECR and (when set) reads model.tar.gz from S3 *as the
+  # execution role*. The aws_sagemaker_model resource above only registers
+  # metadata (image URI + role ARN) — no pull happens there — so the real
+  # consumer of these grants is the endpoint. We depend on
+  # time_sleep.inference_iam_propagation (not the policies directly) so the
+  # endpoint create waits for BOTH the grants to exist AND IAM to propagate them
+  # to SageMaker's control plane — see the time_sleep comment above for why
+  # ordering-only was insufficient and failed both live runs.
   depends_on = [
-    aws_iam_role_policy.inference_ecr_pull,
-    aws_iam_role_policy.inference_model_data,
-    aws_iam_role_policy_attachment.studio_managed,
+    time_sleep.inference_iam_propagation,
   ]
 
   tags = merge(local.tags, { Name = "${var.project}-endpoint" })

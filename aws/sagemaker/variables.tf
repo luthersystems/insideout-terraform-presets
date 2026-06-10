@@ -62,6 +62,17 @@ variable "subnet_ids" {
   }
 }
 
+variable "home_efs_retention" {
+  description = "What to do with the Studio domain's auto-provisioned home EFS filesystem when the domain is destroyed. `Delete` (default) removes the EFS so its mount-target ENIs release and the enclosing VPC can be torn down cleanly — without this, AWS's default `Retain` orphans the EFS and its ENIs, which wedge VPC subnet deletion for ~20min and then fail. Set `Retain` to keep Studio home directories across a domain replace (you must then clean the EFS out-of-band)."
+  type        = string
+  default     = "Delete"
+
+  validation {
+    condition     = contains(["Delete", "Retain"], var.home_efs_retention)
+    error_message = "home_efs_retention must be one of: Delete, Retain."
+  }
+}
+
 variable "network_mode" {
   description = "SageMaker Studio app network access type. `PublicInternetOnly` (default) keeps egress through AWS-managed networking; `VpcOnly` forces all egress through the customer VPC (requires NAT or VPC endpoints for the SageMaker control plane)."
   type        = string
@@ -143,6 +154,24 @@ variable "model_data_url" {
     # `s3://bucket/` (bucket but no object) is also rejected.
     condition     = var.model_data_url == "" ? true : can(regex("^s3://[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]/.+", var.model_data_url))
     error_message = "model_data_url must be a full s3://<bucket>/<key> URI pointing at the model artifact (or empty to let the container supply its own weights). A bare s3:// or bucket-only s3://<bucket>/ is rejected."
+  }
+}
+
+variable "model_environment" {
+  description = "Environment variables injected into the model's primary container (a map of name → value). Threads straight through to the SageMaker `primary_container.environment`. Use it to configure the serving image — e.g. an AWS HuggingFace DLC needs HF_MODEL_ID + HF_TASK to know which hub model to pull and how to serve it; an LMI/TGI image takes its own model/engine vars here. Empty (default) leaves the container's own defaults in place. Only consumed when enable_inference is true. Not marked sensitive — these are serving knobs, not secrets; pass real secrets via a secrets manager, not container env."
+  type        = map(string)
+  default     = {}
+  sensitive   = false
+}
+
+variable "inference_iam_propagation_delay" {
+  description = "How long to wait after writing the endpoint's execution-role grants before creating the endpoint, to let IAM propagate to SageMaker's control plane. Without this delay CreateEndpoint fires before the role is validated, and the provider's create-retry then collides on `Cannot create already existing endpoint` (observed on a real-account run). A Go duration string (e.g. `30s`, `1m`). Only consumed when enable_inference is true."
+  type        = string
+  default     = "30s"
+
+  validation {
+    condition     = can(regex("^[0-9]+(s|m|h)$", var.inference_iam_propagation_delay))
+    error_message = "inference_iam_propagation_delay must be a Go duration like 30s, 1m, or 1h."
   }
 }
 
