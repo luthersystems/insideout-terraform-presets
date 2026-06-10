@@ -73,6 +73,7 @@ EXEMPT_PROJECT_PIN_GCP=(
   google_service_networking_connection  # parent: network (gcp/cloudsql/main.tf:41)
   google_storage_bucket_iam_member      # parent: bucket (gcp/cloud_logging/main.tf:60)
   google_storage_bucket_object          # parent: bucket (gcp/cloud_functions/main.tf:56)
+  google_vertex_ai_index_endpoint_deployed_index  # parent: index_endpoint (gcp/vertex_ai/main.tf; no project attr in provider schema)
 )
 
 exempt_pattern="^($(IFS='|'; echo "${EXEMPT_PROJECT_PIN_GCP[*]}"))$"
