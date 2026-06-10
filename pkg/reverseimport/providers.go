@@ -28,7 +28,7 @@ type importedProviderRenderOptions struct {
 	GCPProjectID   string
 	AWSEndpointURL string
 	ProvidersUsed  map[string]bool
-	AWSAuth        awsProviderAuth
+	AWSAuth        AWSProviderAuth
 
 	// AWSRegions is the sorted set of distinct AWS regions across the
 	// imported resource set (composer.ImportedAWSRegions). When it holds
@@ -120,7 +120,7 @@ func appendAWSImportedProvider(body *hclwrite.Body, alias, region string, opts i
 	appendAWSAssumeRole(prov.Body(), opts.AWSAuth)
 }
 
-func appendAWSAssumeRole(body *hclwrite.Body, auth awsProviderAuth) {
+func appendAWSAssumeRole(body *hclwrite.Body, auth AWSProviderAuth) {
 	if strings.TrimSpace(auth.RoleARN) == "" {
 		return
 	}

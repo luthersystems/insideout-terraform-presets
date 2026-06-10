@@ -1,6 +1,68 @@
 package awsdiscover
 
-import "strings"
+import (
+	"strings"
+	"sync"
+)
+
+// cfnTypeByTF lazily indexes the Terraform-type → CloudFormation-type map from
+// the production discoverer registries (cloudControlTypeConfigs and the SDK-only
+// sub-resource configs). Built once on first use so the index reflects whatever
+// the registries declare without a second source of truth.
+var cfnTypeByTF = sync.OnceValue(func() map[string]string {
+	out := make(map[string]string)
+	for _, cfg := range cloudControlTypeConfigs {
+		if cfg.TFType != "" && cfg.CloudFormationType != "" {
+			out[cfg.TFType] = cfg.CloudFormationType
+		}
+	}
+	// SDK-only sub-resource types (sdkOnlySubresourceTypeConfigs) are
+	// intentionally excluded: they have no CloudFormation type of their own
+	// (they record their PARENT's CFN type), and this index answers "what CFN
+	// type backs this Terraform type" for Cloud Control resources only.
+	return out
+})
+
+// CloudFormationTypeForTF returns the CloudFormation type that backs the given
+// Terraform type, and true when the type is a Cloud Control resource in the
+// production registry. It exists so closure-scoping callers (reversedisco) can
+// key a parent-scope by the parent's CloudFormation type without duplicating
+// the presets-owned TF↔CFN vocabulary. Returns ("", false) for types not routed
+// through Cloud Control (hand-rolled SDK discoverers, SDK-only sub-resources).
+func CloudFormationTypeForTF(tfType string) (string, bool) {
+	cfn, ok := cfnTypeByTF()[strings.TrimSpace(tfType)]
+	return cfn, ok
+}
+
+// identifierSharedChildCFNTypes maps a parent CloudFormation type to the child
+// Cloud Control types whose CC primary identifier IS the parent's identifier
+// (a 1:1, identifier-sharing child). For these, a parent-scope keyed by the
+// parent's identifier also scopes the child: e.g. aws_s3_bucket_policy's CC
+// identifier is the bucket name (the parent aws_s3_bucket's identifier), so the
+// selected bucket names scope the policy discovery directly — no account-wide
+// AWS::S3::BucketPolicy ListResources (and no broad list permission) needed.
+//
+// Only identifier-SHARING children belong here. Children with a compound or
+// independent identifier (aws_cloudwatch_log_stream's "<group>:<stream>", KMS
+// aliases, VPC children, SG rules) are NOT listed — they are scoped via their
+// own parent lister (log streams) or discovered account-wide and filtered by
+// the engine's mergeClosureResources (the in-memory-join families).
+var identifierSharedChildCFNTypes = map[string][]string{
+	"AWS::S3::Bucket": {"AWS::S3::BucketPolicy"},
+}
+
+// IdentifierSharedChildCFNTypes returns the child Cloud Control types whose CC
+// identifier equals the given parent CFN type's identifier, so a closure-scoping
+// caller can scope those children with the same selected-parent identifiers.
+// Returns nil for a parent type with no identifier-sharing children. The
+// returned slice is a fresh copy; callers may mutate it.
+func IdentifierSharedChildCFNTypes(parentCFNType string) []string {
+	children := identifierSharedChildCFNTypes[strings.TrimSpace(parentCFNType)]
+	if len(children) == 0 {
+		return nil
+	}
+	return append([]string(nil), children...)
+}
 
 // cloudControlTypeConfigs is the registry of Terraform resource types
 // routed through the generic Cloud Control discoverer. Each entry maps

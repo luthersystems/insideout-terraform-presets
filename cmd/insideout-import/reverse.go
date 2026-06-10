@@ -99,7 +99,23 @@ Flags:`)
 	ctx, cancel := context.WithTimeout(context.Background(), discoverTimeoutOverall)
 	defer cancel()
 
-	discoverer, cleanup, err := reversedisco.New(ctx, cloud, firstReqRegion(req, *region), firstReqProjectID(req, *gcpProjectID), *awsEndpointURL)
+	// Resolve the customer-account assume-role identity from the generated
+	// stack (env / outputs/cloud-provision.json / tf/auto-vars) so the
+	// discoverer's direct AWS SDK calls run as the SAME principal Terraform's
+	// provider blocks assume (#739). Empty RoleARN (the common local-CLI case,
+	// where the operator already has customer creds ambient) leaves the
+	// discoverer on ambient credentials — assume-role is OPTIONAL.
+	var awsAuth reversedisco.AWSAssumeRole
+	if cloud == "aws" {
+		auth, authErr := reverseimport.ResolveAWSProviderAuth(*outputDir)
+		if authErr != nil {
+			fmt.Fprintf(os.Stderr, "reverse: resolve AWS provider auth: %v\n", authErr)
+			return reverseExitFatal
+		}
+		awsAuth = reversedisco.AWSAssumeRole{RoleARN: auth.RoleARN, ExternalID: auth.ExternalID}
+	}
+
+	discoverer, cleanup, err := reversedisco.New(ctx, cloud, firstReqRegion(req, *region), firstReqProjectID(req, *gcpProjectID), *awsEndpointURL, awsAuth)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "reverse: build discoverer: %v\n", err)
 		return reverseExitFatal

@@ -21,9 +21,9 @@ func TestResolveAWSProviderAuthUsesProjectTerraformRoleOutput(t *testing.T) {
 
 	t.Setenv("TF_VAR_bootstrap_role", "")
 	t.Setenv("TF_VAR_aws_external_id", "")
-	auth, err := resolveAWSProviderAuth(filepath.Join(root, "outputs", "reverse-import"))
+	auth, err := ResolveAWSProviderAuth(filepath.Join(root, "outputs", "reverse-import"))
 	if err != nil {
-		t.Fatalf("resolveAWSProviderAuth() error = %v", err)
+		t.Fatalf("ResolveAWSProviderAuth() error = %v", err)
 	}
 	if auth.RoleARN != "arn:aws:iam::123456789012:role/io-terraform" {
 		t.Fatalf("RoleARN = %q, want project terraform_role output", auth.RoleARN)
@@ -41,9 +41,9 @@ func TestResolveAWSProviderAuthAllowsEnvOverride(t *testing.T) {
 	t.Setenv("TF_VAR_bootstrap_role", "arn:aws:iam::222222222222:role/override")
 	t.Setenv("TF_VAR_aws_external_id", "override-external")
 
-	auth, err := resolveAWSProviderAuth(filepath.Join(root, "outputs", "reverse-import"))
+	auth, err := ResolveAWSProviderAuth(filepath.Join(root, "outputs", "reverse-import"))
 	if err != nil {
-		t.Fatalf("resolveAWSProviderAuth() error = %v", err)
+		t.Fatalf("ResolveAWSProviderAuth() error = %v", err)
 	}
 	if auth.RoleARN != "arn:aws:iam::222222222222:role/override" {
 		t.Fatalf("RoleARN = %q, want env override", auth.RoleARN)
@@ -61,9 +61,9 @@ func TestResolveAWSProviderAuthFallsBackToBootstrapRoleAutoVar(t *testing.T) {
 	t.Setenv("TF_VAR_bootstrap_role", "")
 	t.Setenv("TF_VAR_aws_external_id", "")
 
-	auth, err := resolveAWSProviderAuth(filepath.Join(root, "outputs", "reverse-import"))
+	auth, err := ResolveAWSProviderAuth(filepath.Join(root, "outputs", "reverse-import"))
 	if err != nil {
-		t.Fatalf("resolveAWSProviderAuth() error = %v", err)
+		t.Fatalf("ResolveAWSProviderAuth() error = %v", err)
 	}
 	if auth.RoleARN != "arn:aws:iam::999999999999:role/bootstrap" {
 		t.Fatalf("RoleARN = %q, want bootstrap_role fallback", auth.RoleARN)
