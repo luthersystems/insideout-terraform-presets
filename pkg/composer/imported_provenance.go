@@ -206,6 +206,39 @@ func existingProvenanceProject(ir imported.ImportedResource) (string, bool) {
 	return "", false
 }
 
+// existingProvenanceSession reads the InsideOutImportSession (AWS) or
+// insideout-import-session (GCP) value from ir's desired state, preferring the
+// typed Attrs over the opaque Attributes bag. Returns ("", false) when the
+// resource does not advertise a prior import session. Mirrors
+// existingProvenanceProject exactly, only over the session key.
+//
+// The validator uses this for the same-import-session self-claim allowance
+// (reliable#2068): the session tag is the namespace-stable self identity
+// because it is stamped identically on every import leg, unlike the project
+// id whose namespace differs between the reconcile and apply legs.
+func existingProvenanceSession(ir imported.ImportedResource) (string, bool) {
+	attrName, ok := taggable(ir)
+	if !ok {
+		return "", false
+	}
+	key := AWSTagKeyImportSession
+	if attrName == "labels" {
+		key = GCPLabelKeyImportSession
+	}
+
+	if len(ir.Attrs) > 0 {
+		if v, found := readTypedTagLiteral(ir.Identity.Type, ir.Attrs, attrName, key); found {
+			return v, true
+		}
+	}
+	if len(ir.Attributes) > 0 {
+		if v, found := readOpaqueTagLiteral(ir.Attributes, attrName, key); found {
+			return v, true
+		}
+	}
+	return "", false
+}
+
 // readTypedTagLiteral decodes typed Attrs and reads the literal string value
 // at <Tags|Labels>[key]. Returns ok=false when the typed model has no
 // matching field, the entry is missing, or the entry's state is anything
@@ -356,10 +389,26 @@ func injectProvenance(body []byte, ir *imported.ImportedResource, projectID, ses
 
 	// Refuse to overwrite a conflicting prior owner without a valid force-
 	// takeover. Mirrors the validator's branching: any existing owner that
-	// is neither equal to projectID nor accompanied by a valid ForceTakeover
-	// blocks the rewrite.
+	// is neither equal to projectID nor a same-session self-claim nor
+	// accompanied by a valid ForceTakeover blocks the rewrite.
+	//
+	// The same-session allowance MUST mirror the validator
+	// (ValidateProvenanceConflicts) so stamp and validate agree: when the
+	// validator treats a claim as self (because the observed session equals
+	// this compose's session — reliable#2068), the injector must likewise let
+	// the apply leg overwrite its own reconcile-leg stamp. Without this, the
+	// validator would pass but the injector would silently skip the rewrite,
+	// leaving the stale reconcile-leg project marker in place.
 	if existing, has := existingProvenanceProject(*ir); has && existing != projectID && !validForceTakeover(ir.ForceTakeover, existing) {
-		return body, nil
+		selfBySession := false
+		if sess := strings.TrimSpace(sessionID); sess != "" {
+			if observedSession, hasSession := existingProvenanceSession(*ir); hasSession && observedSession == sess {
+				selfBySession = true
+			}
+		}
+		if !selfBySession {
+			return body, nil
+		}
 	}
 
 	cloud := strings.ToLower(strings.TrimSpace(ir.Identity.Cloud))
