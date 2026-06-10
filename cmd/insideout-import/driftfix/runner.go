@@ -20,9 +20,11 @@ import (
 // just produced. The runner's only job is to drive plan-and-show cycles
 // and re-validate after each patch.
 type terraformRunner interface {
-	// PlanTo runs `terraform plan -out=<planFile>`. Returns hasChanges =
-	// true iff the plan contains a non-no-op resource change.
-	PlanTo(ctx context.Context, planFile string) (hasChanges bool, err error)
+	// PlanTo runs `terraform plan -out=<planFile> -parallelism=<parallelism>`.
+	// Returns hasChanges = true iff the plan contains a non-no-op resource
+	// change. parallelism is the resolved (already defaulted) value the
+	// refresh should run at; see driftfix.DefaultParallelism.
+	PlanTo(ctx context.Context, planFile string, parallelism int) (hasChanges bool, err error)
 	// ShowPlan decodes a binary plan file into the typed tfjson.Plan
 	// shape so the patch pass can walk ResourceChanges.
 	ShowPlan(ctx context.Context, planFile string) (*tfjson.Plan, error)
@@ -78,7 +80,7 @@ func newExecRunner(workdir string, stream io.Writer) (*execRunner, error) {
 	return &execRunner{tf: tf, stream: stream}, nil
 }
 
-func (r *execRunner) PlanTo(ctx context.Context, planFile string) (bool, error) {
+func (r *execRunner) PlanTo(ctx context.Context, planFile string, parallelism int) (bool, error) {
 	// Stream the human-readable `terraform plan` diff to the live log for
 	// THIS call only. ShowPlan/Validate emit -json on stdout and
 	// terraform-exec shares one stdout across commands, so restore
@@ -89,7 +91,18 @@ func (r *execRunner) PlanTo(ctx context.Context, planFile string) (bool, error) 
 		r.tf.SetStdout(r.stream)
 		defer r.tf.SetStdout(io.Discard)
 	}
-	return r.tf.Plan(ctx, tfexec.Out(planFile))
+	return r.tf.Plan(ctx, planToOpts(planFile, parallelism)...)
+}
+
+// planToOpts is the pure builder for the drift-convergence plan's tfexec
+// options. Factored out so a unit test can assert this path always passes
+// `-parallelism` (tfexec.Parallelism) alongside the plan-out target without a
+// real terraform binary, mirroring genconfig.planGenerateOpts.
+func planToOpts(planFile string, parallelism int) []tfexec.PlanOption {
+	return []tfexec.PlanOption{
+		tfexec.Out(planFile),
+		tfexec.Parallelism(parallelism),
+	}
 }
 
 func (r *execRunner) ShowPlan(ctx context.Context, planFile string) (*tfjson.Plan, error) {

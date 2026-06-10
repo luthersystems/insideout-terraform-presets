@@ -39,12 +39,39 @@ const planFile = "driftfix.tfplan"
 // spinning on an attr we can't patch.
 const defaultMaxIterations = 5
 
+// DefaultParallelism is the `-parallelism=<n>` value each drift-convergence
+// `terraform plan` runs at when Options.Parallelism is unset (<= 0). 25
+// matches genconfig.DefaultGenconfigParallelism so the whole reverse-import
+// readback path runs at one consistent, throttle-tuned concurrency rather
+// than a phase-by-phase mix. driftfix is a small absolute slice of the run
+// (≈3m of the measured 1h41m job; luthersystems/ui-core#420) so this is for
+// consistency, not the primary win — but every driftfix plan is the same
+// read-only AWS refresh genconfig does, and the same emitted provider
+// retry_mode = "adaptive" / max_retries tuning backstops the raised
+// concurrency with throttle backoff instead of failures.
+const DefaultParallelism = 25
+
+// parallelismOrDefault returns Options.Parallelism, falling back to
+// DefaultParallelism for the unset (<= 0) zero value so callers stay
+// source-compatible without explicit field-init.
+func (opts Options) parallelismOrDefault() int {
+	if opts.Parallelism <= 0 {
+		return DefaultParallelism
+	}
+	return opts.Parallelism
+}
+
 // Options is the input to Run. Workdir must be the same directory that
 // genconfig.Run produced — driftfix expects generated.tf, providers.tf,
 // imports.tf, and the .terraform dir already in place.
 type Options struct {
 	Workdir       string
 	MaxIterations int
+	// Parallelism overrides the `-parallelism=<n>` flag passed to each
+	// drift-convergence `terraform plan`. 0 (the zero value) uses
+	// DefaultParallelism. See that constant for the throttle-safety
+	// rationale.
+	Parallelism int
 	// Runner is optional; nil means "construct an execRunner from PATH."
 	Runner terraformRunner
 
@@ -154,8 +181,8 @@ func runStack(ctx context.Context, opts Options, stackDir string, out io.Writer)
 	alreadyEscalated := map[string]map[string]struct{}{}
 
 	for iter := 1; iter <= opts.MaxIterations; iter++ {
-		progressf(opts.Stdout, "driftfix: iteration %d: running terraform plan…\n", iter)
-		hasChanges, err := runner.PlanTo(ctx, planPath)
+		progressf(opts.Stdout, "driftfix: iteration %d: running terraform plan (parallelism=%d)…\n", iter, opts.parallelismOrDefault())
+		hasChanges, err := runner.PlanTo(ctx, planPath, opts.parallelismOrDefault())
 		if err != nil {
 			return nil, fmt.Errorf("driftfix iter %d: terraform plan: %w", iter, err)
 		}

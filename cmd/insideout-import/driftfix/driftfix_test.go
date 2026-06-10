@@ -29,11 +29,16 @@ type scriptedRunner struct {
 	showCalls     int
 	validateCalls int
 	calls         []string
+	// lastParallelism records the -parallelism the most recent PlanTo ran
+	// at, so tests can assert Options.Parallelism (defaulted) reaches the
+	// runner (luthersystems/ui-core#420).
+	lastParallelism int
 }
 
-func (r *scriptedRunner) PlanTo(_ context.Context, planFile string) (bool, error) {
+func (r *scriptedRunner) PlanTo(_ context.Context, planFile string, parallelism int) (bool, error) {
 	r.calls = append(r.calls, "plan")
 	r.planCalls++
+	r.lastParallelism = parallelism
 	if r.planErr != nil {
 		return false, r.planErr
 	}
@@ -130,6 +135,40 @@ func TestRun_EmptyPlanFirstIterationReturnsImmediately(t *testing.T) {
 	}
 }
 
+// TestRun_ThreadsParallelismToPlan pins that Options.Parallelism (and its
+// default) reaches the drift-convergence PlanTo end-to-end through Run
+// (luthersystems/ui-core#420). TestPlanToOpts guards the arg builder; this
+// guards the wiring.
+func TestRun_ThreadsParallelismToPlan(t *testing.T) {
+	t.Parallel()
+
+	t.Run("default", func(t *testing.T) {
+		t.Parallel()
+		dir := t.TempDir()
+		writeFixture(t, dir)
+		runner := &scriptedRunner{plansByCall: []*tfjson.Plan{emptyPlan()}}
+		if _, err := Run(context.Background(), Options{Workdir: dir, Runner: runner}); err != nil {
+			t.Fatal(err)
+		}
+		if runner.lastParallelism != DefaultParallelism {
+			t.Errorf("plan ran at -parallelism=%d, want default %d", runner.lastParallelism, DefaultParallelism)
+		}
+	})
+
+	t.Run("explicit override", func(t *testing.T) {
+		t.Parallel()
+		dir := t.TempDir()
+		writeFixture(t, dir)
+		runner := &scriptedRunner{plansByCall: []*tfjson.Plan{emptyPlan()}}
+		if _, err := Run(context.Background(), Options{Workdir: dir, Parallelism: 42, Runner: runner}); err != nil {
+			t.Fatal(err)
+		}
+		if runner.lastParallelism != 42 {
+			t.Errorf("plan ran at -parallelism=%d, want explicit 42", runner.lastParallelism)
+		}
+	})
+}
+
 // TestRun_ImportOnlyPlanReturnsClean pins the post-2b convergence
 // shape: terraform-exec's Plan reports hasChanges=true for any plan
 // that imports resources, even when there's no actual drift. The loop
@@ -178,9 +217,10 @@ type alwaysHasChangesRunner struct {
 	scriptedRunner
 }
 
-func (r *alwaysHasChangesRunner) PlanTo(_ context.Context, planFile string) (bool, error) {
+func (r *alwaysHasChangesRunner) PlanTo(_ context.Context, planFile string, parallelism int) (bool, error) {
 	r.calls = append(r.calls, "plan")
 	r.planCalls++
+	r.lastParallelism = parallelism
 	idx := r.planCalls - 1
 	if idx >= len(r.plansByCall) {
 		return false, nil

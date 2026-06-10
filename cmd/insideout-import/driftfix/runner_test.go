@@ -5,12 +5,52 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"sync"
 	"testing"
 
+	"github.com/hashicorp/terraform-exec/tfexec"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+// TestPlanToOpts guards that the drift-convergence plan keeps its
+// tfexec.Parallelism option (luthersystems/ui-core#420). Mirrors
+// genconfig.TestPlanGenerateOpts: a real terraform run would still pass
+// without the flag (just at default-10), so only this assertion catches its
+// removal.
+func TestPlanToOpts(t *testing.T) {
+	t.Parallel()
+
+	const planFile = "/tmp/driftfix.tfplan"
+	const parallelism = 25
+	opts := planToOpts(planFile, parallelism)
+
+	require.Contains(t, opts, tfexec.Out(planFile), "driftfix plan must keep its -out target")
+
+	var foundParallelism bool
+	for _, o := range opts {
+		if reflect.DeepEqual(o, tfexec.Parallelism(parallelism)) {
+			foundParallelism = true
+		}
+	}
+	require.True(t, foundParallelism,
+		"driftfix plan must pass tfexec.Parallelism(%d) (ui-core#420)", parallelism)
+}
+
+// TestDefaultParallelism + TestOptionsParallelismOrDefault pin the default and
+// its fallback, matching genconfig's guards.
+func TestDefaultParallelism(t *testing.T) {
+	t.Parallel()
+	require.Equal(t, 25, DefaultParallelism)
+}
+
+func TestOptionsParallelismOrDefault(t *testing.T) {
+	t.Parallel()
+	assert.Equal(t, DefaultParallelism, Options{}.parallelismOrDefault(), "zero value defaults")
+	assert.Equal(t, DefaultParallelism, Options{Parallelism: -1}.parallelismOrDefault(), "negative defaults")
+	assert.Equal(t, 30, Options{Parallelism: 30}.parallelismOrDefault(), "explicit positive honored")
+}
 
 // builtinProviderStack uses only the builtin terraform_data resource
 // (terraform.io/builtin/terraform), so `terraform init` and `plan` both
@@ -59,7 +99,7 @@ func TestExecRunner_JSONCaptureDoesNotLeakToStream(t *testing.T) {
 	// PlanTo writes a binary plan; ShowPlan decodes it via `show -json`, which
 	// captures its JSON payload on stdout internally.
 	planFile := filepath.Join(workdir, "tfplan.bin")
-	_, err = runner.PlanTo(ctx, planFile)
+	_, err = runner.PlanTo(ctx, planFile, DefaultParallelism)
 	require.NoError(t, err)
 	plan, err := runner.ShowPlan(ctx, planFile)
 	require.NoError(t, err)
@@ -110,7 +150,7 @@ func TestExecRunner_PlanStreamsHumanDiffToStream(t *testing.T) {
 	// version-dependent, and it isn't what this test verifies. The streamed
 	// plan text below is the actual contract — PlanTo routes terraform's
 	// stdout to the live log.
-	_, err = runner.PlanTo(ctx, planFile)
+	_, err = runner.PlanTo(ctx, planFile, DefaultParallelism)
 	require.NoError(t, err)
 
 	streamed := stream.String()
