@@ -404,4 +404,14 @@ func TestAWSIAMPermissions_SageMakerCovered(t *testing.T) {
 		"SageMaker endpoint-config create permission must be in the required set (#761 inference endpoint)")
 	require.Contains(t, required, "sagemaker:CreateEndpoint",
 		"SageMaker endpoint create permission must be in the required set (#761 inference endpoint)")
+
+	// CloudWatch alarm permissions (#761 review MED-2). observability.tf
+	// creates the invocation-5XX + model-latency alarms by default whenever
+	// inference is on; the deploy principal needs PutMetricAlarm to create
+	// them and DeleteAlarms so destroy can clean them up. Without these the
+	// pre-deploy simulate passes but the alarm create/destroy 403s.
+	require.Contains(t, required, "cloudwatch:PutMetricAlarm",
+		"CloudWatch PutMetricAlarm must be in the required set (observability alarms created by default — #761 MED-2)")
+	require.Contains(t, required, "cloudwatch:DeleteAlarms",
+		"CloudWatch DeleteAlarms must be in the required set so terraform destroy can tear down the observability alarms (#761 MED-2)")
 }

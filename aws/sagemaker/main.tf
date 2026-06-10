@@ -102,6 +102,31 @@ locals {
   # for the grant from the s3://bucket/key URL.
   model_data_bucket = local.enable_inference && trimspace(var.model_data_url) != "" ? split("/", replace(var.model_data_url, "s3://", ""))[0] : ""
   model_data_arn    = local.model_data_bucket == "" ? "" : "arn:${data.aws_partition.current.partition}:s3:::${local.model_data_bucket}"
+
+  # ECR registry scoping (#761 review MED-3). var.model_image can be a
+  # cross-account image — AWS Deep Learning Containers live in AWS-owned
+  # registries (e.g. 763104351884.dkr.ecr.<region>.amazonaws.com/...), not the
+  # deploying account. Scoping the layer/image-read grant to the *deploying*
+  # account's repos would 403 the pull of any DLC. So we parse the registry
+  # account id out of the standard ECR image URI
+  # (<acct>.dkr.ecr.<region>.amazonaws.com/<repo>[:tag|@digest]) and scope the
+  # BatchGetImage / GetDownloadUrlForLayer / BatchCheckLayerAvailability grant
+  # to *that* registry's repos. If the URI isn't a parseable ECR registry host
+  # (e.g. a bare SageMaker built-in algorithm image or a public/non-ECR ref),
+  # the regex yields no match and we fall back to the deploying account — the
+  # safe default for an in-account image, and non-ECR images don't consult an
+  # ECR repo grant at all.
+  #
+  # ecr_registry_account: the 12-digit account id from the registry host, or
+  # "" when the image URI isn't an ECR registry reference.
+  _ecr_registry_matches = local.enable_inference ? regexall("^([0-9]{12})\\.dkr\\.ecr\\.[a-z0-9-]+\\.amazonaws\\.com/", trimspace(var.model_image)) : []
+  ecr_registry_account  = length(local._ecr_registry_matches) > 0 ? local._ecr_registry_matches[0][0] : data.aws_caller_identity.current.account_id
+
+  # ARN of the repo namespace the model image lives in, scoped to the parsed
+  # (possibly cross-account) registry. The pull grant targets this — not the
+  # deploying account's repos — so cross-account DLC pulls succeed under least
+  # privilege.
+  ecr_repo_arn = "arn:${data.aws_partition.current.partition}:ecr:${var.region}:${local.ecr_registry_account}:repository/*"
 }
 
 resource "random_id" "workspace_suffix" {
@@ -281,7 +306,10 @@ resource "aws_sagemaker_user_profile" "studio_user" {
 
 # ECR pull for the model image. ecr:GetAuthorizationToken is account-wide
 # (Resource "*" is required — the token isn't scopable to a repo); the image
-# layer/manifest reads are scoped to ECR repos in the deploying account.
+# layer/manifest reads are scoped to the registry the model image actually
+# lives in (local.ecr_repo_arn), which may be a *cross-account* AWS registry
+# for a Deep Learning Container (#761 review MED-3). Falls back to the
+# deploying account when the URI isn't a parseable ECR registry reference.
 resource "aws_iam_role_policy" "inference_ecr_pull" {
   count = local.enable_inference ? 1 : 0
 
@@ -303,7 +331,7 @@ resource "aws_iam_role_policy" "inference_ecr_pull" {
           "ecr:GetDownloadUrlForLayer",
           "ecr:BatchGetImage",
         ]
-        Resource = "arn:${data.aws_partition.current.partition}:ecr:${var.region}:${data.aws_caller_identity.current.account_id}:repository/*"
+        Resource = local.ecr_repo_arn
       },
     ]
   })
@@ -392,6 +420,28 @@ resource "aws_sagemaker_endpoint" "inference" {
 
   name                 = "${var.project}-endpoint"
   endpoint_config_name = aws_sagemaker_endpoint_configuration.inference[0].name
+
+  # IAM race guard (#761 review HIGH-1). The endpoint create is where AWS
+  # actually instantiates the container: it pulls the model image from ECR
+  # and (when set) reads model.tar.gz from S3 *as the execution role*. The
+  # aws_sagemaker_model resource above only registers metadata (image URI +
+  # role ARN) — no pull happens there — so the real consumer of these grants
+  # is the endpoint. terraform's implicit graph does NOT order the endpoint
+  # after the inline role policies (the endpoint references the model →
+  # config, not the policies), so without an explicit depends_on the endpoint
+  # create can start before the execution role can pull the image / read the
+  # artifact, intermittently failing the InService rollout. The managed-policy
+  # attachment is included for the same reason (AmazonSageMakerFullAccess
+  # carries the ECR/S3 permissions a scoped override might rely on).
+  #
+  # inference_model_data is count-gated (only present when model_data_url is
+  # set); depends_on tolerates a resource that resolves to zero instances, so
+  # listing it unconditionally is safe whether or not the artifact grant exists.
+  depends_on = [
+    aws_iam_role_policy.inference_ecr_pull,
+    aws_iam_role_policy.inference_model_data,
+    aws_iam_role_policy_attachment.studio_managed,
+  ]
 
   tags = merge(local.tags, { Name = "${var.project}-endpoint" })
 }

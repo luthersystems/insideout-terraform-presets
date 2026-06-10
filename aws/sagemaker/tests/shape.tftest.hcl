@@ -566,6 +566,33 @@ run "inference_endpoint" {
     error_message = "Model-data policy must grant s3:GetObject on the artifact bucket."
   }
 
+  # --- IAM Resource SCOPING (#761 review P1-5) -------------------------------
+  # A mutation that widened the model-data statement to Resource = "*" survived
+  # all 24 shape runs because nothing asserted the scope. Pin both halves: the
+  # statement must name the scoped bucket ARN AND must NOT contain a bare
+  # `"Resource":"*"` (the S3 read must never be account-wide).
+  # Match on the partition-independent suffix (`:s3:::my-models`) — the
+  # mock_provider emits a random partition for data.aws_partition, so we can't
+  # pin the `aws` literal here; the bucket scope is what matters.
+  assert {
+    condition     = strcontains(aws_iam_role_policy.inference_model_data[0].policy, ":s3:::my-models")
+    error_message = "Model-data policy must scope s3:GetObject to the artifact bucket ARN (...:s3:::my-models...), not a wildcard."
+  }
+
+  assert {
+    condition     = !strcontains(replace(aws_iam_role_policy.inference_model_data[0].policy, " ", ""), "\"Resource\":\"*\"")
+    error_message = "Model-data policy must NOT grant Resource = \"*\" on the S3 read — that breaks least privilege (#761 P1-5)."
+  }
+
+  # ECR-pull statement repo scope: the layer/image reads must target a
+  # repository ARN. ecr:GetAuthorizationToken legitimately needs Resource "*",
+  # so we assert the repo ARN is present rather than asserting "no * anywhere".
+  # Partition-independent suffix (mock_provider randomizes the partition).
+  assert {
+    condition     = strcontains(aws_iam_role_policy.inference_ecr_pull[0].policy, ":ecr:us-east-1:123456789012:repository/*")
+    error_message = "ECR-pull policy must scope BatchGetImage/GetDownloadUrlForLayer to the image's registry repos (in-account image → deploying account), not a bare wildcard (#761 P1-5)."
+  }
+
   # Observability alarms come up with the endpoint (enable_observability
   # defaults true), keyed on the endpoint name + primary variant.
   assert {
@@ -591,6 +618,49 @@ run "inference_endpoint" {
   assert {
     condition     = aws_cloudwatch_metric_alarm.invocation_5xx_high["0"].dimensions["VariantName"] == "primary"
     error_message = "Alarm must key on the `primary` production variant."
+  }
+
+  # P2-8: pin the EndpointName dimension alongside VariantName so a mutation
+  # that dropped / mis-keyed the endpoint dimension fails (an alarm keyed only
+  # on VariantName would match every endpoint's primary variant).
+  assert {
+    condition     = aws_cloudwatch_metric_alarm.invocation_5xx_high["0"].dimensions["EndpointName"] == "test-endpoint"
+    error_message = "Alarm must key on the endpoint's name via the EndpointName dimension (#761 P2-8)."
+  }
+
+  # --- Alarm direction + statistic + default threshold (#761 review P1-6) ----
+  # An inverted comparison_operator (LessThan...) would make these alarms fire
+  # on healthy traffic and stay silent on the failure they exist to catch, and
+  # survived every prior run. Pin the operator, the statistic, and the default
+  # threshold on BOTH alarms.
+  assert {
+    condition     = aws_cloudwatch_metric_alarm.invocation_5xx_high["0"].comparison_operator == "GreaterThanThreshold"
+    error_message = "5XX alarm must fire when errors go ABOVE threshold (GreaterThanThreshold) — an inverted operator alarms on healthy traffic (#761 P1-6)."
+  }
+
+  assert {
+    condition     = aws_cloudwatch_metric_alarm.invocation_5xx_high["0"].statistic == "Sum"
+    error_message = "5XX alarm must aggregate errors with Sum (count of 5XX per period) (#761 P1-6)."
+  }
+
+  assert {
+    condition     = aws_cloudwatch_metric_alarm.invocation_5xx_high["0"].threshold == 1
+    error_message = "5XX alarm default threshold must be 1 (any sustained 5XX is actionable) (#761 P1-6)."
+  }
+
+  assert {
+    condition     = aws_cloudwatch_metric_alarm.model_latency_high["0"].comparison_operator == "GreaterThanThreshold"
+    error_message = "Latency alarm must fire when latency goes ABOVE threshold (GreaterThanThreshold) (#761 P1-6)."
+  }
+
+  assert {
+    condition     = aws_cloudwatch_metric_alarm.model_latency_high["0"].statistic == "Average"
+    error_message = "Latency alarm must aggregate with Average (mean ModelLatency per period) (#761 P1-6)."
+  }
+
+  assert {
+    condition     = aws_cloudwatch_metric_alarm.model_latency_high["0"].threshold == 5000000
+    error_message = "Latency alarm default threshold must be 5_000_000µs (5s) (#761 P1-6)."
   }
 }
 
@@ -621,6 +691,44 @@ run "inference_endpoint_without_model_data" {
   assert {
     condition     = length(aws_iam_role_policy.inference_model_data) == 0
     error_message = "No S3 model-data policy may attach when model_data_url is omitted (least privilege)."
+  }
+}
+
+# Cross-account ECR registry scoping (#761 review MED-3). model_image accepts a
+# cross-account image — AWS Deep Learning Containers live in AWS-owned
+# registries (e.g. 763104351884) in the same region, NOT the deploying account.
+# The ECR-pull layer/image-read grant must be scoped to *that* registry's repos
+# or the pull 403s. Pins that the parsed cross-account registry id lands in the
+# repo ARN, and that the deploying account's id does NOT appear there.
+run "inference_ecr_pull_scopes_to_cross_account_dlc_registry" {
+  command = plan
+
+  variables {
+    project          = "test"
+    vpc_id           = "vpc-12345"
+    subnet_ids       = ["subnet-aaa"]
+    enable_inference = true
+    # AWS DLC registry account (763104351884), us-east-1. The deploying
+    # account in the mock is a different (mock) id; the repo ARN must carry
+    # 763104351884, not the deploying account.
+    model_image = "763104351884.dkr.ecr.us-east-1.amazonaws.com/huggingface-pytorch-tgi-inference:2.0-tgi"
+  }
+
+  # Partition-independent suffix (mock_provider randomizes data.aws_partition);
+  # the cross-account registry id (763104351884) is the load-bearing part.
+  assert {
+    condition     = strcontains(aws_iam_role_policy.inference_ecr_pull[0].policy, ":ecr:us-east-1:763104351884:repository/*")
+    error_message = "ECR-pull policy must scope layer/image reads to the cross-account DLC registry (763104351884) parsed from model_image, not the deploying account (#761 MED-3)."
+  }
+
+  # GetAuthorizationToken legitimately needs Resource "*" (the token isn't
+  # repo-scopable), so a bare "*" is expected in the auth-token statement.
+  # But the layer/image-read statement must be repo-scoped — assert the
+  # cross-account repo ARN is present so a regression to account-wide
+  # (deploying account) scoping fails here.
+  assert {
+    condition     = strcontains(aws_iam_role_policy.inference_ecr_pull[0].policy, "ecr:GetAuthorizationToken")
+    error_message = "ECR-pull policy must still grant ecr:GetAuthorizationToken on \"*\" (the auth token isn't repo-scopable)."
   }
 }
 
@@ -675,6 +783,94 @@ run "inference_rejects_bad_model_data_url" {
   }
 
   expect_failures = [var.model_data_url]
+}
+
+# A bare `s3://` (no bucket, no key) is rejected by the tightened
+# model_data_url validation (#761 review LOW-4). Before the tightening this
+# passed the `^s3://` regex but derived an empty bucket ARN that would 403 the
+# read at apply.
+run "inference_rejects_bare_s3_scheme" {
+  command = plan
+
+  variables {
+    project          = "test"
+    vpc_id           = "vpc-12345"
+    subnet_ids       = ["subnet-aaa"]
+    enable_inference = true
+    model_image      = "123456789012.dkr.ecr.us-east-1.amazonaws.com/llm-serve:latest"
+    model_data_url   = "s3://"
+  }
+
+  expect_failures = [var.model_data_url]
+}
+
+# Bucket-but-no-key (`s3://bucket/`) is also rejected — SageMaker needs the
+# object key to the model.tar.gz, not just a bucket (#761 review LOW-4).
+run "inference_rejects_s3_bucket_without_key" {
+  command = plan
+
+  variables {
+    project          = "test"
+    vpc_id           = "vpc-12345"
+    subnet_ids       = ["subnet-aaa"]
+    enable_inference = true
+    model_image      = "123456789012.dkr.ecr.us-east-1.amazonaws.com/llm-serve:latest"
+    model_data_url   = "s3://my-models/"
+  }
+
+  expect_failures = [var.model_data_url]
+}
+
+# Positive companion for the tightened validation: a full s3://<bucket>/<key>
+# URI still plans cleanly, so the negatives above can only fail for the right
+# reason (rejection-axis triangulation per #614).
+run "inference_full_s3_url_plans_cleanly" {
+  command = plan
+
+  variables {
+    project          = "test"
+    vpc_id           = "vpc-12345"
+    subnet_ids       = ["subnet-aaa"]
+    enable_inference = true
+    model_image      = "123456789012.dkr.ecr.us-east-1.amazonaws.com/llm-serve:latest"
+    model_data_url   = "s3://my-models/llm/model.tar.gz"
+  }
+
+  assert {
+    condition     = length(aws_iam_role_policy.inference_model_data) == 1
+    error_message = "A full s3://<bucket>/<key> model_data_url must plan cleanly and attach the model-data policy (companion to the bare-s3:// / bucket-only rejects)."
+  }
+}
+
+# Gating run (#761 review P2-7): inference ON but observability OFF must
+# suppress BOTH alarms while still standing up the endpoint. Proves
+# enable_observability gates the alarms independently of enable_inference.
+run "inference_without_observability_suppresses_alarms" {
+  command = plan
+
+  variables {
+    project              = "test"
+    vpc_id               = "vpc-12345"
+    subnet_ids           = ["subnet-aaa"]
+    enable_inference     = true
+    enable_observability = false
+    model_image          = "123456789012.dkr.ecr.us-east-1.amazonaws.com/llm-serve:latest"
+  }
+
+  assert {
+    condition     = length(aws_cloudwatch_metric_alarm.invocation_5xx_high) == 0
+    error_message = "5XX alarm must be suppressed when enable_observability=false even though inference is on (#761 P2-7)."
+  }
+
+  assert {
+    condition     = length(aws_cloudwatch_metric_alarm.model_latency_high) == 0
+    error_message = "Latency alarm must be suppressed when enable_observability=false even though inference is on (#761 P2-7)."
+  }
+
+  assert {
+    condition     = length(aws_sagemaker_endpoint.inference) == 1
+    error_message = "The endpoint must still be created when observability is disabled (the two flags are independent) (#761 P2-7)."
+  }
 }
 
 # enable_inference=true with an empty model_image is rejected by the

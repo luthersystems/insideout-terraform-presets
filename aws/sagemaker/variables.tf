@@ -136,8 +136,13 @@ variable "model_data_url" {
   default     = ""
 
   validation {
-    condition     = var.model_data_url == "" ? true : can(regex("^s3://", var.model_data_url))
-    error_message = "model_data_url must be an s3:// URI (or empty to let the container supply its own weights)."
+    # Require a bucket AND a key, not a bare `s3://` (which would derive an
+    # empty bucket ARN and 403 the model-data read at apply). Bucket segment:
+    # 3-63 chars, lowercase alphanumeric / hyphen / dot, start+end
+    # alphanumeric (S3 naming). Key segment: at least one non-slash char so
+    # `s3://bucket/` (bucket but no object) is also rejected.
+    condition     = var.model_data_url == "" ? true : can(regex("^s3://[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]/.+", var.model_data_url))
+    error_message = "model_data_url must be a full s3://<bucket>/<key> URI pointing at the model artifact (or empty to let the container supply its own weights). A bare s3:// or bucket-only s3://<bucket>/ is rejected."
   }
 }
 
