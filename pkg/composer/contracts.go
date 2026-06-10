@@ -1187,19 +1187,25 @@ func DefaultWiring(selected map[ComponentKey]bool, k ComponentKey, comps *Compon
 
 	case KeyGCPVertexAI:
 		// Vertex AI Vector Search (#764). When a VPC is selected, wire its
-		// network resource id (projects/<p>/global/networks/<n>, the exact
-		// form google_vertex_ai_index_endpoint.network expects) so the index
-		// endpoint takes the private VPC-peering path — the reason the hard
-		// gcp/vpc dep exists (contracts.go:322 / #600 PSC peering). gcp/vpc's
-		// network_id is surfaced as the vpc_id output.
+		// vpc_id (the project-ID path projects/<project_id>/global/networks/<n>)
+		// to the preset's network input. The preset extracts the network NAME
+		// and rebuilds the project-NUMBER path google_vertex_ai_index_endpoint
+		// actually requires (it cannot accept the project-ID form), so the wire
+		// stays vpc_id and the form conversion lives in the preset. The endpoint
+		// is still PUBLIC unless the operator also sets enable_private_endpoint
+		// (the private path needs #774 PSC peering that gcp/vpc lacks today).
 		if selected[KeyGCPVPC] {
 			wi.RawHCL["network"] = WireRef(KeyGCPVPC, "vpc_id")
 			wi.Names = append(wi.Names, "network")
 		}
-		// When GCS is selected, seed the index from the bucket. bucket_url is
-		// the gs:// URL the index's contents_delta_uri expects.
+		// When GCS is selected, seed the index from a dedicated prefix under the
+		// bucket rather than the bucket root. bucket_url is the gs://<bucket>
+		// root; Vertex's contents_delta_uri expects a DIRECTORY of index data
+		// files, so ingesting the whole bucket root would build a junk index.
+		// Scope it to gs://<bucket>/vertex-index/ — operators stage embedding
+		// files there (the index is created empty if the prefix is absent).
 		if selected[KeyGCPGCS] {
-			wi.RawHCL["contents_delta_uri"] = WireRef(KeyGCPGCS, "bucket_url")
+			wi.RawHCL["contents_delta_uri"] = "\"${" + WireRef(KeyGCPGCS, "bucket_url") + "}/vertex-index/\""
 			wi.Names = append(wi.Names, "contents_delta_uri")
 		}
 	}

@@ -1104,6 +1104,9 @@ func TestEveryGCPSpec_PinsMetricTypesAndDisplayNames(t *testing.T) {
 			{"aiplatform.googleapis.com/prediction/online/prediction_count", "Online Prediction Count"},
 			{"aiplatform.googleapis.com/prediction/online/error_count", "Online Prediction Errors"},
 			{"aiplatform.googleapis.com/prediction/online/prediction_latencies", "Online Prediction Latency (p99)"},
+			// Vector Search (Matching Engine) serving surface — the metric the
+			// gcp/vertex_ai query-latency alert policy alarms on (#764).
+			{"aiplatform.googleapis.com/matching_engine/query_latencies", "Vector Search Query Latency (p99)"},
 		},
 	}
 

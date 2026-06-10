@@ -6,9 +6,12 @@ package composer
 //   - The KeyGCPVertexAI mapper case is partial-config: it only emits a tfvar
 //     the caller actually populated, so the preset's own defaults win when a
 //     field is left unset (mirrors the AWS Bedrock pattern from #757).
-//   - DefaultWiring feeds the index endpoint's private VPC-peering network from
-//     gcp/vpc and the index's contents_delta_uri from gcp/gcs when those
-//     components are selected, and stays inert for both when they are not.
+//   - DefaultWiring feeds the index endpoint's network from gcp/vpc (the
+//     preset converts it to the project-NUMBER form the API needs and the
+//     endpoint stays public unless enable_private_endpoint is set) and the
+//     index's contents_delta_uri from a dedicated gcp/gcs bucket prefix when
+//     those components are selected, and stays inert for both when they are
+//     not.
 //
 // The registry plumbing (ComponentKey + PresetKeyMap + ModulePath +
 // AllComponentKeys + ComposeOrder) and the required-variable coverage are
@@ -68,11 +71,13 @@ func TestBuildModuleValues_GCPVertexAI_PartialConfig(t *testing.T) {
 	})
 }
 
-func TestDefaultWiring_GCPVertexAI_PrivateEndpointAndGCS(t *testing.T) {
+func TestDefaultWiring_GCPVertexAI_NetworkAndGCS(t *testing.T) {
 	t.Parallel()
 
-	// Full stack: VPC + GCS selected -> the index endpoint gets the private
-	// VPC-peering network and the index gets its GCS seed URI.
+	// Full stack: VPC + GCS selected -> the index endpoint network is wired
+	// from gcp/vpc (the preset reshapes it to the project-NUMBER form and keeps
+	// the endpoint public unless enable_private_endpoint is set), and the index
+	// is seeded from a dedicated prefix under the bucket.
 	selected := map[ComponentKey]bool{
 		KeyGCPVertexAI: true,
 		KeyGCPVPC:      true,
@@ -81,14 +86,16 @@ func TestDefaultWiring_GCPVertexAI_PrivateEndpointAndGCS(t *testing.T) {
 	wi := DefaultWiring(selected, KeyGCPVertexAI, &Components{})
 
 	require.Contains(t, wi.RawHCL, "network",
-		"VPC selected -> the index endpoint must be wired to the VPC network for the private peering path")
+		"VPC selected -> the index endpoint network input must be wired from the VPC")
 	assert.Equal(t, WireRef(KeyGCPVPC, "vpc_id"), wi.RawHCL["network"],
-		"network must reference gcp/vpc.vpc_id (the projects/<p>/global/networks/<n> form)")
+		"network must reference gcp/vpc.vpc_id; the preset converts the project-ID path to the project-NUMBER path the API requires")
 
 	require.Contains(t, wi.RawHCL, "contents_delta_uri",
 		"GCS selected -> the index must be seeded from the bucket")
-	assert.Equal(t, WireRef(KeyGCPGCS, "bucket_url"), wi.RawHCL["contents_delta_uri"],
-		"contents_delta_uri must reference gcp/gcs.bucket_url")
+	// Wired to a dedicated prefix under the bucket, NOT the bucket root —
+	// Vertex's contents_delta_uri expects a directory of index data files.
+	assert.Equal(t, "\"${"+WireRef(KeyGCPGCS, "bucket_url")+"}/vertex-index/\"", wi.RawHCL["contents_delta_uri"],
+		"contents_delta_uri must reference a gcp/gcs.bucket_url subdirectory (gs://<bucket>/vertex-index/), not the bucket root")
 
 	assert.Contains(t, wi.Names, "network")
 	assert.Contains(t, wi.Names, "contents_delta_uri")
@@ -98,14 +105,14 @@ func TestDefaultWiring_GCPVertexAI_InertStandalone(t *testing.T) {
 	t.Parallel()
 
 	// Standalone preview: neither VPC nor GCS selected -> no wiring, so the
-	// preset's public-endpoint + empty-index fallbacks apply.
+	// preset's public-endpoint + empty-index defaults apply.
 	selected := map[ComponentKey]bool{
 		KeyGCPVertexAI: true,
 	}
 	wi := DefaultWiring(selected, KeyGCPVertexAI, &Components{})
 
 	assert.NotContains(t, wi.RawHCL, "network",
-		"no VPC selected -> the endpoint must fall back to public (no network wiring)")
+		"no VPC selected -> no network wiring (endpoint is public)")
 	assert.NotContains(t, wi.RawHCL, "contents_delta_uri",
 		"no GCS selected -> the index must be created empty (no contents_delta_uri wiring)")
 }

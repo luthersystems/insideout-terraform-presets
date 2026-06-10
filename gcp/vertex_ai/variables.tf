@@ -124,9 +124,15 @@ variable "index_approximate_neighbors_count" {
 }
 
 variable "network" {
-  description = "Full VPC network resource name (projects/<project>/global/networks/<name>) for a private (VPC-peered) index endpoint. Null creates a public endpoint. Wired from gcp/vpc.vpc_id in a full stack; requires servicenetworking peering on the network (#600)."
+  description = "VPC network for a private (VPC-peered) index endpoint. Accepts the project-ID path (projects/<project_id>/global/networks/<name>, as emitted by gcp/vpc.vpc_id), the project-number path, or a bare network name — the preset extracts the network name and rebuilds the project-NUMBER path the API requires. Only used when enable_private_endpoint is also true; otherwise the endpoint is public."
   type        = string
   default     = null
+}
+
+variable "enable_private_endpoint" {
+  description = "When true AND a network is wired, the index endpoint is private (VPC-peered) instead of public. Default false = public endpoint, which works live today. The private path requires a servicenetworking PSC peering range on the network that gcp/vpc does not yet provision (follow-up #774); enabling it before #774 lands means the peering must exist out-of-band or a live apply fails ~30-90min into the deployed-index step."
+  type        = bool
+  default     = false
 }
 
 variable "deployed_index_min_replicas" {

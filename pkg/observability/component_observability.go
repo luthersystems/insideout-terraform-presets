@@ -441,6 +441,11 @@ var gcpServiceMetrics = map[string]GCPObs{
 			{MetricType: "aiplatform.googleapis.com/prediction/online/prediction_count", ResourceType: "aiplatform.googleapis.com/Endpoint", LabelKey: "endpoint_id", Aligner: "ALIGN_RATE", DisplayName: "Online Prediction Count"},
 			{MetricType: "aiplatform.googleapis.com/prediction/online/error_count", ResourceType: "aiplatform.googleapis.com/Endpoint", LabelKey: "endpoint_id", Aligner: "ALIGN_RATE", DisplayName: "Online Prediction Errors"},
 			{MetricType: "aiplatform.googleapis.com/prediction/online/prediction_latencies", ResourceType: "aiplatform.googleapis.com/Endpoint", LabelKey: "endpoint_id", Aligner: "ALIGN_PERCENTILE_99", DisplayName: "Online Prediction Latency (p99)"},
+			// Vector Search (Matching Engine) serving surface — the metric the
+			// gcp/vertex_ai query-latency alert policy alarms on (#764). Lives
+			// here so componentObs() can flip Alarmed=true; without it the
+			// inspector is blind to the alarmed metric.
+			{MetricType: "aiplatform.googleapis.com/matching_engine/query_latencies", ResourceType: "aiplatform.googleapis.com/MatchingEngineIndexEndpoint", LabelKey: "index_endpoint_id", Aligner: "ALIGN_PERCENTILE_99", DisplayName: "Vector Search Query Latency (p99)"},
 		},
 	},
 }
