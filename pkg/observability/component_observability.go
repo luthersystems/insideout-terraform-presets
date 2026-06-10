@@ -534,19 +534,20 @@ type AlarmAuthor struct {
 // then add the metric_name here (and remove the key from
 // observabilityDeferred once every spec for that key is alarmed).
 var alarmedAWSMetrics = map[composer.ComponentKey]AlarmAuthor{
-	composer.KeyAWSALB:         {Module: "aws/alb", Metrics: []string{"HTTPCode_ELB_5XX_Count"}},
-	composer.KeyAWSAPIGateway:  {Module: "aws/apigateway", Metrics: []string{"5xx"}},
-	composer.KeyAWSBastion:     {Module: "aws/bastion", Metrics: []string{"CPUUtilization"}},
-	composer.KeyAWSDynamoDB:    {Module: "aws/dynamodb", Metrics: []string{"ThrottledRequests"}},
-	composer.KeyAWSEC2:         {Module: "aws/ec2", Metrics: []string{"CPUUtilization"}},
-	composer.KeyAWSECS:         {Module: "aws/ecs", Metrics: []string{"CPUUtilization"}},
-	composer.KeyAWSEKS:         {Module: "aws/eks_nodegroup", Metrics: []string{"cluster_failed_node_count"}},
-	composer.KeyAWSElastiCache: {Module: "aws/elasticache", Metrics: []string{"CPUUtilization"}},
-	composer.KeyAWSLambda:      {Module: "aws/lambda", Metrics: []string{"Errors"}},
-	composer.KeyAWSMSK:         {Module: "aws/msk", Metrics: []string{"OfflinePartitionsCount"}},
-	composer.KeyAWSOpenSearch:  {Module: "aws/opensearch", Metrics: []string{"ClusterStatus.red"}},
-	composer.KeyAWSRDS:         {Module: "aws/rds", Metrics: []string{"CPUUtilization", "FreeStorageSpace"}},
-	composer.KeyAWSSQS:         {Module: "aws/sqs", Metrics: []string{"ApproximateNumberOfMessagesVisible"}},
+	composer.KeyAWSALB:          {Module: "aws/alb", Metrics: []string{"HTTPCode_ELB_5XX_Count"}},
+	composer.KeyAWSAPIGateway:   {Module: "aws/apigateway", Metrics: []string{"5xx"}},
+	composer.KeyAWSBastion:      {Module: "aws/bastion", Metrics: []string{"CPUUtilization"}},
+	composer.KeyAWSBedrockAgent: {Module: "aws/bedrock_agent", Metrics: []string{"InvocationClientErrors"}},
+	composer.KeyAWSDynamoDB:     {Module: "aws/dynamodb", Metrics: []string{"ThrottledRequests"}},
+	composer.KeyAWSEC2:          {Module: "aws/ec2", Metrics: []string{"CPUUtilization"}},
+	composer.KeyAWSECS:          {Module: "aws/ecs", Metrics: []string{"CPUUtilization"}},
+	composer.KeyAWSEKS:          {Module: "aws/eks_nodegroup", Metrics: []string{"cluster_failed_node_count"}},
+	composer.KeyAWSElastiCache:  {Module: "aws/elasticache", Metrics: []string{"CPUUtilization"}},
+	composer.KeyAWSLambda:       {Module: "aws/lambda", Metrics: []string{"Errors"}},
+	composer.KeyAWSMSK:          {Module: "aws/msk", Metrics: []string{"OfflinePartitionsCount"}},
+	composer.KeyAWSOpenSearch:   {Module: "aws/opensearch", Metrics: []string{"ClusterStatus.red"}},
+	composer.KeyAWSRDS:          {Module: "aws/rds", Metrics: []string{"CPUUtilization", "FreeStorageSpace"}},
+	composer.KeyAWSSQS:          {Module: "aws/sqs", Metrics: []string{"ApproximateNumberOfMessagesVisible"}},
 }
 
 // alarmedGCPMetrics is the GCP analogue. Metric strings match

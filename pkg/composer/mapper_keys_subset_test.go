@@ -185,6 +185,11 @@ func kitchenSinkConfig() *Config {
 		EnableKnowledgeBase *bool  `json:"enableKnowledgeBase,omitempty"`
 		VectorStore         string `json:"vectorStore,omitempty"`
 	}{KnowledgeBaseName: "kb", ModelID: "anthropic.claude-3", EmbeddingModelID: "amazon.titan-embed", EnableKnowledgeBase: &t, VectorStore: "s3vectors"}
+	cfg.AWSBedrockAgent = &struct {
+		FoundationModel string `json:"foundationModel,omitempty"`
+		Instruction     string `json:"instruction,omitempty"`
+		AgentName       string `json:"agentName,omitempty"`
+	}{FoundationModel: "anthropic.claude-3-5-sonnet-20240620-v1:0", Instruction: "You are a helpful assistant that answers questions about the customer's documents.", AgentName: "support-agent"}
 	cfg.AWSRoute53 = &struct {
 		DomainName   string   `json:"domainName,omitempty"`
 		CreateZone   *bool    `json:"createZone,omitempty"`

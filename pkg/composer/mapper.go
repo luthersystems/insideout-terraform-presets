@@ -812,6 +812,30 @@ func (m DefaultMapper) BuildModuleValues(
 		// null. The KB itself is off by default, so a preview compose with no
 		// config produces just the plain model-invocation role + guardrail.
 
+	case KeyAWSBedrockAgent:
+		// Partial-config: only emit a field the caller actually populated so
+		// the preset's own sensible defaults (foundation_model = a Claude
+		// model, a generic instruction) win when the field is left unset. The
+		// preset validates non-empty foundation_model + instruction, so an
+		// explicit empty string from the caller surfaces as a plan-time
+		// precondition failure rather than a silent default.
+		if cfg != nil && cfg.AWSBedrockAgent != nil {
+			if strings.TrimSpace(cfg.AWSBedrockAgent.FoundationModel) != "" {
+				vals["foundation_model"] = strings.TrimSpace(cfg.AWSBedrockAgent.FoundationModel)
+			}
+			if cfg.AWSBedrockAgent.Instruction != "" {
+				vals["instruction"] = cfg.AWSBedrockAgent.Instruction
+			}
+			if strings.TrimSpace(cfg.AWSBedrockAgent.AgentName) != "" {
+				vals["agent_name"] = strings.TrimSpace(cfg.AWSBedrockAgent.AgentName)
+			}
+		}
+		// action_group_lambda_arn and knowledge_base_id are wired by
+		// DefaultWiring (function_arn from the implicitly-added aws/lambda;
+		// knowledge_base_id from aws/bedrock when selected). For single-module
+		// preview compose they are left unset — the preset defaults them to
+		// null and gates the action group / KB association on a non-null arn.
+
 	case KeyAWSLambda:
 		vals["runtime"] = "nodejs20.x" // Default to nodejs
 		if cfg != nil && cfg.AWSLambda != nil {

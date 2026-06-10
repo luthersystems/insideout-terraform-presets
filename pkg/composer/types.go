@@ -37,6 +37,7 @@ type Components struct {
 	AWSKMS                  *bool  `json:"aws_kms,omitempty"`
 	AWSSecretsManager       *bool  `json:"aws_secretsmanager,omitempty"`
 	AWSBedrock              *bool  `json:"aws_bedrock,omitempty"`
+	AWSBedrockAgent         *bool  `json:"aws_bedrock_agent,omitempty"`
 	AWSSQS                  *bool  `json:"aws_sqs,omitempty"`
 	AWSMSK                  *bool  `json:"aws_msk,omitempty"`
 	AWSCloudWatchLogs       *bool  `json:"aws_cloudwatch_logs,omitempty"`
@@ -298,6 +299,12 @@ type Config struct {
 		EnableKnowledgeBase *bool  `json:"enableKnowledgeBase,omitempty"`
 		VectorStore         string `json:"vectorStore,omitempty"`
 	} `json:"aws_bedrock,omitempty"`
+
+	AWSBedrockAgent *struct {
+		FoundationModel string `json:"foundationModel,omitempty"`
+		Instruction     string `json:"instruction,omitempty"`
+		AgentName       string `json:"agentName,omitempty"`
+	} `json:"aws_bedrock_agent,omitempty"`
 
 	AWSBackups *struct {
 		EC2 *struct {
@@ -638,6 +645,7 @@ func (c *Components) Normalize() {
 		c.AWSKMS = nil
 		c.AWSSecretsManager = nil
 		c.AWSBedrock = nil
+		c.AWSBedrockAgent = nil
 		c.AWSSQS = nil
 		c.AWSMSK = nil
 		c.AWSCloudWatchLogs = nil
@@ -760,6 +768,7 @@ func (c *Config) Normalize() {
 		c.AWSSecretsManager = nil
 		c.AWSOpenSearch = nil
 		c.AWSBedrock = nil
+		c.AWSBedrockAgent = nil
 		c.AWSRoute53 = nil
 		c.AWSACM = nil
 		c.AWSBackups = nil
