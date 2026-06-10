@@ -61,6 +61,7 @@ var expectedResourceTypesByAction = map[string][]string{
 	"aws/apigateway/get-apis":                 {"aws_apigatewayv2_api", "aws_api_gateway_rest_api"},
 	"aws/opensearch/describe-domains":         {"aws_opensearch_domain"},
 	"aws/bedrock/list-knowledge-bases":        {"aws_bedrockagent_knowledge_base"},
+	"aws/bedrock/list-agents":                 {"aws_bedrockagent_agent"},
 	"aws/vpc/describe-vpcs":                   {"aws_vpc"},
 	// #622 historical-drift backfill.
 	"aws/acm/list-certificates":     {"aws_acm_certificate"},

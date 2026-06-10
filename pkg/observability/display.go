@@ -123,6 +123,8 @@ func ComponentDisplayName(key composer.ComponentKey) string {
 		return "AWS OpenSearch"
 	case composer.KeyAWSBedrock:
 		return "AWS Bedrock"
+	case composer.KeyAWSBedrockAgent:
+		return "AWS Bedrock Agent"
 	case composer.KeyAWSBastion:
 		return "AWS Bastion"
 	case composer.KeyAWSGrafana:

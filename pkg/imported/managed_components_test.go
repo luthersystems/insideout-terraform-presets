@@ -35,6 +35,10 @@ var observableParityNonChartable = map[composer.ComponentKey]nonChartableObserva
 		Class:  "inventory-only",
 		Reason: "#712 - aws_sagemaker_domain uses sagemaker.list-domains inventory; no default imported chart metrics",
 	},
+	composer.KeyAWSBedrockAgent: {
+		Class:  "inventory-only",
+		Reason: "#762 - aws_bedrockagent_agent uses bedrock.list-agents inventory; no default imported chart metrics binding (imported discovery support is a follow-up, cf. #712)",
+	},
 	composer.KeyGCPCloudDeploy: {
 		Class:  "inventory-only",
 		Reason: "#712 - google_clouddeploy_delivery_pipeline uses clouddeploy.list-delivery-pipelines inventory; no default imported chart metrics",

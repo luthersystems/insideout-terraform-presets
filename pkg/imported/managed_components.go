@@ -20,6 +20,7 @@ var managedComponentPrimaryTFTypes = map[composer.ComponentKey]string{
 	composer.KeyAWSBackups:              "aws_backup_vault",
 	composer.KeyAWSBastion:              "aws_instance",
 	composer.KeyAWSBedrock:              "aws_bedrock_guardrail",
+	composer.KeyAWSBedrockAgent:         "aws_bedrockagent_agent",
 	composer.KeyAWSCloudfront:           "aws_cloudfront_distribution",
 	composer.KeyAWSCloudWatchLogs:       "aws_cloudwatch_log_group",
 	composer.KeyAWSCloudWatchMonitoring: "aws_cloudwatch_metric_alarm",
