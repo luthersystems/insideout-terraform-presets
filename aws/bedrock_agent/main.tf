@@ -143,6 +143,11 @@ resource "aws_bedrockagent_agent" "this" {
   idle_session_ttl_in_seconds = var.idle_session_ttl_in_seconds
   prepare_agent               = true
 
+  # A prepared agent that still has a live alias / action group bound can hit
+  # the same ConflictException as the action group on delete. Skip the in-use
+  # check so destroy tears the agent down cleanly alongside its dependents.
+  skip_resource_in_use_check = true
+
   tags = merge(module.name.tags, var.tags)
 
   depends_on = [aws_iam_role_policy.agent]
@@ -188,6 +193,12 @@ resource "aws_bedrockagent_agent_action_group" "this" {
   action_group_name = local.action_group_name
   description       = "Lambda-backed tools for ${local.agent_name}."
   prepare_agent     = true
+
+  # An ENABLED action group attached to a prepared agent cannot be deleted —
+  # Bedrock returns ConflictException ("ActionGroup ... cannot be deleted when
+  # it is Enabled") on DeleteAgentActionGroup. Skip the in-use check so destroy
+  # (and any replace) removes it cleanly without a manual disable step.
+  skip_resource_in_use_check = true
 
   action_group_executor {
     lambda = var.action_group_lambda_arn
