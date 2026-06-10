@@ -59,7 +59,7 @@ func TestMapper_AWSSageMaker_DefaultConfig(t *testing.T) {
 		"default subnet_ids should be a single-element preview stub list")
 
 	// Optional vars MUST be absent when caller didn't populate cfg.
-	for _, key := range []string{"network_mode", "workspace_bucket", "workspace_bucket_force_destroy", "studio_users", "sagemaker_managed_policy_arn"} {
+	for _, key := range []string{"network_mode", "workspace_bucket", "workspace_bucket_force_destroy", "studio_users", "sagemaker_managed_policy_arn", "enable_inference", "model_image", "model_data_url", "endpoint_instance_type"} {
 		_, has := vals[key]
 		require.Falsef(t, has,
 			"mapper must NOT emit %q when caller left cfg.AWSSageMaker nil — module default must win",
@@ -71,6 +71,7 @@ func TestMapper_AWSSageMaker_CallerSuppliedConfig(t *testing.T) {
 	t.Parallel()
 
 	fd := true
+	ei := true
 	cfg := &Config{
 		AWSSageMaker: &AWSSageMakerConfig{
 			VPCID:                       "vpc-real",
@@ -80,6 +81,10 @@ func TestMapper_AWSSageMaker_CallerSuppliedConfig(t *testing.T) {
 			WorkspaceBucketForceDestroy: &fd,
 			StudioUsers:                 []string{"alice", "bob"},
 			SageMakerManagedPolicyARN:   "arn:aws:iam::123456789012:policy/MyScopedSagemaker",
+			EnableInference:             &ei,
+			ModelImage:                  "123456789012.dkr.ecr.us-east-1.amazonaws.com/llm:latest",
+			ModelDataURL:                "s3://my-bucket/model.tar.gz",
+			EndpointInstanceType:        "ml.g5.xlarge",
 		},
 	}
 	m := DefaultMapper{}
@@ -93,6 +98,51 @@ func TestMapper_AWSSageMaker_CallerSuppliedConfig(t *testing.T) {
 	require.Equal(t, true, vals["workspace_bucket_force_destroy"])
 	require.Equal(t, []any{"alice", "bob"}, vals["studio_users"])
 	require.Equal(t, "arn:aws:iam::123456789012:policy/MyScopedSagemaker", vals["sagemaker_managed_policy_arn"])
+	require.Equal(t, true, vals["enable_inference"])
+	require.Equal(t, "123456789012.dkr.ecr.us-east-1.amazonaws.com/llm:latest", vals["model_image"])
+	require.Equal(t, "s3://my-bucket/model.tar.gz", vals["model_data_url"])
+	require.Equal(t, "ml.g5.xlarge", vals["endpoint_instance_type"])
+}
+
+// TestMapper_AWSSageMaker_InferencePartialConfig pins that the inference
+// fields obey the same partial-config contract: setting only EnableInference
+// (e.g. a caller that wants the trio with the preset's default image-less
+// shape rejected at plan) emits enable_inference but leaves model_image /
+// model_data_url / endpoint_instance_type unset so the preset defaults / the
+// non-empty-image precondition own those. Catches a regression where the
+// mapper would emit empty strings that override the preset defaults.
+func TestMapper_AWSSageMaker_InferencePartialConfig(t *testing.T) {
+	t.Parallel()
+
+	ei := true
+	cfg := &Config{
+		AWSSageMaker: &AWSSageMakerConfig{
+			EnableInference: &ei,
+			// ModelImage / ModelDataURL / EndpointInstanceType intentionally
+			// left zero.
+		},
+	}
+	m := DefaultMapper{}
+	vals, err := m.BuildModuleValues(KeyAWSSageMaker, &Components{}, cfg, "demo", "us-east-1")
+	require.NoError(t, err)
+
+	require.Equal(t, true, vals["enable_inference"])
+	for _, key := range []string{"model_image", "model_data_url", "endpoint_instance_type"} {
+		_, has := vals[key]
+		require.Falsef(t, has,
+			"mapper must NOT emit %q when caller left it zero — module default must win",
+			key)
+	}
+
+	// And the false-path: EnableInference=&false must still emit
+	// enable_inference (an explicit deselect the preset must honor), not be
+	// dropped like an empty string.
+	ef := false
+	cfg2 := &Config{AWSSageMaker: &AWSSageMakerConfig{EnableInference: &ef}}
+	vals2, err := m.BuildModuleValues(KeyAWSSageMaker, &Components{}, cfg2, "demo", "us-east-1")
+	require.NoError(t, err)
+	require.Equal(t, false, vals2["enable_inference"],
+		"EnableInference=&false must emit enable_inference=false (explicit opt-out), not be dropped")
 }
 
 // TestMapper_AWSSageMaker_PartialConfig confirms that when only one
@@ -130,7 +180,7 @@ func TestMapper_AWSSageMaker_PartialConfig(t *testing.T) {
 	require.Equal(t, "vpc-00000000preview", vals["vpc_id"])
 	require.Equal(t, []any{"subnet-00000000preview"}, vals["subnet_ids"])
 
-	for _, key := range []string{"workspace_bucket", "workspace_bucket_force_destroy", "studio_users", "sagemaker_managed_policy_arn"} {
+	for _, key := range []string{"workspace_bucket", "workspace_bucket_force_destroy", "studio_users", "sagemaker_managed_policy_arn", "enable_inference", "model_image", "model_data_url", "endpoint_instance_type"} {
 		_, has := vals[key]
 		require.Falsef(t, has,
 			"mapper must NOT emit %q when caller left it zero — module default must win",
@@ -153,6 +203,9 @@ func TestMapper_AWSSageMaker_EmptyStringsIgnored(t *testing.T) {
 			WorkspaceBucket:           "   ",
 			StudioUsers:               []string{"alice", "  ", ""},
 			SageMakerManagedPolicyARN: "  ",
+			ModelImage:                "   ",
+			ModelDataURL:              "  ",
+			EndpointInstanceType:      "   ",
 		},
 	}
 	m := DefaultMapper{}
@@ -169,7 +222,8 @@ func TestMapper_AWSSageMaker_EmptyStringsIgnored(t *testing.T) {
 	require.Equal(t, []any{"alice"}, vals["studio_users"])
 
 	// Whitespace-only strings on optional scalar fields → not emitted at all.
-	for _, key := range []string{"network_mode", "workspace_bucket", "sagemaker_managed_policy_arn"} {
+	// enable_inference is a *bool (nil here) so it must also be absent.
+	for _, key := range []string{"network_mode", "workspace_bucket", "sagemaker_managed_policy_arn", "enable_inference", "model_image", "model_data_url", "endpoint_instance_type"} {
 		_, has := vals[key]
 		require.Falsef(t, has,
 			"mapper must NOT emit %q when caller supplied a whitespace-only string",
@@ -340,4 +394,24 @@ func TestAWSIAMPermissions_SageMakerCovered(t *testing.T) {
 		"S3 CreateBucket permission must be in the required set (preset-managed workspace bucket)")
 	require.Contains(t, required, "s3:PutBucketPublicAccessBlock",
 		"PutBucketPublicAccessBlock permission must be in the required set (security default on the workspace bucket)")
+
+	// Real-time inference endpoint (#761) — the model / endpoint-config /
+	// endpoint create permissions must be in the required set so the
+	// pre-deploy simulate catches a principal that can't host a model.
+	require.Contains(t, required, "sagemaker:CreateModel",
+		"SageMaker model create permission must be in the required set (#761 inference endpoint)")
+	require.Contains(t, required, "sagemaker:CreateEndpointConfig",
+		"SageMaker endpoint-config create permission must be in the required set (#761 inference endpoint)")
+	require.Contains(t, required, "sagemaker:CreateEndpoint",
+		"SageMaker endpoint create permission must be in the required set (#761 inference endpoint)")
+
+	// CloudWatch alarm permissions (#761 review MED-2). observability.tf
+	// creates the invocation-5XX + model-latency alarms by default whenever
+	// inference is on; the deploy principal needs PutMetricAlarm to create
+	// them and DeleteAlarms so destroy can clean them up. Without these the
+	// pre-deploy simulate passes but the alarm create/destroy 403s.
+	require.Contains(t, required, "cloudwatch:PutMetricAlarm",
+		"CloudWatch PutMetricAlarm must be in the required set (observability alarms created by default — #761 MED-2)")
+	require.Contains(t, required, "cloudwatch:DeleteAlarms",
+		"CloudWatch DeleteAlarms must be in the required set so terraform destroy can tear down the observability alarms (#761 MED-2)")
 }

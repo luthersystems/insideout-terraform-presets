@@ -89,6 +89,44 @@ locals {
   workspace_bucket_name = local.create_bucket ? aws_s3_bucket.workspace[0].id : var.workspace_bucket
   workspace_bucket_arn  = local.create_bucket ? aws_s3_bucket.workspace[0].arn : "arn:${data.aws_partition.current.partition}:s3:::${var.workspace_bucket}"
   default_bucket_name   = local.create_bucket ? "${var.project}-sagemaker-workspace-${random_id.workspace_suffix[0].hex}" : null
+
+  # Real-time inference slice (#761). When off, the preset stays Studio-only.
+  # The model / endpoint-config / endpoint resources below use
+  # `count = local.enable_inference ? 1 : 0` so they read cleanly as `[0]`
+  # while staying absent when disabled.
+  enable_inference = var.enable_inference
+
+  # model_data_url is optional: many LLM serving images bundle / pull their
+  # own weights. We only attach the s3:GetObject read grant for the artifact
+  # when a URL is actually supplied (least privilege). Derive the bucket ARN
+  # for the grant from the s3://bucket/key URL.
+  model_data_bucket = local.enable_inference && trimspace(var.model_data_url) != "" ? split("/", replace(var.model_data_url, "s3://", ""))[0] : ""
+  model_data_arn    = local.model_data_bucket == "" ? "" : "arn:${data.aws_partition.current.partition}:s3:::${local.model_data_bucket}"
+
+  # ECR registry scoping (#761 review MED-3). var.model_image can be a
+  # cross-account image — AWS Deep Learning Containers live in AWS-owned
+  # registries (e.g. 763104351884.dkr.ecr.<region>.amazonaws.com/...), not the
+  # deploying account. Scoping the layer/image-read grant to the *deploying*
+  # account's repos would 403 the pull of any DLC. So we parse the registry
+  # account id out of the standard ECR image URI
+  # (<acct>.dkr.ecr.<region>.amazonaws.com/<repo>[:tag|@digest]) and scope the
+  # BatchGetImage / GetDownloadUrlForLayer / BatchCheckLayerAvailability grant
+  # to *that* registry's repos. If the URI isn't a parseable ECR registry host
+  # (e.g. a bare SageMaker built-in algorithm image or a public/non-ECR ref),
+  # the regex yields no match and we fall back to the deploying account — the
+  # safe default for an in-account image, and non-ECR images don't consult an
+  # ECR repo grant at all.
+  #
+  # ecr_registry_account: the 12-digit account id from the registry host, or
+  # "" when the image URI isn't an ECR registry reference.
+  _ecr_registry_matches = local.enable_inference ? regexall("^([0-9]{12})\\.dkr\\.ecr\\.[a-z0-9-]+\\.amazonaws\\.com/", trimspace(var.model_image)) : []
+  ecr_registry_account  = length(local._ecr_registry_matches) > 0 ? local._ecr_registry_matches[0][0] : data.aws_caller_identity.current.account_id
+
+  # ARN of the repo namespace the model image lives in, scoped to the parsed
+  # (possibly cross-account) registry. The pull grant targets this — not the
+  # deploying account's repos — so cross-account DLC pulls succeed under least
+  # privilege.
+  ecr_repo_arn = "arn:${data.aws_partition.current.partition}:ecr:${var.region}:${local.ecr_registry_account}:repository/*"
 }
 
 resource "random_id" "workspace_suffix" {
@@ -250,4 +288,160 @@ resource "aws_sagemaker_user_profile" "studio_user" {
   user_profile_name = each.value
 
   tags = local.tags
+}
+
+# -----------------------------------------------------------------------------
+# Real-time inference endpoint (#761) — gated on var.enable_inference.
+#
+# Lifecycle: aws_sagemaker_model (defines the servable container + the
+# execution role it runs under) → aws_sagemaker_endpoint_configuration
+# (the production-variant hosting plan: which model, instance type, count)
+# → aws_sagemaker_endpoint (the live HTTPS endpoint InvokeEndpoint hits).
+#
+# The endpoint hosting container runs as the Studio execution role. To pull
+# the model image from ECR and read the model artifact from S3 it needs
+# explicit grants beyond Studio's bucket access — attached below, only when
+# inference is enabled so the Studio-only path keeps a tighter role.
+# -----------------------------------------------------------------------------
+
+# ECR pull for the model image. ecr:GetAuthorizationToken is account-wide
+# (Resource "*" is required — the token isn't scopable to a repo); the image
+# layer/manifest reads are scoped to the registry the model image actually
+# lives in (local.ecr_repo_arn), which may be a *cross-account* AWS registry
+# for a Deep Learning Container (#761 review MED-3). Falls back to the
+# deploying account when the URI isn't a parseable ECR registry reference.
+resource "aws_iam_role_policy" "inference_ecr_pull" {
+  count = local.enable_inference ? 1 : 0
+
+  name = "${var.project}-sagemaker-inference-ecr-pull"
+  role = aws_iam_role.studio_execution.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect   = "Allow"
+        Action   = ["ecr:GetAuthorizationToken"]
+        Resource = "*"
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "ecr:BatchCheckLayerAvailability",
+          "ecr:GetDownloadUrlForLayer",
+          "ecr:BatchGetImage",
+        ]
+        Resource = local.ecr_repo_arn
+      },
+    ]
+  })
+}
+
+# S3 read for the model artifact (model.tar.gz). Only attached when a
+# model_data_url is supplied — images that bundle their own weights need no
+# extra S3 grant. Scoped to the specific artifact bucket (get object + list).
+resource "aws_iam_role_policy" "inference_model_data" {
+  count = local.enable_inference && local.model_data_arn != "" ? 1 : 0
+
+  name = "${var.project}-sagemaker-inference-model-data"
+  role = aws_iam_role.studio_execution.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect   = "Allow"
+        Action   = ["s3:GetObject"]
+        Resource = "${local.model_data_arn}/*"
+      },
+      {
+        Effect   = "Allow"
+        Action   = ["s3:ListBucket"]
+        Resource = local.model_data_arn
+      },
+    ]
+  })
+}
+
+resource "aws_sagemaker_model" "inference" {
+  count = local.enable_inference ? 1 : 0
+
+  name               = "${var.project}-model"
+  execution_role_arn = aws_iam_role.studio_execution.arn
+
+  primary_container {
+    image = var.model_image
+    # model_data_url is optional — omit it (null) so the provider doesn't set
+    # an empty ModelDataUrl, which AWS rejects. Images that pull their own
+    # weights leave this unset.
+    model_data_url = trimspace(var.model_data_url) != "" ? var.model_data_url : null
+  }
+
+  tags = merge(local.tags, { Name = "${var.project}-model" })
+
+  lifecycle {
+    precondition {
+      # model_image must be non-empty when inference is on — SageMaker can't
+      # host a model without a servable container. Enforced here (not as a
+      # var validation) because the requirement is conditional on
+      # var.enable_inference, and TF forbids cross-variable conditions in a
+      # variable validation block.
+      condition     = trimspace(var.model_image) != ""
+      error_message = "model_image must be a non-empty ECR/SageMaker container image URI when enable_inference is true — SageMaker cannot host a model without a servable container."
+    }
+  }
+}
+
+resource "aws_sagemaker_endpoint_configuration" "inference" {
+  count = local.enable_inference ? 1 : 0
+
+  name = "${var.project}-endpoint-config"
+
+  production_variants {
+    variant_name           = "primary"
+    model_name             = aws_sagemaker_model.inference[0].name
+    initial_instance_count = 1
+    instance_type          = var.endpoint_instance_type
+    initial_variant_weight = 1.0
+  }
+
+  tags = merge(local.tags, { Name = "${var.project}-endpoint-config" })
+}
+
+# Endpoint create blocks until the production variant reaches InService —
+# pulling the image + (optionally) the model artifact and warming the container
+# can take several minutes, longer for large GPU LLM images. The aws provider
+# 6.x aws_sagemaker_endpoint resource does NOT expose a configurable `timeouts`
+# block (verified against `terraform providers schema -json`); it uses the
+# provider's built-in InService wait. A slow-but-healthy rollout is therefore
+# bounded by the provider default, not a knob we can set here.
+resource "aws_sagemaker_endpoint" "inference" {
+  count = local.enable_inference ? 1 : 0
+
+  name                 = "${var.project}-endpoint"
+  endpoint_config_name = aws_sagemaker_endpoint_configuration.inference[0].name
+
+  # IAM race guard (#761 review HIGH-1). The endpoint create is where AWS
+  # actually instantiates the container: it pulls the model image from ECR
+  # and (when set) reads model.tar.gz from S3 *as the execution role*. The
+  # aws_sagemaker_model resource above only registers metadata (image URI +
+  # role ARN) — no pull happens there — so the real consumer of these grants
+  # is the endpoint. terraform's implicit graph does NOT order the endpoint
+  # after the inline role policies (the endpoint references the model →
+  # config, not the policies), so without an explicit depends_on the endpoint
+  # create can start before the execution role can pull the image / read the
+  # artifact, intermittently failing the InService rollout. The managed-policy
+  # attachment is included for the same reason (AmazonSageMakerFullAccess
+  # carries the ECR/S3 permissions a scoped override might rely on).
+  #
+  # inference_model_data is count-gated (only present when model_data_url is
+  # set); depends_on tolerates a resource that resolves to zero instances, so
+  # listing it unconditionally is safe whether or not the artifact grant exists.
+  depends_on = [
+    aws_iam_role_policy.inference_ecr_pull,
+    aws_iam_role_policy.inference_model_data,
+    aws_iam_role_policy_attachment.studio_managed,
+  ]
+
+  tags = merge(local.tags, { Name = "${var.project}-endpoint" })
 }

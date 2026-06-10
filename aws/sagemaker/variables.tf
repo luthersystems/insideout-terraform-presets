@@ -113,6 +113,54 @@ variable "studio_users" {
 }
 
 # -----------------------------------------------------------------------------
+# Real-time inference endpoint (#761) — gated on enable_inference. When off,
+# the preset stays Studio-only (the #615 behavior); when on, it adds a
+# model + endpoint-configuration + endpoint trio hosting a servable container.
+# -----------------------------------------------------------------------------
+
+variable "enable_inference" {
+  description = "When true, provision a real-time inference slice (aws_sagemaker_model + aws_sagemaker_endpoint_configuration + aws_sagemaker_endpoint) hosting model_image. When false (default) the preset stays Studio-only and none of the inference resources are created. The Studio domain + execution role are always provisioned regardless."
+  type        = bool
+  default     = false
+}
+
+variable "model_image" {
+  description = "ECR / SageMaker container image URI for the model's primary container (e.g. a Deep Learning Container or an LLM serving image). Required (non-empty) when enable_inference is true — SageMaker cannot host a model without a servable container. Ignored when enable_inference is false."
+  type        = string
+  default     = ""
+}
+
+variable "model_data_url" {
+  description = "Optional S3 URI to the model artifact tarball (model.tar.gz) loaded into the container at startup. Leave empty for images that bundle their own weights (many LLM serving images pull from the hub at runtime). Only consumed when enable_inference is true."
+  type        = string
+  default     = ""
+
+  validation {
+    # Require a bucket AND a key, not a bare `s3://` (which would derive an
+    # empty bucket ARN and 403 the model-data read at apply). Bucket segment:
+    # 3-63 chars, lowercase alphanumeric / hyphen / dot, start+end
+    # alphanumeric (S3 naming). Key segment: at least one non-slash char so
+    # `s3://bucket/` (bucket but no object) is also rejected.
+    condition     = var.model_data_url == "" ? true : can(regex("^s3://[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]/.+", var.model_data_url))
+    error_message = "model_data_url must be a full s3://<bucket>/<key> URI pointing at the model artifact (or empty to let the container supply its own weights). A bare s3:// or bucket-only s3://<bucket>/ is rejected."
+  }
+}
+
+variable "endpoint_instance_type" {
+  description = "Instance type for the real-time endpoint's production variant (e.g. ml.m5.xlarge, ml.g5.xlarge for GPU LLM serving). Must be an ml.* family — SageMaker hosting only accepts ml-prefixed instance types. Only consumed when enable_inference is true."
+  type        = string
+  default     = "ml.m5.xlarge"
+
+  validation {
+    # SageMaker hosting instance types are always ml.<family>.<size>. A bare
+    # EC2 type (m5.xlarge) or a typo is rejected at plan so callers don't
+    # discover it only when the endpoint create fails at apply.
+    condition     = can(regex("^ml\\.[a-z0-9]+\\.[a-z0-9]+$", var.endpoint_instance_type))
+    error_message = "endpoint_instance_type must be a SageMaker ml.* hosting instance type (e.g. ml.m5.xlarge, ml.g5.xlarge)."
+  }
+}
+
+# -----------------------------------------------------------------------------
 # IAM policy override
 # -----------------------------------------------------------------------------
 
