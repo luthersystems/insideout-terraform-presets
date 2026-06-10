@@ -590,19 +590,26 @@ func (a *AWSDiscoverer) DiscoverTypes(ctx context.Context, types []string, args 
 	// delivered with an empty, non-nil slice so the consumer's progress
 	// denominator still advances. A nil callback short-circuits before the
 	// lock so the back-compat path takes zero overhead.
+	//
+	// The delivered slice is an ISOLATED snapshot, not an alias of the
+	// returned rows: the cross-type augmentation passes that run after
+	// g.Wait() (resolveVPCChildVPCIDs mutates Identity.NativeIDs["vpc_id"];
+	// resolveParentAddresses sets Identity.ParentAddress) would otherwise
+	// mutate structs already handed to the callback — a hazard for a consumer
+	// that retains or asynchronously processes the batch (codex reliable#2065
+	// round 2). snapshotForCallback copies each element by value (isolating
+	// every scalar, including ParentAddress) and clones the NativeIDs map
+	// (the only map a post-Wait pass mutates today), so the callback's view
+	// is frozen at discovery time regardless of later augmentation.
 	var cbMu sync.Mutex
 	onTypeDiscovered := func(tfType string, resources []imported.ImportedResource) {
 		if args.OnTypeDiscovered == nil {
 			return
 		}
-		if resources == nil {
-			// Normalize the downgraded/empty case to a non-nil empty slice
-			// so consumers can rely on a stable "delivered, zero rows" shape.
-			resources = []imported.ImportedResource{}
-		}
+		snapshot := snapshotForCallback(resources)
 		cbMu.Lock()
 		defer cbMu.Unlock()
-		args.OnTypeDiscovered(tfType, resources)
+		args.OnTypeDiscovered(tfType, snapshot)
 	}
 
 	g, gctx := errgroup.WithContext(ctx)
@@ -741,4 +748,38 @@ func (a *AWSDiscoverer) DiscoverTypes(ctx context.Context, types []string, args 
 	resolveParentAddresses(all)
 	args.Emitter.StageFinish("discover", len(all), time.Since(stageStart))
 	return all, nil
+}
+
+// snapshotForCallback returns an isolated copy of a per-type result slice
+// for delivery to DiscoverArgs.OnTypeDiscovered, so the post-g.Wait()
+// cross-type augmentation passes can't mutate structs already handed to a
+// streaming consumer (codex reliable#2065 round 2).
+//
+// It copies every element by VALUE — which already isolates all scalar
+// fields, notably Identity.ParentAddress (set by resolveParentAddresses) —
+// and additionally clones Identity.NativeIDs, the only map a post-Wait pass
+// mutates today (resolveVPCChildVPCIDs stamps NativeIDs["vpc_id"]). The
+// other reference fields (Tags, Attributes, ProviderIdentity, Attrs, the
+// *PresetMatch / *ForceTakeover pointers, …) are NOT touched by any
+// post-Wait augmentation, so they are intentionally shared rather than
+// deep-copied — a full deep copy would be a maintenance hazard that goes
+// stale every time the IR grows a field. INVARIANT: if a future post-Wait
+// pass mutates an additional reference field on a delivered resource, clone
+// it here too (and extend TestOnTypeDiscovered_SnapshotIsolatesNativeIDs).
+//
+// nil/empty in → non-nil empty slice out, so consumers get a stable
+// "delivered, zero rows" shape for downgraded / empty types.
+func snapshotForCallback(in []imported.ImportedResource) []imported.ImportedResource {
+	out := make([]imported.ImportedResource, len(in))
+	copy(out, in)
+	for i := range out {
+		if src := out[i].Identity.NativeIDs; src != nil {
+			clone := make(map[string]string, len(src))
+			for k, v := range src {
+				clone[k] = v
+			}
+			out[i].Identity.NativeIDs = clone
+		}
+	}
+	return out
 }

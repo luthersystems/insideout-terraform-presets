@@ -381,6 +381,116 @@ func TestOnTypeDiscovered_ConcurrentSerialized(t *testing.T) {
 	}
 }
 
+// nativeIDDiscoverer returns one resource carrying a NativeIDs map, so the
+// snapshot-isolation test can prove the delivered batch's map is a distinct
+// object from the one in the returned slice (the slice resolveVPCChildVPCIDs
+// would mutate after g.Wait()).
+type nativeIDDiscoverer struct {
+	t   string
+	out []imported.ImportedResource
+}
+
+func (n *nativeIDDiscoverer) ResourceType() string { return n.t }
+func (n *nativeIDDiscoverer) Discover(_ context.Context, _ DiscoverArgs) ([]imported.ImportedResource, error) {
+	return n.out, nil
+}
+func (n *nativeIDDiscoverer) DiscoverByID(_ context.Context, _, _, _ string) (imported.ImportedResource, error) {
+	return imported.ImportedResource{}, ErrNotSupported
+}
+
+// TestOnTypeDiscovered_SnapshotIsolatesNativeIDs pins the snapshot-isolation
+// contract (codex reliable#2065 round 2): the resources delivered to the
+// callback must NOT alias the NativeIDs maps in the returned slice, so a
+// post-g.Wait() augmentation pass (resolveVPCChildVPCIDs stamps
+// NativeIDs["vpc_id"]) cannot mutate a struct a streaming consumer retained.
+//
+// We simulate the post-pass mutation directly on the returned slice's map and
+// assert the retained callback snapshot is unaffected — a regression that
+// dropped the map clone (or aliased the slice) would let the mutation bleed
+// through.
+func TestOnTypeDiscovered_SnapshotIsolatesNativeIDs(t *testing.T) {
+	t.Parallel()
+
+	res := ir("igw1")
+	res.Identity.NativeIDs = map[string]string{"internet_gateway_id": "igw-123"}
+	d := &nativeIDDiscoverer{t: "aws_internet_gateway", out: []imported.ImportedResource{res}}
+	agg := &AWSDiscoverer{byType: map[string]Discoverer{"aws_internet_gateway": d}}
+
+	var retained []imported.ImportedResource
+	args := argsBasic()
+	args.OnTypeDiscovered = func(_ string, resources []imported.ImportedResource) {
+		retained = resources // a streaming consumer holding the batch
+	}
+
+	got, err := agg.DiscoverTypes(context.Background(), []string{"aws_internet_gateway"}, args)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(retained) != 1 || len(got) != 1 {
+		t.Fatalf("retained=%d got=%d, want 1 each", len(retained), len(got))
+	}
+
+	// The delivered snapshot must not share the returned slice's NativeIDs map.
+	if &retained[0].Identity.NativeIDs == &got[0].Identity.NativeIDs {
+		t.Fatal("snapshot shares the NativeIDs map header with the returned slice")
+	}
+	// Simulate the post-g.Wait() augmentation mutating the RETURNED row.
+	got[0].Identity.NativeIDs["vpc_id"] = "vpc-999"
+	if _, leaked := retained[0].Identity.NativeIDs["vpc_id"]; leaked {
+		t.Error("post-discovery NativeIDs mutation bled into the callback snapshot — snapshot is not isolated")
+	}
+}
+
+// TestSnapshotForCallback_DeepCopiesNativeIDsAndIsolatesScalars unit-tests the
+// helper directly: scalar fields are value-copied (so a ParentAddress stamp on
+// the original doesn't reach the snapshot) and NativeIDs is a distinct map.
+func TestSnapshotForCallback_DeepCopiesNativeIDsAndIsolatesScalars(t *testing.T) {
+	t.Parallel()
+
+	in := []imported.ImportedResource{{
+		Identity: imported.ResourceIdentity{
+			Type:      "aws_internet_gateway",
+			Address:   "igw1",
+			NativeIDs: map[string]string{"internet_gateway_id": "igw-123"},
+		},
+	}}
+	out := snapshotForCallback(in)
+	if len(out) != 1 {
+		t.Fatalf("len(out)=%d, want 1", len(out))
+	}
+	// Mutate the ORIGINAL after snapshotting (mimics resolveParentAddresses +
+	// resolveVPCChildVPCIDs running post-g.Wait() on the returned rows).
+	in[0].Identity.ParentAddress = "aws_vpc.main"
+	in[0].Identity.NativeIDs["vpc_id"] = "vpc-999"
+
+	if out[0].Identity.ParentAddress != "" {
+		t.Errorf("ParentAddress leaked into snapshot: %q", out[0].Identity.ParentAddress)
+	}
+	if _, leaked := out[0].Identity.NativeIDs["vpc_id"]; leaked {
+		t.Error("NativeIDs mutation leaked into snapshot")
+	}
+	// The pre-existing NativeIDs entry must survive the clone.
+	if out[0].Identity.NativeIDs["internet_gateway_id"] != "igw-123" {
+		t.Errorf("snapshot dropped pre-existing NativeIDs entry: %v", out[0].Identity.NativeIDs)
+	}
+}
+
+// TestSnapshotForCallback_NilAndEmpty pins the nil/empty normalization: a nil
+// or empty input yields a non-nil empty slice, so consumers see a stable
+// "delivered, zero rows" shape for downgraded / empty types.
+func TestSnapshotForCallback_NilAndEmpty(t *testing.T) {
+	t.Parallel()
+	for _, in := range [][]imported.ImportedResource{nil, {}} {
+		out := snapshotForCallback(in)
+		if out == nil {
+			t.Errorf("snapshotForCallback(%v) = nil, want non-nil empty slice", in)
+		}
+		if len(out) != 0 {
+			t.Errorf("snapshotForCallback(%v) len=%d, want 0", in, len(out))
+		}
+	}
+}
+
 // TestDiscoverTypesConcurrency_PinnedValue is the exported-constant pin: the
 // type-level fan-out cap is 4 (#632), and it is EXPORTED so downstream
 // consumers (reliable#2065) can bound their own fan-out by the same value

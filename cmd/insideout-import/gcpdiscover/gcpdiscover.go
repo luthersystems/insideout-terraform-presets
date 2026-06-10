@@ -534,17 +534,22 @@ func (g *GCPDiscoverer) DiscoverTypes(ctx context.Context, types []string, args 
 	// cbMu so the documented "no consumer-side locking" contract holds.
 	// A zero-result type is delivered with an empty, non-nil slice. A nil
 	// callback short-circuits before the lock (zero back-compat overhead).
+	//
+	// As with the AWS twin, the delivered slice is an ISOLATED SNAPSHOT
+	// (fresh slice, value-copied elements, cloned NativeIDs) so a consumer
+	// may retain and process it asynchronously. GCP runs no post-completion
+	// augmentation pass, so today nothing mutates the originals — but the
+	// snapshot keeps the cross-cloud contract uniform and future-proofs
+	// against a later per-type augmentation.
 	var cbMu sync.Mutex
 	onTypeDiscovered := func(tfType string, resources []imported.ImportedResource) {
 		if args.OnTypeDiscovered == nil {
 			return
 		}
-		if resources == nil {
-			resources = []imported.ImportedResource{}
-		}
+		snapshot := snapshotForCallback(resources)
 		cbMu.Lock()
 		defer cbMu.Unlock()
-		args.OnTypeDiscovered(tfType, resources)
+		args.OnTypeDiscovered(tfType, snapshot)
 	}
 
 	stageStart := time.Now()
@@ -656,6 +661,28 @@ func (g *GCPDiscoverer) DiscoverTypes(ctx context.Context, types []string, args 
 
 	args.Emitter.StageFinish("discover", len(out), time.Since(stageStart))
 	return out, nil
+}
+
+// snapshotForCallback returns an isolated copy of a per-type result slice
+// for delivery to DiscoverArgs.OnTypeDiscovered — the GCP twin of
+// awsdiscover.snapshotForCallback. It copies every element by value and
+// clones Identity.NativeIDs so a streaming consumer may retain the batch
+// without aliasing the rows in the returned slice. The GCP path runs no
+// post-completion augmentation pass, so this is defensive symmetry rather
+// than a fix for an observed mutation. nil/empty in → non-nil empty out.
+func snapshotForCallback(in []imported.ImportedResource) []imported.ImportedResource {
+	out := make([]imported.ImportedResource, len(in))
+	copy(out, in)
+	for i := range out {
+		if src := out[i].Identity.NativeIDs; src != nil {
+			clone := make(map[string]string, len(src))
+			for k, v := range src {
+				clone[k] = v
+			}
+			out[i].Identity.NativeIDs = clone
+		}
+	}
+	return out
 }
 
 // nonCAIDiscovererHasLister checks each non-CAI discoverer's

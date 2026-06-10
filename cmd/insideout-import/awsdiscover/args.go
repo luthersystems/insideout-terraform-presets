@@ -70,12 +70,27 @@ type DiscoverArgs struct {
 	//     point: it enables streaming). The flattened slice DiscoverTypes
 	//     RETURNS is still ordered by selection order, unchanged.
 	//
-	//   - tfType is the Terraform resource type (e.g. "aws_s3_bucket"); the
-	//     resources slice aliases the same backing array stored for the
-	//     return value, so a callback that needs to RETAIN entries beyond
-	//     the invocation should copy them (the aggregator does not mutate
-	//     the slice afterward, but callers should not assume exclusive
-	//     ownership).
+	//   - tfType is the Terraform resource type (e.g. "aws_s3_bucket"). The
+	//     delivered slice is an ISOLATED SNAPSHOT — a fresh slice whose
+	//     elements are value copies with a cloned Identity.NativeIDs map — so
+	//     the callback may retain it and process it asynchronously without
+	//     racing the aggregator's later mutation (see next bullet).
+	//
+	//   - DISCOVERY-PHASE results, NOT the fully-resolved terminal set. The
+	//     callback fires as each type finishes its per-type Discover, which is
+	//     BEFORE DiscoverTypes runs its cross-type augmentation passes —
+	//     resolveVPCChildVPCIDs (stamps NativeIDs["vpc_id"] on
+	//     aws_internet_gateway / aws_vpc_dhcp_options) and
+	//     resolveParentAddresses (stamps Identity.ParentAddress). Those passes
+	//     need the FULL cross-type set, so they cannot run per type and only
+	//     execute after every type has completed; they mutate the slice
+	//     DiscoverTypes RETURNS, never the isolated snapshot. A consumer that
+	//     needs the resolved parent linkage (FK closure / parent addresses)
+	//     must therefore read it from the returned slice, not from the
+	//     streamed callbacks. This matches how the streaming consumer already
+	//     treats per-type batches: reliable's resource_batch sink is the live
+	//     "services as we find them" progress feed and explicitly defers
+	//     dependency resolution to the terminal result.
 	//
 	//   - FAILURE SEMANTICS (matches streaming): the callback is NOT invoked
 	//     after DiscoverTypes returns an error. On a fail-fast abort (a

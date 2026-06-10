@@ -51,6 +51,15 @@ type DiscoverArgs struct {
 	//     non-CAI types tick one at a time as their per-service listers
 	//     return. The flattened slice DiscoverTypes RETURNS is unchanged.
 	//
+	//   - The delivered slice is an ISOLATED SNAPSHOT (fresh slice,
+	//     value-copied elements, cloned NativeIDs), as with the AWS twin, so a
+	//     consumer may retain and process it asynchronously. Unlike AWS, the
+	//     GCP path runs NO post-completion cross-type augmentation pass —
+	//     address/parent resolution happens inline in FromAsset via the shared
+	//     addressBook during the CAI translation loop, before delivery — so
+	//     the snapshot already carries the final field values that appear in
+	//     the returned slice.
+	//
 	//   - FAILURE SEMANTICS: not invoked after DiscoverTypes returns an
 	//     error. The GCP path is largely sequential after the bulk CAI
 	//     search, so on an error mid-scan, types translated before the
