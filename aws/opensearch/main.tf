@@ -1,3 +1,45 @@
+# aws/opensearch — OpenSearch Service (managed) + OpenSearch Serverless (AOSS).
+#
+# Two deployment modes, selected by var.deployment_type:
+#   - "managed"    : an OpenSearch Service domain in the VPC (text search,
+#                    log analytics; slow/application logs to CloudWatch).
+#   - "serverless" : an AOSS VECTORSEARCH collection — the production vector
+#                    store of the AI stack, the alternative to the S3 Vectors
+#                    default that aws/bedrock provisions. See issue #758.
+#
+# AOSS collection-create requires all THREE security policy types to exist:
+#   1. encryption  (emitted here — AWS-owned or customer KMS key)
+#   2. network     (emitted here — public or VPC-endpoint reachability)
+#   3. data-access (NOT emitted here — see the split below)
+# A collection cannot be created until 1+2 exist; the data-access policy can
+# be authored after the collection but is required before any principal can
+# read/write the data plane.
+#
+# DATA-ACCESS-POLICY SPLIT WITH aws/bedrock
+# -----------------------------------------
+# This module deliberately does NOT emit the AOSS data-access policy. That
+# policy names the exact principal ARNs allowed on the data plane, and the
+# canonical consumer is the Bedrock Knowledge Base role — which lives in
+# aws/bedrock, not here. aws/bedrock authors the data-access policy from the
+# collection NAME (AOSS access policies match collections by name, not ARN),
+# wired in via aws/bedrock.opensearch_collection_name <- collection_name.
+# Keeping the data-access policy on the consumer side avoids a circular
+# dependency (this module would otherwise need the bedrock role ARN to grant
+# it) and keeps each principal's grant co-located with the principal.
+# Composer wiring: contracts.go DefaultWiring(KeyAWSBedrock) sources
+# opensearch_collection_arn from module.aws_opensearch.collection_arn, and the
+# mapper hard-forces deployment_type=serverless whenever Bedrock is composed
+# (mapper.go, pinned by TestMapper_OpenSearchDeploymentTypeOverride).
+#
+# VECTOR INDEX IS OUT OF SCOPE (API-ONLY)
+# ---------------------------------------
+# The vector index INSIDE the collection is NOT a Terraform resource — there
+# is no aws_opensearchserverless_index in the hashicorp/aws provider. The
+# index is created via the AOSS data-plane API (the _aws/iam-signed OpenSearch
+# index API), which depends on the embedding model / dimension the application
+# chooses. The application layer creates and owns the index; this module stops
+# at the empty collection + its encryption/network policies + the alarms.
+
 terraform {
   required_version = ">= 1.5"
   required_providers {

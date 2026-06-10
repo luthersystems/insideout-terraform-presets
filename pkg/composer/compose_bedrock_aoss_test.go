@@ -41,10 +41,19 @@ func TestBedrockWiring_AOSSCollectionArn(t *testing.T) {
 	require.Equal(t, "module.aws_opensearch.collection_arn", wi.RawHCL["opensearch_collection_arn"],
 		"bedrock must wire opensearch_collection_arn to the AOSS collection output")
 
+	// Bedrock authors the AOSS data-access policy from the collection NAME
+	// (access policies match collections by name, not ARN). Without this
+	// edge the bedrock module's data-access policy count gates off and the
+	// KB role has no data-plane grant — a composed Bedrock+OpenSearch stack
+	// would deploy a role that cannot read/write the collection.
+	require.Equal(t, "module.aws_opensearch.collection_name", wi.RawHCL["opensearch_collection_name"],
+		"bedrock must wire opensearch_collection_name so it can author the AOSS data-access policy")
+
 	_, hasOldKey := wi.RawHCL["opensearch_arn"]
 	require.False(t, hasOldKey, "legacy opensearch_arn input must not be emitted")
 
 	require.Contains(t, wi.Names, "opensearch_collection_arn")
+	require.Contains(t, wi.Names, "opensearch_collection_name")
 	require.NotContains(t, wi.Names, "opensearch_arn")
 }
 
@@ -98,6 +107,76 @@ func TestMapper_OpenSearchDeploymentTypeOverride(t *testing.T) {
 	// and TestBuildModuleValues_IgnoresLegacyBedrockComponent (negative
 	// regression proving unnormalized comps.Bedrock doesn't fire the
 	// serverless override).
+}
+
+// TestMapper_OpenSearchDeploymentTypeOverride_758 hardens the
+// bedrock-forces-serverless override (mapper.go) for the #758 production
+// vector-store surfacing. The original override test (above) pins the
+// managed→serverless flip and the no-bedrock passthrough. These cases pin
+// the two paths that override miss:
+//
+//   - empty/unset DeploymentType + Bedrock must STILL force serverless. The
+//     override writes vals["deployment_type"] unconditionally when Bedrock is
+//     present, but a refactor that moved the write inside the
+//     `if cfg.AWSOpenSearch.DeploymentType != ""` block would silently drop
+//     it for the empty-config case — exactly the Bedrock-KB default path.
+//   - explicit serverless + Bedrock is idempotent (stays serverless, no error).
+//
+// Without these, a mutation that gated the override on a non-empty user
+// DeploymentType would pass the original test (which always sets "managed")
+// yet break the real default flow where the user configures nothing.
+func TestMapper_OpenSearchDeploymentTypeOverride_758(t *testing.T) {
+	m := DefaultMapper{}
+
+	t.Run("empty deployment_type plus bedrock still forces serverless", func(t *testing.T) {
+		// cfg.AWSOpenSearch is nil entirely — the Bedrock-KB default path,
+		// where the user selects Bedrock + OpenSearch and configures neither.
+		vals, err := m.BuildModuleValues(
+			KeyAWSOpenSearch,
+			&Components{AWSBedrock: ptrBool(true), AWSOpenSearch: ptrBool(true)},
+			&Config{},
+			"demo", "us-east-1",
+		)
+		require.NoError(t, err)
+		require.Equal(t, "serverless", vals["deployment_type"],
+			"Bedrock must force serverless even when the user supplies no OpenSearch config — this is the KB default path")
+	})
+
+	t.Run("explicit serverless plus bedrock is idempotent", func(t *testing.T) {
+		vals, err := m.BuildModuleValues(
+			KeyAWSOpenSearch,
+			&Components{AWSBedrock: ptrBool(true), AWSOpenSearch: ptrBool(true)},
+			&Config{
+				AWSOpenSearch: &struct {
+					DeploymentType string `json:"deploymentType,omitempty"`
+					InstanceType   string `json:"instanceType,omitempty"`
+					StorageSize    string `json:"storageSize,omitempty"`
+					MultiAZ        *bool  `json:"multiAz,omitempty"`
+				}{DeploymentType: "serverless"},
+			},
+			"demo", "us-east-1",
+		)
+		require.NoError(t, err)
+		require.Equal(t, "serverless", vals["deployment_type"],
+			"explicit serverless + Bedrock must remain serverless (override is idempotent, not an error)")
+	})
+
+	t.Run("no bedrock plus empty config leaves deployment_type unset", func(t *testing.T) {
+		// Negative companion: with no Bedrock and no user config, the mapper
+		// must NOT emit deployment_type at all so the preset default
+		// ("managed") wins. A mutation that hard-wrote serverless
+		// unconditionally would be caught here.
+		vals, err := m.BuildModuleValues(
+			KeyAWSOpenSearch,
+			&Components{AWSOpenSearch: ptrBool(true)},
+			&Config{},
+			"demo", "us-east-1",
+		)
+		require.NoError(t, err)
+		_, has := vals["deployment_type"]
+		require.False(t, has,
+			"mapper must not emit deployment_type when neither Bedrock nor user config sets it — preset default 'managed' must win")
+	})
 }
 
 // TestMapper_BedrockNoKBStub confirms the mapper does NOT inject the
@@ -216,10 +295,17 @@ func TestComposeStack_BedrockWiresRealAOSSArn(t *testing.T) {
 	mainTF := string(out["/main.tf"])
 	bedrockTfvars := string(out["/aws_bedrock.auto.tfvars"])
 
-	// The composed module block must carry the real wiring.
-	require.Contains(t, mainTF,
-		`opensearch_collection_arn = module.aws_opensearch.collection_arn`,
+	// The composed module block must carry the real wiring. HCL aligns the
+	// `=` columns, so match whitespace-tolerantly rather than pinning the
+	// exact gap (which shifts when a longer key like collection_name is added).
+	require.Regexp(t,
+		`opensearch_collection_arn\s+=\s+module\.aws_opensearch\.collection_arn`,
+		mainTF,
 		"KB-path stack composition must wire the real AOSS collection_arn")
+	require.Regexp(t,
+		`opensearch_collection_name\s+=\s+module\.aws_opensearch\.collection_name`,
+		mainTF,
+		"KB-path stack composition must wire the AOSS collection_name for the data-access policy")
 
 	// No fabricated preview ARN may appear anywhere.
 	require.NotContains(t, mainTF, "composerpreview",
@@ -606,10 +692,18 @@ func TestComposeStack_BedrockOpenSearchAOSSEndToEnd(t *testing.T) {
 	outputsTF := string(out["/outputs.tf"])
 
 	// 1. Bedrock block wires opensearch_collection_arn to the AOSS output.
-	require.Contains(t, mainTF, `opensearch_collection_arn = module.aws_opensearch.collection_arn`,
+	//    HCL aligns the `=` columns, so match whitespace-tolerantly.
+	require.Regexp(t, `opensearch_collection_arn\s+=\s+module\.aws_opensearch\.collection_arn`, mainTF,
 		"bedrock must wire opensearch_collection_arn to the AOSS collection_arn output")
 	require.NotContains(t, mainTF, "module.aws_opensearch.opensearch_arn",
 		"bedrock must no longer reference the legacy opensearch_arn output")
+
+	// 1b. Bedrock also wires opensearch_collection_name so it can author the
+	//     AOSS data-access policy (matched by name, not ARN). The preset
+	//     gates the data-access policy on this variable; without the edge a
+	//     composed KB stack deploys a role with no data-plane grant.
+	require.Regexp(t, `opensearch_collection_name\s+=\s+module\.aws_opensearch\.collection_name`, mainTF,
+		"bedrock must wire opensearch_collection_name to the AOSS collection_name output")
 
 	// 2. OpenSearch tfvars reflect the hard-override to serverless,
 	//    regardless of the "managed" value in cfg.
