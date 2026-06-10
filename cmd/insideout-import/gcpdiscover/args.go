@@ -1,6 +1,9 @@
 package gcpdiscover
 
-import "github.com/luthersystems/insideout-terraform-presets/cmd/insideout-import/progress"
+import (
+	"github.com/luthersystems/insideout-terraform-presets/cmd/insideout-import/progress"
+	"github.com/luthersystems/insideout-terraform-presets/pkg/composer/imported"
+)
 
 // DiscoverArgs is the per-call input shape consumed by the aggregator's
 // DiscoverTypes. Mirrors awsdiscover.DiscoverArgs minus AccountID
@@ -24,6 +27,39 @@ type DiscoverArgs struct {
 	Regions      []string
 	TagSelectors []TagSelector
 	Emitter      progress.Emitter
+
+	// OnTypeDiscovered, when non-nil, is invoked by DiscoverTypes exactly
+	// once per requested type AS THAT TYPE COMPLETES, carrying the type's
+	// discovered resources. It is the GCP twin of
+	// awsdiscover.DiscoverArgs.OnTypeDiscovered (reliable#2060) — the
+	// per-type RESULTS counterpart to the count-only
+	// TypeProgressEmitter.TypeDone — so the reliable streaming discover path
+	// can consume one DiscoverTypes call instead of fanning out single-type
+	// calls to observe per-type results.
+	//
+	// Contract (mirrors the AWS twin):
+	//
+	//   - INVOKED ONCE PER REQUESTED TYPE, including a type that yielded no
+	//     resources (delivered with an EMPTY, non-nil slice), so a consumer
+	//     driving a progress denominator off the callbacks still advances to
+	//     100%.
+	//
+	//   - SERIALIZED. DiscoverTypes serializes callback invocations under an
+	//     internal mutex, so the callback needs no locking of its own.
+	//     Invocations fire in COMPLETION order: CAI-backed types tick in a
+	//     burst as the bulk SearchAllResources translation lands, then
+	//     non-CAI types tick one at a time as their per-service listers
+	//     return. The flattened slice DiscoverTypes RETURNS is unchanged.
+	//
+	//   - FAILURE SEMANTICS: not invoked after DiscoverTypes returns an
+	//     error. The GCP path is largely sequential after the bulk CAI
+	//     search, so on an error mid-scan, types translated before the
+	//     failure MAY already have fired — the consumer must tolerate a
+	//     partial set of callbacks followed by a non-nil error. No type ever
+	//     fires more than once.
+	//
+	// Nil OnTypeDiscovered is the back-compat default (CLI / mars unchanged).
+	OnTypeDiscovered func(tfType string, resources []imported.ImportedResource)
 }
 
 // TagSelector is a single operator-supplied label-equality clause. See
