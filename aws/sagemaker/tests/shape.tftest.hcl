@@ -400,3 +400,297 @@ run "sagemaker_rejects_empty_vpc_id" {
 
   expect_failures = [var.vpc_id]
 }
+
+# -----------------------------------------------------------------------------
+# Real-time inference endpoint (#761).
+# -----------------------------------------------------------------------------
+
+# Studio-only is the default: with enable_inference unset, none of the model /
+# endpoint-config / endpoint resources exist, and the Studio domain is
+# unchanged. This is the "Studio behavior unchanged when flag unset" guard.
+run "sagemaker_no_inference_by_default" {
+  command = plan
+
+  variables {
+    project    = "test"
+    vpc_id     = "vpc-12345"
+    subnet_ids = ["subnet-aaa"]
+  }
+
+  assert {
+    condition     = length(aws_sagemaker_model.inference) == 0
+    error_message = "No model resource may exist when enable_inference is unset (Studio-only default)."
+  }
+
+  assert {
+    condition     = length(aws_sagemaker_endpoint_configuration.inference) == 0
+    error_message = "No endpoint-configuration may exist when enable_inference is unset."
+  }
+
+  assert {
+    condition     = length(aws_sagemaker_endpoint.inference) == 0
+    error_message = "No endpoint may exist when enable_inference is unset."
+  }
+
+  # No inference ECR / model-data role policies either.
+  assert {
+    condition     = length(aws_iam_role_policy.inference_ecr_pull) == 0
+    error_message = "No inference ECR-pull policy may exist when enable_inference is unset."
+  }
+
+  assert {
+    condition     = length(aws_iam_role_policy.inference_model_data) == 0
+    error_message = "No inference model-data policy may exist when enable_inference is unset."
+  }
+
+  # No inference = no endpoint metrics, so no alarms (the observability
+  # locals must stay safe to evaluate even when the endpoint is absent).
+  assert {
+    condition     = length(aws_cloudwatch_metric_alarm.invocation_5xx_high) == 0
+    error_message = "No 5XX alarm may exist when inference is off (no endpoint = no metrics)."
+  }
+
+  assert {
+    condition     = length(aws_cloudwatch_metric_alarm.model_latency_high) == 0
+    error_message = "No latency alarm may exist when inference is off."
+  }
+
+  # Studio domain still provisioned + unchanged (the headline invariant).
+  assert {
+    condition     = aws_sagemaker_domain.studio.domain_name == "test-studio"
+    error_message = "Studio domain must stay provisioned + project-prefixed when inference is off."
+  }
+}
+
+# enable_inference=true with a valid image + ml.* instance type composes the
+# full model / endpoint-config / endpoint trio. Pins names, the image flowing
+# into the model's primary container, the instance type on the production
+# variant, the model→config→endpoint chaining, and the ECR-pull + model-data
+# role policies coming up alongside.
+run "inference_endpoint" {
+  command = plan
+
+  variables {
+    project                = "test"
+    vpc_id                 = "vpc-12345"
+    subnet_ids             = ["subnet-aaa"]
+    enable_inference       = true
+    model_image            = "123456789012.dkr.ecr.us-east-1.amazonaws.com/llm-serve:latest"
+    model_data_url         = "s3://my-models/llm/model.tar.gz"
+    endpoint_instance_type = "ml.g5.xlarge"
+  }
+
+  assert {
+    condition     = length(aws_sagemaker_model.inference) == 1
+    error_message = "enable_inference must create exactly one model resource."
+  }
+
+  assert {
+    condition     = aws_sagemaker_model.inference[0].name == "test-model"
+    error_message = "Model name must be project-prefixed (`<project>-model`)."
+  }
+
+  assert {
+    condition     = aws_sagemaker_model.inference[0].primary_container[0].image == "123456789012.dkr.ecr.us-east-1.amazonaws.com/llm-serve:latest"
+    error_message = "model_image must flow into the model's primary_container image."
+  }
+
+  assert {
+    condition     = aws_sagemaker_model.inference[0].primary_container[0].model_data_url == "s3://my-models/llm/model.tar.gz"
+    error_message = "model_data_url must flow into the model's primary_container model_data_url when supplied."
+  }
+
+  # Note: we can't pin `execution_role_arn == aws_iam_role.studio_execution.arn`
+  # under plan mode — the role ARN is Computed (unknown) so the comparison
+  # short-circuits to "unknown" and terraform test errors. The model→exec-role
+  # wiring is asserted apply-mode in tests/integration.tftest.hcl.
+
+  assert {
+    condition     = length(aws_sagemaker_endpoint_configuration.inference) == 1
+    error_message = "enable_inference must create exactly one endpoint configuration."
+  }
+
+  assert {
+    condition     = aws_sagemaker_endpoint_configuration.inference[0].name == "test-endpoint-config"
+    error_message = "Endpoint config name must be project-prefixed (`<project>-endpoint-config`)."
+  }
+
+  assert {
+    condition     = aws_sagemaker_endpoint_configuration.inference[0].production_variants[0].instance_type == "ml.g5.xlarge"
+    error_message = "endpoint_instance_type must flow into the production variant instance_type."
+  }
+
+  assert {
+    condition     = aws_sagemaker_endpoint_configuration.inference[0].production_variants[0].variant_name == "primary"
+    error_message = "Production variant must be named `primary` (the dimension the observability alarms key on)."
+  }
+
+  assert {
+    condition     = aws_sagemaker_endpoint_configuration.inference[0].production_variants[0].model_name == aws_sagemaker_model.inference[0].name
+    error_message = "Endpoint config production variant must reference the preset's model name."
+  }
+
+  assert {
+    condition     = length(aws_sagemaker_endpoint.inference) == 1
+    error_message = "enable_inference must create exactly one endpoint."
+  }
+
+  assert {
+    condition     = aws_sagemaker_endpoint.inference[0].name == "test-endpoint"
+    error_message = "Endpoint name must be project-prefixed (`<project>-endpoint`)."
+  }
+
+  assert {
+    condition     = aws_sagemaker_endpoint.inference[0].endpoint_config_name == aws_sagemaker_endpoint_configuration.inference[0].name
+    error_message = "Endpoint must bind the preset's endpoint configuration name."
+  }
+
+  # Execution role gains both inference grants when a model_data_url is set.
+  assert {
+    condition     = length(aws_iam_role_policy.inference_ecr_pull) == 1
+    error_message = "Inference must attach an ECR-pull policy to the execution role."
+  }
+
+  assert {
+    condition     = strcontains(aws_iam_role_policy.inference_ecr_pull[0].policy, "ecr:GetAuthorizationToken")
+    error_message = "ECR-pull policy must grant ecr:GetAuthorizationToken (image pull needs the auth token)."
+  }
+
+  assert {
+    condition     = length(aws_iam_role_policy.inference_model_data) == 1
+    error_message = "A supplied model_data_url must attach an S3 model-data read policy to the execution role."
+  }
+
+  assert {
+    condition     = strcontains(aws_iam_role_policy.inference_model_data[0].policy, "s3:GetObject")
+    error_message = "Model-data policy must grant s3:GetObject on the artifact bucket."
+  }
+
+  # Observability alarms come up with the endpoint (enable_observability
+  # defaults true), keyed on the endpoint name + primary variant.
+  assert {
+    condition     = length(aws_cloudwatch_metric_alarm.invocation_5xx_high) == 1
+    error_message = "5XX invocation alarm must be created with the inference endpoint."
+  }
+
+  assert {
+    condition     = aws_cloudwatch_metric_alarm.invocation_5xx_high["0"].metric_name == "Invocation5XXErrors"
+    error_message = "5XX alarm must watch the Invocation5XXErrors metric (AWS/SageMaker)."
+  }
+
+  assert {
+    condition     = aws_cloudwatch_metric_alarm.invocation_5xx_high["0"].namespace == "AWS/SageMaker"
+    error_message = "5XX alarm namespace must be AWS/SageMaker."
+  }
+
+  assert {
+    condition     = aws_cloudwatch_metric_alarm.model_latency_high["0"].metric_name == "ModelLatency"
+    error_message = "Latency alarm must watch the ModelLatency metric."
+  }
+
+  assert {
+    condition     = aws_cloudwatch_metric_alarm.invocation_5xx_high["0"].dimensions["VariantName"] == "primary"
+    error_message = "Alarm must key on the `primary` production variant."
+  }
+}
+
+# When inference is on but no model_data_url is supplied (image bundles its own
+# weights), the ECR-pull policy still attaches but the model-data policy does
+# NOT — least privilege. Companion to the trio run above.
+run "inference_endpoint_without_model_data" {
+  command = plan
+
+  variables {
+    project          = "test"
+    vpc_id           = "vpc-12345"
+    subnet_ids       = ["subnet-aaa"]
+    enable_inference = true
+    model_image      = "123456789012.dkr.ecr.us-east-1.amazonaws.com/llm-serve:latest"
+  }
+
+  assert {
+    condition     = length(aws_sagemaker_model.inference) == 1
+    error_message = "Model must still be created when model_data_url is omitted (image bundles weights)."
+  }
+
+  assert {
+    condition     = length(aws_iam_role_policy.inference_ecr_pull) == 1
+    error_message = "ECR-pull policy must attach even without a model_data_url."
+  }
+
+  assert {
+    condition     = length(aws_iam_role_policy.inference_model_data) == 0
+    error_message = "No S3 model-data policy may attach when model_data_url is omitted (least privilege)."
+  }
+}
+
+# Positive triangulation companion: a valid ml.* instance type plans cleanly,
+# so the negative below can only fail for the right reason.
+run "inference_valid_instance_type_plans_cleanly" {
+  command = plan
+
+  variables {
+    project                = "test"
+    vpc_id                 = "vpc-12345"
+    subnet_ids             = ["subnet-aaa"]
+    enable_inference       = true
+    model_image            = "123456789012.dkr.ecr.us-east-1.amazonaws.com/llm-serve:latest"
+    endpoint_instance_type = "ml.m5.xlarge"
+  }
+
+  assert {
+    condition     = aws_sagemaker_endpoint_configuration.inference[0].production_variants[0].instance_type == "ml.m5.xlarge"
+    error_message = "A valid ml.* endpoint_instance_type must plan cleanly (companion to rejects_bad_instance_type)."
+  }
+}
+
+# A bare EC2 type (no ml. prefix) is rejected by the endpoint_instance_type
+# validation at plan — the headline #761 rejection axis.
+run "inference_rejects_bad_instance_type" {
+  command = plan
+
+  variables {
+    project                = "test"
+    vpc_id                 = "vpc-12345"
+    subnet_ids             = ["subnet-aaa"]
+    enable_inference       = true
+    model_image            = "123456789012.dkr.ecr.us-east-1.amazonaws.com/llm-serve:latest"
+    endpoint_instance_type = "m5.xlarge"
+  }
+
+  expect_failures = [var.endpoint_instance_type]
+}
+
+# A non-s3 model_data_url is rejected by the model_data_url validation.
+run "inference_rejects_bad_model_data_url" {
+  command = plan
+
+  variables {
+    project          = "test"
+    vpc_id           = "vpc-12345"
+    subnet_ids       = ["subnet-aaa"]
+    enable_inference = true
+    model_image      = "123456789012.dkr.ecr.us-east-1.amazonaws.com/llm-serve:latest"
+    model_data_url   = "https://not-s3.example.com/model.tar.gz"
+  }
+
+  expect_failures = [var.model_data_url]
+}
+
+# enable_inference=true with an empty model_image is rejected by the
+# aws_sagemaker_model precondition (cross-variable: only required when
+# inference is on, so it lives as a resource precondition, not a var
+# validation). Pins that SageMaker can't be asked to host an image-less model.
+run "inference_rejects_empty_model_image" {
+  command = plan
+
+  variables {
+    project          = "test"
+    vpc_id           = "vpc-12345"
+    subnet_ids       = ["subnet-aaa"]
+    enable_inference = true
+    # model_image deliberately left at its empty default.
+  }
+
+  expect_failures = [aws_sagemaker_model.inference]
+}

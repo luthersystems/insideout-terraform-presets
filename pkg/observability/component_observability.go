@@ -308,6 +308,25 @@ var awsServiceMetrics = map[string]AWSObs{
 			{Name: "PassedRequests", Stat: "Sum"},
 		},
 	},
+	// SageMaker real-time inference endpoint invocation metrics (#761).
+	// Published under the AWS/SageMaker namespace from InvokeEndpoint calls,
+	// keyed by EndpointName (+ VariantName, which the panel doesn't dimension
+	// on — the endpoint has a single "primary" variant). Metric names verified
+	// against the AWS/SageMaker endpoint-invocation metric table, NOT memory
+	// (the #764 metric-name regression). ModelLatency / OverheadLatency are in
+	// MICROSECONDS. Only present on stacks with enable_inference=true; a
+	// Studio-only deploy publishes none of these.
+	"sagemaker": {
+		Namespace:     "AWS/SageMaker",
+		DimensionName: "EndpointName",
+		Metrics: []AWSMetricSpec{
+			{Name: "Invocations", Stat: "Sum"},
+			{Name: "ModelLatency", Stat: "Average"},
+			{Name: "OverheadLatency", Stat: "Average"},
+			{Name: "Invocation4XXErrors", Stat: "Sum"},
+			{Name: "Invocation5XXErrors", Stat: "Sum"},
+		},
+	},
 }
 
 // gcpServiceMetrics is the per-service catalog ported from the InsideOut backend's
@@ -552,7 +571,13 @@ var alarmedAWSMetrics = map[composer.ComponentKey]AlarmAuthor{
 	composer.KeyAWSMSK:          {Module: "aws/msk", Metrics: []string{"OfflinePartitionsCount"}},
 	composer.KeyAWSOpenSearch:   {Module: "aws/opensearch", Metrics: []string{"ClusterStatus.red"}},
 	composer.KeyAWSRDS:          {Module: "aws/rds", Metrics: []string{"CPUUtilization", "FreeStorageSpace"}},
-	composer.KeyAWSSQS:          {Module: "aws/sqs", Metrics: []string{"ApproximateNumberOfMessagesVisible"}},
+	// SageMaker real-time inference endpoint alarms (#761). Invocation5XXErrors
+	// (the model is failing requests) + ModelLatency (the model is responding
+	// slowly). Both alarms only exist on stacks with enable_inference=true;
+	// the gate in aws/sagemaker/observability.tf for_each-suppresses them
+	// otherwise, but the metric_name strings still match this catalog.
+	composer.KeyAWSSageMaker: {Module: "aws/sagemaker", Metrics: []string{"Invocation5XXErrors", "ModelLatency"}},
+	composer.KeyAWSSQS:       {Module: "aws/sqs", Metrics: []string{"ApproximateNumberOfMessagesVisible"}},
 }
 
 // alarmedGCPMetrics is the GCP analogue. Metric strings match

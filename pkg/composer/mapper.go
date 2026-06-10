@@ -1344,6 +1344,23 @@ func (m DefaultMapper) BuildModuleValues(
 			if strings.TrimSpace(sm.SageMakerManagedPolicyARN) != "" {
 				vals["sagemaker_managed_policy_arn"] = strings.TrimSpace(sm.SageMakerManagedPolicyARN)
 			}
+			// Real-time inference (#761). enable_inference gates the model /
+			// endpoint-config / endpoint trio; the image / data URL /
+			// instance-type fields only matter when it's on, but emit each
+			// independently (same partial-config contract) so the preset
+			// default wins for any field the caller leaves zero.
+			if sm.EnableInference != nil {
+				vals["enable_inference"] = *sm.EnableInference
+			}
+			if strings.TrimSpace(sm.ModelImage) != "" {
+				vals["model_image"] = strings.TrimSpace(sm.ModelImage)
+			}
+			if strings.TrimSpace(sm.ModelDataURL) != "" {
+				vals["model_data_url"] = strings.TrimSpace(sm.ModelDataURL)
+			}
+			if strings.TrimSpace(sm.EndpointInstanceType) != "" {
+				vals["endpoint_instance_type"] = strings.TrimSpace(sm.EndpointInstanceType)
+			}
 		}
 
 	case KeyAWSCodeBuild:
