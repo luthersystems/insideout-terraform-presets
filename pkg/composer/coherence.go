@@ -306,6 +306,7 @@ func isOrphanStrippableKey(key ComponentKey) bool {
 		KeyGCPCompute, KeyGCPGKE, KeyGCPCloudRun,
 		KeyGCPCloudFunctions, KeyGCPLoadbalancer,
 		KeyGCPCloudSQL, KeyGCPMemorystore, KeyGCPGCS,
+		KeyGCPVertexAI,
 		KeyGCPPubSub, KeyGCPCloudLogging,
 		KeyGCPIdentityPlatform, KeyGCPAPIGateway, KeyGCPBackups,
 		KeyGCPCloudDNS, KeyGCPGitHubActions, KeyGCPCloudDeploy:
