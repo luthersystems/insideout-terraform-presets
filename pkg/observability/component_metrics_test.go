@@ -6,6 +6,7 @@ import (
 
 	"github.com/luthersystems/insideout-terraform-presets/pkg/composer"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // TestComponentMetricsMapping_OnlyKnownKeys ensures every key in
@@ -125,7 +126,8 @@ func TestObservabilityMatchesComponentMetricsMapping_Service(t *testing.T) {
 // TestObservability_AWSEntriesHaveAWSObs ensures every Observability
 // entry whose key is AWS-backed AND whose Service is in
 // awsServiceMetrics has a non-nil AWS field. GCP keys must NOT have a
-// non-nil AWS field.
+// non-nil AWS field. Any AWSExtra groups present (multi-namespace
+// components, #778) must be non-nil and only attached to AWS keys.
 func TestObservability_AWSEntriesHaveAWSObs(t *testing.T) {
 	for k, o := range Observability {
 		if composer.CloudFor(k) == "aws" {
@@ -134,18 +136,63 @@ func TestObservability_AWSEntriesHaveAWSObs(t *testing.T) {
 					"Observability[%s].AWS should be non-nil because service %q has awsServiceMetrics catalog",
 					k, o.Service)
 			}
+			for i, g := range o.AWSExtra {
+				assert.NotNil(t, g,
+					"Observability[%s].AWSExtra[%d] must be non-nil — componentObs only appends real groups", k, i)
+			}
 			assert.Nil(t, o.GCP,
 				"Observability[%s].GCP must be nil (key is AWS)", k)
 			continue
 		}
 		assert.Nil(t, o.AWS,
 			"Observability[%s].AWS must be nil (key is GCP)", k)
+		assert.Empty(t, o.AWSExtra,
+			"Observability[%s].AWSExtra must be empty (key is GCP)", k)
 		if _, hasMetrics := gcpServiceMetrics[o.Service]; hasMetrics {
 			assert.NotNil(t, o.GCP,
 				"Observability[%s].GCP should be non-nil because service %q has gcpServiceMetrics catalog",
 				k, o.Service)
 		}
 	}
+}
+
+// TestObservability_OpenSearchHasAOSSGroup is the #778 multi-group
+// contract pinned to the data model: aws_opensearch carries the managed
+// AWS/ES + DomainName group as its primary AWS group AND the serverless
+// AWS/AOSS + ClientId group in AWSExtra. SearchOCU / IndexingOCU live in
+// the AOSS group with Alarmed=true (flipped from
+// alarmedAWSMetrics[KeyAWSOpenSearch]) and the Sum stat.
+func TestObservability_OpenSearchHasAOSSGroup(t *testing.T) {
+	o, ok := Observability[composer.KeyAWSOpenSearch]
+	require.True(t, ok, "aws_opensearch must have an Observability record")
+
+	require.NotNil(t, o.AWS, "primary AWS group (managed AWS/ES) must be present")
+	assert.Equal(t, "AWS/ES", o.AWS.Namespace)
+	assert.Equal(t, "DomainName", o.AWS.DimensionName)
+
+	require.Len(t, o.AWSExtra, 1, "aws_opensearch must carry exactly one extra group (AOSS)")
+	aoss := o.AWSExtra[0]
+	require.NotNil(t, aoss)
+	assert.Equal(t, "AWS/AOSS", aoss.Namespace)
+	assert.Equal(t, "ClientId", aoss.DimensionName)
+
+	byName := make(map[string]AWSMetricSpec, len(aoss.Metrics))
+	for _, m := range aoss.Metrics {
+		byName[m.Name] = m
+	}
+	for _, name := range []string{"SearchOCU", "IndexingOCU"} {
+		spec, present := byName[name]
+		require.True(t, present, "AOSS group must carry %q", name)
+		assert.Equal(t, "Sum", spec.Stat, "%q must use the Sum stat", name)
+		assert.True(t, spec.Alarmed,
+			"%q must be Alarmed=true — it is registered in alarmedAWSMetrics[KeyAWSOpenSearch]", name)
+	}
+
+	// AWSGroups() exposes both groups in order for the metric-fetch path.
+	groups := o.AWSGroups()
+	require.Len(t, groups, 2)
+	assert.Equal(t, "AWS/ES", groups[0].Namespace)
+	assert.Equal(t, "AWS/AOSS", groups[1].Namespace)
 }
 
 // TestObservability_AlarmedSpecsHaveAuthorityEntry is the post-C9
@@ -169,15 +216,15 @@ func TestObservability_AlarmedSpecsHaveAuthorityEntry(t *testing.T) {
 				gcpAuthority[m] = true
 			}
 		}
-		if o.AWS != nil {
-			for _, m := range o.AWS.Metrics {
-				if !m.Alarmed {
-					continue
-				}
-				assert.True(t, awsAuthority[m.Name],
-					"Observability[%s].AWS.Metrics[%q].Alarmed=true but %q not in alarmedAWSMetrics[%s] — service catalog must remain Alarmed=false; flips happen via the per-key authority map",
-					k, m.Name, m.Name, k)
-			}
+		// Walk every AWS group (primary + AWSExtra) so an Alarmed flip in a
+		// multi-namespace component's extra group (the AOSS SearchOCU /
+		// IndexingOCU, #778) is held to the same authority contract. Shares
+		// the alarmedSpecHasAuthority predicate with the synthetic negative
+		// in TestAlarmedSpecHasAuthority_RejectsExtraGroup.
+		if name, ns, ok := alarmedSpecHasAuthority(o, awsAuthority); !ok {
+			assert.Failf(t, "Alarmed spec lacks authority entry",
+				"Observability[%s].AWS group (namespace %s) metric %q has Alarmed=true but %q not in alarmedAWSMetrics[%s] — service catalog must remain Alarmed=false; flips happen via the per-key authority map",
+				k, ns, name, name, k)
 		}
 		if o.GCP != nil {
 			for _, m := range o.GCP.Metrics {
@@ -190,6 +237,78 @@ func TestObservability_AlarmedSpecsHaveAuthorityEntry(t *testing.T) {
 			}
 		}
 	}
+}
+
+// alarmedSpecHasAuthority is the predicate
+// TestObservability_AlarmedSpecsHaveAuthorityEntry enforces against the
+// real catalog: for every Alarmed=true AWS spec across all of a record's
+// groups (primary + AWSExtra), the metric name must appear in the
+// per-key authority set. It returns (offendingMetric, namespace, ok) —
+// ok=false names the first Alarmed spec lacking authority. Factored out
+// so the live gate and the synthetic negative below share one
+// implementation.
+func alarmedSpecHasAuthority(o ComponentObservability, authority map[string]bool) (string, string, bool) {
+	for _, g := range o.AWSGroups() {
+		for _, m := range g.Metrics {
+			if m.Alarmed && !authority[m.Name] {
+				return m.Name, g.Namespace, false
+			}
+		}
+	}
+	return "", "", true
+}
+
+// TestAlarmedSpecHasAuthority_RejectsExtraGroup is the P2 synthetic
+// negative for the extra-group Alarmed-rejection gate (#778 review). The
+// live gate (TestObservability_AlarmedSpecsHaveAuthorityEntry) only ever
+// sees a catalog that already satisfies the contract, so its rejection
+// arm is never actually taken. This test feeds the predicate a
+// hand-built ComponentObservability whose AWSExtra group carries an
+// Alarmed=true metric absent from the authority set, and confirms the
+// gate rejects it — proving the extra-group walk is load-bearing,
+// independent of what the real catalog happens to contain.
+func TestAlarmedSpecHasAuthority_RejectsExtraGroup(t *testing.T) {
+	t.Parallel()
+
+	// Authority set covers the primary group's alarmed metric only — the
+	// extra group's alarmed metric is deliberately NOT authorized.
+	authority := map[string]bool{"PrimaryAlarmed": true}
+
+	synthetic := ComponentObservability{
+		Service: "synthetic",
+		AWS: &AWSObs{
+			Namespace:     "AWS/Primary",
+			DimensionName: "PrimaryId",
+			Metrics: []AWSMetricSpec{
+				{Name: "PrimaryAlarmed", Stat: "Sum", Alarmed: true},
+				{Name: "PrimaryQuiet", Stat: "Average"},
+			},
+		},
+		AWSExtra: []*AWSObs{{
+			Namespace:     "AWS/Extra",
+			DimensionName: "ExtraId",
+			Metrics: []AWSMetricSpec{
+				// Unauthorized Alarmed=true spec living ONLY in the extra
+				// group — the gate must catch this.
+				{Name: "ExtraAlarmedNoAuthority", Stat: "Sum", Alarmed: true},
+			},
+		}},
+	}
+
+	name, ns, ok := alarmedSpecHasAuthority(synthetic, authority)
+	require.False(t, ok,
+		"gate must reject an Alarmed=true metric in an extra group with no authority entry")
+	assert.Equal(t, "ExtraAlarmedNoAuthority", name,
+		"the rejected metric must be the unauthorized extra-group spec")
+	assert.Equal(t, "AWS/Extra", ns,
+		"rejection must point at the extra group's namespace — proving AWSExtra was walked")
+
+	// Sanity: once the extra-group metric is authorized, the same record
+	// passes — confirming the gate isn't rejecting unconditionally.
+	authority["ExtraAlarmedNoAuthority"] = true
+	_, _, ok = alarmedSpecHasAuthority(synthetic, authority)
+	assert.True(t, ok,
+		"with every Alarmed spec authorized (both groups), the gate must accept the record")
 }
 
 // TestServicesForKeys_ReturnsKnownServices verifies that with C2's

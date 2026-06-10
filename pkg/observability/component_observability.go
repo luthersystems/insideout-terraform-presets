@@ -23,14 +23,49 @@ type ComponentObservability struct {
 	// in ComponentMetricsMapping[k].Service.
 	Service string
 
-	// AWS is populated for AWS-backed components and carries the
-	// CloudWatch namespace / dimension / metric specs that drive both the
-	// metric-fetch wrapper and the per-component alarm authoring.
-	// nil for GCP components or AWS components with no metric surface.
+	// AWS is the primary CloudWatch namespace / dimension / metric group
+	// for AWS-backed components. It drives both the metric-fetch wrapper
+	// and the per-component alarm authoring. nil for GCP components or AWS
+	// components with no metric surface.
+	//
+	// Most components have exactly one namespace/dimension group, carried
+	// here. A few components publish across more than one namespace (e.g.
+	// aws_opensearch covers managed domains under AWS/ES + DomainName AND
+	// serverless collections under AWS/AOSS + ClientId, #778). Those carry
+	// their extra groups in AWSExtra; single-group callers keep reading
+	// AWS unchanged. AWSGroups() returns the full set (AWS first, then
+	// AWSExtra) for callers that must walk every group.
 	AWS *AWSObs
+
+	// AWSExtra carries additional CloudWatch namespace/dimension groups
+	// for AWS-backed components that publish across more than one
+	// namespace. Empty/nil for the single-group common case. Entries are
+	// never nil (componentObs only appends non-nil groups). See AWS above
+	// and AWSGroups().
+	AWSExtra []*AWSObs
 
 	// GCP is populated for GCP-backed components.
 	GCP *GCPObs
+}
+
+// AWSGroups returns every AWS namespace/dimension group on the record in
+// stable order: the primary AWS group first (when set), then each
+// AWSExtra group. nil entries are filtered out, so the result is safe to
+// range over directly. Returns an empty (non-nil-bearing) slice for
+// records with no AWS surface. Multi-group consumers — the metric-fetch
+// query builder and the alarm-flip in componentObs — iterate this rather
+// than touching AWS / AWSExtra directly.
+func (c ComponentObservability) AWSGroups() []*AWSObs {
+	groups := make([]*AWSObs, 0, 1+len(c.AWSExtra))
+	if c.AWS != nil {
+		groups = append(groups, c.AWS)
+	}
+	for _, g := range c.AWSExtra {
+		if g != nil {
+			groups = append(groups, g)
+		}
+	}
+	return groups
 }
 
 // AWSObs is the AWS half of ComponentObservability. Mirrors the InsideOut backend's
@@ -42,6 +77,17 @@ type AWSObs struct {
 	Namespace     string
 	DimensionName string
 	Metrics       []AWSMetricSpec
+
+	// DimensionValueAccountID, when true, sources this group's dimension
+	// VALUE from the AWS account ID rather than the per-resource ID. AOSS
+	// (AWS/AOSS, #778) publishes account-level OCU under a ClientId
+	// dimension whose value is the account ID — not the collection/domain
+	// ID the rest of the catalog keys on. Every other group leaves this
+	// false and the dimension value is res.ID. The query builder skips a
+	// group with this flag set when no account ID is available, rather
+	// than emitting a query with an empty (and silently-non-matching)
+	// dimension value.
+	DimensionValueAccountID bool
 }
 
 type AWSMetricSpec struct {
@@ -216,6 +262,32 @@ var awsServiceMetrics = map[string]AWSObs{
 			{Name: "JVMMemoryPressure", Stat: "Average"},
 		},
 	},
+	// OpenSearch Serverless (AOSS) OCU consumption — the second
+	// namespace/dimension group attached to KeyAWSOpenSearch (#778).
+	// AWS/AOSS publishes SearchOCU / IndexingOCU at the ACCOUNT level under
+	// the ClientId dimension (= account ID); there is no per-collection OCU
+	// breakdown (verified against the AWS/AOSS metrics reference, 2026-06,
+	// same source the aws/opensearch observability.tf OCU alarms cite). Stat
+	// is Sum: these metrics publish with Sum (OCU-units consumed in the
+	// period); Maximum returns an empty series. This is NOT a standalone
+	// service binding — no ComponentMetricsMapping entry points at
+	// "opensearch_aoss"; it exists solely as the catalog source for the
+	// AOSS group componentObs() attaches to KeyAWSOpenSearch via AWSExtra.
+	"opensearch_aoss": {
+		Namespace:     "AWS/AOSS",
+		DimensionName: "ClientId",
+		// The ClientId dimension's VALUE is the AWS account ID, not the
+		// collection/domain ID — AOSS OCU is published account-wide, so the
+		// query builder must source this group's dimension value from the
+		// account ID (DimensionValueAccountID) rather than res.ID. Without
+		// this flag the live OCU fetch sets ClientId=<collection-id> and the
+		// series comes back empty (#778 review).
+		DimensionValueAccountID: true,
+		Metrics: []AWSMetricSpec{
+			{Name: "SearchOCU", Stat: "Sum"},
+			{Name: "IndexingOCU", Stat: "Sum"},
+		},
+	},
 	"bedrock": {
 		Namespace:     "AWS/Bedrock",
 		DimensionName: "ModelId",
@@ -306,6 +378,25 @@ var awsServiceMetrics = map[string]AWSObs{
 			{Name: "BlockedRequests", Stat: "Sum"},
 			{Name: "CountedRequests", Stat: "Sum"},
 			{Name: "PassedRequests", Stat: "Sum"},
+		},
+	},
+	// SageMaker real-time inference endpoint invocation metrics (#761).
+	// Published under the AWS/SageMaker namespace from InvokeEndpoint calls,
+	// keyed by EndpointName (+ VariantName, which the panel doesn't dimension
+	// on — the endpoint has a single "primary" variant). Metric names verified
+	// against the AWS/SageMaker endpoint-invocation metric table, NOT memory
+	// (the #764 metric-name regression). ModelLatency / OverheadLatency are in
+	// MICROSECONDS. Only present on stacks with enable_inference=true; a
+	// Studio-only deploy publishes none of these.
+	"sagemaker": {
+		Namespace:     "AWS/SageMaker",
+		DimensionName: "EndpointName",
+		Metrics: []AWSMetricSpec{
+			{Name: "Invocations", Stat: "Sum"},
+			{Name: "ModelLatency", Stat: "Average"},
+			{Name: "OverheadLatency", Stat: "Average"},
+			{Name: "Invocation4XXErrors", Stat: "Sum"},
+			{Name: "Invocation5XXErrors", Stat: "Sum"},
 		},
 	},
 }
@@ -492,14 +583,31 @@ func componentObs(k composer.ComponentKey) ComponentObservability {
 	o := ComponentObservability{Service: binding.Service}
 	if composer.CloudFor(k) == "aws" {
 		o.AWS = awsObsFor(binding.Service)
-		if author, ok := alarmedAWSMetrics[k]; ok && o.AWS != nil {
+		// OpenSearch publishes across two namespaces: managed domains
+		// under AWS/ES (the primary group above) and serverless
+		// collections under AWS/AOSS (#778). Attach the AOSS catalog as
+		// an extra group so the inspector can see SearchOCU / IndexingOCU
+		// alongside the managed-domain metrics. The catalog copy is
+		// per-record (awsObsFor clones Metrics) so the Alarmed flip below
+		// won't mutate the shared catalog.
+		if k == composer.KeyAWSOpenSearch {
+			if aoss := awsObsFor("opensearch_aoss"); aoss != nil {
+				o.AWSExtra = append(o.AWSExtra, aoss)
+			}
+		}
+		// Flip Alarmed across every namespace group so an alarmed metric
+		// in the AOSS group (SearchOCU / IndexingOCU) is marked the same
+		// way an AWS/ES metric (ClusterStatus.red) is.
+		if author, ok := alarmedAWSMetrics[k]; ok {
 			set := make(map[string]bool, len(author.Metrics))
 			for _, m := range author.Metrics {
 				set[m] = true
 			}
-			for i := range o.AWS.Metrics {
-				if set[o.AWS.Metrics[i].Name] {
-					o.AWS.Metrics[i].Alarmed = true
+			for _, g := range o.AWSGroups() {
+				for i := range g.Metrics {
+					if set[g.Metrics[i].Name] {
+						g.Metrics[i].Alarmed = true
+					}
 				}
 			}
 		}
@@ -550,9 +658,21 @@ var alarmedAWSMetrics = map[composer.ComponentKey]AlarmAuthor{
 	composer.KeyAWSElastiCache:  {Module: "aws/elasticache", Metrics: []string{"CPUUtilization"}},
 	composer.KeyAWSLambda:       {Module: "aws/lambda", Metrics: []string{"Errors"}},
 	composer.KeyAWSMSK:          {Module: "aws/msk", Metrics: []string{"OfflinePartitionsCount"}},
-	composer.KeyAWSOpenSearch:   {Module: "aws/opensearch", Metrics: []string{"ClusterStatus.red"}},
-	composer.KeyAWSRDS:          {Module: "aws/rds", Metrics: []string{"CPUUtilization", "FreeStorageSpace"}},
-	composer.KeyAWSSQS:          {Module: "aws/sqs", Metrics: []string{"ApproximateNumberOfMessagesVisible"}},
+	// ClusterStatus.red (managed, AWS/ES) plus the two serverless OCU
+	// alarms (AWS/AOSS, #758) now that the AOSS namespace group exists in
+	// the catalog (#778). All three have aws_cloudwatch_metric_alarm
+	// resources in aws/opensearch/observability.tf; the for_each gates
+	// suppress whichever pair doesn't match the deployment_type, but the
+	// metric_name strings still match this catalog.
+	composer.KeyAWSOpenSearch: {Module: "aws/opensearch", Metrics: []string{"ClusterStatus.red", "SearchOCU", "IndexingOCU"}},
+	composer.KeyAWSRDS:        {Module: "aws/rds", Metrics: []string{"CPUUtilization", "FreeStorageSpace"}},
+	// SageMaker real-time inference endpoint alarms (#761). Invocation5XXErrors
+	// (the model is failing requests) + ModelLatency (the model is responding
+	// slowly). Both alarms only exist on stacks with enable_inference=true;
+	// the gate in aws/sagemaker/observability.tf for_each-suppresses them
+	// otherwise, but the metric_name strings still match this catalog.
+	composer.KeyAWSSageMaker: {Module: "aws/sagemaker", Metrics: []string{"Invocation5XXErrors", "ModelLatency"}},
+	composer.KeyAWSSQS:       {Module: "aws/sqs", Metrics: []string{"ApproximateNumberOfMessagesVisible"}},
 }
 
 // alarmedGCPMetrics is the GCP analogue. Metric strings match
