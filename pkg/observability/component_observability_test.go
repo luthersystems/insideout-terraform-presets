@@ -93,3 +93,76 @@ func TestGCPMetricDefinitions_FirestoreAlarmBinding(t *testing.T) {
 			mt)
 	}
 }
+
+// TestEveryAlarmedAWSMetricExistsInSomeGroup is the AWS analogue of the
+// firestore alarm-binding pin: for EVERY component in alarmedAWSMetrics,
+// each declared metric_name must appear in at least one of that
+// component's namespace/dimension groups (primary AWS or any AWSExtra),
+// otherwise componentObs() can never flip Alarmed=true and the inspector
+// stays blind to a metric production is paging on.
+//
+// This is the contract #778 had to satisfy to retire the
+// excludedFromAuthority entries: registering SearchOCU / IndexingOCU in
+// alarmedAWSMetrics[KeyAWSOpenSearch] WITHOUT the AOSS catalog group would
+// pass the HCL drift gates but leave Alarmed unset (the explicitly
+// rejected shortcut in the issue). This test fails on exactly that.
+func TestEveryAlarmedAWSMetricExistsInSomeGroup(t *testing.T) {
+	t.Parallel()
+	for k, author := range alarmedAWSMetrics {
+		o, ok := Observability[k]
+		require.Truef(t, ok, "alarmedAWSMetrics[%s] has no Observability record", k)
+
+		catalog := map[string]struct{}{}
+		for _, g := range o.AWSGroups() {
+			for _, m := range g.Metrics {
+				catalog[m.Name] = struct{}{}
+			}
+		}
+		for _, name := range author.Metrics {
+			_, present := catalog[name]
+			assert.Truef(t, present,
+				"alarmedAWSMetrics[%s] references metric %q which is in NO group of Observability[%s] (primary AWS + AWSExtra); componentObs() can never flip Alarmed and the inspector stays blind — add the metric to the catalog group, do not just register the alarm",
+				k, name, k)
+		}
+	}
+}
+
+// TestOpenSearchAOSSAlarmBinding pins the #778 contract concretely: the
+// two AOSS OCU alarms registered in alarmedAWSMetrics[KeyAWSOpenSearch]
+// must resolve to specs in the AOSS catalog group (AWS/AOSS) and emerge
+// from componentObs() with Alarmed=true. Mirrors the firestore alarm
+// binding pin for the multi-group AWS case.
+func TestOpenSearchAOSSAlarmBinding(t *testing.T) {
+	t.Parallel()
+
+	author, ok := alarmedAWSMetrics[composer.KeyAWSOpenSearch]
+	require.True(t, ok, "alarmedAWSMetrics must bind KeyAWSOpenSearch")
+	for _, want := range []string{"SearchOCU", "IndexingOCU"} {
+		assert.Containsf(t, author.Metrics, want,
+			"alarmedAWSMetrics[KeyAWSOpenSearch] must register %q (#778)", want)
+	}
+
+	// The AOSS specs must live in the catalog group so the flip lands.
+	aoss, ok := awsServiceMetrics["opensearch_aoss"]
+	require.True(t, ok, `awsServiceMetrics["opensearch_aoss"] must be present`)
+	aossNames := map[string]struct{}{}
+	for _, m := range aoss.Metrics {
+		aossNames[m.Name] = struct{}{}
+	}
+	assert.Contains(t, aossNames, "SearchOCU")
+	assert.Contains(t, aossNames, "IndexingOCU")
+
+	// Round-trip through the built Observability record: the AOSS group's
+	// SearchOCU / IndexingOCU come out Alarmed=true.
+	o := Observability[composer.KeyAWSOpenSearch]
+	alarmed := map[string]bool{}
+	for _, g := range o.AWSGroups() {
+		for _, m := range g.Metrics {
+			if m.Alarmed {
+				alarmed[m.Name] = true
+			}
+		}
+	}
+	assert.True(t, alarmed["SearchOCU"], "SearchOCU must come out Alarmed=true")
+	assert.True(t, alarmed["IndexingOCU"], "IndexingOCU must come out Alarmed=true")
+}
