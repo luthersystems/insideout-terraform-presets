@@ -1055,8 +1055,16 @@ func DefaultWiring(selected map[ComponentKey]bool, k ComponentKey, comps *Compon
 			wi.Names = append(wi.Names, "s3_bucket_arn")
 		}
 		if hasOpenSearch {
-			wi.RawHCL["opensearch_collection_arn"] = opensearchRef(selected) + ".collection_arn"
-			wi.Names = append(wi.Names, "opensearch_collection_arn")
+			osRef := opensearchRef(selected)
+			wi.RawHCL["opensearch_collection_arn"] = osRef + ".collection_arn"
+			// Bedrock authors the AOSS data-access policy from the collection
+			// NAME (AOSS access policies match collections by name, not ARN),
+			// so it needs collection_name as well as collection_arn. Without
+			// this edge the bedrock module skips the data-access policy
+			// (count gates on var.opensearch_collection_name) and the KB role
+			// has no data-plane grant. See aws/opensearch/main.tf header.
+			wi.RawHCL["opensearch_collection_name"] = osRef + ".collection_name"
+			wi.Names = append(wi.Names, "opensearch_collection_arn", "opensearch_collection_name")
 		}
 
 	case KeyAWSBackups:

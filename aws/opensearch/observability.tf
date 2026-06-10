@@ -116,6 +116,10 @@ resource "aws_cloudwatch_metric_alarm" "cluster_red" {
 resource "aws_cloudwatch_metric_alarm" "search_ocu" {
   for_each = local._obs_serverless_gate
 
+  # statistic = "Sum": AWS/AOSS publishes SearchOCU/IndexingOCU with the Sum
+  # statistic (OCU-units consumed in the period), not Maximum. Maximum returns
+  # an empty series for these metrics, so the alarm would sit in
+  # INSUFFICIENT_DATA and never fire.
   alarm_name          = "${module.name.name}-aoss-search-ocu"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = 3
@@ -123,7 +127,7 @@ resource "aws_cloudwatch_metric_alarm" "search_ocu" {
   metric_name         = "SearchOCU"
   namespace           = "AWS/AOSS"
   period              = 300
-  statistic           = "Maximum"
+  statistic           = "Sum"
   treat_missing_data  = "notBreaching"
   alarm_description   = "AOSS search OCU consumption is sustained above ${local._obs_thresholds["search_ocu"]} (account-level, ClientId=${local._obs_account_id}).${local._obs_runbook_search_ocu}"
   dimensions          = { ClientId = local._obs_account_id }
@@ -135,6 +139,8 @@ resource "aws_cloudwatch_metric_alarm" "search_ocu" {
 resource "aws_cloudwatch_metric_alarm" "indexing_ocu" {
   for_each = local._obs_serverless_gate
 
+  # statistic = "Sum": see SearchOCU above — AWS/AOSS OCU metrics are published
+  # with Sum, not Maximum.
   alarm_name          = "${module.name.name}-aoss-indexing-ocu"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = 3
@@ -142,7 +148,7 @@ resource "aws_cloudwatch_metric_alarm" "indexing_ocu" {
   metric_name         = "IndexingOCU"
   namespace           = "AWS/AOSS"
   period              = 300
-  statistic           = "Maximum"
+  statistic           = "Sum"
   treat_missing_data  = "notBreaching"
   alarm_description   = "AOSS indexing OCU consumption is sustained above ${local._obs_thresholds["indexing_ocu"]} (account-level, ClientId=${local._obs_account_id}).${local._obs_runbook_indexing_ocu}"
   dimensions          = { ClientId = local._obs_account_id }

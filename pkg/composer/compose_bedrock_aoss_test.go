@@ -41,10 +41,19 @@ func TestBedrockWiring_AOSSCollectionArn(t *testing.T) {
 	require.Equal(t, "module.aws_opensearch.collection_arn", wi.RawHCL["opensearch_collection_arn"],
 		"bedrock must wire opensearch_collection_arn to the AOSS collection output")
 
+	// Bedrock authors the AOSS data-access policy from the collection NAME
+	// (access policies match collections by name, not ARN). Without this
+	// edge the bedrock module's data-access policy count gates off and the
+	// KB role has no data-plane grant — a composed Bedrock+OpenSearch stack
+	// would deploy a role that cannot read/write the collection.
+	require.Equal(t, "module.aws_opensearch.collection_name", wi.RawHCL["opensearch_collection_name"],
+		"bedrock must wire opensearch_collection_name so it can author the AOSS data-access policy")
+
 	_, hasOldKey := wi.RawHCL["opensearch_arn"]
 	require.False(t, hasOldKey, "legacy opensearch_arn input must not be emitted")
 
 	require.Contains(t, wi.Names, "opensearch_collection_arn")
+	require.Contains(t, wi.Names, "opensearch_collection_name")
 	require.NotContains(t, wi.Names, "opensearch_arn")
 }
 
@@ -286,10 +295,17 @@ func TestComposeStack_BedrockWiresRealAOSSArn(t *testing.T) {
 	mainTF := string(out["/main.tf"])
 	bedrockTfvars := string(out["/aws_bedrock.auto.tfvars"])
 
-	// The composed module block must carry the real wiring.
-	require.Contains(t, mainTF,
-		`opensearch_collection_arn = module.aws_opensearch.collection_arn`,
+	// The composed module block must carry the real wiring. HCL aligns the
+	// `=` columns, so match whitespace-tolerantly rather than pinning the
+	// exact gap (which shifts when a longer key like collection_name is added).
+	require.Regexp(t,
+		`opensearch_collection_arn\s+=\s+module\.aws_opensearch\.collection_arn`,
+		mainTF,
 		"KB-path stack composition must wire the real AOSS collection_arn")
+	require.Regexp(t,
+		`opensearch_collection_name\s+=\s+module\.aws_opensearch\.collection_name`,
+		mainTF,
+		"KB-path stack composition must wire the AOSS collection_name for the data-access policy")
 
 	// No fabricated preview ARN may appear anywhere.
 	require.NotContains(t, mainTF, "composerpreview",
@@ -676,10 +692,18 @@ func TestComposeStack_BedrockOpenSearchAOSSEndToEnd(t *testing.T) {
 	outputsTF := string(out["/outputs.tf"])
 
 	// 1. Bedrock block wires opensearch_collection_arn to the AOSS output.
-	require.Contains(t, mainTF, `opensearch_collection_arn = module.aws_opensearch.collection_arn`,
+	//    HCL aligns the `=` columns, so match whitespace-tolerantly.
+	require.Regexp(t, `opensearch_collection_arn\s+=\s+module\.aws_opensearch\.collection_arn`, mainTF,
 		"bedrock must wire opensearch_collection_arn to the AOSS collection_arn output")
 	require.NotContains(t, mainTF, "module.aws_opensearch.opensearch_arn",
 		"bedrock must no longer reference the legacy opensearch_arn output")
+
+	// 1b. Bedrock also wires opensearch_collection_name so it can author the
+	//     AOSS data-access policy (matched by name, not ARN). The preset
+	//     gates the data-access policy on this variable; without the edge a
+	//     composed KB stack deploys a role with no data-plane grant.
+	require.Regexp(t, `opensearch_collection_name\s+=\s+module\.aws_opensearch\.collection_name`, mainTF,
+		"bedrock must wire opensearch_collection_name to the AOSS collection_name output")
 
 	// 2. OpenSearch tfvars reflect the hard-override to serverless,
 	//    regardless of the "managed" value in cfg.
