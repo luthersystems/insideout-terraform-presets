@@ -90,10 +90,13 @@ func TestRenderImportedProvidersTF_MultiRegion(t *testing.T) {
 	}
 	// Every emitted AWS provider block carries the throttle-safety retry
 	// tuning (luthersystems/ui-core#420): base + 2 regional = 3 each.
-	if n := strings.Count(s, `retry_mode  = "adaptive"`); n != 3 {
+	// Value-anchored regexes (\s*=\s*), not fixed-gutter strings: hclwrite
+	// re-aligns the = column whenever a block gains a wider attribute, and a
+	// formatting change must not fail a behavior assertion (qa #780).
+	if n := len(regexp.MustCompile(`retry_mode\s*=\s*"adaptive"`).FindAllString(s, -1)); n != 3 {
 		t.Fatalf("expected 3 retry_mode=adaptive attrs (base + 2 regional), got %d:\n%s", n, s)
 	}
-	if n := strings.Count(s, "max_retries = 25"); n != 3 {
+	if n := len(regexp.MustCompile(`max_retries\s*=\s*25`).FindAllString(s, -1)); n != 3 {
 		t.Fatalf("expected 3 max_retries attrs (base + 2 regional), got %d:\n%s", n, s)
 	}
 }
