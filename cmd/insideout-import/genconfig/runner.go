@@ -23,11 +23,13 @@ type terraformRunner interface {
 	// binary (#724). Running version once forces that install serially.
 	Version(ctx context.Context) error
 	Init(ctx context.Context) error
-	// PlanGenerate runs `terraform plan -generate-config-out=<path>` and
-	// returns whether the plan has changes (which it always does for a fresh
-	// import — generate-config-out only fires when there's something to
-	// generate).
-	PlanGenerate(ctx context.Context, generatedPath string) (changes bool, err error)
+	// PlanGenerate runs `terraform plan -generate-config-out=<path>
+	// -parallelism=<parallelism>` and returns whether the plan has changes
+	// (which it always does for a fresh import — generate-config-out only
+	// fires when there's something to generate). parallelism is the resolved
+	// (already defaulted) value the readback should refresh resources at; see
+	// genconfig.DefaultGenconfigParallelism.
+	PlanGenerate(ctx context.Context, generatedPath string, parallelism int) (changes bool, err error)
 	Validate(ctx context.Context) error
 	ProvidersSchema(ctx context.Context) (*tfjson.ProviderSchemas, error)
 }
@@ -85,8 +87,21 @@ func (r *execRunner) Init(ctx context.Context) error {
 	return r.tf.Init(ctx, tfexec.Upgrade(false))
 }
 
-func (r *execRunner) PlanGenerate(ctx context.Context, generatedPath string) (bool, error) {
-	return r.tf.Plan(ctx, tfexec.GenerateConfigOut(generatedPath))
+func (r *execRunner) PlanGenerate(ctx context.Context, generatedPath string, parallelism int) (bool, error) {
+	return r.tf.Plan(ctx, planGenerateOpts(generatedPath, parallelism)...)
+}
+
+// planGenerateOpts is the pure builder for the genconfig readback's tfexec
+// plan options. Factored out so a unit test can assert the genconfig path
+// always passes `-parallelism` (tfexec.Parallelism) alongside the
+// generate-config-out target without shelling out to a real terraform binary
+// — the mutation-resistant guard for luthersystems/ui-core#420: if someone
+// drops the parallelism option from this path, TestPlanGenerateOpts fails.
+func planGenerateOpts(generatedPath string, parallelism int) []tfexec.PlanOption {
+	return []tfexec.PlanOption{
+		tfexec.GenerateConfigOut(generatedPath),
+		tfexec.Parallelism(parallelism),
+	}
 }
 
 func (r *execRunner) Validate(ctx context.Context) error {

@@ -76,6 +76,13 @@ type Options struct {
 	// behavior). Ignored when Runner is injected.
 	Stdout io.Writer
 
+	// Parallelism overrides the `-parallelism=<n>` flag passed to the
+	// `terraform plan -generate-config-out` readback. 0 (the zero value)
+	// uses DefaultGenconfigParallelism. See that constant for the
+	// throttle-safety rationale binding the raised concurrency to the
+	// emitted provider's adaptive retry/backoff.
+	Parallelism int
+
 	// newRunner builds a terraformRunner for a specific region subdir on the
 	// multi-region path, so each concurrent region gets its own runner
 	// instance rather than sharing one (production runs one execRunner per
@@ -83,6 +90,39 @@ type Options struct {
 	// Unexported: production callers never set it — they want the real
 	// execRunner — and only the package's own tests inject per-subdir fakes.
 	newRunner func(workdir string, stdout io.Writer) (terraformRunner, error)
+}
+
+// DefaultGenconfigParallelism is the `-parallelism=<n>` value the genconfig
+// `terraform plan -generate-config-out` readback runs at when Options.
+// Parallelism is unset (<= 0).
+//
+// Why 25 (terraform's own default is 10): the genconfig readback is the
+// dominant cost of a large reverse import — on a measured 481-resource job it
+// was ≈1h32m of a 1h41m run (~91%; see luthersystems/ui-core#420). That phase
+// is `terraform plan -generate-config-out` refreshing every imported resource
+// via AWS Describe/Get reads; it is strictly read-only (plan/refresh, no
+// apply), so raising parallelism just issues more concurrent AWS reads with no
+// mutation risk. 25 ≈ 2.5x the terraform default, the leverage point the
+// ticket sized.
+//
+// Throttle safety: raised parallelism MUST degrade to backoff, not failures.
+// The emitted provider config pairs this with retry_mode = "adaptive" +
+// max_retries = 25 (see emit.go / providers.go), so the AWS SDK's adaptive
+// client-side rate limiter throttles the extra concurrent reads back into a
+// token-bucket-paced stream instead of surfacing ThrottlingException. Without
+// that pairing this default would trade wall-clock for flaky throttle
+// failures; with it, the worst case is the readback degrading back toward the
+// serialized rate, never an error.
+const DefaultGenconfigParallelism = 25
+
+// parallelismOrDefault returns Options.Parallelism, falling back to
+// DefaultGenconfigParallelism for the unset (<= 0) zero value so callers stay
+// source-compatible without explicit field-init. Mirrors providerOrDefault.
+func (opts Options) parallelismOrDefault() int {
+	if opts.Parallelism <= 0 {
+		return DefaultGenconfigParallelism
+	}
+	return opts.Parallelism
 }
 
 // buildRunner returns the terraformRunner to drive the stack in opts.Workdir,
@@ -440,8 +480,8 @@ func runSingleRegion(ctx context.Context, opts Options, resources []imported.Imp
 	}
 
 	generatedPath := filepath.Join(opts.Workdir, generatedFile)
-	progressf(opts.Stdout, "genconfig: %s: terraform plan -generate-config-out…\n", scope)
-	if _, err := runner.PlanGenerate(ctx, generatedPath); err != nil {
+	progressf(opts.Stdout, "genconfig: %s: terraform plan -generate-config-out (parallelism=%d)…\n", scope, opts.parallelismOrDefault())
+	if _, err := runner.PlanGenerate(ctx, generatedPath, opts.parallelismOrDefault()); err != nil {
 		// `terraform plan -generate-config-out` writes generated.tf and
 		// then immediately validates the result. For resource types like
 		// aws_lambda_function the validation fails — the AtLeastOneOf

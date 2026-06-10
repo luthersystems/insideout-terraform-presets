@@ -5,12 +5,65 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"sync"
 	"testing"
 
+	"github.com/hashicorp/terraform-exec/tfexec"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+// TestPlanGenerateOpts is the mutation-resistant guard for the genconfig
+// readback parallelism (luthersystems/ui-core#420): the genconfig
+// `terraform plan -generate-config-out` phase was ≈91% of a measured
+// 1h41m / 481-resource reverse import, run at terraform's default
+// -parallelism=10. planGenerateOpts MUST pass tfexec.Parallelism alongside
+// the generate-config-out target. If anyone drops the parallelism option from
+// THIS path specifically, this test fails — even though a real terraform run
+// would still "succeed" (just slowly), so no other test would catch the
+// regression.
+func TestPlanGenerateOpts(t *testing.T) {
+	t.Parallel()
+
+	const generated = "/tmp/generated.tf"
+	const parallelism = 25
+	opts := planGenerateOpts(generated, parallelism)
+
+	// The generate-config-out target must still be present.
+	require.Contains(t, opts, tfexec.GenerateConfigOut(generated),
+		"genconfig readback must keep its -generate-config-out target")
+
+	// The parallelism option must be present AND carry the exact value
+	// threaded in. reflect.DeepEqual compares the (unexported) parallelism
+	// field, so a value mutation (e.g. silently forcing 10) also fails here.
+	var foundParallelism bool
+	for _, o := range opts {
+		if reflect.DeepEqual(o, tfexec.Parallelism(parallelism)) {
+			foundParallelism = true
+		}
+	}
+	require.True(t, foundParallelism,
+		"genconfig readback must pass tfexec.Parallelism(%d); dropping -parallelism re-introduces the ui-core#420 default-10 bottleneck", parallelism)
+}
+
+// TestDefaultGenconfigParallelism pins the chosen default so a casual edit
+// back to terraform's default (10) — which would silently undo the
+// ui-core#420 fix — trips the suite. 25 is the value the ticket sized for the
+// readback; see DefaultGenconfigParallelism for the throttle-safety rationale.
+func TestDefaultGenconfigParallelism(t *testing.T) {
+	t.Parallel()
+	require.Equal(t, 25, DefaultGenconfigParallelism)
+}
+
+// TestOptionsParallelismOrDefault pins that the unset (<= 0) zero value falls
+// back to the default and an explicit positive value is honored.
+func TestOptionsParallelismOrDefault(t *testing.T) {
+	t.Parallel()
+	assert.Equal(t, DefaultGenconfigParallelism, Options{}.parallelismOrDefault(), "zero value defaults")
+	assert.Equal(t, DefaultGenconfigParallelism, Options{Parallelism: -3}.parallelismOrDefault(), "negative defaults")
+	assert.Equal(t, 40, Options{Parallelism: 40}.parallelismOrDefault(), "explicit positive honored")
+}
 
 // builtinProviderStack is a terraform config that only uses the builtin
 // terraform_data resource (terraform.io/builtin/terraform). It needs no plugin

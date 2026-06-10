@@ -1,6 +1,7 @@
 package reverseimport
 
 import (
+	"regexp"
 	"strings"
 	"testing"
 
@@ -25,14 +26,26 @@ func TestRenderImportedProvidersTF_AWSAssumesProjectRole(t *testing.T) {
 	s := string(body)
 	for _, want := range []string{
 		`provider "aws"`,
-		`alias  = "imported"`,
-		`region = "us-west-2"`,
 		`assume_role`,
 		`role_arn    = "arn:aws:iam::123456789012:role/io-terraform"`,
 		`external_id = "external-123"`,
 	} {
 		if !strings.Contains(s, want) {
 			t.Fatalf("providers-imported.tf missing %q:\n%s", want, s)
+		}
+	}
+	// hclwrite aligns the `=` columns, so the retry-tuning attrs widen the
+	// alias/region gutter — match those value-anchored. retry_mode =
+	// "adaptive" + max_retries are the throttle-safety pairing for the raised
+	// final-plan parallelism (luthersystems/ui-core#420).
+	for _, pat := range []string{
+		`alias\s*=\s*"imported"`,
+		`region\s*=\s*"us-west-2"`,
+		`retry_mode\s*=\s*"adaptive"`,
+		`max_retries\s*=\s*25`,
+	} {
+		if !regexp.MustCompile(pat).MatchString(s) {
+			t.Fatalf("providers-imported.tf missing pattern %q:\n%s", pat, s)
 		}
 	}
 }
@@ -58,20 +71,33 @@ func TestRenderImportedProvidersTF_MultiRegion(t *testing.T) {
 		t.Fatalf("renderImportedProvidersTF() error = %v", err)
 	}
 	s := string(body)
-	for _, want := range []string{
-		`alias  = "imported"`,           // base block (back-compat / fallback)
-		`alias  = "imported_us_east_1"`, // per-region
-		`region = "us-east-1"`,
-		`alias  = "imported_us_west_2"`,
-		`region = "us-west-2"`,
+	// hclwrite aligns the `=` columns and the retry-tuning attrs widen the
+	// gutter, so match value-anchored.
+	for _, pat := range []string{
+		`alias\s*=\s*"imported"`,           // base block (back-compat / fallback)
+		`alias\s*=\s*"imported_us_east_1"`, // per-region
+		`region\s*=\s*"us-east-1"`,
+		`alias\s*=\s*"imported_us_west_2"`,
+		`region\s*=\s*"us-west-2"`,
 	} {
-		if !strings.Contains(s, want) {
-			t.Fatalf("providers-imported.tf missing %q:\n%s", want, s)
+		if !regexp.MustCompile(pat).MatchString(s) {
+			t.Fatalf("providers-imported.tf missing pattern %q:\n%s", pat, s)
 		}
 	}
 	// base + 2 regional = 3 assume_role blocks (one per provider block).
 	if n := strings.Count(s, "assume_role"); n != 3 {
 		t.Fatalf("expected 3 assume_role blocks (base + 2 regional), got %d:\n%s", n, s)
+	}
+	// Every emitted AWS provider block carries the throttle-safety retry
+	// tuning (luthersystems/ui-core#420): base + 2 regional = 3 each.
+	// Value-anchored regexes (\s*=\s*), not fixed-gutter strings: hclwrite
+	// re-aligns the = column whenever a block gains a wider attribute, and a
+	// formatting change must not fail a behavior assertion (qa #780).
+	if n := len(regexp.MustCompile(`retry_mode\s*=\s*"adaptive"`).FindAllString(s, -1)); n != 3 {
+		t.Fatalf("expected 3 retry_mode=adaptive attrs (base + 2 regional), got %d:\n%s", n, s)
+	}
+	if n := len(regexp.MustCompile(`max_retries\s*=\s*25`).FindAllString(s, -1)); n != 3 {
+		t.Fatalf("expected 3 max_retries attrs (base + 2 regional), got %d:\n%s", n, s)
 	}
 }
 

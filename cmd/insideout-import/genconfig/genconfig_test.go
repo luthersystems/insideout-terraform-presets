@@ -41,6 +41,11 @@ type fakeRunner struct {
 	validateCalled  int
 	schemaCalled    int
 	versionCalled   int
+	// lastParallelism records the -parallelism value the readback was
+	// invoked with on the most recent PlanGenerate, so tests can assert the
+	// genconfig path threads Options.Parallelism (defaulted) through to the
+	// runner (luthersystems/ui-core#420).
+	lastParallelism int
 }
 
 // Version models the tfenv warm-up call (#724). The single-region path never
@@ -57,10 +62,11 @@ func (f *fakeRunner) Init(_ context.Context) error {
 	return f.initErr
 }
 
-func (f *fakeRunner) PlanGenerate(_ context.Context, generatedPath string) (bool, error) {
+func (f *fakeRunner) PlanGenerate(_ context.Context, generatedPath string, parallelism int) (bool, error) {
 	f.calls = append(f.calls, "plan")
 	f.planCalled++
 	f.generatedPath = generatedPath
+	f.lastParallelism = parallelism
 	if f.planErr != nil {
 		return false, f.planErr
 	}
@@ -97,10 +103,11 @@ type recoveringFakeRunner struct {
 	planError error
 }
 
-func (r *recoveringFakeRunner) PlanGenerate(ctx context.Context, generatedPath string) (bool, error) {
+func (r *recoveringFakeRunner) PlanGenerate(ctx context.Context, generatedPath string, parallelism int) (bool, error) {
 	r.calls = append(r.calls, "plan")
 	r.planCalled++
 	r.generatedPath = generatedPath
+	r.lastParallelism = parallelism
 	// Write the body first, THEN return the error — the order matters.
 	_ = os.WriteFile(generatedPath, []byte(r.planBody), 0o644)
 	return false, r.planError
@@ -193,6 +200,52 @@ func TestRun_HappyPath(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(dir, providersFile)); err != nil {
 		t.Errorf("providers.tf missing: %v", err)
 	}
+}
+
+// TestRun_ThreadsParallelismToReadback pins that Options.Parallelism (and its
+// default) reaches the readback PlanGenerate call end-to-end through Run, not
+// just inside the pure arg builder (luthersystems/ui-core#420). The
+// default-10 bottleneck the ticket measured was exactly a missing
+// -parallelism on this call; this guards the wiring, TestPlanGenerateOpts
+// guards the arg construction.
+func TestRun_ThreadsParallelismToReadback(t *testing.T) {
+	t.Parallel()
+	mkRunner := func() *fakeRunner {
+		return &fakeRunner{
+			planBody: `resource "aws_sqs_queue" "x" {
+  name = "alpha"
+}
+`,
+			schemas: minimalAWSSchema(),
+		}
+	}
+	resources := []imported.ImportedResource{
+		{Identity: imported.ResourceIdentity{Address: "aws_sqs_queue.x", ImportID: "id-x"}},
+	}
+
+	t.Run("default", func(t *testing.T) {
+		t.Parallel()
+		runner := mkRunner()
+		_, err := Run(context.Background(), Options{Workdir: t.TempDir(), Region: "us-east-1", Runner: runner}, resources)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if runner.lastParallelism != DefaultGenconfigParallelism {
+			t.Errorf("readback ran at -parallelism=%d, want default %d", runner.lastParallelism, DefaultGenconfigParallelism)
+		}
+	})
+
+	t.Run("explicit override", func(t *testing.T) {
+		t.Parallel()
+		runner := mkRunner()
+		_, err := Run(context.Background(), Options{Workdir: t.TempDir(), Region: "us-east-1", Parallelism: 37, Runner: runner}, resources)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if runner.lastParallelism != 37 {
+			t.Errorf("readback ran at -parallelism=%d, want explicit 37", runner.lastParallelism)
+		}
+	})
 }
 
 func TestRun_StreamsMilestoneProgressToStdout(t *testing.T) {
@@ -764,10 +817,11 @@ type regionAwareRunner struct {
 	fakeRunner
 }
 
-func (r *regionAwareRunner) PlanGenerate(_ context.Context, generatedPath string) (bool, error) {
+func (r *regionAwareRunner) PlanGenerate(_ context.Context, generatedPath string, parallelism int) (bool, error) {
 	r.calls = append(r.calls, "plan")
 	r.planCalled++
 	r.generatedPath = generatedPath
+	r.lastParallelism = parallelism
 	importsTF, err := os.ReadFile(filepath.Join(filepath.Dir(generatedPath), importsFile))
 	if err != nil {
 		return false, err
@@ -830,7 +884,10 @@ func TestRun_MultiRegion(t *testing.T) {
 			t.Errorf("missing per-region providers.tf for %s: %v", region, err)
 			continue
 		}
-		if !strings.Contains(string(prov), `region = "`+wantRegion+`"`) {
+		// hclwrite aligns the `=` columns across all provider attributes, so
+		// the retry-tuning attrs (retry_mode/max_retries) widen the region
+		// gutter — match value-anchored rather than on a fixed gutter width.
+		if !regexp.MustCompile(`region\s*=\s*"` + regexp.QuoteMeta(wantRegion) + `"`).Match(prov) {
 			t.Errorf("%s providers.tf not pinned to %s:\n%s", region, wantRegion, prov)
 		}
 		if strings.Contains(string(prov), "alias") {
@@ -853,10 +910,11 @@ type orphanProneRegionRunner struct {
 	orphans map[string]struct{}
 }
 
-func (r *orphanProneRegionRunner) PlanGenerate(_ context.Context, generatedPath string) (bool, error) {
+func (r *orphanProneRegionRunner) PlanGenerate(_ context.Context, generatedPath string, parallelism int) (bool, error) {
 	r.calls = append(r.calls, "plan")
 	r.planCalled++
 	r.generatedPath = generatedPath
+	r.lastParallelism = parallelism
 	importsTF, err := os.ReadFile(filepath.Join(filepath.Dir(generatedPath), importsFile))
 	if err != nil {
 		return false, err
