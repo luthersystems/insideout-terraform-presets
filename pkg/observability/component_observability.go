@@ -568,6 +568,7 @@ var alarmedGCPMetrics = map[composer.ComponentKey]AlarmAuthor{
 	composer.KeyGCPLoadbalancer:   {Module: "gcp/loadbalancer", Metrics: []string{"loadbalancing.googleapis.com/https/backend_latencies"}},
 	composer.KeyGCPMemorystore:    {Module: "gcp/memorystore", Metrics: []string{"redis.googleapis.com/stats/cpu_utilization"}},
 	composer.KeyGCPPubSub:         {Module: "gcp/pubsub", Metrics: []string{"pubsub.googleapis.com/subscription/num_undelivered_messages"}},
+	composer.KeyGCPVertexAI:       {Module: "gcp/vertex_ai", Metrics: []string{"aiplatform.googleapis.com/matching_engine/query_latencies"}},
 }
 
 // AlarmedAWSMetrics returns a defensive copy of the AWS authority entry

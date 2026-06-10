@@ -928,6 +928,24 @@ func (m DefaultMapper) BuildModuleValues(
 			}
 		}
 
+	case KeyGCPVertexAI:
+		// Vertex AI deepening (#764). The dataset is always created; the
+		// Vector Search resources (index + endpoint + deployed index) are
+		// gated on enable_vector_search. Partial-config: only emit a field
+		// the caller actually populated so the preset's own defaults
+		// (enable_vector_search=false, index_dimensions=768,
+		// index_update_method="BATCH_UPDATE") win when the field is left
+		// unset. network + contents_delta_uri are supplied by DefaultWiring
+		// from gcp/vpc + gcp/gcs in a full stack, not here.
+		if cfg != nil && cfg.GCPVertexAI != nil {
+			if cfg.GCPVertexAI.EnableVectorSearch != nil {
+				vals["enable_vector_search"] = *cfg.GCPVertexAI.EnableVectorSearch
+			}
+			if cfg.GCPVertexAI.IndexDimensions > 0 {
+				vals["index_dimensions"] = cfg.GCPVertexAI.IndexDimensions
+			}
+		}
+
 	case KeyGCPPubSub:
 		vals["topic_name"] = "events"
 		if cfg != nil && cfg.GCPPubSub != nil {

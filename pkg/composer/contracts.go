@@ -1184,6 +1184,24 @@ func DefaultWiring(selected map[ComponentKey]bool, k ComponentKey, comps *Compon
 			wi.RawHCL["vpc_connector"] = WireRef(KeyGCPVPC, "connector_id")
 			wi.Names = append(wi.Names, "vpc_connector")
 		}
+
+	case KeyGCPVertexAI:
+		// Vertex AI Vector Search (#764). When a VPC is selected, wire its
+		// network resource id (projects/<p>/global/networks/<n>, the exact
+		// form google_vertex_ai_index_endpoint.network expects) so the index
+		// endpoint takes the private VPC-peering path — the reason the hard
+		// gcp/vpc dep exists (contracts.go:322 / #600 PSC peering). gcp/vpc's
+		// network_id is surfaced as the vpc_id output.
+		if selected[KeyGCPVPC] {
+			wi.RawHCL["network"] = WireRef(KeyGCPVPC, "vpc_id")
+			wi.Names = append(wi.Names, "network")
+		}
+		// When GCS is selected, seed the index from the bucket. bucket_url is
+		// the gs:// URL the index's contents_delta_uri expects.
+		if selected[KeyGCPGCS] {
+			wi.RawHCL["contents_delta_uri"] = WireRef(KeyGCPGCS, "bucket_url")
+			wi.Names = append(wi.Names, "contents_delta_uri")
+		}
 	}
 
 	// Observability post-switch wiring (issue #204). Driven off the

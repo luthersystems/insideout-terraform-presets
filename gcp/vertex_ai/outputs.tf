@@ -17,3 +17,21 @@ output "region" {
   value       = google_vertex_ai_dataset.dataset.region
   description = "The region of the Vertex AI dataset"
 }
+
+# --- Vector Search ----------------------------------------------------------
+# Null when var.enable_vector_search is false (the resources are not created).
+
+output "index_id" {
+  value       = var.enable_vector_search ? google_vertex_ai_index.this[0].id : null
+  description = "The resource ID of the Vector Search index (null when Vector Search is disabled)"
+}
+
+output "index_endpoint_id" {
+  value       = var.enable_vector_search ? google_vertex_ai_index_endpoint.this[0].id : null
+  description = "The resource ID of the Vector Search index endpoint (null when Vector Search is disabled)"
+}
+
+output "deployed_index_id" {
+  value       = var.enable_vector_search ? google_vertex_ai_index_endpoint_deployed_index.this[0].deployed_index_id : null
+  description = "The deployed-index ID binding the index to the endpoint (null when Vector Search is disabled)"
+}

@@ -346,6 +346,18 @@ type Config struct {
 		Versioning   *bool  `json:"versioning,omitempty"`
 	} `json:"gcp_gcs,omitempty"`
 
+	// GCPVertexAI carries the caller-supplied Vertex AI configuration (#764).
+	// EnableVectorSearch gates the Vector Search resources (index + endpoint +
+	// deployed index) in the gcp/vertex_ai preset; the dataset is always
+	// created. IndexDimensions is the embedding dimensionality of the Vector
+	// Search index (immutable — changing it forces destroy/recreate). Both are
+	// partial-config: the mapper only emits a field the caller actually
+	// populated so the preset's own defaults win when left unset.
+	GCPVertexAI *struct {
+		EnableVectorSearch *bool `json:"enableVectorSearch,omitempty"`
+		IndexDimensions    int   `json:"indexDimensions,omitempty"`
+	} `json:"gcp_vertex_ai,omitempty"`
+
 	GCPPubSub *struct {
 		MessageRetentionDuration string `json:"messageRetentionDuration,omitempty"`
 	} `json:"gcp_pubsub,omitempty"`
@@ -697,13 +709,14 @@ func (c *Config) Normalize() {
 	}
 	switch c.Cloud {
 	case "AWS":
-		// Clear every GCP sub-config (14 fields — keep in sync with the
+		// Clear every GCP sub-config (15 fields — keep in sync with the
 		// GCPConfiguration section of the Config struct).
 		c.GCPCompute = nil
 		c.GCPGKE = nil
 		c.GCPCloudSQL = nil
 		c.GCPMemorystore = nil
 		c.GCPGCS = nil
+		c.GCPVertexAI = nil
 		c.GCPPubSub = nil
 		c.GCPCloudLogging = nil
 		c.GCPCloudRun = nil
