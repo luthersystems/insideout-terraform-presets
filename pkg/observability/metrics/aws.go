@@ -53,8 +53,11 @@ func ParseMetricsFilter(filtersJSON string) MetricsFilter {
 
 // Fetch is the public metric-fetch entry point. It walks every
 // resource in resources, builds the CloudWatch GetMetricData query set
-// off obs, issues one GetMetricData call per resource, and assembles
-// the per-resource MetricSeries slice into a MetricsResult.
+// off every namespace/dimension group in groups (one element for the
+// single-namespace common case; several for multi-namespace components
+// like aws_opensearch — #778), issues one GetMetricData call per
+// resource, and assembles the per-resource MetricSeries slice into a
+// MetricsResult. Callers pass ComponentObservability.AWSGroups().
 //
 // service is the inspector-side join key from
 // observability.ComponentObservability.Service ("ec2", "rds",
@@ -80,15 +83,26 @@ func Fetch(
 	ctx context.Context,
 	clients *Clients,
 	service string,
-	obs *observability.AWSObs,
+	groups []*observability.AWSObs,
 	resources []ResourceID,
 	mf MetricsFilter,
 ) (MetricsResult, error) {
 	if clients == nil {
 		return MetricsResult{}, fmt.Errorf("metrics: clients is required")
 	}
-	if obs == nil {
-		return MetricsResult{}, fmt.Errorf("metrics: obs is required for service %q", service)
+	// At least one non-nil group is required. Most services pass exactly
+	// one (Observability[k].AWS); multi-namespace components like
+	// aws_opensearch pass several via ComponentObservability.AWSGroups()
+	// (#778).
+	hasGroup := false
+	for _, g := range groups {
+		if g != nil {
+			hasGroup = true
+			break
+		}
+	}
+	if !hasGroup {
+		return MetricsResult{}, fmt.Errorf("metrics: at least one obs group is required for service %q", service)
 	}
 
 	// Apply per-service overrides (mirrors aws_metrics.go:666-672).
@@ -129,7 +143,7 @@ func Fetch(
 
 	var out []ResourceMetrics
 	for _, res := range resources {
-		queries := BuildGetMetricDataQueries(obs, res, service)
+		queries := BuildGetMetricDataQueries(groups, res, service)
 		series, err := getMetricData(ctx, cw, queries, startTime, endTime, int32(clampedPeriod)) //nolint:gosec // clamped to [1, 86400]
 		if err != nil {
 			// Per-resource failures log and skip; matches the InsideOut backend's
@@ -153,8 +167,23 @@ func Fetch(
 }
 
 // BuildGetMetricDataQueries constructs the per-resource MetricDataQuery
-// slice from obs. Mirrors the InsideOut backend's BuildMetricDataQueries
-// (aws_metrics.go:712).
+// slice from every namespace/dimension group in groups. Mirrors the
+// InsideOut backend's BuildMetricDataQueries (aws_metrics.go:712), extended to
+// walk multiple groups (#778): aws_opensearch publishes managed-domain
+// metrics under AWS/ES + DomainName AND serverless OCU metrics under
+// AWS/AOSS + ClientId, so a single resource emits queries across both
+// namespaces. Single-group services pass a one-element slice and get the
+// original behavior.
+//
+// Query IDs are globally unique across groups ("m0", "m1", …) so a
+// multi-group GetMetricData call never collides — CloudWatch rejects
+// duplicate query IDs in one request.
+//
+// res.DimensionName overrides the dimension name ONLY for the primary
+// (first) group — the per-resource ID was discovered against that group's
+// dimension. Extra groups use their own DimensionName (e.g. the AOSS
+// group's account-level ClientId), which is fixed by the namespace, not
+// by the per-resource override.
 //
 // Two service-shaped quirks survive intact:
 //
@@ -168,55 +197,62 @@ func Fetch(
 // Period on each MetricStat is a placeholder (300); getMetricData
 // overwrites it with the caller's clamped period before issuing the
 // CloudWatch call.
-func BuildGetMetricDataQueries(obs *observability.AWSObs, res ResourceID, service string) []cwtypes.MetricDataQuery {
-	if obs == nil {
-		return nil
-	}
-	dimName := res.DimensionName
-	if dimName == "" {
-		dimName = obs.DimensionName
-	}
-
-	queries := make([]cwtypes.MetricDataQuery, 0, len(obs.Metrics))
-	for i, m := range obs.Metrics {
-		id := fmt.Sprintf("m%d", i)
-
-		dimensions := []cwtypes.Dimension{{
-			Name:  aws.String(dimName),
-			Value: aws.String(res.ID),
-		}}
-
-		if service == serviceCloudFront {
-			dimensions = append(dimensions, cwtypes.Dimension{
-				Name:  aws.String("Region"),
-				Value: aws.String("Global"),
-			})
+func BuildGetMetricDataQueries(groups []*observability.AWSObs, res ResourceID, service string) []cwtypes.MetricDataQuery {
+	var queries []cwtypes.MetricDataQuery
+	primary := true
+	for _, obs := range groups {
+		if obs == nil {
+			continue
 		}
+		// The per-resource dimension override only applies to the primary
+		// group; extra groups carry a namespace-fixed dimension of their
+		// own (the AOSS group's ClientId, #778).
+		dimName := obs.DimensionName
+		if primary && res.DimensionName != "" {
+			dimName = res.DimensionName
+		}
+		primary = false
 
-		if service == serviceS3 {
-			storageType := "StandardStorage"
-			if m.Name == "NumberOfObjects" {
-				storageType = "AllStorageTypes"
+		for _, m := range obs.Metrics {
+			id := fmt.Sprintf("m%d", len(queries))
+
+			dimensions := []cwtypes.Dimension{{
+				Name:  aws.String(dimName),
+				Value: aws.String(res.ID),
+			}}
+
+			if service == serviceCloudFront {
+				dimensions = append(dimensions, cwtypes.Dimension{
+					Name:  aws.String("Region"),
+					Value: aws.String("Global"),
+				})
 			}
-			dimensions = append(dimensions, cwtypes.Dimension{
-				Name:  aws.String("StorageType"),
-				Value: aws.String(storageType),
+
+			if service == serviceS3 {
+				storageType := "StandardStorage"
+				if m.Name == "NumberOfObjects" {
+					storageType = "AllStorageTypes"
+				}
+				dimensions = append(dimensions, cwtypes.Dimension{
+					Name:  aws.String("StorageType"),
+					Value: aws.String(storageType),
+				})
+			}
+
+			queries = append(queries, cwtypes.MetricDataQuery{
+				Id:    aws.String(id),
+				Label: aws.String(m.Name),
+				MetricStat: &cwtypes.MetricStat{
+					Metric: &cwtypes.Metric{
+						Namespace:  aws.String(obs.Namespace),
+						MetricName: aws.String(m.Name),
+						Dimensions: dimensions,
+					},
+					Period: aws.Int32(300), // overwritten by getMetricData
+					Stat:   aws.String(m.Stat),
+				},
 			})
 		}
-
-		queries = append(queries, cwtypes.MetricDataQuery{
-			Id:    aws.String(id),
-			Label: aws.String(m.Name),
-			MetricStat: &cwtypes.MetricStat{
-				Metric: &cwtypes.Metric{
-					Namespace:  aws.String(obs.Namespace),
-					MetricName: aws.String(m.Name),
-					Dimensions: dimensions,
-				},
-				Period: aws.Int32(300), // overwritten by getMetricData
-				Stat:   aws.String(m.Stat),
-			},
-		})
 	}
 	return queries
 }
