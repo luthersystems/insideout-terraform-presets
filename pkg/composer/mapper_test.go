@@ -1155,6 +1155,28 @@ func TestBuildModuleValues_AWSEC2_GPU(t *testing.T) {
 		assert.Equal(t, "x86_64", vals["arch"], "GPU AMIs are x86_64-only")
 		assert.Equal(t, "g5.xlarge", vals["instance_type"],
 			"GPUEnabled with no explicit instance type must default to g5.xlarge")
+		// The preset's os_type defaults to "ubuntu", and the GPU AMI is
+		// Amazon Linux 2023 — leaving the default would trip the module's
+		// gpu+ubuntu precondition. The mapper must pin amazon-linux so a
+		// composer-generated GPU stack plans cleanly (#759 HIGH-3).
+		assert.Equal(t, "amazon-linux", vals["os_type"],
+			"GPU path must emit os_type=amazon-linux so the gpu+ubuntu precondition does not trip")
+	})
+
+	t.Run("explicit GPU instance type also pins os_type=amazon-linux", func(t *testing.T) {
+		cfg := configWithAWSEC2(awsEC2CfgInput{GPUEnabled: &trueVal, InstanceType: "g6.2xlarge"})
+		vals, err := m.BuildModuleValues(KeyAWSEC2, nil, cfg, "", "")
+		require.NoError(t, err)
+		assert.Equal(t, "amazon-linux", vals["os_type"],
+			"os_type must be pinned on every GPU path, not just the default-instance-type path")
+	})
+
+	t.Run("non-GPU EC2 leaves os_type unset (preset default applies)", func(t *testing.T) {
+		cfg := configWithAWSEC2(awsEC2CfgInput{GPUEnabled: &falseVal})
+		vals, err := m.BuildModuleValues(KeyAWSEC2, nil, cfg, "", "")
+		require.NoError(t, err)
+		_, hasOSType := vals["os_type"]
+		assert.False(t, hasOSType, "non-GPU EC2 must not pin os_type; the preset default (ubuntu) applies")
 	})
 
 	t.Run("GPU overrides ARM component hint (x86_64-only AMI)", func(t *testing.T) {
@@ -1174,6 +1196,24 @@ func TestBuildModuleValues_AWSEC2_GPU(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, "g6.2xlarge", vals["instance_type"],
 			"explicit GPU instance type must override the g5.xlarge default")
+		assert.Equal(t, true, vals["gpu_enabled"])
+	})
+
+	t.Run("gr6 GPU family is accepted", func(t *testing.T) {
+		// gr6 is a real x86 NVIDIA family in the allow-list; it must validate.
+		cfg := configWithAWSEC2(awsEC2CfgInput{GPUEnabled: &trueVal, InstanceType: "gr6.4xlarge"})
+		vals, err := m.BuildModuleValues(KeyAWSEC2, nil, cfg, "", "")
+		require.NoError(t, err)
+		assert.Equal(t, "gr6.4xlarge", vals["instance_type"])
+		assert.Equal(t, true, vals["gpu_enabled"])
+	})
+
+	t.Run("capitalised GPU instance type accepted via normalization", func(t *testing.T) {
+		// AWS types are canonically lower-case, but a caller passing "G5.xlarge"
+		// must still validate — instanceFamily lower-cases before matching.
+		cfg := configWithAWSEC2(awsEC2CfgInput{GPUEnabled: &trueVal, InstanceType: "G5.xlarge"})
+		vals, err := m.BuildModuleValues(KeyAWSEC2, nil, cfg, "", "")
+		require.NoError(t, err, "a capitalised GPU family must validate via normalization")
 		assert.Equal(t, true, vals["gpu_enabled"])
 	})
 

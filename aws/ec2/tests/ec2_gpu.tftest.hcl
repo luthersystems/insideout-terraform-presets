@@ -3,8 +3,11 @@
 # gpu_enabled=true selects the AWS Deep Learning Base GPU AMI (Amazon Linux
 # 2023, NVIDIA driver baked in) so a g5/g6/p4d/p5 instance comes up with
 # /dev/nvidia* present, instead of the plain OS AMI. GPU AMIs are x86_64-only,
-# so gpu_enabled=true requires arch=x86_64 — the variable validation rejects
-# the arm64 mismatch (the #207 class: wrong AMI for the chosen hardware).
+# so gpu_enabled=true requires an x86 NVIDIA GPU instance_type — the
+# aws_instance precondition rejects non-GPU/ARM types (the #207 class: wrong
+# AMI for the chosen hardware). The check is a resource precondition rather
+# than a variable validation because TF forbids cross-variable conditions in
+# variable validation blocks.
 #
 # The in-cluster / on-host NVIDIA device plugin and CUDA runtime layering is
 # app-layer and out of preset scope — this module only provisions a
@@ -87,9 +90,11 @@ run "explicit_ami_id_overrides_gpu" {
 }
 
 # Arch/AMI mismatch (#207 class): GPU AMIs are x86_64-only, so gpu_enabled
-# with arch=arm64 must fail validation rather than silently provisioning an
-# instance with an incompatible AMI.
-run "gpu_with_arm64_fails_validation" {
+# with an ARM/Graviton instance_type must fail rather than silently
+# provisioning an instance with an incompatible AMI. The check lives on the
+# aws_instance precondition (TF forbids the cross-variable condition in a
+# variable validation block), so the failure surfaces against aws_instance.this.
+run "gpu_with_arm64_instance_type_fails_precondition" {
   command = plan
 
   override_data {
@@ -99,12 +104,49 @@ run "gpu_with_arm64_fails_validation" {
     }
   }
 
-  variables {
-    gpu_enabled = true
-    arch        = "arm64"
+  override_data {
+    target = data.aws_ami.gpu[0]
+    values = {
+      id = "ami-0gpu00000000000ab"
+    }
   }
 
-  expect_failures = [var.gpu_enabled]
+  variables {
+    gpu_enabled   = true
+    arch          = "arm64"
+    instance_type = "g5g.xlarge"
+  }
+
+  expect_failures = [aws_instance.this]
+}
+
+# Non-GPU instance type with gpu_enabled (#759): a plain compute type like
+# t3.medium has no NVIDIA hardware, so booting it with the GPU AMI yields a
+# node without /dev/nvidia*. The precondition rejects it at plan.
+run "gpu_with_non_gpu_instance_type_fails_precondition" {
+  command = plan
+
+  override_data {
+    target = data.aws_iam_policy_document.ec2_assume_role
+    values = {
+      json = "{\"Version\":\"2012-10-17\",\"Statement\":[]}"
+    }
+  }
+
+  override_data {
+    target = data.aws_ami.gpu[0]
+    values = {
+      id = "ami-0gpu00000000000ab"
+    }
+  }
+
+  variables {
+    gpu_enabled   = true
+    arch          = "x86_64"
+    instance_type = "t3.medium"
+  }
+
+  expect_failures = [aws_instance.this]
 }
 
 # os_type override (#759): gpu_enabled selects the Amazon Linux 2023 GPU AMI

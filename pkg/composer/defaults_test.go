@@ -556,17 +556,28 @@ func TestComputePresetDefaults_GPUInstanceTypeDefault(t *testing.T) {
 			"GPU EKS node group must overlay the GPU default instance type")
 	})
 
-	t.Run("explicit GPU instance type is preserved (not overwritten)", func(t *testing.T) {
+	t.Run("explicit GPU instance type is preserved through the full merge", func(t *testing.T) {
+		// Guard the premise: the user's pick must differ from the GPU default,
+		// otherwise "preserved" would be indistinguishable from "overwritten".
+		require.NotEqual(t, defaultGPUInstanceType, "p4d.24xlarge")
+
 		cfg := configWithAWSEC2(awsEC2CfgInput{GPUEnabled: &trueVal, InstanceType: "p4d.24xlarge"})
+
+		// The overlay is the back-fill only; the zero-only merge keeps the
+		// user's explicit value, so the overlay must NOT echo the GPU default.
 		overlay, err := c.ComputePresetDefaults(*cfg, &Components{Cloud: "aws"}, []ComponentKey{KeyAWSEC2})
 		require.NoError(t, err)
-		// The overlay is the back-fill only; an explicit user pick is in cfg,
-		// so the overlay's instance type must NOT be the GPU default (the
-		// zero-only merge keeps the user's explicit value).
-		assert.NotEqual(t, defaultGPUInstanceType, "p4d.24xlarge")
 		require.NotNil(t, overlay.AWSEC2)
 		assert.NotEqual(t, defaultGPUInstanceType, overlay.AWSEC2.InstanceType,
 			"explicit user instance type must not trigger the GPU default overlay")
+
+		// Run the full ApplyPresetDefaults/merge path and positively assert the
+		// EFFECTIVE instance type is the user's explicit pick, not the GPU
+		// default — the real outcome a caller observes after defaults apply.
+		require.NoError(t, c.ApplyPresetDefaults(cfg, &Components{Cloud: "aws"}, []ComponentKey{KeyAWSEC2}))
+		require.NotNil(t, cfg.AWSEC2)
+		assert.Equal(t, "p4d.24xlarge", cfg.AWSEC2.InstanceType,
+			"the user's explicit GPU instance type must survive the full defaults merge")
 	})
 
 	t.Run("non-GPU EC2 keeps the t3.medium HCL default", func(t *testing.T) {
@@ -575,6 +586,40 @@ func TestComputePresetDefaults_GPUInstanceTypeDefault(t *testing.T) {
 		require.NotNil(t, overlay.AWSEC2)
 		assert.Equal(t, "t3.medium", overlay.AWSEC2.InstanceType,
 			"non-GPU EC2 must keep the non-GPU HCL default")
+	})
+}
+
+// TestApplyGPUInstanceTypeDefault_AllocatesNilOverlay exercises
+// applyGPUInstanceTypeDefault directly with an empty (&Config{}) overlay so the
+// reflect-based nil-allocation branch is covered. Through ComputePresetDefaults
+// the overlay's inner struct is always pre-allocated by the selection loop, so
+// that branch is otherwise dead — this calls it head-on with out.AWSEC2 ==
+// nil / out.AWSEKS == nil to prove the allocate-on-demand path works (#759).
+func TestApplyGPUInstanceTypeDefault_AllocatesNilOverlay(t *testing.T) {
+	trueVal := true
+
+	t.Run("EC2 GPU with nil overlay allocates and fills the GPU default", func(t *testing.T) {
+		cfg := configWithAWSEC2(awsEC2CfgInput{GPUEnabled: &trueVal})
+		out := &Config{} // out.AWSEC2 is nil — drives the allocation branch.
+		applyGPUInstanceTypeDefault(cfg, out)
+		require.NotNil(t, out.AWSEC2, "nil overlay must be allocated on demand")
+		assert.Equal(t, defaultGPUInstanceType, out.AWSEC2.InstanceType)
+	})
+
+	t.Run("EKS GPU with nil overlay allocates and fills the GPU default", func(t *testing.T) {
+		cfg := configWithAWSEKS(awsEKSCfgInput{GPUEnabled: &trueVal})
+		out := &Config{} // out.AWSEKS is nil — drives the allocation branch.
+		applyGPUInstanceTypeDefault(cfg, out)
+		require.NotNil(t, out.AWSEKS, "nil overlay must be allocated on demand")
+		assert.Equal(t, defaultGPUInstanceType, out.AWSEKS.InstanceType)
+	})
+
+	t.Run("no GPU → nil overlay untouched", func(t *testing.T) {
+		cfg := configWithAWSEC2(awsEC2CfgInput{})
+		out := &Config{}
+		applyGPUInstanceTypeDefault(cfg, out)
+		assert.Nil(t, out.AWSEC2, "no GPU enabled must not allocate the overlay")
+		assert.Nil(t, out.AWSEKS)
 	})
 }
 

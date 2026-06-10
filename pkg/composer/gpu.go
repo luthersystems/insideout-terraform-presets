@@ -42,9 +42,12 @@ var gpuX86Families = map[string]struct{}{
 // instanceFamily returns the family prefix of an EC2 instance type — the part
 // before the first "." — matching the HCL `split(".", ...)[0]` derive. For
 // "g5.xlarge" it returns "g5"; for a string with no "." it returns the input
-// unchanged.
+// unchanged. The input is trimmed and lower-cased first so surrounding
+// whitespace or a capitalised family ("G5.xlarge") still matches the allow-list
+// (AWS instance types are canonically lower-case).
 func instanceFamily(instanceType string) string {
-	return strings.SplitN(instanceType, ".", 2)[0]
+	normalized := strings.ToLower(strings.TrimSpace(instanceType))
+	return strings.SplitN(normalized, ".", 2)[0]
 }
 
 // isGPUX86Family reports whether instanceType belongs to a known NVIDIA-GPU

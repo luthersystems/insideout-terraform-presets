@@ -389,6 +389,15 @@ func (m DefaultMapper) BuildModuleValues(
 				}
 				vals["gpu_enabled"] = true
 				vals["arch"] = "x86_64"
+				// The aws/ec2 preset's os_type defaults to "ubuntu", but the
+				// GPU AMI is Amazon Linux 2023 — so a GPU instance left on the
+				// default os_type trips the module's gpu+ubuntu precondition at
+				// plan (the GPU AMI ignores os_type, and the preset rejects the
+				// silent override). The IR has no os_type field, so pin
+				// amazon-linux here to keep every composer-generated GPU stack
+				// plan-clean. A caller needing an Ubuntu GPU image supplies an
+				// explicit ami_id, which the precondition exempts.
+				vals["os_type"] = "amazon-linux"
 			}
 			if cfg.AWSEC2.DiskSizePerServer != "" {
 				n, err := strconv.Atoi(strings.TrimSpace(cfg.AWSEC2.DiskSizePerServer))
