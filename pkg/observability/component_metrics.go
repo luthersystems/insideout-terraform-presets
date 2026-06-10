@@ -61,10 +61,15 @@ var ComponentMetricsMapping = map[composer.ComponentKey]ComponentMetricsBinding{
 	composer.KeyAWSAPIGateway:           {Service: "apigateway", Action: "get-apis"},
 	composer.KeyAWSOpenSearch:           {Service: "opensearch", Action: "describe-domains"},
 	composer.KeyAWSBedrock:              {Service: "bedrock", Action: "list-knowledge-bases"},
-	composer.KeyAWSVPC:                  {Service: "vpc", Action: "describe-vpcs"},
-	composer.KeyAWSBastion:              {Service: "ec2", Action: "describe-instances"},
-	composer.KeyAWSGrafana:              {Service: "ec2", Action: "describe-instances"},
-	composer.KeyAWSCodePipeline:         {Service: "ec2", Action: "describe-instances"},
+	// aws_bedrock_agent (#762): the agent is the panel-default surface. The
+	// preset declares aws_bedrockagent_agent as its top-level entity; the
+	// action group / alias / KB association hang off it. bedrock.list-agents
+	// is already a registered action on the bedrock service.
+	composer.KeyAWSBedrockAgent: {Service: "bedrock", Action: "list-agents"},
+	composer.KeyAWSVPC:          {Service: "vpc", Action: "describe-vpcs"},
+	composer.KeyAWSBastion:      {Service: "ec2", Action: "describe-instances"},
+	composer.KeyAWSGrafana:      {Service: "ec2", Action: "describe-instances"},
+	composer.KeyAWSCodePipeline: {Service: "ec2", Action: "describe-instances"},
 	// #622 historical-drift backfill: ACM panel surface is the cert
 	// inventory; Route 53 panel surface is the hosted-zone inventory;
 	// Backups panel surface is the vault inventory. All three had

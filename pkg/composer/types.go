@@ -37,6 +37,7 @@ type Components struct {
 	AWSKMS                  *bool  `json:"aws_kms,omitempty"`
 	AWSSecretsManager       *bool  `json:"aws_secretsmanager,omitempty"`
 	AWSBedrock              *bool  `json:"aws_bedrock,omitempty"`
+	AWSBedrockAgent         *bool  `json:"aws_bedrock_agent,omitempty"`
 	AWSSQS                  *bool  `json:"aws_sqs,omitempty"`
 	AWSMSK                  *bool  `json:"aws_msk,omitempty"`
 	AWSCloudWatchLogs       *bool  `json:"aws_cloudwatch_logs,omitempty"`
@@ -113,6 +114,10 @@ type Config struct {
 		CustomIngressPorts    []int  `json:"customIngressPorts,omitempty"`
 		SSHPublicKey          string `json:"sshPublicKey,omitempty"`
 		EnableInstanceConnect *bool  `json:"enableInstanceConnect,omitempty"`
+		// GPUEnabled selects an NVIDIA-GPU AMI for the instance (#759). Pair
+		// with a GPU InstanceType (g4dn/g5/g6/p4d/p5, ...). GPU AMIs are
+		// x86_64-only; the preset rejects gpu_enabled with arm64.
+		GPUEnabled *bool `json:"gpuEnabled,omitempty"`
 	} `json:"aws_ec2,omitempty"`
 
 	AWSEKS *struct {
@@ -122,6 +127,12 @@ type Config struct {
 		MaxSize                string `json:"maxSize,omitempty"`
 		MinSize                string `json:"minSize,omitempty"`
 		InstanceType           string `json:"instanceType,omitempty"`
+		// GPUEnabled provisions a GPU node group (#759): when true and no
+		// explicit GPU InstanceType is given, the mapper defaults
+		// instance_types to g5.xlarge and sets ami_type to
+		// AL2023_x86_64_NVIDIA. The in-cluster NVIDIA device plugin is
+		// app-layer and out of preset scope.
+		GPUEnabled *bool `json:"gpuEnabled,omitempty"`
 	} `json:"aws_eks,omitempty"`
 
 	AWSECS *struct {
@@ -289,6 +300,12 @@ type Config struct {
 		VectorStore         string `json:"vectorStore,omitempty"`
 	} `json:"aws_bedrock,omitempty"`
 
+	AWSBedrockAgent *struct {
+		FoundationModel string `json:"foundationModel,omitempty"`
+		Instruction     string `json:"instruction,omitempty"`
+		AgentName       string `json:"agentName,omitempty"`
+	} `json:"aws_bedrock_agent,omitempty"`
+
 	AWSBackups *struct {
 		EC2 *struct {
 			FrequencyHours int    `json:"frequencyHours,omitempty"`
@@ -345,6 +362,18 @@ type Config struct {
 		StorageClass string `json:"storageClass,omitempty"`
 		Versioning   *bool  `json:"versioning,omitempty"`
 	} `json:"gcp_gcs,omitempty"`
+
+	// GCPVertexAI carries the caller-supplied Vertex AI configuration (#764).
+	// EnableVectorSearch gates the Vector Search resources (index + endpoint +
+	// deployed index) in the gcp/vertex_ai preset; the dataset is always
+	// created. IndexDimensions is the embedding dimensionality of the Vector
+	// Search index (immutable — changing it forces destroy/recreate). Both are
+	// partial-config: the mapper only emits a field the caller actually
+	// populated so the preset's own defaults win when left unset.
+	GCPVertexAI *struct {
+		EnableVectorSearch *bool `json:"enableVectorSearch,omitempty"`
+		IndexDimensions    int   `json:"indexDimensions,omitempty"`
+	} `json:"gcp_vertex_ai,omitempty"`
 
 	GCPPubSub *struct {
 		MessageRetentionDuration string `json:"messageRetentionDuration,omitempty"`
@@ -628,6 +657,7 @@ func (c *Components) Normalize() {
 		c.AWSKMS = nil
 		c.AWSSecretsManager = nil
 		c.AWSBedrock = nil
+		c.AWSBedrockAgent = nil
 		c.AWSSQS = nil
 		c.AWSMSK = nil
 		c.AWSCloudWatchLogs = nil
@@ -697,13 +727,14 @@ func (c *Config) Normalize() {
 	}
 	switch c.Cloud {
 	case "AWS":
-		// Clear every GCP sub-config (14 fields — keep in sync with the
+		// Clear every GCP sub-config (15 fields — keep in sync with the
 		// GCPConfiguration section of the Config struct).
 		c.GCPCompute = nil
 		c.GCPGKE = nil
 		c.GCPCloudSQL = nil
 		c.GCPMemorystore = nil
 		c.GCPGCS = nil
+		c.GCPVertexAI = nil
 		c.GCPPubSub = nil
 		c.GCPCloudLogging = nil
 		c.GCPCloudRun = nil
@@ -750,6 +781,7 @@ func (c *Config) Normalize() {
 		c.AWSSecretsManager = nil
 		c.AWSOpenSearch = nil
 		c.AWSBedrock = nil
+		c.AWSBedrockAgent = nil
 		c.AWSRoute53 = nil
 		c.AWSACM = nil
 		c.AWSBackups = nil

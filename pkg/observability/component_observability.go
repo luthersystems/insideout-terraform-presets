@@ -441,6 +441,11 @@ var gcpServiceMetrics = map[string]GCPObs{
 			{MetricType: "aiplatform.googleapis.com/prediction/online/prediction_count", ResourceType: "aiplatform.googleapis.com/Endpoint", LabelKey: "endpoint_id", Aligner: "ALIGN_RATE", DisplayName: "Online Prediction Count"},
 			{MetricType: "aiplatform.googleapis.com/prediction/online/error_count", ResourceType: "aiplatform.googleapis.com/Endpoint", LabelKey: "endpoint_id", Aligner: "ALIGN_RATE", DisplayName: "Online Prediction Errors"},
 			{MetricType: "aiplatform.googleapis.com/prediction/online/prediction_latencies", ResourceType: "aiplatform.googleapis.com/Endpoint", LabelKey: "endpoint_id", Aligner: "ALIGN_PERCENTILE_99", DisplayName: "Online Prediction Latency (p99)"},
+			// Vector Search (Matching Engine) serving surface — the metric the
+			// gcp/vertex_ai query-latency alert policy alarms on (#764). Lives
+			// here so componentObs() can flip Alarmed=true; without it the
+			// inspector is blind to the alarmed metric.
+			{MetricType: "aiplatform.googleapis.com/matching_engine/query/latencies", ResourceType: "aiplatform.googleapis.com/IndexEndpoint", LabelKey: "index_endpoint_id", Aligner: "ALIGN_PERCENTILE_99", DisplayName: "Vector Search Query Latency (p99)"},
 		},
 	},
 }
@@ -534,19 +539,20 @@ type AlarmAuthor struct {
 // then add the metric_name here (and remove the key from
 // observabilityDeferred once every spec for that key is alarmed).
 var alarmedAWSMetrics = map[composer.ComponentKey]AlarmAuthor{
-	composer.KeyAWSALB:         {Module: "aws/alb", Metrics: []string{"HTTPCode_ELB_5XX_Count"}},
-	composer.KeyAWSAPIGateway:  {Module: "aws/apigateway", Metrics: []string{"5xx"}},
-	composer.KeyAWSBastion:     {Module: "aws/bastion", Metrics: []string{"CPUUtilization"}},
-	composer.KeyAWSDynamoDB:    {Module: "aws/dynamodb", Metrics: []string{"ThrottledRequests"}},
-	composer.KeyAWSEC2:         {Module: "aws/ec2", Metrics: []string{"CPUUtilization"}},
-	composer.KeyAWSECS:         {Module: "aws/ecs", Metrics: []string{"CPUUtilization"}},
-	composer.KeyAWSEKS:         {Module: "aws/eks_nodegroup", Metrics: []string{"cluster_failed_node_count"}},
-	composer.KeyAWSElastiCache: {Module: "aws/elasticache", Metrics: []string{"CPUUtilization"}},
-	composer.KeyAWSLambda:      {Module: "aws/lambda", Metrics: []string{"Errors"}},
-	composer.KeyAWSMSK:         {Module: "aws/msk", Metrics: []string{"OfflinePartitionsCount"}},
-	composer.KeyAWSOpenSearch:  {Module: "aws/opensearch", Metrics: []string{"ClusterStatus.red"}},
-	composer.KeyAWSRDS:         {Module: "aws/rds", Metrics: []string{"CPUUtilization", "FreeStorageSpace"}},
-	composer.KeyAWSSQS:         {Module: "aws/sqs", Metrics: []string{"ApproximateNumberOfMessagesVisible"}},
+	composer.KeyAWSALB:          {Module: "aws/alb", Metrics: []string{"HTTPCode_ELB_5XX_Count"}},
+	composer.KeyAWSAPIGateway:   {Module: "aws/apigateway", Metrics: []string{"5xx"}},
+	composer.KeyAWSBastion:      {Module: "aws/bastion", Metrics: []string{"CPUUtilization"}},
+	composer.KeyAWSBedrockAgent: {Module: "aws/bedrock_agent", Metrics: []string{"InvocationClientErrors"}},
+	composer.KeyAWSDynamoDB:     {Module: "aws/dynamodb", Metrics: []string{"ThrottledRequests"}},
+	composer.KeyAWSEC2:          {Module: "aws/ec2", Metrics: []string{"CPUUtilization"}},
+	composer.KeyAWSECS:          {Module: "aws/ecs", Metrics: []string{"CPUUtilization"}},
+	composer.KeyAWSEKS:          {Module: "aws/eks_nodegroup", Metrics: []string{"cluster_failed_node_count"}},
+	composer.KeyAWSElastiCache:  {Module: "aws/elasticache", Metrics: []string{"CPUUtilization"}},
+	composer.KeyAWSLambda:       {Module: "aws/lambda", Metrics: []string{"Errors"}},
+	composer.KeyAWSMSK:          {Module: "aws/msk", Metrics: []string{"OfflinePartitionsCount"}},
+	composer.KeyAWSOpenSearch:   {Module: "aws/opensearch", Metrics: []string{"ClusterStatus.red"}},
+	composer.KeyAWSRDS:          {Module: "aws/rds", Metrics: []string{"CPUUtilization", "FreeStorageSpace"}},
+	composer.KeyAWSSQS:          {Module: "aws/sqs", Metrics: []string{"ApproximateNumberOfMessagesVisible"}},
 }
 
 // alarmedGCPMetrics is the GCP analogue. Metric strings match
@@ -568,6 +574,7 @@ var alarmedGCPMetrics = map[composer.ComponentKey]AlarmAuthor{
 	composer.KeyGCPLoadbalancer:   {Module: "gcp/loadbalancer", Metrics: []string{"loadbalancing.googleapis.com/https/backend_latencies"}},
 	composer.KeyGCPMemorystore:    {Module: "gcp/memorystore", Metrics: []string{"redis.googleapis.com/stats/cpu_utilization"}},
 	composer.KeyGCPPubSub:         {Module: "gcp/pubsub", Metrics: []string{"pubsub.googleapis.com/subscription/num_undelivered_messages"}},
+	composer.KeyGCPVertexAI:       {Module: "gcp/vertex_ai", Metrics: []string{"aiplatform.googleapis.com/matching_engine/query/latencies"}},
 }
 
 // AlarmedAWSMetrics returns a defensive copy of the AWS authority entry

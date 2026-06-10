@@ -82,6 +82,7 @@ var AWSIAMActions = map[ComponentKey][]string{
 	KeyAWSSecretsManager:       {"secretsmanager:CreateSecret"},
 	KeyAWSOpenSearch:           {"es:CreateDomain"},
 	KeyAWSBedrock:              {"bedrock:GetFoundationModel"},
+	KeyAWSBedrockAgent:         {"bedrock:CreateAgent"},
 	KeyAWSSQS:                  {"sqs:CreateQueue"},
 	KeyAWSMSK:                  {"kafka:CreateClusterV2"},
 	KeyAWSCloudWatchLogs:       {"logs:CreateLogGroup"},

@@ -55,6 +55,7 @@ const (
 	KeyAWSSecretsManager       ComponentKey = "aws_secretsmanager"
 	KeyAWSOpenSearch           ComponentKey = "aws_opensearch"
 	KeyAWSBedrock              ComponentKey = "aws_bedrock"
+	KeyAWSBedrockAgent         ComponentKey = "aws_bedrock_agent"
 	KeyAWSSQS                  ComponentKey = "aws_sqs"
 	KeyAWSMSK                  ComponentKey = "aws_msk"
 	KeyAWSCloudWatchLogs       ComponentKey = "aws_cloudwatch_logs"
@@ -156,6 +157,13 @@ var ComposeOrder = []ComponentKey{
 	KeyGCPSecretManager,
 	KeyAWSOpenSearch,
 	KeyAWSBedrock,
+	// Bedrock Agent (#762) composes after KeyAWSBedrock so its DefaultWiring
+	// case can read the KB's knowledge_base_id output when aws_bedrock is also
+	// selected. Its hard ImplicitDependency on KeyAWSLambda (the action-group
+	// executor) is positioned far earlier (Lambda :~110), so both producers
+	// precede this consumer — TestImplicitDependencies_ComposeOrderRespected
+	// enforces that.
+	KeyAWSBedrockAgent,
 	KeyAWSSageMaker,
 	KeyGCPVertexAI,
 	// App Runner (#598 row 2). Independent of EKS/ECS/Lambda compute
@@ -216,6 +224,7 @@ var ModulePath = map[ComponentKey]string{
 	KeyAWSKMS:                  "modules/kms",
 	KeyAWSSecretsManager:       "modules/secretsmanager",
 	KeyAWSBedrock:              "modules/bedrock",
+	KeyAWSBedrockAgent:         "modules/bedrock_agent",
 	KeyAWSSQS:                  "modules/sqs",
 	KeyAWSMSK:                  "modules/msk",
 	KeyAWSCloudWatchLogs:       "modules/cloudwatchlogs",
@@ -294,6 +303,14 @@ var ImplicitDependencies = map[ComponentKey][]ComponentKey{
 	// network_mode is PublicInternetOnly or VpcOnly — selecting SageMaker
 	// without a VPC leaves the required inputs without a wired source.
 	KeyAWSSageMaker: {KeyAWSVPC},
+	// Bedrock Agent (#762): the action group's executor is a Lambda function.
+	// aws_bedrockagent_agent_action_group.action_group_executor.lambda has no
+	// source unless aws/lambda is in the stack, so the action_group_lambda_arn
+	// wire is unsatisfiable without it — a HARD dependency. The VPC arrives
+	// transitively (KeyAWSLambda → KeyAWSVPC). The KB association is NOT a hard
+	// dep: a Bedrock Agent is fully functional without RAG; the KB wire is
+	// added conditionally by DefaultWiring only when aws_bedrock is selected.
+	KeyAWSBedrockAgent: {KeyAWSLambda},
 	// App Runner (#598 row 2). The public-only service does NOT strictly
 	// require a VPC, but the preset's optional VPC connector path
 	// (enable_vpc_connector = true) feeds vpc_id + subnet_ids from
@@ -433,6 +450,7 @@ var PresetKeyMap = map[ComponentKey]string{
 	KeyAWSKMS:                  "kms",
 	KeyAWSSecretsManager:       "secretsmanager",
 	KeyAWSBedrock:              "bedrock",
+	KeyAWSBedrockAgent:         "bedrock_agent",
 	KeyAWSSQS:                  "sqs",
 	KeyAWSMSK:                  "msk",
 	KeyAWSCloudWatchLogs:       "cloudwatchlogs",
@@ -537,6 +555,7 @@ var AllComponentKeys = []ComponentKey{
 	KeyAWSBackups,
 	KeyAWSBastion,
 	KeyAWSBedrock,
+	KeyAWSBedrockAgent,
 	KeyAWSCloudWatchLogs,
 	KeyAWSCloudWatchMonitoring,
 	KeyAWSCloudfront,
@@ -658,6 +677,8 @@ func rdsRef(_ map[ComponentKey]bool) string        { return ModuleRef(KeyAWSRDS)
 func s3Ref(_ map[ComponentKey]bool) string         { return ModuleRef(KeyAWSS3) }
 func opensearchRef(_ map[ComponentKey]bool) string { return ModuleRef(KeyAWSOpenSearch) }
 func sqsRef(_ map[ComponentKey]bool) string        { return ModuleRef(KeyAWSSQS) }
+func lambdaRef(_ map[ComponentKey]bool) string     { return ModuleRef(KeyAWSLambda) }
+func bedrockRef(_ map[ComponentKey]bool) string    { return ModuleRef(KeyAWSBedrock) }
 
 // resourceRef returns the EKS/ECS module reference for the selected stack.
 // Prefers KeyAWSEKS over KeyAWSECS when both are somehow present (validators
@@ -1055,8 +1076,35 @@ func DefaultWiring(selected map[ComponentKey]bool, k ComponentKey, comps *Compon
 			wi.Names = append(wi.Names, "s3_bucket_arn")
 		}
 		if hasOpenSearch {
-			wi.RawHCL["opensearch_collection_arn"] = opensearchRef(selected) + ".collection_arn"
-			wi.Names = append(wi.Names, "opensearch_collection_arn")
+			osRef := opensearchRef(selected)
+			wi.RawHCL["opensearch_collection_arn"] = osRef + ".collection_arn"
+			// Bedrock authors the AOSS data-access policy from the collection
+			// NAME (AOSS access policies match collections by name, not ARN),
+			// so it needs collection_name as well as collection_arn. Without
+			// this edge the bedrock module skips the data-access policy
+			// (count gates on var.opensearch_collection_name) and the KB role
+			// has no data-plane grant. See aws/opensearch/main.tf header.
+			wi.RawHCL["opensearch_collection_name"] = osRef + ".collection_name"
+			wi.Names = append(wi.Names, "opensearch_collection_arn", "opensearch_collection_name")
+		}
+
+	case KeyAWSBedrockAgent:
+		// The action group's executor is a Lambda function. KeyAWSLambda is a
+		// HARD ImplicitDependency of KeyAWSBedrockAgent, so aws/lambda is always
+		// in the stack here — wire the agent's action_group_lambda_arn from the
+		// lambda module's function_arn output unconditionally.
+		wi.RawHCL["action_group_lambda_arn"] = lambdaRef(selected) + ".function_arn"
+		wi.Names = append(wi.Names, "action_group_lambda_arn")
+		// "Agent that does RAG": when aws/bedrock is also selected with its
+		// Knowledge Base enabled, wire the KB's id into the agent so the preset
+		// creates an aws_bedrockagent_agent_knowledge_base_association. The
+		// bedrock preset's knowledge_base_id output is null when the KB is
+		// disabled, so the association is gated preset-side on a non-null id —
+		// composing aws_bedrock without enable_knowledge_base leaves the agent
+		// KB-less, which is correct.
+		if selected[KeyAWSBedrock] {
+			wi.RawHCL["knowledge_base_id"] = bedrockRef(selected) + ".knowledge_base_id"
+			wi.Names = append(wi.Names, "knowledge_base_id")
 		}
 
 	case KeyAWSBackups:
@@ -1183,6 +1231,30 @@ func DefaultWiring(selected map[ComponentKey]bool, k ComponentKey, comps *Compon
 		if selected[KeyGCPVPC] {
 			wi.RawHCL["vpc_connector"] = WireRef(KeyGCPVPC, "connector_id")
 			wi.Names = append(wi.Names, "vpc_connector")
+		}
+
+	case KeyGCPVertexAI:
+		// Vertex AI Vector Search (#764). When a VPC is selected, wire its
+		// vpc_id (the project-ID path projects/<project_id>/global/networks/<n>)
+		// to the preset's network input. The preset extracts the network NAME
+		// and rebuilds the project-NUMBER path google_vertex_ai_index_endpoint
+		// actually requires (it cannot accept the project-ID form), so the wire
+		// stays vpc_id and the form conversion lives in the preset. The endpoint
+		// is still PUBLIC unless the operator also sets enable_private_endpoint
+		// (the private path needs #774 PSC peering that gcp/vpc lacks today).
+		if selected[KeyGCPVPC] {
+			wi.RawHCL["network"] = WireRef(KeyGCPVPC, "vpc_id")
+			wi.Names = append(wi.Names, "network")
+		}
+		// When GCS is selected, seed the index from a dedicated prefix under the
+		// bucket rather than the bucket root. bucket_url is the gs://<bucket>
+		// root; Vertex's contents_delta_uri expects a DIRECTORY of index data
+		// files, so ingesting the whole bucket root would build a junk index.
+		// Scope it to gs://<bucket>/vertex-index/ — operators stage embedding
+		// files there (the index is created empty if the prefix is absent).
+		if selected[KeyGCPGCS] {
+			wi.RawHCL["contents_delta_uri"] = "\"${" + WireRef(KeyGCPGCS, "bucket_url") + "}/vertex-index/\""
+			wi.Names = append(wi.Names, "contents_delta_uri")
 		}
 	}
 

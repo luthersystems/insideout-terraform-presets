@@ -171,6 +171,7 @@ func TestUnionConfig_NonNilEmptySliceOverridesPopulated(t *testing.T) {
 				CustomIngressPorts    []int  `json:"customIngressPorts,omitempty"`
 				SSHPublicKey          string `json:"sshPublicKey,omitempty"`
 				EnableInstanceConnect *bool  `json:"enableInstanceConnect,omitempty"`
+				GPUEnabled            *bool  `json:"gpuEnabled,omitempty"`
 			}{CustomIngressPorts: []int{22, 80, 443}},
 		},
 		{
@@ -184,6 +185,7 @@ func TestUnionConfig_NonNilEmptySliceOverridesPopulated(t *testing.T) {
 				CustomIngressPorts    []int  `json:"customIngressPorts,omitempty"`
 				SSHPublicKey          string `json:"sshPublicKey,omitempty"`
 				EnableInstanceConnect *bool  `json:"enableInstanceConnect,omitempty"`
+				GPUEnabled            *bool  `json:"gpuEnabled,omitempty"`
 			}{CustomIngressPorts: []int{}}, // non-nil empty — IS zero-distinct
 		},
 	}
@@ -214,6 +216,7 @@ func TestUnionConfig_NilSlice_NoOverride(t *testing.T) {
 				CustomIngressPorts    []int  `json:"customIngressPorts,omitempty"`
 				SSHPublicKey          string `json:"sshPublicKey,omitempty"`
 				EnableInstanceConnect *bool  `json:"enableInstanceConnect,omitempty"`
+				GPUEnabled            *bool  `json:"gpuEnabled,omitempty"`
 			}{
 				CustomIngressPorts: []int{22, 80, 443},
 			},
@@ -229,6 +232,7 @@ func TestUnionConfig_NilSlice_NoOverride(t *testing.T) {
 				CustomIngressPorts    []int  `json:"customIngressPorts,omitempty"`
 				SSHPublicKey          string `json:"sshPublicKey,omitempty"`
 				EnableInstanceConnect *bool  `json:"enableInstanceConnect,omitempty"`
+				GPUEnabled            *bool  `json:"gpuEnabled,omitempty"`
 			}{
 				InstanceType: "t3.large", // populated leaf
 				// CustomIngressPorts left nil — must not override

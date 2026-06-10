@@ -21,8 +21,31 @@ module "name" {
 }
 
 locals {
+  # NVIDIA-GPU x86_64 EC2 families (#759). MUST stay in lockstep with the
+  # HCL `_gpu_x86_families` local in aws/eks_nodegroup/main.tf and the Go
+  # `gpuX86Families` set in pkg/composer/gpu.go — TestGPUFamiliesDrift parses
+  # all three and fails the moment any one drifts. The GPU AMI is x86_64-only,
+  # so gpu_enabled with a non-x86-GPU instance type (ARM, or a non-GPU family)
+  # is rejected at plan by the aws_instance precondition below. g5g is
+  # deliberately ABSENT: it is Graviton (ARM) + NVIDIA T4G with no x86 NVIDIA
+  # AMI, so it stays on the ARM standard path.
+  _gpu_x86_families = [
+    "g4dn", "g5", "g6", "g6e", "gr6",
+    "p3", "p3dn", "p4d", "p4de", "p5", "p5e", "p5en",
+  ]
+  _instance_family   = split(".", var.instance_type)[0]
+  _is_gpu_x86_family = contains(local._gpu_x86_families, local._instance_family)
+
+  # GPU path (#759) wins over os_type: when gpu_enabled and no explicit
+  # ami_id, select the AWS Deep Learning Base GPU AMI (AL2023, NVIDIA
+  # driver + container toolkit baked in) so a g5/g6/p4d/p5 instance comes
+  # up with /dev/nvidia* present. Non-GPU path keeps the existing
+  # os_type/arch selection. The NVIDIA AMI is x86_64-only (enforced by the
+  # aws_instance precondition), so this never collides with arm64.
   ami_id = var.ami_id != null ? var.ami_id : (
-    var.os_type == "ubuntu" ? data.aws_ami.ubuntu[0].id : data.aws_ami.al2023[0].id
+    var.gpu_enabled ? data.aws_ami.gpu[0].id : (
+      var.os_type == "ubuntu" ? data.aws_ami.ubuntu[0].id : data.aws_ami.al2023[0].id
+    )
   )
 
   # Resolve effective user_data: inline script takes priority, URL generates a fetch wrapper.
@@ -31,9 +54,37 @@ locals {
   )
 }
 
-# Pick Amazon Linux 2023 AMI by arch (only when ami_id is not provided and os_type is amazon-linux)
+# Pick the AWS Deep Learning Base GPU AMI (Amazon Linux 2023) when GPU is
+# requested and no explicit ami_id is given (#759). This AMI is published by
+# Amazon (owner alias `amazon`) and ships the NVIDIA kernel driver + container
+# toolkit pre-installed — no app-layer driver bootstrap needed on the host.
+# x86_64-only (var.gpu_enabled requires arch=x86_64). The "Base" variant
+# carries drivers without a bundled DL framework, keeping the image lean.
+data "aws_ami" "gpu" {
+  count       = var.ami_id == null && var.gpu_enabled ? 1 : 0
+  owners      = ["amazon"]
+  most_recent = true
+
+  filter {
+    name   = "name"
+    values = ["Deep Learning Base OSS Nvidia Driver GPU AMI (Amazon Linux 2023)*"]
+  }
+
+  filter {
+    name   = "architecture"
+    values = ["x86_64"]
+  }
+
+  filter {
+    name   = "virtualization-type"
+    values = ["hvm"]
+  }
+}
+
+# Pick Amazon Linux 2023 AMI by arch (only when ami_id is not provided, GPU is
+# off, and os_type is amazon-linux)
 data "aws_ami" "al2023" {
-  count       = var.ami_id == null && var.os_type == "amazon-linux" ? 1 : 0
+  count       = var.ami_id == null && !var.gpu_enabled && var.os_type == "amazon-linux" ? 1 : 0
   owners      = ["137112412989"] # Amazon
   most_recent = true
 
@@ -43,9 +94,10 @@ data "aws_ami" "al2023" {
   }
 }
 
-# Pick Ubuntu 24.04 LTS AMI by arch (only when ami_id is not provided and os_type is ubuntu)
+# Pick Ubuntu 24.04 LTS AMI by arch (only when ami_id is not provided, GPU is
+# off, and os_type is ubuntu)
 data "aws_ami" "ubuntu" {
-  count       = var.ami_id == null && var.os_type == "ubuntu" ? 1 : 0
+  count       = var.ami_id == null && !var.gpu_enabled && var.os_type == "ubuntu" ? 1 : 0
   owners      = ["099720109477"] # Canonical
   most_recent = true
 
@@ -199,6 +251,37 @@ resource "aws_instance" "this" {
     precondition {
       condition     = !(var.user_data != "" && var.user_data_url != "")
       error_message = "user_data and user_data_url are mutually exclusive. Set one or the other, not both."
+    }
+
+    # GPU AMI is x86_64-only (#759): when gpu_enabled and no explicit ami_id,
+    # the module boots the AWS Deep Learning Base GPU AMI, which exists only
+    # for x86_64 NVIDIA GPU families (g4dn/g5/g6/g6e/gr6/p3/p3dn/p4d/p4de/p5/
+    # p5e/p5en). A non-GPU type (t3.medium) or an ARM/Graviton type (c7g, g5g)
+    # would boot a node with the GPU AMI's driver but no NVIDIA hardware, so
+    # /dev/nvidia* never appears — the EC2 analogue of the EKS #207 arch
+    # mismatch. Reject at plan rather than silently provisioning a useless GPU
+    # node. Direct module callers who supply their own ami_id are exempt (the
+    # ami_id==null guard). The composer always defaults/validates an x86 GPU
+    # family upstream, so this fires only for direct/hand-rolled module use.
+    # Not enforceable as a var validation block — TF forbids cross-variable
+    # conditions there — so it lives as a resource precondition.
+    precondition {
+      condition     = !(var.gpu_enabled && var.ami_id == null) || local._is_gpu_x86_family
+      error_message = "gpu_enabled=true requires an x86 NVIDIA GPU instance_type (one of g4dn/g5/g6/g6e/gr6/p3/p3dn/p4d/p4de/p5/p5e/p5en) when ami_id is null — AWS GPU AMIs are x86_64-only and a non-GPU/ARM type boots without /dev/nvidia*. Pick a supported GPU instance_type, or supply an explicit ami_id."
+    }
+
+    # GPU AMI is os_type-independent (#759): when gpu_enabled and no explicit
+    # ami_id, the module always boots the AWS Deep Learning Base GPU AMI
+    # (Amazon Linux 2023) regardless of os_type. Previously os_type="ubuntu"
+    # was silently ignored on the GPU path — a caller asking for Ubuntu got an
+    # Amazon Linux node with no warning. Reject the combination loudly so the
+    # caller either drops os_type (accept the AL2023 GPU AMI) or supplies their
+    # own Ubuntu GPU ami_id. Not enforceable as a var validation block — TF
+    # forbids cross-variable conditions there — so it lives as a resource
+    # precondition.
+    precondition {
+      condition     = !(var.gpu_enabled && var.ami_id == null && var.os_type == "ubuntu")
+      error_message = "gpu_enabled=true selects the Amazon Linux 2023 GPU AMI and ignores os_type=\"ubuntu\". Drop os_type (or set it to \"amazon-linux\") to use the built-in GPU AMI, or supply an explicit Ubuntu GPU ami_id."
     }
   }
 
