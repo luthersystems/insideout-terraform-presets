@@ -223,6 +223,21 @@ var awsCodegenOnlyTypes = []string{
 	"aws_apprunner_service",
 	"aws_apprunner_vpc_connector",
 	"aws_athena_workgroup",
+	// #787 — AI-stack reverse-import vocabulary backfill for the
+	// preset-authored types shipped by the #776 / #783 AI-stack waves
+	// (#761 / #762 deferred the codegen plumbing by precedent). None of
+	// the Bedrock Agents resource types are cloud-control-routed, so a
+	// hand-rolled SDKLister in awsdiscover is the future promotion path.
+	// Until that lands, Layer-1 codegen + curated Layer-2 policy ship here
+	// so out-of-band edits to the agent's foundation model, its resource
+	// role, its action-group executors / API schemas, and its alias
+	// routing are visible to drift detection. The agent_resource_role_arn
+	// and guardrail wiring are the high-value privilege / safety surfaces.
+	"aws_bedrockagent_agent",
+	"aws_bedrockagent_agent_action_group",
+	"aws_bedrockagent_agent_alias",
+	"aws_bedrockagent_data_source",
+	"aws_bedrockagent_knowledge_base",
 	"aws_cloudtrail",
 	"aws_cloudwatch_event_bus",
 	"aws_codebuild_project",
@@ -238,6 +253,16 @@ var awsCodegenOnlyTypes = []string{
 	"aws_lambda_layer_version",
 	"aws_rds_cluster",
 	"aws_route53_record",
+	// #787 — S3 Vectors backbone for the Bedrock Knowledge Base RAG
+	// stack (#783). aws_s3vectors_vector_bucket / aws_s3vectors_index
+	// are not cloud-control-routed; the high-value drift surface is the
+	// vector index geometry (data_type / dimension / distance_metric,
+	// all replace-on-change) plus the bucket / index encryption_
+	// configuration. Layer-1 codegen + curated Layer-2 policy ship here
+	// per the codegen-only contract; the SDKLister hookup is the lower-
+	// priority follow-up.
+	"aws_s3vectors_index",
+	"aws_s3vectors_vector_bucket",
 	// #623 — aws/sagemaker preset (#615 / #618) drift-policy backfill.
 	// SageMaker Studio domain + user profile are not cloud-control-routed
 	// either; a hand-rolled SDKLister in awsdiscover is the future
@@ -245,6 +270,17 @@ var awsCodegenOnlyTypes = []string{
 	// access type, KMS / VPC wiring) is high-value security-adjacent
 	// state that must not be invisible to drift detection.
 	"aws_sagemaker_domain",
+	// #787 — SageMaker real-time inference triad (#761): model →
+	// endpoint configuration → endpoint. Not cloud-control-routed. The
+	// high-value drift surfaces are the model's execution_role_arn /
+	// container image (what code the endpoint actually serves), the
+	// endpoint configuration's production_variants instance sizing +
+	// model binding + KMS key, and the endpoint's bound config name.
+	// Layer-1 codegen + curated Layer-2 policy ship here per the
+	// codegen-only contract; the SDKLister hookup is the follow-up.
+	"aws_sagemaker_endpoint",
+	"aws_sagemaker_endpoint_configuration",
+	"aws_sagemaker_model",
 	"aws_sagemaker_user_profile",
 	"aws_sfn_state_machine",
 }

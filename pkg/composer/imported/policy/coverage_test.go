@@ -87,6 +87,17 @@ var coveredTypes = []string{
 	"aws_autoscaling_group_tag",
 	"aws_bedrock_guardrail",
 	"aws_bedrock_model_invocation_logging_configuration",
+	// #787 — Bedrock Agents reverse-import vocabulary backfill for the
+	// #776 / #783 AI-stack waves (deferred by #761 / #762). agent +
+	// action group + alias + knowledge base + data source. The
+	// agent_resource_role_arn / role_arn rebinds + foundation_model /
+	// embedding_model_arn swaps + guardrail binding are the high-value
+	// privilege / behavior / safety drift signals.
+	"aws_bedrockagent_agent",
+	"aws_bedrockagent_agent_action_group",
+	"aws_bedrockagent_agent_alias",
+	"aws_bedrockagent_data_source",
+	"aws_bedrockagent_knowledge_base",
 	// Bundle 8 (cont.) — CloudFront OAI.
 	"aws_cloudfront_origin_access_identity",
 	// Bundle 4 (cont.) — CloudTrail.
@@ -246,12 +257,28 @@ var coveredTypes = []string{
 	"aws_s3_bucket_public_access_block",
 	"aws_s3_bucket_server_side_encryption_configuration",
 	"aws_s3_bucket_versioning",
+	// #787 — S3 Vectors backbone for the Bedrock Knowledge Base RAG
+	// stack (#783). Vector bucket + index. The index geometry
+	// (data_type / dimension / distance_metric, all replace-on-change)
+	// must match the writing embedding model; the encryption_
+	// configuration governs at-rest protection of the embeddings.
+	"aws_s3vectors_index",
+	"aws_s3vectors_vector_bucket",
 	// #623 — aws/sagemaker preset (#615 / #618) drift-policy backfill.
 	// Studio domain + per-user profile. The default_user_settings.
 	// execution_role / user_settings.execution_role surfaces are the
 	// high-value privilege-escalation drift signal — a silent rebind
 	// re-purposes every running studio app's IAM identity.
 	"aws_sagemaker_domain",
+	// #787 — SageMaker real-time inference triad (#761): model →
+	// endpoint configuration → endpoint. The model's execution_role_arn
+	// + container image, the endpoint configuration's production_variants
+	// model binding + instance sizing + KMS key, and the endpoint's
+	// bound config name are the high-value privilege / what-is-served
+	// drift signals.
+	"aws_sagemaker_endpoint",
+	"aws_sagemaker_endpoint_configuration",
+	"aws_sagemaker_model",
 	"aws_sagemaker_user_profile",
 	"aws_secretsmanager_secret",
 	"aws_secretsmanager_secret_rotation",

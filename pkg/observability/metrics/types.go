@@ -19,6 +19,17 @@ package metrics
 type MetricsFilter struct {
 	Hours  int `json:"hours"`  // lookback window (default: 6)
 	Period int `json:"period"` // aggregation period in seconds (default: 300)
+
+	// AccountID is the caller's AWS account ID. It's the dimension VALUE
+	// for groups whose AWSObs.DimensionValueAccountID is set — today only
+	// the AOSS OCU group (AWS/AOSS publishes account-level OCU under a
+	// ClientId=<account-id> dimension, #778). The inspector that resolves
+	// the credential already knows the account (sts.GetCallerIdentity at
+	// dispatch); it rides here so Fetch need not make its own STS call.
+	// Empty for callers fetching only account-keyed-free services; the
+	// query builder then skips any account-keyed group rather than
+	// emitting an empty-value query.
+	AccountID string `json:"account_id,omitempty"`
 }
 
 // MetricsResult is the top-level response for a get-metrics action.

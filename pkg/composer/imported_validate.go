@@ -320,11 +320,23 @@ func dropUncomposable(irs []imported.ImportedResource, emitReadiness []Validatio
 
 // ProvenanceOpts carries the per-compose context needed by
 // ValidateProvenanceConflicts. ImportProjectID is the logical claim/owner ID
-// used cross-cloud (decision #46 in docs/managed-resource-tiers.md). The
-// session ID is not relevant to the conflict check (sessions are advisory)
-// and is omitted from this struct deliberately.
+// used cross-cloud (decision #46 in docs/managed-resource-tiers.md).
+//
+// ImportSessionID is the namespace-stable self identity (reliable#2068). The
+// project-id namespace is NOT stable across import legs — the mars reconcile
+// leg stamps claims with the Oracle deployment UUID, while the import_apply
+// leg historically passed a session-derived "io-<suffix>" name (and at one
+// point an AWS account id) — so a session's OWN claim can arrive with a
+// project string that differs from opts.ImportProjectID. The import SESSION
+// tag (AWSTagKeyImportSession / GCPLabelKeyImportSession) is the one marker
+// that is stamped identically on every leg, so it is the reliable signal that
+// a claim is self. The guard treats a claim as self when EITHER the observed
+// project equals ImportProjectID OR the observed session equals
+// ImportSessionID. Empty ImportSessionID disables the session arm and the
+// guard falls back to project-id matching alone (the pre-fix behavior).
 type ProvenanceOpts struct {
 	ImportProjectID string
+	ImportSessionID string
 }
 
 // ValidateProvenanceConflicts enforces cross-session mutual exclusion on
@@ -405,6 +417,17 @@ func ValidateProvenanceConflicts(cloud string, irs []imported.ImportedResource, 
 		}
 		if observed == opts.ImportProjectID {
 			continue
+		}
+		// Same-import-session claims are self even when the project string
+		// differs across legs (reliable#2068). The session tag is the only
+		// marker stamped identically on every leg, so an observed session
+		// equal to this compose's session means the claim belongs to us — let
+		// the apply leg overwrite its own reconcile-leg stamp without a
+		// force-takeover. Empty ImportSessionID disables this arm.
+		if sess := strings.TrimSpace(opts.ImportSessionID); sess != "" {
+			if observedSession, hasSession := existingProvenanceSession(ir); hasSession && observedSession == sess {
+				continue
+			}
 		}
 
 		field := importedField(ir, i)

@@ -61,29 +61,48 @@ const s3BucketTFType = "aws_s3_bucket"
 // Sensitive fields: none on this resource (the bucket policy lives
 // in the `policy` field as a JSON document — decision #36 redaction
 // is downstream's concern).
+//
+// **Per-call region override**: S3 is regional, but reliable's
+// /api/import/apply re-enrichment runs EVERY enricher through a single
+// session-region S3 client (built once from the session's primary
+// region). A bucket that lives in another region then answers every
+// request — HeadBucket and all the Get* overlays — with 301
+// MovedPermanently (surfaced as "aws_s3_bucket.<name>: discovery could
+// not enrich — HeadBucket ...: StatusCode 301"). The bucket's true
+// region is already known at enrich time (s3BucketPostDiscover stamps
+// Identity.Region + NativeIDs["region"] before enrichment), so each
+// fetch hook takes a `region` and the production fetchers apply it as a
+// per-call `o.Region = region` Options closure — mirroring the Lambda /
+// ResourceExplorer2 / WAFv2 regional enrichers so one client serves
+// every region in the run. An empty region threads through as "no
+// override", preserving the client's configured region (reliable#2066).
 type s3BucketEnricher struct {
 	// fetchHead is the load-bearing existence probe. Returns the
 	// HeadBucket response (carries BucketRegion when the SDK auto-
 	// discovers the bucket's region) or an error. A typed NotFound /
 	// NoSuchBucket is wrapped as ErrNotFound at the call site; other
-	// errors bubble up unchanged. Overridable for tests.
-	fetchHead func(ctx context.Context, c *s3.Client, bucket string) (*s3.HeadBucketOutput, error)
+	// errors bubble up unchanged. Overridable for tests. The `region`
+	// argument is the bucket's recorded region (see the per-call
+	// region override note above).
+	fetchHead func(ctx context.Context, c *s3.Client, region, bucket string) (*s3.HeadBucketOutput, error)
 
 	// All fetch* hooks below are best-effort overlays. Each returns
 	// (response, nil) when the sub-resource is configured, (nil, nil)
 	// when the service-native "not set" code is observed, and (nil,
 	// err) for any other failure. The Enrich path treats both nil
 	// responses and real errors as "block omitted" — see soft-fail
-	// discipline note above for the rationale.
-	fetchEncryption func(ctx context.Context, c *s3.Client, bucket string) (*s3types.ServerSideEncryptionConfiguration, error)
-	fetchVersioning func(ctx context.Context, c *s3.Client, bucket string) (*s3.GetBucketVersioningOutput, error)
-	fetchLifecycle  func(ctx context.Context, c *s3.Client, bucket string) ([]s3types.LifecycleRule, error)
-	fetchLogging    func(ctx context.Context, c *s3.Client, bucket string) (*s3types.LoggingEnabled, error)
-	fetchCors       func(ctx context.Context, c *s3.Client, bucket string) ([]s3types.CORSRule, error)
-	fetchPolicy     func(ctx context.Context, c *s3.Client, bucket string) (*string, error)
-	fetchWebsite    func(ctx context.Context, c *s3.Client, bucket string) (*s3.GetBucketWebsiteOutput, error)
-	fetchTags       func(ctx context.Context, c *s3.Client, bucket string) ([]s3types.Tag, error)
-	fetchObjectLock func(ctx context.Context, c *s3.Client, bucket string) (*s3types.ObjectLockConfiguration, error)
+	// discipline note above for the rationale. Each takes the bucket's
+	// recorded `region` for the same per-call override reason as
+	// fetchHead: an overlay Get* against the wrong region 301s too.
+	fetchEncryption func(ctx context.Context, c *s3.Client, region, bucket string) (*s3types.ServerSideEncryptionConfiguration, error)
+	fetchVersioning func(ctx context.Context, c *s3.Client, region, bucket string) (*s3.GetBucketVersioningOutput, error)
+	fetchLifecycle  func(ctx context.Context, c *s3.Client, region, bucket string) ([]s3types.LifecycleRule, error)
+	fetchLogging    func(ctx context.Context, c *s3.Client, region, bucket string) (*s3types.LoggingEnabled, error)
+	fetchCors       func(ctx context.Context, c *s3.Client, region, bucket string) ([]s3types.CORSRule, error)
+	fetchPolicy     func(ctx context.Context, c *s3.Client, region, bucket string) (*string, error)
+	fetchWebsite    func(ctx context.Context, c *s3.Client, region, bucket string) (*s3.GetBucketWebsiteOutput, error)
+	fetchTags       func(ctx context.Context, c *s3.Client, region, bucket string) ([]s3types.Tag, error)
+	fetchObjectLock func(ctx context.Context, c *s3.Client, region, bucket string) (*s3types.ObjectLockConfiguration, error)
 }
 
 // newS3BucketEnricher returns the production-wired enricher.
@@ -123,7 +142,7 @@ func (e s3BucketEnricher) Enrich(ctx context.Context, ir *imported.ImportedResou
 			ir.Identity.Address, ir.Identity.ImportID, ir.Identity.NameHint)
 	}
 
-	typed, err := e.fetchAndMap(ctx, c.S3, bucket)
+	typed, err := e.fetchAndMap(ctx, c.S3, s3BucketRegionForEnrich(&ir.Identity), bucket)
 	if err != nil {
 		return err
 	}
@@ -184,7 +203,7 @@ func (e s3BucketEnricher) EnrichByID(ctx context.Context, identity *imported.Res
 		return nil, fmt.Errorf("s3_bucket: cannot derive bucket name from Identity (Address=%q ImportID=%q NameHint=%q)",
 			identity.Address, identity.ImportID, identity.NameHint)
 	}
-	typed, err := e.fetchAndMap(ctx, c.S3, bucket)
+	typed, err := e.fetchAndMap(ctx, c.S3, s3BucketRegionForEnrich(identity), bucket)
 	if err != nil {
 		return nil, err
 	}
@@ -204,8 +223,8 @@ func (e s3BucketEnricher) EnrichByID(ctx context.Context, identity *imported.Res
 // (`arn:aws:s3:::<bucket>`), so we synthesize it whenever
 // HeadBucket doesn't return one (HeadBucket's BucketArn field is
 // directory-bucket-only).
-func (e s3BucketEnricher) fetchAndMap(ctx context.Context, c *s3.Client, bucket string) (*generated.AWSS3Bucket, error) {
-	head, err := e.fetchHead(ctx, c, bucket)
+func (e s3BucketEnricher) fetchAndMap(ctx context.Context, c *s3.Client, region, bucket string) (*generated.AWSS3Bucket, error) {
+	head, err := e.fetchHead(ctx, c, region, bucket)
 	if err != nil {
 		// HeadBucket surfaces a not-found bucket as a generic 404 with
 		// ErrorCode "NotFound" or "NoSuchBucket" — both via the typed
@@ -222,7 +241,7 @@ func (e s3BucketEnricher) fetchAndMap(ctx context.Context, c *s3.Client, bucket 
 	typed := mapS3Bucket(bucket, head)
 
 	// Encryption — GetBucketEncryption. Soft-fail.
-	if sse, ferr := e.fetchEncryption(ctx, c, bucket); ferr == nil && sse != nil {
+	if sse, ferr := e.fetchEncryption(ctx, c, region, bucket); ferr == nil && sse != nil {
 		if block := mapS3SSE(sse); block != nil {
 			typed.ServerSideEncryptionConfiguration = []generated.AWSS3BucketServerSideEncryptionConfigurationNested{*block}
 		}
@@ -231,43 +250,43 @@ func (e s3BucketEnricher) fetchAndMap(ctx context.Context, c *s3.Client, bucket 
 	// Versioning — GetBucketVersioning. Soft-fail. Absent when Status
 	// and MFADelete are both empty (matches the bucket-versioning
 	// sub-resource "never configured" semantic from sdkonly_s3.go).
-	if v, ferr := e.fetchVersioning(ctx, c, bucket); ferr == nil && v != nil {
+	if v, ferr := e.fetchVersioning(ctx, c, region, bucket); ferr == nil && v != nil {
 		if block := mapS3Versioning(v); block != nil {
 			typed.Versioning = []generated.AWSS3BucketVersioningNested{*block}
 		}
 	}
 
 	// Lifecycle — GetBucketLifecycleConfiguration. Soft-fail.
-	if rules, ferr := e.fetchLifecycle(ctx, c, bucket); ferr == nil && len(rules) > 0 {
+	if rules, ferr := e.fetchLifecycle(ctx, c, region, bucket); ferr == nil && len(rules) > 0 {
 		typed.LifecycleRule = mapS3LifecycleRules(rules)
 	}
 
 	// Logging — GetBucketLogging. Soft-fail.
-	if lg, ferr := e.fetchLogging(ctx, c, bucket); ferr == nil && lg != nil {
+	if lg, ferr := e.fetchLogging(ctx, c, region, bucket); ferr == nil && lg != nil {
 		if block := mapS3Logging(lg); block != nil {
 			typed.Logging = []generated.AWSS3BucketLogging{*block}
 		}
 	}
 
 	// CORS — GetBucketCors. Soft-fail.
-	if rules, ferr := e.fetchCors(ctx, c, bucket); ferr == nil && len(rules) > 0 {
+	if rules, ferr := e.fetchCors(ctx, c, region, bucket); ferr == nil && len(rules) > 0 {
 		typed.CorsRule = mapS3CorsRules(rules)
 	}
 
 	// Policy — GetBucketPolicy. Soft-fail.
-	if p, ferr := e.fetchPolicy(ctx, c, bucket); ferr == nil && p != nil && *p != "" {
+	if p, ferr := e.fetchPolicy(ctx, c, region, bucket); ferr == nil && p != nil && *p != "" {
 		typed.Policy = generated.LiteralOf(*p)
 	}
 
 	// Website — GetBucketWebsite. Soft-fail.
-	if w, ferr := e.fetchWebsite(ctx, c, bucket); ferr == nil && w != nil {
+	if w, ferr := e.fetchWebsite(ctx, c, region, bucket); ferr == nil && w != nil {
 		if block := mapS3Website(w); block != nil {
 			typed.Website = []generated.AWSS3BucketWebsite{*block}
 		}
 	}
 
 	// Tags — GetBucketTagging. Soft-fail.
-	if tags, ferr := e.fetchTags(ctx, c, bucket); ferr == nil && len(tags) > 0 {
+	if tags, ferr := e.fetchTags(ctx, c, region, bucket); ferr == nil && len(tags) > 0 {
 		m := map[string]*generated.Value[string]{}
 		for _, t := range tags {
 			if t.Key != nil {
@@ -283,7 +302,7 @@ func (e s3BucketEnricher) fetchAndMap(ctx context.Context, c *s3.Client, bucket 
 	// mirrors `object_lock_enabled` (top-level bool) since the SDK's
 	// ObjectLockEnabled enum is the only reliable signal — HeadBucket
 	// does not surface it.
-	if ol, ferr := e.fetchObjectLock(ctx, c, bucket); ferr == nil && ol != nil {
+	if ol, ferr := e.fetchObjectLock(ctx, c, region, bucket); ferr == nil && ol != nil {
 		if block := mapS3ObjectLock(ol); block != nil {
 			typed.ObjectLockConfiguration = []generated.AWSS3BucketObjectLockConfiguration{*block}
 		}
@@ -319,6 +338,38 @@ func s3BucketNameForEnrich(id *imported.ResourceIdentity) string {
 		return s
 	}
 	return strings.TrimSpace(id.ImportID)
+}
+
+// s3BucketRegionForEnrich resolves the bucket's home region for the
+// per-call SDK Options override. s3BucketPostDiscover stamps the true
+// region into both Identity.Region and NativeIDs["region"] before
+// enrichment runs, so Identity.Region is the primary source and the
+// bag is the fallback (a refresh path may carry only NativeIDs).
+// Returns "" when neither is set, in which case the default fetchers
+// add no override and the client's configured region stands — exactly
+// the pre-fix behavior for the IsGlobal enumeration path and single-
+// region runs (reliable#2066).
+func s3BucketRegionForEnrich(id *imported.ResourceIdentity) string {
+	if id == nil {
+		return ""
+	}
+	if s := strings.TrimSpace(id.Region); s != "" {
+		return s
+	}
+	return strings.TrimSpace(id.NativeIDs["region"])
+}
+
+// s3RegionOpts returns the per-call S3 Options closures that pin the
+// request region. An empty region yields no closure, so the client's
+// configured region is used unchanged. Mirrors the per-call override
+// the Lambda / ResourceExplorer2 / WAFv2 enrichers apply so a single
+// session-region client can serve a bucket in any region without a 301
+// MovedPermanently (reliable#2066).
+func s3RegionOpts(region string) []func(*s3.Options) {
+	if region == "" {
+		return nil
+	}
+	return []func(*s3.Options){func(o *s3.Options) { o.Region = region }}
 }
 
 // mapS3Bucket builds the typed top-level surface from the bucket
@@ -599,9 +650,12 @@ func literalStringSlice(in []string) []*generated.Value[string] {
 	return out
 }
 
-// defaultS3BucketFetchHead is the production HeadBucket call.
-func defaultS3BucketFetchHead(ctx context.Context, c *s3.Client, bucket string) (*s3.HeadBucketOutput, error) {
-	out, err := c.HeadBucket(ctx, &s3.HeadBucketInput{Bucket: aws.String(bucket)})
+// defaultS3BucketFetchHead is the production HeadBucket call. The
+// region (when non-empty) is applied as a per-call Options override so
+// a single session-region client signs/routes the request to the
+// bucket's home region instead of 301-ing cross-region (reliable#2066).
+func defaultS3BucketFetchHead(ctx context.Context, c *s3.Client, region, bucket string) (*s3.HeadBucketOutput, error) {
+	out, err := c.HeadBucket(ctx, &s3.HeadBucketInput{Bucket: aws.String(bucket)}, s3RegionOpts(region)...)
 	if err != nil {
 		return nil, err
 	}
@@ -613,8 +667,8 @@ func defaultS3BucketFetchHead(ctx context.Context, c *s3.Client, bucket string) 
 
 // defaultS3BucketFetchEncryption is the production encryption fetch.
 // Returns (nil, nil) when the bucket has no encryption configuration.
-func defaultS3BucketFetchEncryption(ctx context.Context, c *s3.Client, bucket string) (*s3types.ServerSideEncryptionConfiguration, error) {
-	out, err := c.GetBucketEncryption(ctx, &s3.GetBucketEncryptionInput{Bucket: aws.String(bucket)})
+func defaultS3BucketFetchEncryption(ctx context.Context, c *s3.Client, region, bucket string) (*s3types.ServerSideEncryptionConfiguration, error) {
+	out, err := c.GetBucketEncryption(ctx, &s3.GetBucketEncryptionInput{Bucket: aws.String(bucket)}, s3RegionOpts(region)...)
 	if err != nil {
 		if isS3NotSetError(err, "ServerSideEncryptionConfigurationNotFoundError", "NoSuchEncryptionConfiguration") {
 			return nil, nil
@@ -630,14 +684,14 @@ func defaultS3BucketFetchEncryption(ctx context.Context, c *s3.Client, bucket st
 // defaultS3BucketFetchVersioning is the production versioning fetch.
 // GetBucketVersioning has no NotFound code: AWS treats "versioning
 // never set" as a successful response with empty Status / MFADelete.
-func defaultS3BucketFetchVersioning(ctx context.Context, c *s3.Client, bucket string) (*s3.GetBucketVersioningOutput, error) {
-	return c.GetBucketVersioning(ctx, &s3.GetBucketVersioningInput{Bucket: aws.String(bucket)})
+func defaultS3BucketFetchVersioning(ctx context.Context, c *s3.Client, region, bucket string) (*s3.GetBucketVersioningOutput, error) {
+	return c.GetBucketVersioning(ctx, &s3.GetBucketVersioningInput{Bucket: aws.String(bucket)}, s3RegionOpts(region)...)
 }
 
 // defaultS3BucketFetchLifecycle is the production lifecycle fetch.
 // Returns (nil, nil) when the bucket has no lifecycle configuration.
-func defaultS3BucketFetchLifecycle(ctx context.Context, c *s3.Client, bucket string) ([]s3types.LifecycleRule, error) {
-	out, err := c.GetBucketLifecycleConfiguration(ctx, &s3.GetBucketLifecycleConfigurationInput{Bucket: aws.String(bucket)})
+func defaultS3BucketFetchLifecycle(ctx context.Context, c *s3.Client, region, bucket string) ([]s3types.LifecycleRule, error) {
+	out, err := c.GetBucketLifecycleConfiguration(ctx, &s3.GetBucketLifecycleConfigurationInput{Bucket: aws.String(bucket)}, s3RegionOpts(region)...)
 	if err != nil {
 		if isS3NotSetError(err, "NoSuchLifecycleConfiguration") {
 			return nil, nil
@@ -653,8 +707,8 @@ func defaultS3BucketFetchLifecycle(ctx context.Context, c *s3.Client, bucket str
 // defaultS3BucketFetchLogging is the production logging fetch.
 // GetBucketLogging returns success with LoggingEnabled=nil when
 // logging is not configured.
-func defaultS3BucketFetchLogging(ctx context.Context, c *s3.Client, bucket string) (*s3types.LoggingEnabled, error) {
-	out, err := c.GetBucketLogging(ctx, &s3.GetBucketLoggingInput{Bucket: aws.String(bucket)})
+func defaultS3BucketFetchLogging(ctx context.Context, c *s3.Client, region, bucket string) (*s3types.LoggingEnabled, error) {
+	out, err := c.GetBucketLogging(ctx, &s3.GetBucketLoggingInput{Bucket: aws.String(bucket)}, s3RegionOpts(region)...)
 	if err != nil {
 		return nil, err
 	}
@@ -666,8 +720,8 @@ func defaultS3BucketFetchLogging(ctx context.Context, c *s3.Client, bucket strin
 
 // defaultS3BucketFetchCors is the production CORS fetch.
 // Returns (nil, nil) when the bucket has no CORS configuration.
-func defaultS3BucketFetchCors(ctx context.Context, c *s3.Client, bucket string) ([]s3types.CORSRule, error) {
-	out, err := c.GetBucketCors(ctx, &s3.GetBucketCorsInput{Bucket: aws.String(bucket)})
+func defaultS3BucketFetchCors(ctx context.Context, c *s3.Client, region, bucket string) ([]s3types.CORSRule, error) {
+	out, err := c.GetBucketCors(ctx, &s3.GetBucketCorsInput{Bucket: aws.String(bucket)}, s3RegionOpts(region)...)
 	if err != nil {
 		if isS3NotSetError(err, "NoSuchCORSConfiguration") {
 			return nil, nil
@@ -682,8 +736,8 @@ func defaultS3BucketFetchCors(ctx context.Context, c *s3.Client, bucket string) 
 
 // defaultS3BucketFetchPolicy is the production policy fetch.
 // Returns (nil, nil) when the bucket has no policy.
-func defaultS3BucketFetchPolicy(ctx context.Context, c *s3.Client, bucket string) (*string, error) {
-	out, err := c.GetBucketPolicy(ctx, &s3.GetBucketPolicyInput{Bucket: aws.String(bucket)})
+func defaultS3BucketFetchPolicy(ctx context.Context, c *s3.Client, region, bucket string) (*string, error) {
+	out, err := c.GetBucketPolicy(ctx, &s3.GetBucketPolicyInput{Bucket: aws.String(bucket)}, s3RegionOpts(region)...)
 	if err != nil {
 		if isS3NotSetError(err, "NoSuchBucketPolicy") {
 			return nil, nil
@@ -698,8 +752,8 @@ func defaultS3BucketFetchPolicy(ctx context.Context, c *s3.Client, bucket string
 
 // defaultS3BucketFetchWebsite is the production website fetch.
 // Returns (nil, nil) when the bucket has no website configuration.
-func defaultS3BucketFetchWebsite(ctx context.Context, c *s3.Client, bucket string) (*s3.GetBucketWebsiteOutput, error) {
-	out, err := c.GetBucketWebsite(ctx, &s3.GetBucketWebsiteInput{Bucket: aws.String(bucket)})
+func defaultS3BucketFetchWebsite(ctx context.Context, c *s3.Client, region, bucket string) (*s3.GetBucketWebsiteOutput, error) {
+	out, err := c.GetBucketWebsite(ctx, &s3.GetBucketWebsiteInput{Bucket: aws.String(bucket)}, s3RegionOpts(region)...)
 	if err != nil {
 		if isS3NotSetError(err, "NoSuchWebsiteConfiguration") {
 			return nil, nil
@@ -714,8 +768,8 @@ func defaultS3BucketFetchWebsite(ctx context.Context, c *s3.Client, bucket strin
 
 // defaultS3BucketFetchTags is the production tags fetch.
 // Returns (nil, nil) when the bucket has no tag set.
-func defaultS3BucketFetchTags(ctx context.Context, c *s3.Client, bucket string) ([]s3types.Tag, error) {
-	out, err := c.GetBucketTagging(ctx, &s3.GetBucketTaggingInput{Bucket: aws.String(bucket)})
+func defaultS3BucketFetchTags(ctx context.Context, c *s3.Client, region, bucket string) ([]s3types.Tag, error) {
+	out, err := c.GetBucketTagging(ctx, &s3.GetBucketTaggingInput{Bucket: aws.String(bucket)}, s3RegionOpts(region)...)
 	if err != nil {
 		if isS3NotSetError(err, "NoSuchTagSet") {
 			return nil, nil
@@ -733,8 +787,8 @@ func defaultS3BucketFetchTags(ctx context.Context, c *s3.Client, bucket string) 
 // Note the SDK operation is named GetObjectLockConfiguration (not
 // GetBucketObjectLockConfiguration); the naming asymmetry is a
 // historical S3 API quirk.
-func defaultS3BucketFetchObjectLock(ctx context.Context, c *s3.Client, bucket string) (*s3types.ObjectLockConfiguration, error) {
-	out, err := c.GetObjectLockConfiguration(ctx, &s3.GetObjectLockConfigurationInput{Bucket: aws.String(bucket)})
+func defaultS3BucketFetchObjectLock(ctx context.Context, c *s3.Client, region, bucket string) (*s3types.ObjectLockConfiguration, error) {
+	out, err := c.GetObjectLockConfiguration(ctx, &s3.GetObjectLockConfigurationInput{Bucket: aws.String(bucket)}, s3RegionOpts(region)...)
 	if err != nil {
 		if isS3NotSetError(err, "ObjectLockConfigurationNotFoundError") {
 			return nil, nil

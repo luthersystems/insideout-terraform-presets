@@ -26,16 +26,16 @@ import (
 // struct form because S3 has too many overlays for a positional
 // signature to stay readable.
 type s3FetchHooks struct {
-	head       func(ctx context.Context, c *s3.Client, bucket string) (*s3.HeadBucketOutput, error)
-	encryption func(ctx context.Context, c *s3.Client, bucket string) (*s3types.ServerSideEncryptionConfiguration, error)
-	versioning func(ctx context.Context, c *s3.Client, bucket string) (*s3.GetBucketVersioningOutput, error)
-	lifecycle  func(ctx context.Context, c *s3.Client, bucket string) ([]s3types.LifecycleRule, error)
-	logging    func(ctx context.Context, c *s3.Client, bucket string) (*s3types.LoggingEnabled, error)
-	cors       func(ctx context.Context, c *s3.Client, bucket string) ([]s3types.CORSRule, error)
-	policy     func(ctx context.Context, c *s3.Client, bucket string) (*string, error)
-	website    func(ctx context.Context, c *s3.Client, bucket string) (*s3.GetBucketWebsiteOutput, error)
-	tags       func(ctx context.Context, c *s3.Client, bucket string) ([]s3types.Tag, error)
-	objectLock func(ctx context.Context, c *s3.Client, bucket string) (*s3types.ObjectLockConfiguration, error)
+	head       func(ctx context.Context, c *s3.Client, region, bucket string) (*s3.HeadBucketOutput, error)
+	encryption func(ctx context.Context, c *s3.Client, region, bucket string) (*s3types.ServerSideEncryptionConfiguration, error)
+	versioning func(ctx context.Context, c *s3.Client, region, bucket string) (*s3.GetBucketVersioningOutput, error)
+	lifecycle  func(ctx context.Context, c *s3.Client, region, bucket string) ([]s3types.LifecycleRule, error)
+	logging    func(ctx context.Context, c *s3.Client, region, bucket string) (*s3types.LoggingEnabled, error)
+	cors       func(ctx context.Context, c *s3.Client, region, bucket string) ([]s3types.CORSRule, error)
+	policy     func(ctx context.Context, c *s3.Client, region, bucket string) (*string, error)
+	website    func(ctx context.Context, c *s3.Client, region, bucket string) (*s3.GetBucketWebsiteOutput, error)
+	tags       func(ctx context.Context, c *s3.Client, region, bucket string) ([]s3types.Tag, error)
+	objectLock func(ctx context.Context, c *s3.Client, region, bucket string) (*s3types.ObjectLockConfiguration, error)
 }
 
 // newTestS3Enricher builds an s3BucketEnricher with the supplied
@@ -43,52 +43,52 @@ type s3FetchHooks struct {
 // test can stub only the overlays it exercises.
 func newTestS3Enricher(h s3FetchHooks) s3BucketEnricher {
 	if h.head == nil {
-		h.head = func(context.Context, *s3.Client, string) (*s3.HeadBucketOutput, error) {
+		h.head = func(context.Context, *s3.Client, string, string) (*s3.HeadBucketOutput, error) {
 			return &s3.HeadBucketOutput{}, nil
 		}
 	}
 	if h.encryption == nil {
-		h.encryption = func(context.Context, *s3.Client, string) (*s3types.ServerSideEncryptionConfiguration, error) {
+		h.encryption = func(context.Context, *s3.Client, string, string) (*s3types.ServerSideEncryptionConfiguration, error) {
 			return nil, nil
 		}
 	}
 	if h.versioning == nil {
-		h.versioning = func(context.Context, *s3.Client, string) (*s3.GetBucketVersioningOutput, error) {
+		h.versioning = func(context.Context, *s3.Client, string, string) (*s3.GetBucketVersioningOutput, error) {
 			return nil, nil
 		}
 	}
 	if h.lifecycle == nil {
-		h.lifecycle = func(context.Context, *s3.Client, string) ([]s3types.LifecycleRule, error) {
+		h.lifecycle = func(context.Context, *s3.Client, string, string) ([]s3types.LifecycleRule, error) {
 			return nil, nil
 		}
 	}
 	if h.logging == nil {
-		h.logging = func(context.Context, *s3.Client, string) (*s3types.LoggingEnabled, error) {
+		h.logging = func(context.Context, *s3.Client, string, string) (*s3types.LoggingEnabled, error) {
 			return nil, nil
 		}
 	}
 	if h.cors == nil {
-		h.cors = func(context.Context, *s3.Client, string) ([]s3types.CORSRule, error) {
+		h.cors = func(context.Context, *s3.Client, string, string) ([]s3types.CORSRule, error) {
 			return nil, nil
 		}
 	}
 	if h.policy == nil {
-		h.policy = func(context.Context, *s3.Client, string) (*string, error) {
+		h.policy = func(context.Context, *s3.Client, string, string) (*string, error) {
 			return nil, nil
 		}
 	}
 	if h.website == nil {
-		h.website = func(context.Context, *s3.Client, string) (*s3.GetBucketWebsiteOutput, error) {
+		h.website = func(context.Context, *s3.Client, string, string) (*s3.GetBucketWebsiteOutput, error) {
 			return nil, nil
 		}
 	}
 	if h.tags == nil {
-		h.tags = func(context.Context, *s3.Client, string) ([]s3types.Tag, error) {
+		h.tags = func(context.Context, *s3.Client, string, string) ([]s3types.Tag, error) {
 			return nil, nil
 		}
 	}
 	if h.objectLock == nil {
-		h.objectLock = func(context.Context, *s3.Client, string) (*s3types.ObjectLockConfiguration, error) {
+		h.objectLock = func(context.Context, *s3.Client, string, string) (*s3types.ObjectLockConfiguration, error) {
 			return nil, nil
 		}
 	}
@@ -258,7 +258,7 @@ func TestS3BucketEnricher_HeadError_Propagates(t *testing.T) {
 	t.Parallel()
 	wantErr := errors.New("AccessDenied")
 	enr := newTestS3Enricher(s3FetchHooks{
-		head: func(context.Context, *s3.Client, string) (*s3.HeadBucketOutput, error) {
+		head: func(context.Context, *s3.Client, string, string) (*s3.HeadBucketOutput, error) {
 			return nil, wantErr
 		},
 	})
@@ -273,7 +273,7 @@ func TestS3BucketEnricher_HeadNotFound_ReturnsErrNotFound(t *testing.T) {
 	t.Parallel()
 	// Typed NotFound error path.
 	enr := newTestS3Enricher(s3FetchHooks{
-		head: func(context.Context, *s3.Client, string) (*s3.HeadBucketOutput, error) {
+		head: func(context.Context, *s3.Client, string, string) (*s3.HeadBucketOutput, error) {
 			return nil, &s3types.NotFound{}
 		},
 	})
@@ -290,7 +290,7 @@ func TestS3BucketEnricher_HeadNoSuchBucketCode_ReturnsErrNotFound(t *testing.T) 
 	// rather than the typed NotFound; the enricher must collapse both
 	// onto ErrNotFound.
 	enr := newTestS3Enricher(s3FetchHooks{
-		head: func(context.Context, *s3.Client, string) (*s3.HeadBucketOutput, error) {
+		head: func(context.Context, *s3.Client, string, string) (*s3.HeadBucketOutput, error) {
 			return nil, &stubAPIError{code: "NoSuchBucket"}
 		},
 	})
@@ -304,7 +304,7 @@ func TestS3BucketEnricher_HeadNoSuchBucketCode_ReturnsErrNotFound(t *testing.T) 
 func TestS3BucketEnricher_BasicMapping(t *testing.T) {
 	t.Parallel()
 	enr := newTestS3Enricher(s3FetchHooks{
-		head: func(context.Context, *s3.Client, string) (*s3.HeadBucketOutput, error) {
+		head: func(context.Context, *s3.Client, string, string) (*s3.HeadBucketOutput, error) {
 			return &s3.HeadBucketOutput{
 				BucketRegion: aws.String("us-east-1"),
 			}, nil
@@ -357,7 +357,7 @@ func TestS3BucketEnricher_BasicMapping(t *testing.T) {
 func TestS3BucketEnricher_PromotesNonDefaultRegion(t *testing.T) {
 	t.Parallel()
 	enr := newTestS3Enricher(s3FetchHooks{
-		head: func(context.Context, *s3.Client, string) (*s3.HeadBucketOutput, error) {
+		head: func(context.Context, *s3.Client, string, string) (*s3.HeadBucketOutput, error) {
 			return &s3.HeadBucketOutput{
 				BucketRegion: aws.String("us-west-2"),
 			}, nil
@@ -377,12 +377,141 @@ func TestS3BucketEnricher_PromotesNonDefaultRegion(t *testing.T) {
 	assert.Equal(t, "us-west-2", ir.Identity.Region, "true region must be promoted into Identity.Region")
 }
 
+// TestS3BucketEnricher_HonorsRecordedRegion proves the cross-region fix
+// (reliable#2066): reliable's /api/import/apply re-enrichment runs every
+// enricher through a SINGLE session-region S3 client, so an enricher that
+// does not apply a per-call region override sends HeadBucket / Get* to the
+// session region and a bucket in another region answers 301 MovedPermanently
+// ("aws_s3_bucket.<name>: discovery could not enrich — HeadBucket ...:
+// StatusCode 301"). The bucket's true region is already known at enrich time
+// (s3BucketPostDiscover stamps Identity.Region + NativeIDs["region"] before
+// enrichment), so the enricher must thread that region into EVERY S3 call so
+// the SDK signs/routes the request to the bucket's home region. This test
+// asserts the region reaches every fetch hook (the seam the default fetchers
+// turn into an Options closure `o.Region = region`). Before the fix the hooks
+// did not receive a region at all, so this fails to compile / fails the
+// assertion.
+func TestS3BucketEnricher_HonorsRecordedRegion(t *testing.T) {
+	t.Parallel()
+	const wantRegion = "eu-west-2"
+
+	// captured records the region threaded into each S3 call. Every overlay
+	// shares the recorder so a single assertion covers the whole call set —
+	// HeadBucket is load-bearing but the overlays 301 cross-region too.
+	captured := map[string]string{}
+	enr := newTestS3Enricher(s3FetchHooks{
+		head: func(_ context.Context, _ *s3.Client, region, _ string) (*s3.HeadBucketOutput, error) {
+			captured["head"] = region
+			return &s3.HeadBucketOutput{BucketRegion: aws.String(wantRegion)}, nil
+		},
+		encryption: func(_ context.Context, _ *s3.Client, region, _ string) (*s3types.ServerSideEncryptionConfiguration, error) {
+			captured["encryption"] = region
+			return nil, nil
+		},
+		versioning: func(_ context.Context, _ *s3.Client, region, _ string) (*s3.GetBucketVersioningOutput, error) {
+			captured["versioning"] = region
+			return nil, nil
+		},
+		lifecycle: func(_ context.Context, _ *s3.Client, region, _ string) ([]s3types.LifecycleRule, error) {
+			captured["lifecycle"] = region
+			return nil, nil
+		},
+		logging: func(_ context.Context, _ *s3.Client, region, _ string) (*s3types.LoggingEnabled, error) {
+			captured["logging"] = region
+			return nil, nil
+		},
+		cors: func(_ context.Context, _ *s3.Client, region, _ string) ([]s3types.CORSRule, error) {
+			captured["cors"] = region
+			return nil, nil
+		},
+		policy: func(_ context.Context, _ *s3.Client, region, _ string) (*string, error) {
+			captured["policy"] = region
+			return nil, nil
+		},
+		website: func(_ context.Context, _ *s3.Client, region, _ string) (*s3.GetBucketWebsiteOutput, error) {
+			captured["website"] = region
+			return nil, nil
+		},
+		tags: func(_ context.Context, _ *s3.Client, region, _ string) ([]s3types.Tag, error) {
+			captured["tags"] = region
+			return nil, nil
+		},
+		objectLock: func(_ context.Context, _ *s3.Client, region, _ string) (*s3types.ObjectLockConfiguration, error) {
+			captured["objectLock"] = region
+			return nil, nil
+		},
+	})
+
+	ir := &imported.ImportedResource{
+		Identity: imported.ResourceIdentity{
+			Type:     "aws_s3_bucket",
+			NameHint: "cross-region",
+			// PostDiscover already stamped the bucket's true region; the
+			// session-region client must be overridden to it on every call.
+			Region: wantRegion,
+		},
+	}
+	require.NoError(t, enr.Enrich(context.Background(), ir, EnrichClients{S3: &s3.Client{}}))
+
+	for _, call := range []string{"head", "encryption", "versioning", "lifecycle", "logging", "cors", "policy", "website", "tags", "objectLock"} {
+		assert.Equal(t, wantRegion, captured[call],
+			"S3 %s call must receive the bucket's recorded region so the per-call override routes it home", call)
+	}
+}
+
+// TestS3BucketEnricher_RegionFromNativeIDsFallback proves the region source
+// falls back to NativeIDs["region"] when Identity.Region is empty (the
+// PostDiscover hook stamps both; a refresh path may carry only the bag).
+func TestS3BucketEnricher_RegionFromNativeIDsFallback(t *testing.T) {
+	t.Parallel()
+	const wantRegion = "ap-southeast-2"
+	var headRegion string
+	enr := newTestS3Enricher(s3FetchHooks{
+		head: func(_ context.Context, _ *s3.Client, region, _ string) (*s3.HeadBucketOutput, error) {
+			headRegion = region
+			return &s3.HeadBucketOutput{BucketRegion: aws.String(wantRegion)}, nil
+		},
+	})
+	ir := &imported.ImportedResource{
+		Identity: imported.ResourceIdentity{
+			Type:      "aws_s3_bucket",
+			NameHint:  "bag-region",
+			NativeIDs: map[string]string{"region": wantRegion},
+		},
+	}
+	require.NoError(t, enr.Enrich(context.Background(), ir, EnrichClients{S3: &s3.Client{}}))
+	assert.Equal(t, wantRegion, headRegion,
+		"region must fall back to NativeIDs[region] when Identity.Region is empty")
+}
+
+// TestS3BucketEnricher_EmptyRegionNoOverride proves the no-region behavior is
+// unchanged: when neither Identity.Region nor NativeIDs["region"] is set, the
+// enricher threads an empty region so the default fetchers add NO Options
+// closure and the client's configured region stands (today's behavior — the
+// IsGlobal enumeration path and most single-region runs).
+func TestS3BucketEnricher_EmptyRegionNoOverride(t *testing.T) {
+	t.Parallel()
+	headRegion := "sentinel"
+	enr := newTestS3Enricher(s3FetchHooks{
+		head: func(_ context.Context, _ *s3.Client, region, _ string) (*s3.HeadBucketOutput, error) {
+			headRegion = region
+			return &s3.HeadBucketOutput{}, nil
+		},
+	})
+	ir := &imported.ImportedResource{
+		Identity: imported.ResourceIdentity{Type: "aws_s3_bucket", NameHint: "no-region"},
+	}
+	require.NoError(t, enr.Enrich(context.Background(), ir, EnrichClients{S3: &s3.Client{}}))
+	assert.Equal(t, "", headRegion,
+		"empty recorded region must thread an empty region (no override) — today's behavior")
+}
+
 func TestS3BucketEnricher_HeadBucketArnRespected(t *testing.T) {
 	t.Parallel()
 	// Directory buckets carry a real BucketArn — the enricher must
 	// use it rather than synthesizing the standard form.
 	enr := newTestS3Enricher(s3FetchHooks{
-		head: func(context.Context, *s3.Client, string) (*s3.HeadBucketOutput, error) {
+		head: func(context.Context, *s3.Client, string, string) (*s3.HeadBucketOutput, error) {
 			return &s3.HeadBucketOutput{
 				BucketArn:    aws.String("arn:aws:s3express:us-east-1:012345678901:bucket/dir-bucket"),
 				BucketRegion: aws.String("us-east-1"),
@@ -401,7 +530,7 @@ func TestS3BucketEnricher_HeadBucketArnRespected(t *testing.T) {
 func TestS3BucketEnricher_EncryptionOverlayHappy(t *testing.T) {
 	t.Parallel()
 	enr := newTestS3Enricher(s3FetchHooks{
-		encryption: func(context.Context, *s3.Client, string) (*s3types.ServerSideEncryptionConfiguration, error) {
+		encryption: func(context.Context, *s3.Client, string, string) (*s3types.ServerSideEncryptionConfiguration, error) {
 			return &s3types.ServerSideEncryptionConfiguration{
 				Rules: []s3types.ServerSideEncryptionRule{{
 					BucketKeyEnabled: aws.Bool(true),
@@ -435,7 +564,7 @@ func TestS3BucketEnricher_EncryptionNotConfigured_SoftFails(t *testing.T) {
 	t.Parallel()
 	// Service-native "feature not configured" error code -> block absent.
 	enr := newTestS3Enricher(s3FetchHooks{
-		encryption: func(context.Context, *s3.Client, string) (*s3types.ServerSideEncryptionConfiguration, error) {
+		encryption: func(context.Context, *s3.Client, string, string) (*s3types.ServerSideEncryptionConfiguration, error) {
 			return nil, &stubAPIError{code: "ServerSideEncryptionConfigurationNotFoundError"}
 		},
 	})
@@ -450,7 +579,7 @@ func TestS3BucketEnricher_EncryptionNotConfigured_SoftFails(t *testing.T) {
 func TestS3BucketEnricher_VersioningOverlay(t *testing.T) {
 	t.Parallel()
 	enr := newTestS3Enricher(s3FetchHooks{
-		versioning: func(context.Context, *s3.Client, string) (*s3.GetBucketVersioningOutput, error) {
+		versioning: func(context.Context, *s3.Client, string, string) (*s3.GetBucketVersioningOutput, error) {
 			return &s3.GetBucketVersioningOutput{
 				Status:    s3types.BucketVersioningStatusEnabled,
 				MFADelete: s3types.MFADeleteStatusDisabled,
@@ -473,7 +602,7 @@ func TestS3BucketEnricher_VersioningNeverConfigured_Absent(t *testing.T) {
 	t.Parallel()
 	// Empty Status + empty MFADelete -> "never configured", block absent.
 	enr := newTestS3Enricher(s3FetchHooks{
-		versioning: func(context.Context, *s3.Client, string) (*s3.GetBucketVersioningOutput, error) {
+		versioning: func(context.Context, *s3.Client, string, string) (*s3.GetBucketVersioningOutput, error) {
 			return &s3.GetBucketVersioningOutput{}, nil
 		},
 	})
@@ -489,7 +618,7 @@ func TestS3BucketEnricher_VersioningNeverConfigured_Absent(t *testing.T) {
 func TestS3BucketEnricher_LifecycleOverlay(t *testing.T) {
 	t.Parallel()
 	enr := newTestS3Enricher(s3FetchHooks{
-		lifecycle: func(context.Context, *s3.Client, string) ([]s3types.LifecycleRule, error) {
+		lifecycle: func(context.Context, *s3.Client, string, string) ([]s3types.LifecycleRule, error) {
 			return []s3types.LifecycleRule{
 				{
 					ID:     aws.String("rule-1"),
@@ -554,7 +683,7 @@ func TestS3BucketEnricher_LifecycleDateTransitionFormat(t *testing.T) {
 	// Transition.Date / Expiration.Date should be RFC3339 with Z suffix.
 	when := time.Date(2024, 1, 2, 3, 4, 5, 0, time.UTC)
 	enr := newTestS3Enricher(s3FetchHooks{
-		lifecycle: func(context.Context, *s3.Client, string) ([]s3types.LifecycleRule, error) {
+		lifecycle: func(context.Context, *s3.Client, string, string) ([]s3types.LifecycleRule, error) {
 			return []s3types.LifecycleRule{{
 				Status:     s3types.ExpirationStatusEnabled,
 				Expiration: &s3types.LifecycleExpiration{Date: &when},
@@ -582,7 +711,7 @@ func TestS3BucketEnricher_LifecycleDateTransitionFormat(t *testing.T) {
 func TestS3BucketEnricher_LoggingOverlay(t *testing.T) {
 	t.Parallel()
 	enr := newTestS3Enricher(s3FetchHooks{
-		logging: func(context.Context, *s3.Client, string) (*s3types.LoggingEnabled, error) {
+		logging: func(context.Context, *s3.Client, string, string) (*s3types.LoggingEnabled, error) {
 			return &s3types.LoggingEnabled{
 				TargetBucket: aws.String("logs-bucket"),
 				TargetPrefix: aws.String("access/"),
@@ -606,7 +735,7 @@ func TestS3BucketEnricher_LoggingNilTargetBucket_Absent(t *testing.T) {
 	// LoggingEnabled with empty TargetBucket means logging is not
 	// actually configured — the block must be absent.
 	enr := newTestS3Enricher(s3FetchHooks{
-		logging: func(context.Context, *s3.Client, string) (*s3types.LoggingEnabled, error) {
+		logging: func(context.Context, *s3.Client, string, string) (*s3types.LoggingEnabled, error) {
 			return &s3types.LoggingEnabled{}, nil
 		},
 	})
@@ -621,7 +750,7 @@ func TestS3BucketEnricher_LoggingNilTargetBucket_Absent(t *testing.T) {
 func TestS3BucketEnricher_CorsOverlay(t *testing.T) {
 	t.Parallel()
 	enr := newTestS3Enricher(s3FetchHooks{
-		cors: func(context.Context, *s3.Client, string) ([]s3types.CORSRule, error) {
+		cors: func(context.Context, *s3.Client, string, string) ([]s3types.CORSRule, error) {
 			return []s3types.CORSRule{{
 				AllowedMethods: []string{"GET", "HEAD"},
 				AllowedOrigins: []string{"https://example.com"},
@@ -653,7 +782,7 @@ func TestS3BucketEnricher_PolicyOverlay(t *testing.T) {
 	t.Parallel()
 	doc := `{"Version":"2012-10-17","Statement":[]}`
 	enr := newTestS3Enricher(s3FetchHooks{
-		policy: func(context.Context, *s3.Client, string) (*string, error) {
+		policy: func(context.Context, *s3.Client, string, string) (*string, error) {
 			return &doc, nil
 		},
 	})
@@ -669,7 +798,7 @@ func TestS3BucketEnricher_PolicyOverlay(t *testing.T) {
 func TestS3BucketEnricher_WebsiteOverlay(t *testing.T) {
 	t.Parallel()
 	enr := newTestS3Enricher(s3FetchHooks{
-		website: func(context.Context, *s3.Client, string) (*s3.GetBucketWebsiteOutput, error) {
+		website: func(context.Context, *s3.Client, string, string) (*s3.GetBucketWebsiteOutput, error) {
 			return &s3.GetBucketWebsiteOutput{
 				IndexDocument: &s3types.IndexDocument{Suffix: aws.String("index.html")},
 				ErrorDocument: &s3types.ErrorDocument{Key: aws.String("404.html")},
@@ -691,7 +820,7 @@ func TestS3BucketEnricher_WebsiteOverlay(t *testing.T) {
 func TestS3BucketEnricher_WebsiteRedirectOnly(t *testing.T) {
 	t.Parallel()
 	enr := newTestS3Enricher(s3FetchHooks{
-		website: func(context.Context, *s3.Client, string) (*s3.GetBucketWebsiteOutput, error) {
+		website: func(context.Context, *s3.Client, string, string) (*s3.GetBucketWebsiteOutput, error) {
 			return &s3.GetBucketWebsiteOutput{
 				RedirectAllRequestsTo: &s3types.RedirectAllRequestsTo{
 					HostName: aws.String("example.com"),
@@ -713,7 +842,7 @@ func TestS3BucketEnricher_WebsiteRedirectOnly(t *testing.T) {
 func TestS3BucketEnricher_WebsiteEmpty_Absent(t *testing.T) {
 	t.Parallel()
 	enr := newTestS3Enricher(s3FetchHooks{
-		website: func(context.Context, *s3.Client, string) (*s3.GetBucketWebsiteOutput, error) {
+		website: func(context.Context, *s3.Client, string, string) (*s3.GetBucketWebsiteOutput, error) {
 			return &s3.GetBucketWebsiteOutput{}, nil
 		},
 	})
@@ -728,7 +857,7 @@ func TestS3BucketEnricher_WebsiteEmpty_Absent(t *testing.T) {
 func TestS3BucketEnricher_TagsOverlay(t *testing.T) {
 	t.Parallel()
 	enr := newTestS3Enricher(s3FetchHooks{
-		tags: func(context.Context, *s3.Client, string) ([]s3types.Tag, error) {
+		tags: func(context.Context, *s3.Client, string, string) ([]s3types.Tag, error) {
 			return []s3types.Tag{
 				{Key: aws.String("Env"), Value: aws.String("prod")},
 				{Key: aws.String("Team"), Value: aws.String("payments")},
@@ -750,7 +879,7 @@ func TestS3BucketEnricher_TagsOverlay(t *testing.T) {
 func TestS3BucketEnricher_ObjectLockOverlay(t *testing.T) {
 	t.Parallel()
 	enr := newTestS3Enricher(s3FetchHooks{
-		objectLock: func(context.Context, *s3.Client, string) (*s3types.ObjectLockConfiguration, error) {
+		objectLock: func(context.Context, *s3.Client, string, string) (*s3types.ObjectLockConfiguration, error) {
 			return &s3types.ObjectLockConfiguration{
 				ObjectLockEnabled: s3types.ObjectLockEnabledEnabled,
 				Rule: &s3types.ObjectLockRule{
@@ -793,31 +922,31 @@ func TestS3BucketEnricher_OverlaysSoftFailOnError(t *testing.T) {
 	notSetErr := &stubAPIError{code: "NoSuchBucketPolicy"}
 	enr := newTestS3Enricher(s3FetchHooks{
 		// Head succeeds — we want to reach the overlays.
-		encryption: func(context.Context, *s3.Client, string) (*s3types.ServerSideEncryptionConfiguration, error) {
+		encryption: func(context.Context, *s3.Client, string, string) (*s3types.ServerSideEncryptionConfiguration, error) {
 			return nil, apiErr
 		},
-		versioning: func(context.Context, *s3.Client, string) (*s3.GetBucketVersioningOutput, error) {
+		versioning: func(context.Context, *s3.Client, string, string) (*s3.GetBucketVersioningOutput, error) {
 			return nil, apiErr
 		},
-		lifecycle: func(context.Context, *s3.Client, string) ([]s3types.LifecycleRule, error) {
+		lifecycle: func(context.Context, *s3.Client, string, string) ([]s3types.LifecycleRule, error) {
 			return nil, apiErr
 		},
-		logging: func(context.Context, *s3.Client, string) (*s3types.LoggingEnabled, error) {
+		logging: func(context.Context, *s3.Client, string, string) (*s3types.LoggingEnabled, error) {
 			return nil, apiErr
 		},
-		cors: func(context.Context, *s3.Client, string) ([]s3types.CORSRule, error) {
+		cors: func(context.Context, *s3.Client, string, string) ([]s3types.CORSRule, error) {
 			return nil, apiErr
 		},
-		policy: func(context.Context, *s3.Client, string) (*string, error) {
+		policy: func(context.Context, *s3.Client, string, string) (*string, error) {
 			return nil, notSetErr
 		},
-		website: func(context.Context, *s3.Client, string) (*s3.GetBucketWebsiteOutput, error) {
+		website: func(context.Context, *s3.Client, string, string) (*s3.GetBucketWebsiteOutput, error) {
 			return nil, apiErr
 		},
-		tags: func(context.Context, *s3.Client, string) ([]s3types.Tag, error) {
+		tags: func(context.Context, *s3.Client, string, string) ([]s3types.Tag, error) {
 			return nil, apiErr
 		},
-		objectLock: func(context.Context, *s3.Client, string) (*s3types.ObjectLockConfiguration, error) {
+		objectLock: func(context.Context, *s3.Client, string, string) (*s3types.ObjectLockConfiguration, error) {
 			return nil, apiErr
 		},
 	})
@@ -842,12 +971,12 @@ func TestS3BucketEnricher_OverlaysSoftFailOnError(t *testing.T) {
 func TestS3BucketEnricher_EnrichByID_HappyPath(t *testing.T) {
 	t.Parallel()
 	enr := newTestS3Enricher(s3FetchHooks{
-		head: func(context.Context, *s3.Client, string) (*s3.HeadBucketOutput, error) {
+		head: func(context.Context, *s3.Client, string, string) (*s3.HeadBucketOutput, error) {
 			return &s3.HeadBucketOutput{
 				BucketRegion: aws.String("eu-west-1"),
 			}, nil
 		},
-		tags: func(context.Context, *s3.Client, string) ([]s3types.Tag, error) {
+		tags: func(context.Context, *s3.Client, string, string) ([]s3types.Tag, error) {
 			return []s3types.Tag{{Key: aws.String("K"), Value: aws.String("V")}}, nil
 		},
 	})
@@ -876,13 +1005,13 @@ func TestS3BucketEnricher_EnrichByID_HappyPath(t *testing.T) {
 func TestS3BucketEnricher_EnrichAndEnrichByIDProduceSameJSON(t *testing.T) {
 	t.Parallel()
 	hooks := s3FetchHooks{
-		head: func(context.Context, *s3.Client, string) (*s3.HeadBucketOutput, error) {
+		head: func(context.Context, *s3.Client, string, string) (*s3.HeadBucketOutput, error) {
 			return &s3.HeadBucketOutput{BucketRegion: aws.String("us-west-2")}, nil
 		},
-		versioning: func(context.Context, *s3.Client, string) (*s3.GetBucketVersioningOutput, error) {
+		versioning: func(context.Context, *s3.Client, string, string) (*s3.GetBucketVersioningOutput, error) {
 			return &s3.GetBucketVersioningOutput{Status: s3types.BucketVersioningStatusEnabled}, nil
 		},
-		tags: func(context.Context, *s3.Client, string) ([]s3types.Tag, error) {
+		tags: func(context.Context, *s3.Client, string, string) ([]s3types.Tag, error) {
 			return []s3types.Tag{{Key: aws.String("Tier"), Value: aws.String("gold")}}, nil
 		},
 	}

@@ -45,3 +45,28 @@ output "tags" {
   description = "The Project-tagged map applied to every taggable resource in this preset. Other presets composing on top can `merge(module.aws_sagemaker.tags, ...)` to inherit the same Project attribution."
   value       = local.tags
 }
+
+# -----------------------------------------------------------------------------
+# Real-time inference endpoint outputs (#761). Null when enable_inference is
+# false so downstream wiring can detect the Studio-only configuration.
+# -----------------------------------------------------------------------------
+
+output "endpoint_name" {
+  description = "Name of the real-time inference endpoint (`<project>-endpoint`). Callers hit this via the SageMaker Runtime InvokeEndpoint API. Null when enable_inference is false."
+  value       = local.enable_inference ? aws_sagemaker_endpoint.inference[0].name : null
+}
+
+output "endpoint_arn" {
+  description = "Full ARN of the inference endpoint. Useful for IAM policy resource references (e.g. granting sagemaker:InvokeEndpoint to callers). Null when enable_inference is false."
+  value       = local.enable_inference ? aws_sagemaker_endpoint.inference[0].arn : null
+}
+
+output "model_name" {
+  description = "Name of the SageMaker model (`<project>-model`) hosting the servable container. Null when enable_inference is false."
+  value       = local.enable_inference ? aws_sagemaker_model.inference[0].name : null
+}
+
+output "endpoint_config_name" {
+  description = "Name of the endpoint configuration (`<project>-endpoint-config`) — the production-variant hosting plan the endpoint binds. Null when enable_inference is false."
+  value       = local.enable_inference ? aws_sagemaker_endpoint_configuration.inference[0].name : null
+}
