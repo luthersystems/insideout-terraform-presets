@@ -1457,6 +1457,32 @@ aws_internet_gateway	tags	Tuning		Hidden	SystemOnly	Redacted
 aws_internet_gateway	tags_all	Tuning		Hidden	SystemOnly	Redacted	
 aws_internet_gateway	timeouts	Tuning		Hidden	SystemOnly		
 aws_internet_gateway	vpc_id	Wiring	Security	UIVisible	RequiresApproval		
+aws_kendra_data_source	arn	Identity		UIVisible	Never		
+aws_kendra_data_source	configuration.s3_configuration.bucket_name	Wiring	Reliability	UIVisible	RelationshipOnly		
+aws_kendra_data_source	custom_document_enrichment_configuration.post_extraction_hook_configuration.lambda_arn	Wiring	Security	SummaryVisible	RelationshipOnly		
+aws_kendra_data_source	custom_document_enrichment_configuration.pre_extraction_hook_configuration.lambda_arn	Wiring	Security	SummaryVisible	RelationshipOnly		
+aws_kendra_data_source	custom_document_enrichment_configuration.role_arn	Wiring	Security	SummaryVisible	RelationshipOnly		
+aws_kendra_data_source	data_source_id	Identity		UIVisible	Never		
+aws_kendra_data_source	id	Identity		UIVisible	Never		
+aws_kendra_data_source	index_id	Wiring	Reliability	UIVisible	RelationshipOnly		AlwaysReplace
+aws_kendra_data_source	name	Identity		UIVisible	Never		AlwaysReplace
+aws_kendra_data_source	region	Identity		UIVisible	Never		AlwaysReplace
+aws_kendra_data_source	role_arn	Wiring	Security	UIVisible	RelationshipOnly		
+aws_kendra_data_source	schedule	Tuning	Reliability	SummaryVisible	RequiresApproval		
+aws_kendra_data_source	tags	Tuning		Hidden	SystemOnly	Redacted	
+aws_kendra_data_source	tags_all	Tuning		Hidden	SystemOnly	Redacted	
+aws_kendra_data_source	type	Tuning	Reliability	UIVisible	RequiresApproval		AlwaysReplace
+aws_kendra_index	arn	Identity		UIVisible	Never		
+aws_kendra_index	edition	Tuning	Reliability	UIVisible	RequiresApproval		AlwaysReplace
+aws_kendra_index	id	Identity		UIVisible	Never		
+aws_kendra_index	name	Identity		UIVisible	Never		AlwaysReplace
+aws_kendra_index	region	Identity		UIVisible	Never		AlwaysReplace
+aws_kendra_index	role_arn	Wiring	Security	UIVisible	RelationshipOnly		
+aws_kendra_index	server_side_encryption_configuration.kms_key_id	Wiring	Security	SummaryVisible	RelationshipOnly		AlwaysReplace
+aws_kendra_index	tags	Tuning		Hidden	SystemOnly	Redacted	
+aws_kendra_index	tags_all	Tuning		Hidden	SystemOnly	Redacted	
+aws_kendra_index	user_context_policy	Tuning	Security	UIVisible	RequiresApproval		
+aws_kendra_index	user_token_configurations.jwt_token_type_configuration.secrets_manager_arn	Wiring	Security	SummaryVisible	RelationshipOnly	Redacted	
 aws_key_pair	arn	Identity		UIVisible	Never		
 aws_key_pair	fingerprint	Identity	Security	UIVisible	Never		
 aws_key_pair	id	Identity		UIVisible	Never		

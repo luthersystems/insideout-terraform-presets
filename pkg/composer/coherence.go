@@ -85,6 +85,8 @@ func ComponentSelected(c *Components, key ComponentKey) bool {
 		return boolPtrTrue(c.AWSBedrockAgent)
 	case KeyAWSAgentCoreGateway:
 		return boolPtrTrue(c.AWSAgentCoreGateway)
+	case KeyAWSKendra:
+		return boolPtrTrue(c.AWSKendra)
 	case KeyAWSSQS:
 		return boolPtrTrue(c.AWSSQS)
 	case KeyAWSMSK:
@@ -303,7 +305,7 @@ func isOrphanStrippableKey(key ComponentKey) bool {
 		KeyAWSCloudWatchLogs, KeyAWSCloudWatchMonitoring,
 		KeyAWSCognito, KeyAWSLambda, KeyAWSAppRunner, KeyAWSSageMaker, KeyAWSCodeBuild, KeyAWSAPIGateway,
 		KeyAWSKMS, KeyAWSSecretsManager, KeyAWSOpenSearch,
-		KeyAWSBedrock, KeyAWSBedrockAgent, KeyAWSAgentCoreGateway, KeyAWSBackups, KeyAWSRoute53,
+		KeyAWSBedrock, KeyAWSBedrockAgent, KeyAWSAgentCoreGateway, KeyAWSKendra, KeyAWSBackups, KeyAWSRoute53,
 		KeyAWSACM,
 		KeyGCPCompute, KeyGCPGKE, KeyGCPCloudRun,
 		KeyGCPCloudFunctions, KeyGCPLoadbalancer,
