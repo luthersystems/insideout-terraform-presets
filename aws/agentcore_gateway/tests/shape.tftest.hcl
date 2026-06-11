@@ -153,7 +153,14 @@ run "defaults" {
 # --- With Lambda target (executor wired in) ----------------------------------
 
 run "with_lambda_target" {
-  command = plan
+  # apply (not plan): the final source_arn assertion compares the Lambda
+  # permission's source_arn against aws_bedrockagentcore_gateway.this.gateway_arn,
+  # a computed attribute that is "(known after apply)" at plan time — comparing
+  # two unknowns raises "Unknown condition value" under command = plan.
+  # mock_provider populates the gateway_arn mock default at apply and never calls
+  # AWS, so this stays credential-free (mirrors aws/bedrock/tests/unit.tftest.hcl,
+  # which uses command = apply for the same computed-ARN-in-condition reason).
+  command = apply
 
   variables {
     target_lambda_arn = "arn:aws:lambda:us-east-1:111111111111:function:iotest-gw-fn"
