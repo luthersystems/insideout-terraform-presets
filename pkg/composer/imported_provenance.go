@@ -40,6 +40,7 @@ var untaggableAWS = map[string]struct{}{
 	"aws_bedrockagent_agent_action_group":                {},
 	"aws_bedrockagent_agent_knowledge_base_association":  {},
 	"aws_bedrockagent_data_source":                       {},
+	"aws_bedrockagentcore_gateway_target":                {},
 	"aws_cloudfront_monitoring_subscription":             {},
 	"aws_cloudfront_origin_access_identity":              {},
 	"aws_cloudwatch_dashboard":                           {},

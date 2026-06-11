@@ -836,6 +836,39 @@ func (m DefaultMapper) BuildModuleValues(
 		// preview compose they are left unset — the preset defaults them to
 		// null and gates the action group / KB association on a non-null arn.
 
+	case KeyAWSAgentCoreGateway:
+		// Partial-config: only emit a field the caller actually populated so
+		// the preset's own defaults (gateway_name = {project}-gateway,
+		// protocol_type = MCP) win when the field is left unset. protocol_type
+		// is constrained to "MCP" by the preset's validation, so an out-of-set
+		// value surfaces as a plan-time precondition failure rather than a
+		// silent default — internally consistent with the variables.tf gate.
+		if cfg != nil && cfg.AWSAgentCoreGateway != nil {
+			ac := cfg.AWSAgentCoreGateway
+			if strings.TrimSpace(ac.GatewayName) != "" {
+				vals["gateway_name"] = strings.TrimSpace(ac.GatewayName)
+			}
+			if strings.TrimSpace(ac.ProtocolType) != "" {
+				vals["protocol_type"] = strings.TrimSpace(ac.ProtocolType)
+			}
+			// Inbound-auth surface. The preset's jwt_discovery_url default is a
+			// placeholder, so a composed deploy that wants real auth MUST be
+			// able to supply the issuer here — emit it when populated.
+			if strings.TrimSpace(ac.JwtDiscoveryURL) != "" {
+				vals["jwt_discovery_url"] = strings.TrimSpace(ac.JwtDiscoveryURL)
+			}
+			if aud := nonEmptyTrimmed(ac.JwtAllowedAudience); len(aud) > 0 {
+				vals["jwt_allowed_audience"] = aud
+			}
+			if cl := nonEmptyTrimmed(ac.JwtAllowedClients); len(cl) > 0 {
+				vals["jwt_allowed_clients"] = cl
+			}
+		}
+		// target_lambda_arn is wired by DefaultWiring (function_arn from the
+		// implicitly-added aws/lambda — KeyAWSLambda is a HARD dep). For
+		// single-module preview compose it is left unset; the preset defaults
+		// it to null and gates the Lambda target on a non-null arn.
+
 	case KeyAWSLambda:
 		vals["runtime"] = "nodejs20.x" // Default to nodejs
 		if cfg != nil && cfg.AWSLambda != nil {
@@ -1826,4 +1859,21 @@ func cronFor(hours int) string {
 	default:
 		return ""
 	}
+}
+
+// nonEmptyTrimmed returns the input strings trimmed of surrounding whitespace,
+// dropping any that are empty after trimming. The result is []any so it can be
+// assigned directly into a mapper vals map (HCL list emission expects []any).
+// Returns an empty (non-nil) slice when nothing survives, so callers gate on
+// len()>0 before emitting a tfvar.
+func nonEmptyTrimmed(in []string) []any {
+	out := make([]any, 0, len(in))
+	for _, s := range in {
+		t := strings.TrimSpace(s)
+		if t == "" {
+			continue
+		}
+		out = append(out, t)
+	}
+	return out
 }

@@ -69,10 +69,11 @@ var configExtractorAllowlist = map[string]string{
 	// own SDK inspector — extraction is handled by aws_eks (#204, #224).
 	"aws_eks_nodegroup": "[no-inspector] EKS node group is covered by the aws_eks inspector (#204)",
 
-	"aws_sagemaker":     "[no-inspector] SageMaker Studio inspector deferred (#615 explicitly marks discovery inspector as optional/follow-up — domain + execution role are surfaced via name-prefix scoping until per-resource extractors land)",
-	"aws_apprunner":     "[no-inspector] App Runner inspector deferred (#598 explicitly marks discovery inspector as optional/follow-up for every parity row — service + autoscaling config + VPC connector are surfaced via name-prefix scoping until per-resource extractors land)",
-	"aws_codebuild":     "[no-inspector] CodeBuild inspector deferred (#619 explicitly marks discovery inspector as optional/follow-up — project + service role + optional logs bucket are surfaced via name-prefix scoping until per-resource extractors land)",
-	"aws_bedrock_agent": "[no-inspector] Bedrock Agent inspector deferred (#762 — the agent panel binds bedrock.list-agents but a per-component SDK-shape extractor for agent + action group + alias + KB association is a discovery-pipeline follow-up; surfaced via name-prefix scoping until it lands)",
+	"aws_sagemaker":         "[no-inspector] SageMaker Studio inspector deferred (#615 explicitly marks discovery inspector as optional/follow-up — domain + execution role are surfaced via name-prefix scoping until per-resource extractors land)",
+	"aws_apprunner":         "[no-inspector] App Runner inspector deferred (#598 explicitly marks discovery inspector as optional/follow-up for every parity row — service + autoscaling config + VPC connector are surfaced via name-prefix scoping until per-resource extractors land)",
+	"aws_codebuild":         "[no-inspector] CodeBuild inspector deferred (#619 explicitly marks discovery inspector as optional/follow-up — project + service role + optional logs bucket are surfaced via name-prefix scoping until per-resource extractors land)",
+	"aws_bedrock_agent":     "[no-inspector] Bedrock Agent inspector deferred (#762 — the agent panel binds bedrock.list-agents but a per-component SDK-shape extractor for agent + action group + alias + KB association is a discovery-pipeline follow-up; surfaced via name-prefix scoping until it lands)",
+	"aws_agentcore_gateway": "[no-inspector] AgentCore Gateway inspector deferred (#763 — the preset ships with NO observability wiring because AgentCore metrics are immature; reverse-import discovery vocabulary for aws_bedrockagentcore_gateway/_target is a follow-up too, so no SDK-shape extractor lands yet; mirrors the aws_bedrock_agent precedent)",
 
 	"gcp_backups":      "[no-inspector] GCP Backup vaults aren't inspected; covered via label-based discovery (#204)",
 	"gcp_cloud_deploy": "[no-inspector] Cloud Deploy delivery-pipeline inspector deferred (#613 explicitly marks discovery inspector + extractor as optional/follow-up); ComponentMetricsMapping has no entry yet so the panel falls back to design values until the per-component extractor lands",

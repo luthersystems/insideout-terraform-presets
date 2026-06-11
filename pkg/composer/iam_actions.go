@@ -98,6 +98,7 @@ var AWSIAMActions = map[ComponentKey][]string{
 	KeyAWSOpenSearch:           {"es:CreateDomain"},
 	KeyAWSBedrock:              {"bedrock:GetFoundationModel"},
 	KeyAWSBedrockAgent:         {"bedrock:CreateAgent"},
+	KeyAWSAgentCoreGateway:     {"bedrock-agentcore:CreateGateway"},
 	KeyAWSSQS:                  {"sqs:CreateQueue"},
 	KeyAWSMSK:                  {"kafka:CreateClusterV2"},
 	KeyAWSCloudWatchLogs:       {"logs:CreateLogGroup"},

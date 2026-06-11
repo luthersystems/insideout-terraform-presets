@@ -38,6 +38,7 @@ type Components struct {
 	AWSSecretsManager       *bool  `json:"aws_secretsmanager,omitempty"`
 	AWSBedrock              *bool  `json:"aws_bedrock,omitempty"`
 	AWSBedrockAgent         *bool  `json:"aws_bedrock_agent,omitempty"`
+	AWSAgentCoreGateway     *bool  `json:"aws_agentcore_gateway,omitempty"`
 	AWSSQS                  *bool  `json:"aws_sqs,omitempty"`
 	AWSMSK                  *bool  `json:"aws_msk,omitempty"`
 	AWSCloudWatchLogs       *bool  `json:"aws_cloudwatch_logs,omitempty"`
@@ -305,6 +306,18 @@ type Config struct {
 		Instruction     string `json:"instruction,omitempty"`
 		AgentName       string `json:"agentName,omitempty"`
 	} `json:"aws_bedrock_agent,omitempty"`
+
+	AWSAgentCoreGateway *struct {
+		GatewayName  string `json:"gatewayName,omitempty"`
+		ProtocolType string `json:"protocolType,omitempty"`
+		// Inbound-auth surface: a composed deploy MUST be able to point the
+		// gateway's JWT authorizer at a real OIDC issuer (Cognito/Auth0/…) —
+		// the preset's default discovery_url is a placeholder. AllowedAudience
+		// and AllowedClients narrow which tokens the gateway accepts.
+		JwtDiscoveryURL    string   `json:"jwtDiscoveryUrl,omitempty"`
+		JwtAllowedAudience []string `json:"jwtAllowedAudience,omitempty"`
+		JwtAllowedClients  []string `json:"jwtAllowedClients,omitempty"`
+	} `json:"aws_agentcore_gateway,omitempty"`
 
 	AWSBackups *struct {
 		EC2 *struct {
@@ -678,6 +691,7 @@ func (c *Components) Normalize() {
 		c.AWSSecretsManager = nil
 		c.AWSBedrock = nil
 		c.AWSBedrockAgent = nil
+		c.AWSAgentCoreGateway = nil
 		c.AWSSQS = nil
 		c.AWSMSK = nil
 		c.AWSCloudWatchLogs = nil
@@ -802,6 +816,7 @@ func (c *Config) Normalize() {
 		c.AWSOpenSearch = nil
 		c.AWSBedrock = nil
 		c.AWSBedrockAgent = nil
+		c.AWSAgentCoreGateway = nil
 		c.AWSRoute53 = nil
 		c.AWSACM = nil
 		c.AWSBackups = nil
