@@ -98,6 +98,15 @@ var coveredTypes = []string{
 	"aws_bedrockagent_agent_alias",
 	"aws_bedrockagent_data_source",
 	"aws_bedrockagent_knowledge_base",
+	// #795 — AgentCore MCP/tool gateway vocabulary for the
+	// aws/agentcore_gateway preset (#763 / #794), deferred by the #787
+	// precedent. Gateway (taggable) + gateway target (no tags attribute).
+	// The gateway's role_arn + CUSTOM_JWT authorizer wiring (discovery_url
+	// / allowed_clients / allowed_audience) are the high-value privilege /
+	// inbound-auth drift signals; the target's lambda_arn + credential
+	// provider_arn are the tool-binding / backend-auth surfaces.
+	"aws_bedrockagentcore_gateway",
+	"aws_bedrockagentcore_gateway_target",
 	// Bundle 8 (cont.) — CloudFront OAI.
 	"aws_cloudfront_origin_access_identity",
 	// Bundle 4 (cont.) — CloudTrail.

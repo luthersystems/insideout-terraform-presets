@@ -22,7 +22,7 @@ and is checked in lockstep with the runtime registries. See the
 
 ## Summary
 
-- **AWS:** 145 types · 75% Discoverable · 75% Enrichable · 100% DriftDetectable · 63% MetricsAvailable · 90% AgentEditable
+- **AWS:** 147 types · 74% Discoverable · 74% Enrichable · 100% DriftDetectable · 62% MetricsAvailable · 90% AgentEditable
 - **GCP:** 64 types · 84% Discoverable · 84% Enrichable · 100% DriftDetectable · 78% MetricsAvailable · 91% AgentEditable
 
 ## AWS
@@ -60,6 +60,8 @@ and is checked in lockstep with the runtime registries. See the
 | `aws_bedrockagent_agent_alias` | – | – | ✓ | – | – |
 | `aws_bedrockagent_data_source` | – | – | ✓ | – | ✓ |
 | `aws_bedrockagent_knowledge_base` | – | – | ✓ | – | ✓ |
+| `aws_bedrockagentcore_gateway` | – | – | ✓ | – | ✓ |
+| `aws_bedrockagentcore_gateway_target` | – | – | ✓ | – | – |
 | `aws_cloudfront_distribution` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `aws_cloudfront_function` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `aws_cloudfront_monitoring_subscription` | ✓ | ✓ | ✓ | – | ✓ |
