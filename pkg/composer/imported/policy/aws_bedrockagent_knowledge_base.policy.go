@@ -69,6 +69,19 @@ var awsBedrockagentKnowledgeBasePolicy = Map{
 		ChangeRisk:    ChangeAlwaysReplace,
 		DriftSemantic: DriftSemanticExact,
 	},
+	// The vector geometry the embedding model emits with — must match
+	// the S3 Vectors index (data_type / dimension). A silent mismatch
+	// corrupts retrieval just as surely as swapping the model itself.
+	"knowledge_base_configuration.vector_knowledge_base_configuration.embedding_model_configuration.bedrock_embedding_model_configuration.dimensions": {
+		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilitySummaryVisible,
+		Edit:          EditRequiresApproval,
+		DriftSemantic: DriftSemanticExact,
+	},
+	"knowledge_base_configuration.vector_knowledge_base_configuration.embedding_model_configuration.bedrock_embedding_model_configuration.embedding_data_type": {
+		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilitySummaryVisible,
+		Edit:          EditRequiresApproval,
+		DriftSemantic: DriftSemanticExact,
+	},
 
 	// Storage backend — which corpus the base points at --------------
 	"storage_configuration.type": {

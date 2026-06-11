@@ -88,6 +88,47 @@ var awsBedrockagentAgentPolicy = Map{
 		DriftSemantic: DriftSemanticExact,
 	},
 
+	// Prompt override — advanced prompt-engineering behavior ----------
+	// The agent's per-stage prompt templates and the custom parser
+	// Lambda. An out-of-band edit here silently re-shapes how the agent
+	// pre-/post-processes every turn (behavioral drift); a parser-Lambda
+	// rebind re-routes that processing to different code.
+	"prompt_override_configuration.override_lambda": {
+		Role: RoleWiring, Pillar: PillarSecurity, Visibility: VisibilitySummaryVisible,
+		Edit:          EditRelationshipOnly,
+		DriftSemantic: DriftSemanticExact,
+	},
+	"prompt_override_configuration.prompt_configurations.base_prompt_template": {
+		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilitySummaryVisible,
+		Edit:          EditRequiresApproval,
+		DriftSemantic: DriftSemanticExact,
+	},
+	"prompt_override_configuration.prompt_configurations.parser_mode": {
+		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilitySummaryVisible,
+		Edit:          EditRequiresApproval,
+		DriftSemantic: DriftSemanticExact,
+	},
+	"prompt_override_configuration.prompt_configurations.prompt_state": {
+		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilitySummaryVisible,
+		Edit:          EditRequiresApproval,
+		DriftSemantic: DriftSemanticExact,
+	},
+
+	// Memory configuration — cross-session retention ------------------
+	// enabled_memory_types governs whether the agent persists session
+	// memory at all; storage_days is the retention window. Both are
+	// data-retention / privacy-adjacent surfaces.
+	"memory_configuration.enabled_memory_types": {
+		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilitySummaryVisible,
+		Edit:          EditRequiresApproval,
+		DriftSemantic: DriftSemanticWholeList,
+	},
+	"memory_configuration.storage_days": {
+		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilitySummaryVisible,
+		Edit:          EditChatSafe,
+		DriftSemantic: DriftSemanticExact,
+	},
+
 	"tags":     tagPolicy(),
 	"tags_all": tagPolicy(),
 }

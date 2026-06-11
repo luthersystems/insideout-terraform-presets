@@ -1509,11 +1509,39 @@
       "semantic": "Exact"
     },
     {
+      "path": "memory_configuration.enabled_memory_types",
+      "semantic": "WholeList"
+    },
+    {
+      "path": "memory_configuration.storage_days",
+      "semantic": "Exact"
+    },
+    {
+      "path": "prompt_override_configuration.override_lambda",
+      "semantic": "Exact"
+    },
+    {
+      "path": "prompt_override_configuration.prompt_configurations.base_prompt_template",
+      "semantic": "Exact"
+    },
+    {
+      "path": "prompt_override_configuration.prompt_configurations.parser_mode",
+      "semantic": "Exact"
+    },
+    {
+      "path": "prompt_override_configuration.prompt_configurations.prompt_state",
+      "semantic": "Exact"
+    },
+    {
       "path": "region",
       "semantic": "Exact"
     }
   ],
   "aws_bedrockagent_agent_action_group": [
+    {
+      "path": "action_group_executor.custom_control",
+      "semantic": "Exact"
+    },
     {
       "path": "action_group_executor.lambda",
       "semantic": "Exact"
@@ -1539,11 +1567,19 @@
       "semantic": "Exact"
     },
     {
+      "path": "api_schema.payload",
+      "semantic": "Exact"
+    },
+    {
       "path": "api_schema.s3.s3_bucket_name",
       "semantic": "Exact"
     },
     {
       "path": "api_schema.s3.s3_object_key",
+      "semantic": "Exact"
+    },
+    {
+      "path": "function_schema",
       "semantic": "Exact"
     },
     {
@@ -1591,7 +1627,23 @@
       "semantic": "Exact"
     },
     {
+      "path": "data_source_configuration.confluence_configuration.source_configuration.credentials_secret_arn",
+      "semantic": "Exact"
+    },
+    {
       "path": "data_source_configuration.s3_configuration.bucket_arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "data_source_configuration.s3_configuration.inclusion_prefixes",
+      "semantic": "WholeList"
+    },
+    {
+      "path": "data_source_configuration.salesforce_configuration.source_configuration.credentials_secret_arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "data_source_configuration.share_point_configuration.source_configuration.credentials_secret_arn",
       "semantic": "Exact"
     },
     {
@@ -1621,6 +1673,10 @@
     {
       "path": "server_side_encryption_configuration.kms_key_arn",
       "semantic": "Exact"
+    },
+    {
+      "path": "vector_ingestion_configuration.chunking_configuration.chunking_strategy",
+      "semantic": "Exact"
     }
   ],
   "aws_bedrockagent_knowledge_base": [
@@ -1638,6 +1694,14 @@
     },
     {
       "path": "knowledge_base_configuration.vector_knowledge_base_configuration.embedding_model_arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "knowledge_base_configuration.vector_knowledge_base_configuration.embedding_model_configuration.bedrock_embedding_model_configuration.dimensions",
+      "semantic": "Exact"
+    },
+    {
+      "path": "knowledge_base_configuration.vector_knowledge_base_configuration.embedding_model_configuration.bedrock_embedding_model_configuration.embedding_data_type",
       "semantic": "Exact"
     },
     {
@@ -8415,6 +8479,10 @@
       "semantic": "Exact"
     },
     {
+      "path": "production_variants.variant_name",
+      "semantic": "Exact"
+    },
+    {
       "path": "region",
       "semantic": "Exact"
     }
@@ -8422,6 +8490,18 @@
   "aws_sagemaker_model": [
     {
       "path": "arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "container.image",
+      "semantic": "Exact"
+    },
+    {
+      "path": "container.mode",
+      "semantic": "Exact"
+    },
+    {
+      "path": "container.model_data_url",
       "semantic": "Exact"
     },
     {

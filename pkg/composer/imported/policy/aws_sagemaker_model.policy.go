@@ -81,6 +81,29 @@ var awsSagemakerModelPolicy = Map{
 		DriftSemantic: DriftSemanticExact,
 	},
 
+	// Inference-pipeline container(s) — the alternative to
+	// primary_container for multi-container / pipeline models. Same
+	// served-code surface; a silent image / artifact swap ships
+	// different code on a pipeline model just as on a single one.
+	"container.image": {
+		Role: RoleWiring, Pillar: PillarReliability, Visibility: VisibilityUIVisible,
+		Edit:          EditRelationshipOnly,
+		ChangeRisk:    ChangeAlwaysReplace,
+		DriftSemantic: DriftSemanticExact,
+	},
+	"container.model_data_url": {
+		Role: RoleWiring, Pillar: PillarReliability, Visibility: VisibilityUIVisible,
+		Edit:          EditRelationshipOnly,
+		ChangeRisk:    ChangeAlwaysReplace,
+		DriftSemantic: DriftSemanticExact,
+	},
+	"container.mode": {
+		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilitySummaryVisible,
+		Edit:          EditRequiresApproval,
+		ChangeRisk:    ChangeAlwaysReplace,
+		DriftSemantic: DriftSemanticExact,
+	},
+
 	// VPC wiring — security boundary ---------------------------------
 	"vpc_config.security_group_ids": {
 		Role: RoleWiring, Pillar: PillarSecurity, Visibility: VisibilitySummaryVisible,

@@ -56,6 +56,14 @@ var awsSagemakerEndpointConfigurationPolicy = Map{
 	},
 
 	// Production variants — what is served + at what scale -----------
+	"production_variants.variant_name": {
+		// The stable variant identity that traffic weights / data-capture
+		// key off of. For multi-variant configs it disambiguates which
+		// model+capacity owns which traffic share.
+		Role: RoleIdentity, Visibility: VisibilitySummaryVisible, Edit: EditNever,
+		ChangeRisk:    ChangeAlwaysReplace,
+		DriftSemantic: DriftSemanticExact,
+	},
 	"production_variants.model_name": {
 		// Silent rebind swaps the served model out from under the endpoint.
 		Role: RoleWiring, Pillar: PillarReliability, Visibility: VisibilityUIVisible,
