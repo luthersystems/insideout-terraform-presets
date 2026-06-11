@@ -70,6 +70,25 @@ locals {
   network_canonical = local.vector_search_private ? (
     "projects/${data.google_project.this.number}/global/networks/${local.network_name}"
   ) : null
+
+  # --- Model serving (#768) -------------------------------------------------
+  # google_vertex_ai_endpoint.name must be NUMERIC, no leading zeros, <=10
+  # digits (the endpoint's resource id). Derive a deterministic number from
+  # var.project so the name is stable across applies for a given stack: parse
+  # the first 8 hex chars of sha256(project) -> an integer <= 4294967295 (10
+  # digits max). tostring renders an int without leading zeros, so the API
+  # constraint holds.
+  serving_endpoint_name = tostring(parseint(substr(sha256(var.project), 0, 8), 16))
+
+  # The Model Garden one-shot deployment is created only when serving is on AND
+  # a model is named. A bare endpoint (no model) is the enable_serving-only
+  # path; attach a model out-of-band there.
+  model_garden_enabled = var.enable_serving && var.model_garden_model != null
+
+  # Attach dedicated accelerators only when an accelerator type is requested.
+  # CPU-only serving (the default) omits the machine_spec accelerator fields so
+  # the deployment does not demand GPU quota it doesn't need.
+  serving_accelerator_enabled = var.serving_accelerator_type != null
 }
 
 # Resolves the caller's project to its numeric project number, which the
@@ -205,6 +224,98 @@ resource "google_vertex_ai_index_endpoint_deployed_index" "this" {
     precondition {
       condition     = var.deployed_index_max_replicas >= var.deployed_index_min_replicas
       error_message = "deployed_index_max_replicas must be >= deployed_index_min_replicas."
+    }
+  }
+}
+
+# --- Model serving (Endpoint + Model Garden) — issue #768 -------------------
+#
+# google_vertex_ai_endpoint:                            serving endpoint (a
+#   managed front door for online predictions). Created when enable_serving is
+#   true. PUBLIC by default; the private-endpoint story is unchanged here (it
+#   reuses the same #774 PSC peering range the Vector Search endpoint needs and
+#   is out of scope for this issue).
+# google_vertex_ai_endpoint_with_model_garden_deployment: one-shot deploy of an
+#   open Model Garden model (Gemma/Llama/etc) onto its OWN managed endpoint.
+#   Created when enable_serving is true AND model_garden_model is named. The
+#   deploy is the long pole — model downloads + replica spin-up routinely take
+#   30+ minutes — so create/delete carry generous 60m timeouts.
+#
+# Resources verified against hashicorp/google v7.x (GA tier; both resources are
+# in the GA provider — see PR notes). The dataset and Vector Search resources
+# above are untouched by enable_serving.
+
+# A bare serving endpoint. Models can be deployed onto it out-of-band; the
+# Model Garden resource below provisions its own endpoint, so this one is the
+# generic attach point for custom/other models.
+resource "google_vertex_ai_endpoint" "serving" {
+  count        = var.enable_serving ? 1 : 0
+  name         = local.serving_endpoint_name
+  display_name = "${var.project}-serving-endpoint"
+  description  = "InsideOut Vertex AI serving endpoint for ${var.project}"
+  # location is the required, canonical field on this resource (region is a
+  # legacy alias and redundant when location is set). The sibling dataset/index
+  # resources only expose region, hence the differing field here.
+  location = var.region
+  project  = var.project_id
+
+  labels = merge(
+    {
+      project = var.project
+    },
+    var.labels
+  )
+}
+
+# One-shot Model Garden open-model deployment onto a managed endpoint. EULA
+# acceptance and accelerator quota are operator concerns (see var docs): many
+# open models won't deploy until model_garden_accept_eula is true, and a GPU
+# accelerator_type needs matching quota in the project/region.
+resource "google_vertex_ai_endpoint_with_model_garden_deployment" "model_garden" {
+  count                = local.model_garden_enabled ? 1 : 0
+  publisher_model_name = var.model_garden_model
+  location             = var.region
+  project              = var.project_id
+
+  model_config {
+    accept_eula = var.model_garden_accept_eula
+  }
+
+  deploy_config {
+    dedicated_resources {
+      min_replica_count = var.serving_min_replicas
+      max_replica_count = var.serving_max_replicas
+
+      machine_spec {
+        machine_type = var.serving_machine_type
+        # Accelerator fields only when a GPU/TPU type is requested; CPU-only
+        # serving leaves them unset so no accelerator quota is demanded.
+        accelerator_type  = local.serving_accelerator_enabled ? var.serving_accelerator_type : null
+        accelerator_count = local.serving_accelerator_enabled ? var.serving_accelerator_count : null
+      }
+    }
+  }
+
+  # Model deploys run long (download + replica spin-up). Stay well clear of the
+  # provider's shorter defaults.
+  timeouts {
+    create = "60m"
+    delete = "60m"
+  }
+
+  lifecycle {
+    # Cross-variable invariants live here (a per-variable validation may only
+    # reference its own variable):
+    #   - autoscaling ceiling must not sit below the floor;
+    #   - an accelerator TYPE without a positive COUNT (or vice versa) is a
+    #     half-configured GPU request that the API would reject at apply.
+    precondition {
+      condition     = var.serving_max_replicas >= var.serving_min_replicas
+      error_message = "serving_max_replicas must be >= serving_min_replicas."
+    }
+    precondition {
+      condition     = (var.serving_accelerator_type == null) == (var.serving_accelerator_count == 0)
+      error_message = "serving_accelerator_type and serving_accelerator_count must be set together: a type requires count > 0, and count > 0 requires a type."
     }
   }
 }

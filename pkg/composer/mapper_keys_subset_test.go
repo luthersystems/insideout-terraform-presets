@@ -250,9 +250,11 @@ func kitchenSinkConfig() *Config {
 		Versioning   *bool  `json:"versioning,omitempty"`
 	}{StorageClass: "STANDARD", Versioning: &t}
 	cfg.GCPVertexAI = &struct {
-		EnableVectorSearch *bool `json:"enableVectorSearch,omitempty"`
-		IndexDimensions    int   `json:"indexDimensions,omitempty"`
-	}{EnableVectorSearch: &t, IndexDimensions: 768}
+		EnableVectorSearch *bool  `json:"enableVectorSearch,omitempty"`
+		IndexDimensions    int    `json:"indexDimensions,omitempty"`
+		EnableServing      *bool  `json:"enableServing,omitempty"`
+		ModelGardenModel   string `json:"modelGardenModel,omitempty"`
+	}{EnableVectorSearch: &t, IndexDimensions: 768, EnableServing: &t, ModelGardenModel: "publishers/google/models/gemma3@gemma-3-1b-it"}
 	cfg.GCPPubSub = &struct {
 		MessageRetentionDuration string `json:"messageRetentionDuration,omitempty"`
 	}{MessageRetentionDuration: "604800s"}

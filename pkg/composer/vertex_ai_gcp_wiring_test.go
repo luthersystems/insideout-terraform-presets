@@ -39,27 +39,40 @@ func TestBuildModuleValues_GCPVertexAI_PartialConfig(t *testing.T) {
 		assert.False(t, hasEnable, "nil GCPVertexAI must not emit enable_vector_search")
 		_, hasDims := vals["index_dimensions"]
 		assert.False(t, hasDims, "nil GCPVertexAI must not emit index_dimensions")
+		_, hasServing := vals["enable_serving"]
+		assert.False(t, hasServing, "nil GCPVertexAI must not emit enable_serving")
+		_, hasModel := vals["model_garden_model"]
+		assert.False(t, hasModel, "nil GCPVertexAI must not emit model_garden_model")
 	})
 
 	t.Run("EnableVectorSearch=true flows through", func(t *testing.T) {
 		t.Parallel()
 		cfg := &Config{}
 		cfg.GCPVertexAI = &struct {
-			EnableVectorSearch *bool `json:"enableVectorSearch,omitempty"`
-			IndexDimensions    int   `json:"indexDimensions,omitempty"`
+			EnableVectorSearch *bool  `json:"enableVectorSearch,omitempty"`
+			IndexDimensions    int    `json:"indexDimensions,omitempty"`
+			EnableServing      *bool  `json:"enableServing,omitempty"`
+			ModelGardenModel   string `json:"modelGardenModel,omitempty"`
 		}{EnableVectorSearch: &tr, IndexDimensions: 1536}
 		vals, err := m.BuildModuleValues(KeyGCPVertexAI, nil, cfg, "demo", "us-central1")
 		require.NoError(t, err)
 		assert.Equal(t, true, vals["enable_vector_search"])
 		assert.Equal(t, 1536, vals["index_dimensions"])
+		// Serving fields untouched here -> not emitted (preset defaults win).
+		_, hasServing := vals["enable_serving"]
+		assert.False(t, hasServing, "unset EnableServing must not emit enable_serving")
+		_, hasModel := vals["model_garden_model"]
+		assert.False(t, hasModel, "unset ModelGardenModel must not emit model_garden_model")
 	})
 
 	t.Run("EnableVectorSearch=false flows through, zero dimensions omitted", func(t *testing.T) {
 		t.Parallel()
 		cfg := &Config{}
 		cfg.GCPVertexAI = &struct {
-			EnableVectorSearch *bool `json:"enableVectorSearch,omitempty"`
-			IndexDimensions    int   `json:"indexDimensions,omitempty"`
+			EnableVectorSearch *bool  `json:"enableVectorSearch,omitempty"`
+			IndexDimensions    int    `json:"indexDimensions,omitempty"`
+			EnableServing      *bool  `json:"enableServing,omitempty"`
+			ModelGardenModel   string `json:"modelGardenModel,omitempty"`
 		}{EnableVectorSearch: &fa}
 		vals, err := m.BuildModuleValues(KeyGCPVertexAI, nil, cfg, "demo", "us-central1")
 		require.NoError(t, err)
@@ -68,6 +81,42 @@ func TestBuildModuleValues_GCPVertexAI_PartialConfig(t *testing.T) {
 		// preset's own default (768) applies rather than an invalid 0.
 		_, hasDims := vals["index_dimensions"]
 		assert.False(t, hasDims, "zero IndexDimensions must be omitted so the preset default wins")
+	})
+
+	t.Run("EnableServing + ModelGardenModel flow through (#768)", func(t *testing.T) {
+		t.Parallel()
+		cfg := &Config{}
+		cfg.GCPVertexAI = &struct {
+			EnableVectorSearch *bool  `json:"enableVectorSearch,omitempty"`
+			IndexDimensions    int    `json:"indexDimensions,omitempty"`
+			EnableServing      *bool  `json:"enableServing,omitempty"`
+			ModelGardenModel   string `json:"modelGardenModel,omitempty"`
+		}{EnableServing: &tr, ModelGardenModel: "publishers/google/models/gemma3@gemma-3-1b-it"}
+		vals, err := m.BuildModuleValues(KeyGCPVertexAI, nil, cfg, "demo", "us-central1")
+		require.NoError(t, err)
+		assert.Equal(t, true, vals["enable_serving"])
+		assert.Equal(t, "publishers/google/models/gemma3@gemma-3-1b-it", vals["model_garden_model"])
+		// Vector Search fields untouched -> not emitted (orthogonal flags).
+		_, hasVS := vals["enable_vector_search"]
+		assert.False(t, hasVS, "unset EnableVectorSearch must not emit enable_vector_search when only serving is set")
+	})
+
+	t.Run("EnableServing=false flows through, empty model omitted (#768)", func(t *testing.T) {
+		t.Parallel()
+		cfg := &Config{}
+		cfg.GCPVertexAI = &struct {
+			EnableVectorSearch *bool  `json:"enableVectorSearch,omitempty"`
+			IndexDimensions    int    `json:"indexDimensions,omitempty"`
+			EnableServing      *bool  `json:"enableServing,omitempty"`
+			ModelGardenModel   string `json:"modelGardenModel,omitempty"`
+		}{EnableServing: &fa}
+		vals, err := m.BuildModuleValues(KeyGCPVertexAI, nil, cfg, "demo", "us-central1")
+		require.NoError(t, err)
+		assert.Equal(t, false, vals["enable_serving"])
+		// Empty ModelGardenModel must NOT be emitted so the preset default
+		// (null -> bare endpoint) wins rather than an invalid empty string.
+		_, hasModel := vals["model_garden_model"]
+		assert.False(t, hasModel, "empty ModelGardenModel must be omitted so the preset default wins")
 	})
 }
 

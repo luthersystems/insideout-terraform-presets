@@ -694,7 +694,17 @@ var alarmedGCPMetrics = map[composer.ComponentKey]AlarmAuthor{
 	composer.KeyGCPLoadbalancer:   {Module: "gcp/loadbalancer", Metrics: []string{"loadbalancing.googleapis.com/https/backend_latencies"}},
 	composer.KeyGCPMemorystore:    {Module: "gcp/memorystore", Metrics: []string{"redis.googleapis.com/stats/cpu_utilization"}},
 	composer.KeyGCPPubSub:         {Module: "gcp/pubsub", Metrics: []string{"pubsub.googleapis.com/subscription/num_undelivered_messages"}},
-	composer.KeyGCPVertexAI:       {Module: "gcp/vertex_ai", Metrics: []string{"aiplatform.googleapis.com/matching_engine/query/latencies"}},
+	// Vector Search query latency (#764) plus the two serving alarms (#768):
+	// online-prediction latency and error_count, both already in the vertexai
+	// catalog above. All three have google_monitoring_alert_policy resources in
+	// gcp/vertex_ai/observability.tf (the for_each gates suppress the serving
+	// pair when enable_serving=false and the vector alarm when
+	// enable_vector_search=false, but the metric.type strings still match).
+	composer.KeyGCPVertexAI: {Module: "gcp/vertex_ai", Metrics: []string{
+		"aiplatform.googleapis.com/matching_engine/query/latencies",
+		"aiplatform.googleapis.com/prediction/online/prediction_latencies",
+		"aiplatform.googleapis.com/prediction/online/error_count",
+	}},
 }
 
 // AlarmedAWSMetrics returns a defensive copy of the AWS authority entry
