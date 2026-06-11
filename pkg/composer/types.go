@@ -74,6 +74,7 @@ type Components struct {
 	GCPCloudKMS         *bool  `json:"gcp_cloud_kms,omitempty"`
 	GCPSecretManager    *bool  `json:"gcp_secret_manager,omitempty"`
 	GCPVertexAI         *bool  `json:"gcp_vertex_ai,omitempty"`
+	GCPAgentEngine      *bool  `json:"gcp_agent_engine,omitempty"`
 	GCPPubSub           *bool  `json:"gcp_pubsub,omitempty"`
 	GCPCloudLogging     *bool  `json:"gcp_cloud_logging,omitempty"`
 	GCPCloudMonitoring  *bool  `json:"gcp_cloud_monitoring,omitempty"`
@@ -375,6 +376,18 @@ type Config struct {
 		IndexDimensions    int   `json:"indexDimensions,omitempty"`
 	} `json:"gcp_vertex_ai,omitempty"`
 
+	// GCPAgentEngine carries the caller-supplied Vertex AI Agent Engine
+	// configuration (#769). DisplayName overrides the preset's project-prefixed
+	// default for the Reasoning Engine. The packaged-artifact URI / staging
+	// bucket are not modeled here: the artifact is built by the application
+	// layer and its URI is supplied directly to the preset, and staging_bucket
+	// is wired by DefaultWiring from gcp/gcs. Partial-config: the mapper only
+	// emits a field the caller actually populated so the preset's own defaults
+	// win when left unset.
+	GCPAgentEngine *struct {
+		DisplayName string `json:"displayName,omitempty"`
+	} `json:"gcp_agent_engine,omitempty"`
+
 	GCPPubSub *struct {
 		MessageRetentionDuration string `json:"messageRetentionDuration,omitempty"`
 	} `json:"gcp_pubsub,omitempty"`
@@ -646,6 +659,7 @@ func (c *Components) Normalize() {
 		c.GCPCloudKMS = nil
 		c.GCPSecretManager = nil
 		c.GCPVertexAI = nil
+		c.GCPAgentEngine = nil
 		c.GCPPubSub = nil
 		c.GCPCloudLogging = nil
 		c.GCPCloudMonitoring = nil
@@ -747,7 +761,7 @@ func (c *Config) Normalize() {
 	}
 	switch c.Cloud {
 	case "AWS":
-		// Clear every GCP sub-config (15 fields — keep in sync with the
+		// Clear every GCP sub-config (18 fields — keep in sync with the
 		// GCPConfiguration section of the Config struct).
 		c.GCPCompute = nil
 		c.GCPGKE = nil
@@ -755,6 +769,7 @@ func (c *Config) Normalize() {
 		c.GCPMemorystore = nil
 		c.GCPGCS = nil
 		c.GCPVertexAI = nil
+		c.GCPAgentEngine = nil
 		c.GCPPubSub = nil
 		c.GCPCloudLogging = nil
 		c.GCPCloudRun = nil

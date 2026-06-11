@@ -63,6 +63,9 @@ var GCPServices = map[ComponentKey][]GCPService{
 	KeyGCPCloudBuild:       {{Name: "cloudbuild.googleapis.com", Title: "Cloud Build"}},
 	KeyGCPFirestore:        {{Name: "firestore.googleapis.com", Title: "Cloud Firestore"}},
 	KeyGCPVertexAI:         {{Name: "aiplatform.googleapis.com", Title: "Vertex AI"}},
+	// Agent Engine / Reasoning Engine is the same Vertex AI plane as datasets +
+	// vector search, so it rides on aiplatform.googleapis.com (#769).
+	KeyGCPAgentEngine: {{Name: "aiplatform.googleapis.com", Title: "Vertex AI"}},
 	KeyGCPAPIGateway: {
 		{Name: "apigateway.googleapis.com", Title: "API Gateway"},
 		// API Gateway plane requires both Service Control (request

@@ -145,6 +145,7 @@ type PricingData struct {
 		GCPCloudKMS         *PricingItem       `json:"gcp_cloud_kms,omitempty"`
 		GCPSecretManager    *PricingItem       `json:"gcp_secret_manager,omitempty"`
 		GCPVertexAI         *PricingItem       `json:"gcp_vertex_ai,omitempty"`
+		GCPAgentEngine      *PricingItem       `json:"gcp_agent_engine,omitempty"`
 		GCPPubSub           *PricingItem       `json:"gcp_pubsub,omitempty"`
 		GCPCloudLogging     *PricingItem       `json:"gcp_cloud_logging,omitempty"`
 		GCPCloudMonitoring  *PricingItem       `json:"gcp_cloud_monitoring,omitempty"`
@@ -409,6 +410,7 @@ func (p *PricingData) Normalize() {
 		c.GCPCloudKMS = nil
 		c.GCPSecretManager = nil
 		c.GCPVertexAI = nil
+		c.GCPAgentEngine = nil
 		c.GCPPubSub = nil
 		c.GCPCloudLogging = nil
 		c.GCPCloudMonitoring = nil
