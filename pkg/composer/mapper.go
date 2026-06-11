@@ -869,6 +869,32 @@ func (m DefaultMapper) BuildModuleValues(
 		// single-module preview compose it is left unset; the preset defaults
 		// it to null and gates the Lambda target on a non-null arn.
 
+	case KeyAWSKendra:
+		// Partial-config: only emit a field the caller actually populated so
+		// the preset's own defaults (index_name = {project}-index, edition =
+		// DEVELOPER_EDITION, user_context_policy = ATTRIBUTE_FILTER) win when
+		// the field is left unset. edition / user_context_policy are
+		// constrained by the preset's validation, so an out-of-set value
+		// surfaces as a plan-time failure rather than a silent default —
+		// internally consistent with the variables.tf gates (validate, don't
+		// mask).
+		if cfg != nil && cfg.AWSKendra != nil {
+			k := cfg.AWSKendra
+			if strings.TrimSpace(k.IndexName) != "" {
+				vals["index_name"] = strings.TrimSpace(k.IndexName)
+			}
+			if strings.TrimSpace(k.Edition) != "" {
+				vals["edition"] = strings.TrimSpace(k.Edition)
+			}
+			if strings.TrimSpace(k.UserContextPolicy) != "" {
+				vals["user_context_policy"] = strings.TrimSpace(k.UserContextPolicy)
+			}
+		}
+		// s3_bucket_name / s3_bucket_arn are wired by DefaultWiring only when
+		// aws_s3 is also selected (Kendra has NO hard dep). For single-module
+		// preview compose they are left unset; the preset defaults them to null
+		// and gates the S3 data source on a non-null bucket name.
+
 	case KeyAWSLambda:
 		vals["runtime"] = "nodejs20.x" // Default to nodejs
 		if cfg != nil && cfg.AWSLambda != nil {

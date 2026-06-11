@@ -39,6 +39,7 @@ type Components struct {
 	AWSBedrock              *bool  `json:"aws_bedrock,omitempty"`
 	AWSBedrockAgent         *bool  `json:"aws_bedrock_agent,omitempty"`
 	AWSAgentCoreGateway     *bool  `json:"aws_agentcore_gateway,omitempty"`
+	AWSKendra               *bool  `json:"aws_kendra,omitempty"`
 	AWSSQS                  *bool  `json:"aws_sqs,omitempty"`
 	AWSMSK                  *bool  `json:"aws_msk,omitempty"`
 	AWSCloudWatchLogs       *bool  `json:"aws_cloudwatch_logs,omitempty"`
@@ -318,6 +319,16 @@ type Config struct {
 		JwtAllowedAudience []string `json:"jwtAllowedAudience,omitempty"`
 		JwtAllowedClients  []string `json:"jwtAllowedClients,omitempty"`
 	} `json:"aws_agentcore_gateway,omitempty"`
+
+	AWSKendra *struct {
+		// Edition is DEVELOPER_EDITION (cost-friendly) or ENTERPRISE_EDITION
+		// (HA). Immutable on the index; the preset validates the value.
+		Edition   string `json:"edition,omitempty"`
+		IndexName string `json:"indexName,omitempty"`
+		// UserContextPolicy controls query-time document-level access control:
+		// ATTRIBUTE_FILTER (default) or USER_TOKEN.
+		UserContextPolicy string `json:"userContextPolicy,omitempty"`
+	} `json:"aws_kendra,omitempty"`
 
 	AWSBackups *struct {
 		EC2 *struct {
@@ -692,6 +703,7 @@ func (c *Components) Normalize() {
 		c.AWSBedrock = nil
 		c.AWSBedrockAgent = nil
 		c.AWSAgentCoreGateway = nil
+		c.AWSKendra = nil
 		c.AWSSQS = nil
 		c.AWSMSK = nil
 		c.AWSCloudWatchLogs = nil
@@ -817,6 +829,7 @@ func (c *Config) Normalize() {
 		c.AWSBedrock = nil
 		c.AWSBedrockAgent = nil
 		c.AWSAgentCoreGateway = nil
+		c.AWSKendra = nil
 		c.AWSRoute53 = nil
 		c.AWSACM = nil
 		c.AWSBackups = nil

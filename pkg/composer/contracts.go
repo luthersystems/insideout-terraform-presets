@@ -57,6 +57,7 @@ const (
 	KeyAWSBedrock              ComponentKey = "aws_bedrock"
 	KeyAWSBedrockAgent         ComponentKey = "aws_bedrock_agent"
 	KeyAWSAgentCoreGateway     ComponentKey = "aws_agentcore_gateway"
+	KeyAWSKendra               ComponentKey = "aws_kendra"
 	KeyAWSSQS                  ComponentKey = "aws_sqs"
 	KeyAWSMSK                  ComponentKey = "aws_msk"
 	KeyAWSCloudWatchLogs       ComponentKey = "aws_cloudwatch_logs"
@@ -171,6 +172,13 @@ var ComposeOrder = []ComponentKey{
 	// (Lambda :~110), so the producer precedes this consumer —
 	// TestImplicitDependencies_ComposeOrderRespected enforces that.
 	KeyAWSAgentCoreGateway,
+	// Kendra (#760) is a standalone enterprise-search / RAG-retrieval index.
+	// It has NO hard ImplicitDependency — a bare index is valid; the optional
+	// S3 data source is wired conditionally by DefaultWiring only when aws_s3
+	// is also selected. aws_s3 (the only producer it can read) is positioned
+	// far earlier in this order, so the conditional wire's producer precedes
+	// this consumer.
+	KeyAWSKendra,
 	KeyAWSSageMaker,
 	KeyGCPVertexAI,
 	// App Runner (#598 row 2). Independent of EKS/ECS/Lambda compute
@@ -233,6 +241,7 @@ var ModulePath = map[ComponentKey]string{
 	KeyAWSBedrock:              "modules/bedrock",
 	KeyAWSBedrockAgent:         "modules/bedrock_agent",
 	KeyAWSAgentCoreGateway:     "modules/agentcore_gateway",
+	KeyAWSKendra:               "modules/kendra",
 	KeyAWSSQS:                  "modules/sqs",
 	KeyAWSMSK:                  "modules/msk",
 	KeyAWSCloudWatchLogs:       "modules/cloudwatchlogs",
@@ -468,6 +477,7 @@ var PresetKeyMap = map[ComponentKey]string{
 	KeyAWSBedrock:              "bedrock",
 	KeyAWSBedrockAgent:         "bedrock_agent",
 	KeyAWSAgentCoreGateway:     "agentcore_gateway",
+	KeyAWSKendra:               "kendra",
 	KeyAWSSQS:                  "sqs",
 	KeyAWSMSK:                  "msk",
 	KeyAWSCloudWatchLogs:       "cloudwatchlogs",
@@ -588,6 +598,7 @@ var AllComponentKeys = []ComponentKey{
 	KeyAWSElastiCache,
 	KeyAWSGitHubActions,
 	KeyAWSGrafana,
+	KeyAWSKendra, // aws_kendra — sorts between aws_grafana and aws_kms
 	KeyAWSKMS,
 	KeyAWSLambda,
 	KeyAWSMSK,
@@ -1134,6 +1145,19 @@ func DefaultWiring(selected map[ComponentKey]bool, k ComponentKey, comps *Compon
 		// non-null arn, so the wire is what turns the Lambda into an MCP tool.
 		wi.RawHCL["target_lambda_arn"] = lambdaRef(selected) + ".function_arn"
 		wi.Names = append(wi.Names, "target_lambda_arn")
+
+	case KeyAWSKendra:
+		// Kendra has NO hard dependency — a bare index is valid. The optional
+		// S3 data source is additive: only when aws_s3 is also selected do we
+		// wire the stack bucket in, turning the index into an S3-crawling RAG
+		// source. The preset gates the data source / access role / policy on a
+		// non-null bucket name, so the wire is what stands the connector up.
+		if hasS3 {
+			s3 := s3Ref(selected)
+			wi.RawHCL["s3_bucket_name"] = s3 + ".bucket_name"
+			wi.RawHCL["s3_bucket_arn"] = s3 + ".bucket_arn"
+			wi.Names = append(wi.Names, "s3_bucket_name", "s3_bucket_arn")
+		}
 
 	case KeyAWSBackups:
 		// Legacy sessions must Normalize before reaching DefaultWiring;

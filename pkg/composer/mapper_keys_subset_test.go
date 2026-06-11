@@ -211,6 +211,21 @@ func kitchenSinkConfig() *Config {
 		JwtAllowedAudience: []string{"insideout-agents"},
 		JwtAllowedClients:  []string{"client-abc"},
 	}
+	// AWSKendra (#760): exercises every config field — IndexName, Edition, and
+	// UserContextPolicy. Edition "ENTERPRISE_EDITION" and UserContextPolicy
+	// "ATTRIBUTE_FILTER" are internally consistent with the preset's
+	// validations so the kitchen-sink config would also pass a real plan. The
+	// mapper emits index_name / edition / user_context_policy, all of which the
+	// keys-subset gate confirms are declared aws/kendra variables.
+	cfg.AWSKendra = &struct {
+		Edition           string `json:"edition,omitempty"`
+		IndexName         string `json:"indexName,omitempty"`
+		UserContextPolicy string `json:"userContextPolicy,omitempty"`
+	}{
+		Edition:           "ENTERPRISE_EDITION",
+		IndexName:         "support-search",
+		UserContextPolicy: "ATTRIBUTE_FILTER",
+	}
 	// AWSSageMaker exercises both the #615 Studio fields and the #761
 	// inference fields so the keys-subset gate confirms every emitted tfvar
 	// (network_mode … enable_inference / model_image / model_data_url /

@@ -57,6 +57,17 @@ var metricsDeferredKeys = map[composer.ComponentKey]string{
 	// AgentCore metrics namespace stabilizes and a discovery inspector lands
 	// (mirrors the aws_bedrock_agent inspector deferral precedent).
 	composer.KeyAWSAgentCoreGateway: "[#763] AgentCore metrics immature; no observability wiring shipped (no CloudWatchMonitoring driver entry / no alarms), so ComponentMetricsMapping entry is deferred until the metrics namespace stabilizes and a discovery inspector lands",
+	// Kendra (#760). The kendra service is not registered in AWSServiceActions
+	// (no discovery inspector handler exists in the InsideOut backend), so a
+	// ComponentMetricsMapping entry pointing at a kendra (service, action)
+	// would dispatch to an unregistered service and surface "unsupported
+	// service" at runtime instead of a panel. The preset therefore ships NO
+	// observability alarm (an alarmed metric must live in the spec catalog,
+	// which in turn requires the registered service + mapping). Backfill the
+	// AWS/Kendra namespace group + a kendra discovery inspector together in a
+	// follow-up — mirrors the aws_agentcore_gateway / aws_bedrock_agent
+	// inspector-deferral precedent.
+	composer.KeyAWSKendra: "[#760] kendra service not yet registered in AWSServiceActions (no InsideOut-backend inspector handler), so no ComponentMetricsMapping / spec-catalog group / alarm is shipped; deferred until a kendra discovery inspector + AWS/Kendra namespace group land together",
 }
 
 // metricsNonComponentKeys are AllComponentKeys entries that genuinely

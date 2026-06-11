@@ -123,6 +123,7 @@ func kitchenSinkComponents() *Components {
 		AWSBedrock:              &t,
 		AWSBedrockAgent:         &t,
 		AWSAgentCoreGateway:     &t,
+		AWSKendra:               &t,
 		AWSSQS:                  &t,
 		AWSMSK:                  &t,
 		AWSCloudWatchLogs:       &t,
