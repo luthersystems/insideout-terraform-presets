@@ -38,9 +38,26 @@ variable "instance_name" {
 }
 
 variable "machine_type" {
-  description = "Machine type (e.g., e2-medium, n2-standard-2)"
+  description = "Machine type (e.g., e2-medium, n2-standard-2). To attach a GPU via guest_accelerator, use an N1 machine (e.g. n1-standard-4); A2/A3/A4/G2/G4 accelerator-optimized machines bundle their GPU with the machine type and do not take a guest_accelerator."
   type        = string
   default     = "e2-medium"
+}
+
+variable "gpu_type" {
+  description = "NVIDIA accelerator type to attach via guest_accelerator (e.g. nvidia-tesla-t4). Empty = no GPU. Only N1 machines accept attached GPUs; when set, the instance is forced to on_host_maintenance=TERMINATE because GCP rejects live migration for GPU instances. GPU types are zone-constrained and quota-gated — a deploy-time operator concern."
+  type        = string
+  default     = ""
+}
+
+variable "gpu_count" {
+  description = "Number of GPUs of gpu_type to attach. Ignored unless gpu_type is set."
+  type        = number
+  default     = 0
+
+  validation {
+    condition     = var.gpu_count >= 0
+    error_message = "gpu_count must be >= 0."
+  }
 }
 
 variable "network_self_link" {

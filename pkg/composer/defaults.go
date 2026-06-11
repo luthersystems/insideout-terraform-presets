@@ -197,6 +197,7 @@ func (c *Client) ComputePresetDefaults(cfg Config, comps *Components, selected [
 	// instance type the mapper will actually deploy. Only fills when the user's
 	// own cfg left the instance type blank — an explicit pick is preserved.
 	applyGPUInstanceTypeDefault(&cfg, &out)
+	applyGCPGPUDefaults(&cfg, &out)
 
 	return out, nil
 }
@@ -225,6 +226,41 @@ func applyGPUInstanceTypeDefault(cfg, out *Config) {
 			reflect.ValueOf(&out.AWSEKS).Elem().Set(v)
 		}
 		out.AWSEKS.InstanceType = defaultGPUInstanceType
+	}
+}
+
+// applyGCPGPUDefaults backfills the GCP GPU overlay so the pricing-facing Config
+// is self-consistent when a caller signalled GPU intent with a partial spec
+// (#767): supplying only GPUType leaves GPUCount blank, and supplying only
+// GPUCount leaves GPUType blank. The mapper fills the same blanks at compose
+// time (defaultGCPAccelerator / defaultGCPGPUCount); mirroring it here keeps the
+// overlay Config in sync with what actually deploys. Only fills when the user's
+// cfg signalled a GPU and left the paired field blank — explicit picks are
+// preserved (the overlay is merged zero-only downstream).
+func applyGCPGPUDefaults(cfg, out *Config) {
+	if cfg.GCPCompute != nil && (cfg.GCPCompute.GPUType != "" || cfg.GCPCompute.GPUCount > 0) {
+		if out.GCPCompute == nil {
+			v := reflect.New(reflect.TypeOf(out.GCPCompute).Elem())
+			reflect.ValueOf(&out.GCPCompute).Elem().Set(v)
+		}
+		if out.GCPCompute.GPUType == "" {
+			out.GCPCompute.GPUType = defaultGCPAccelerator
+		}
+		if out.GCPCompute.GPUCount == 0 {
+			out.GCPCompute.GPUCount = defaultGCPGPUCount
+		}
+	}
+	if cfg.GCPGKE != nil && (cfg.GCPGKE.GPUType != "" || cfg.GCPGKE.GPUCount > 0) {
+		if out.GCPGKE == nil {
+			v := reflect.New(reflect.TypeOf(out.GCPGKE).Elem())
+			reflect.ValueOf(&out.GCPGKE).Elem().Set(v)
+		}
+		if out.GCPGKE.GPUType == "" {
+			out.GCPGKE.GPUType = defaultGCPAccelerator
+		}
+		if out.GCPGKE.GPUCount == 0 {
+			out.GCPGKE.GPUCount = defaultGCPGPUCount
+		}
 	}
 }
 

@@ -140,9 +140,37 @@ variable "max_node_count" {
 }
 
 variable "machine_type" {
-  description = "Machine type for nodes"
+  description = "Machine type for nodes. To attach a GPU via the node pool accelerator config, use an N1 machine (e.g. n1-standard-4); A2/A3/A4/G2/G4 accelerator-optimized machines bundle their GPU with the machine type and do not take a separate accelerator."
   type        = string
   default     = "e2-standard-4"
+}
+
+variable "gpu_type" {
+  description = "NVIDIA accelerator type to attach to the node pool (e.g. nvidia-tesla-t4). Empty = no GPU. Only N1 node machines accept attached accelerators. When set, GKE auto-installs the NVIDIA driver (gpu_driver_version=DEFAULT) — no in-cluster device-plugin work needed, unlike EKS. GPU types are zone-constrained and quota-gated — a deploy-time operator concern."
+  type        = string
+  default     = ""
+}
+
+variable "gpu_count" {
+  description = "Number of GPUs of gpu_type per node. Ignored unless gpu_type is set."
+  type        = number
+  default     = 0
+
+  validation {
+    condition     = var.gpu_count >= 0
+    error_message = "gpu_count must be >= 0."
+  }
+}
+
+variable "gpu_driver_version" {
+  description = "GKE GPU driver auto-install version: DEFAULT (driver for the node GKE version), LATEST, or INSTALLATION_DISABLED. Applied only when gpu_type is set."
+  type        = string
+  default     = "DEFAULT"
+
+  validation {
+    condition     = contains(["DEFAULT", "LATEST", "INSTALLATION_DISABLED"], var.gpu_driver_version)
+    error_message = "gpu_driver_version must be one of: DEFAULT, LATEST, INSTALLATION_DISABLED."
+  }
 }
 
 variable "disk_size_gb" {
