@@ -515,6 +515,91 @@ func TestValidateProvenanceConflicts_GCPTagFromTypedAttrs(t *testing.T) {
 	assert.Equal(t, "io-other", issues[0].Value)
 }
 
+// TestValidateProvenanceConflicts_SameSessionDifferentProjectOK proves the
+// same-session self-claim fix (reliable#2068): the project-id namespace
+// differs between import legs (the mars reconcile leg stamps the Oracle
+// deployment UUID; the import_apply leg historically passed a session-derived
+// "io-<suffix>" name or an AWS account id), so a session's OWN claim arrives
+// with a project string that does not equal opts.ImportProjectID and was
+// wrongly rejected as foreign. The namespace-stable self identity is the
+// import SESSION — the resource also carries the session tag, and every
+// compose caller passes opts.ImportSessionID. When the observed session
+// matches opts.ImportSessionID, the claim is self and must not conflict.
+func TestValidateProvenanceConflicts_SameSessionDifferentProjectOK(t *testing.T) {
+	t.Parallel()
+	irs := []imported.ImportedResource{
+		{
+			Identity: imported.ResourceIdentity{Cloud: "aws", Type: "aws_dynamodb_table", Address: "aws_dynamodb_table.t", ImportID: "t"},
+			Tier:     imported.TierImportedFlat,
+			Attributes: map[string]any{
+				"name": "t",
+				"tags": map[string]any{
+					// Stamped by the reconcile leg under the Oracle deployment
+					// UUID — a different namespace from this apply leg's project.
+					"InsideOutImportProject": "deploy-uuid-from-reconcile-leg",
+					"InsideOutImportSession": "sess_v2_abc",
+				},
+			},
+		},
+	}
+	issues := ValidateProvenanceConflicts("aws", irs, ProvenanceOpts{
+		ImportProjectID: "io-1",
+		ImportSessionID: "sess_v2_abc",
+	})
+	assert.Empty(t, issues, "a claim from the SAME import session is self — no conflict even when the project string differs")
+}
+
+// TestValidateProvenanceConflicts_DifferentSessionDifferentProjectFails proves
+// the guard is not weakened: a claim that is foreign on BOTH axes (different
+// project AND different session) still raises the conflict.
+func TestValidateProvenanceConflicts_DifferentSessionDifferentProjectFails(t *testing.T) {
+	t.Parallel()
+	irs := []imported.ImportedResource{
+		{
+			Identity: imported.ResourceIdentity{Cloud: "aws", Type: "aws_dynamodb_table", Address: "aws_dynamodb_table.t", ImportID: "t"},
+			Tier:     imported.TierImportedFlat,
+			Attributes: map[string]any{
+				"name": "t",
+				"tags": map[string]any{
+					"InsideOutImportProject": "io-other",
+					"InsideOutImportSession": "sess_v2_someone_else",
+				},
+			},
+		},
+	}
+	issues := ValidateProvenanceConflicts("aws", irs, ProvenanceOpts{
+		ImportProjectID: "io-1",
+		ImportSessionID: "sess_v2_abc",
+	})
+	require.Len(t, issues, 1)
+	assert.Equal(t, "imported_resource_provenance_conflict", issues[0].Code)
+	assert.Equal(t, "io-other", issues[0].Value)
+}
+
+// TestValidateProvenanceConflicts_SameProjectNoSessionOK proves the existing
+// project-id match path is intact: a resource claimed under the same project
+// with NO session tag is still allowed (the session allowance is additive).
+func TestValidateProvenanceConflicts_SameProjectNoSessionOK(t *testing.T) {
+	t.Parallel()
+	irs := []imported.ImportedResource{
+		{
+			Identity: imported.ResourceIdentity{Cloud: "aws", Type: "aws_dynamodb_table", Address: "aws_dynamodb_table.t", ImportID: "t"},
+			Tier:     imported.TierImportedFlat,
+			Attributes: map[string]any{
+				"name": "t",
+				"tags": map[string]any{
+					"InsideOutImportProject": "io-1",
+				},
+			},
+		},
+	}
+	issues := ValidateProvenanceConflicts("aws", irs, ProvenanceOpts{
+		ImportProjectID: "io-1",
+		ImportSessionID: "sess_v2_abc",
+	})
+	assert.Empty(t, issues, "matching project with no session tag must remain allowed")
+}
+
 func issueCodes(issues []ValidationIssue) []string {
 	out := make([]string, 0, len(issues))
 	for _, i := range issues {

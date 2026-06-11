@@ -701,7 +701,7 @@ func (c *Client) composeStackImpl(opts ComposeStackOpts) (*ComposeStackResult, e
 	emitReadiness := ValidateImportedEmitReadiness(cloud, opts.Imported)
 	issues = append(issues, emitReadiness...)
 	issues = append(issues, ValidateImportedResourceAuthorization(cloud, opts.Imported)...)
-	provOpts := ProvenanceOpts{ImportProjectID: opts.ImportProjectID}
+	provOpts := ProvenanceOpts{ImportProjectID: opts.ImportProjectID, ImportSessionID: opts.ImportSessionID}
 	issues = append(issues, ValidateProvenanceConflicts(cloud, opts.Imported, provOpts)...)
 	emitOpts := EmitImportedOpts{
 		ImportProjectID: opts.ImportProjectID,
