@@ -273,7 +273,14 @@ locals {
   # bucket_arn from the aws_s3 module, but a single-module caller may pass only
   # the name — derive a partition-correct ARN so the access policy is still
   # least-privilege rather than wildcarded.
-  s3_bucket_arn = var.s3_bucket_arn != null ? var.s3_bucket_arn : "arn:${data.aws_partition.current.partition}:s3:::${var.s3_bucket_name}"
+  # Guard the name interpolation: var.s3_bucket_name is null in the bare-index
+  # case, and Terraform evaluates this local eagerly at plan time even though
+  # only count-gated (has_s3_source) resources consume it — interpolating a null
+  # into the template would raise "Invalid template interpolation value". Resolve
+  # to null when neither an explicit ARN nor a bucket name is present.
+  s3_bucket_arn = var.s3_bucket_arn != null ? var.s3_bucket_arn : (
+    var.s3_bucket_name != null ? "arn:${data.aws_partition.current.partition}:s3:::${var.s3_bucket_name}" : null
+  )
 }
 
 # IAM propagation for the data-source role before the connector validates it.
