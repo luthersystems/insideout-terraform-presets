@@ -66,6 +66,14 @@ type Options struct {
 	Discoverer            Discoverer
 	ClosureDiscoverer     ClosureDiscoverer
 
+	// Parallelism overrides the `-parallelism=<n>` flag passed to the
+	// engine's final `terraform plan` (the authoritative combined-stack plan
+	// over the full imported set) AND propagated to the genconfig readback /
+	// driftfix passes this engine drives, so the whole reverse-import path
+	// runs at one consistent concurrency. 0 (the zero value) uses
+	// DefaultParallelism. See that constant for the throttle-safety rationale.
+	Parallelism int
+
 	// Stdout receives continuous human-readable progress as Run works
 	// through its phases — provider readback, genconfig, driftfix,
 	// dep-chase, and the final terraform init/validate/plan — plus the
@@ -96,12 +104,38 @@ type deps struct {
 	tf           terraformRunner
 }
 
-func defaultDeps(terraformBinary string, stdout io.Writer) deps {
+// DefaultParallelism is the `-parallelism=<n>` value the engine's final
+// combined-stack `terraform plan` (and the genconfig/driftfix passes it
+// drives) runs at when Options.Parallelism is unset (<= 0). It mirrors
+// genconfig.DefaultGenconfigParallelism (25) so the whole reverse-import
+// readback path — genconfig generate-config-out, driftfix re-plans, and the
+// final authoritative plan — refreshes resources at one consistent,
+// throttle-tuned concurrency rather than terraform's default of 10.
+//
+// Throttle safety: every one of these passes is read-only (plan/refresh, no
+// apply), so raising parallelism only issues more concurrent AWS Describe/Get
+// reads with no mutation risk. The raised concurrency MUST degrade to backoff
+// rather than ThrottlingException failures: the emitted provider config pairs
+// it with retry_mode = "adaptive" + max_retries = 25 (providers.go /
+// genconfig emit.go), so the AWS SDK's adaptive client-side rate limiter
+// paces the reads back into a token-bucket stream under throttle pressure.
+const DefaultParallelism = genconfig.DefaultGenconfigParallelism
+
+// parallelismOrDefault returns Options.Parallelism, falling back to
+// DefaultParallelism for the unset (<= 0) zero value.
+func (o Options) parallelismOrDefault() int {
+	if o.Parallelism <= 0 {
+		return DefaultParallelism
+	}
+	return o.Parallelism
+}
+
+func defaultDeps(terraformBinary string, parallelism int, stdout io.Writer) deps {
 	return deps{
 		runGenconfig: genconfig.Run,
 		runDriftfix:  driftfix.Run,
 		runDepChase:  depchase.Run,
-		tf:           execTerraformRunner{binary: terraformBinary, stdout: stdout},
+		tf:           execTerraformRunner{binary: terraformBinary, parallelism: parallelism, stdout: stdout},
 	}
 }
 
@@ -143,7 +177,7 @@ func (o Options) withDefaults() Options {
 		o.deps.runDriftfix == nil ||
 		o.deps.runDepChase == nil ||
 		o.deps.tf == nil {
-		o.deps = defaultDeps(o.TerraformBinary, o.Stdout)
+		o.deps = defaultDeps(o.TerraformBinary, o.parallelismOrDefault(), o.Stdout)
 	}
 	return o
 }

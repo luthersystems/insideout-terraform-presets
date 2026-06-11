@@ -95,6 +95,7 @@ func Run(ctx context.Context, req job.Request, opts Options) (job.Result, error)
 		AWSEndpointURL: opts.AWSEndpointURL,
 		AWSRoleARN:     awsAuth.RoleARN,
 		AWSExternalID:  awsAuth.ExternalID,
+		Parallelism:    opts.parallelismOrDefault(),
 		Stdout:         opts.Stdout,
 	}
 
@@ -124,7 +125,7 @@ func Run(ctx context.Context, req job.Request, opts Options) (job.Result, error)
 	if !opts.SkipDriftFix {
 		opts.progressf("reverse-import: running driftfix…\n")
 		if err := opts.runPhase("driftfix", func() error {
-			_, driftErr := opts.deps.runDriftfix(ctx, driftfix.Options{Workdir: workdir, Stdout: opts.Stdout})
+			_, driftErr := opts.deps.runDriftfix(ctx, driftfix.Options{Workdir: workdir, Parallelism: opts.parallelismOrDefault(), Stdout: opts.Stdout})
 			return driftErr
 		}); err != nil {
 			return result, fmt.Errorf("driftfix: %w", err)
@@ -143,7 +144,7 @@ func Run(ctx context.Context, req job.Request, opts Options) (job.Result, error)
 				return &depchase.GenconfigResult{GeneratedPath: r.GeneratedPath, Resources: r.Resources}, nil
 			},
 			RunDriftfix: func(ictx context.Context) (*depchase.DriftfixResult, error) {
-				r, err := opts.deps.runDriftfix(ictx, driftfix.Options{Workdir: workdir, Stdout: opts.Stdout})
+				r, err := opts.deps.runDriftfix(ictx, driftfix.Options{Workdir: workdir, Parallelism: opts.parallelismOrDefault(), Stdout: opts.Stdout})
 				if err != nil {
 					return nil, err
 				}

@@ -105,6 +105,7 @@ func appendAWSImportedProvider(body *hclwrite.Body, alias, region string, opts i
 	prov := body.AppendNewBlock("provider", []string{"aws"})
 	prov.Body().SetAttributeValue("alias", cty.StringVal(alias))
 	prov.Body().SetAttributeValue("region", cty.StringVal(region))
+	appendAWSRetryTuning(prov.Body())
 	if opts.AWSEndpointURL != "" {
 		prov.Body().SetAttributeValue("access_key", cty.StringVal("test"))
 		prov.Body().SetAttributeValue("secret_key", cty.StringVal("test"))
@@ -118,6 +119,26 @@ func appendAWSImportedProvider(body *hclwrite.Body, alias, region string, opts i
 		}
 	}
 	appendAWSAssumeRole(prov.Body(), opts.AWSAuth)
+}
+
+// awsProviderMaxRetries mirrors genconfig.awsProviderMaxRetries (the AWS
+// provider's documented default of 25). Emitted explicitly on the final
+// combined-stack provider blocks so the raised final-plan -parallelism keeps
+// at least the default retry budget and degrades to backoff rather than
+// ThrottlingException failures. Kept as a local copy (not imported) to match
+// the existing appendAWSAssumeRole duplication between this package and
+// genconfig — the two emitters intentionally stay independent.
+const awsProviderMaxRetries = 25
+
+// appendAWSRetryTuning emits `retry_mode = "adaptive"` and `max_retries` onto
+// a final-plan AWS provider block so the raised plan/refresh -parallelism
+// degrades to throttle backoff instead of failures (luthersystems/ui-core
+// #420). Mirrors genconfig.appendAWSRetryTuning; see it for the adaptive-mode
+// rationale. Both attributes are top-level arguments of the pinned
+// hashicorp/aws ~> 6.0 provider.
+func appendAWSRetryTuning(body *hclwrite.Body) {
+	body.SetAttributeValue("retry_mode", cty.StringVal("adaptive"))
+	body.SetAttributeValue("max_retries", cty.NumberIntVal(awsProviderMaxRetries))
 }
 
 func appendAWSAssumeRole(body *hclwrite.Body, auth AWSProviderAuth) {

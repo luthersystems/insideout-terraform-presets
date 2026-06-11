@@ -59,10 +59,40 @@ func planStderr(err error) string {
 
 type execTerraformRunner struct {
 	binary string
+	// parallelism is the `-parallelism=<n>` value the final combined-stack
+	// plan runs at. 0 falls back to DefaultParallelism so a zero-value
+	// runner (and any test double that constructs one directly) keeps a
+	// sane, throttle-tuned concurrency rather than terraform's default 10.
+	parallelism int
 	// stdout receives the live stdout of the streaming commands (init,
 	// plan) and the stderr of every command. nil falls back to os.Stdout
 	// / os.Stderr so a zero-value runner keeps the historical behavior.
 	stdout io.Writer
+}
+
+// planParallelism resolves the runner's configured parallelism, defaulting a
+// zero/unset value to DefaultParallelism.
+func (r execTerraformRunner) planParallelism() int {
+	if r.parallelism <= 0 {
+		return DefaultParallelism
+	}
+	return r.parallelism
+}
+
+// planArgs is the pure builder for the final `terraform plan` argv. Factored
+// out so a unit test can assert the engine's authoritative plan always carries
+// `-parallelism=<n>` without shelling out to a real terraform binary
+// (luthersystems/ui-core#420). -detailed-exitcode is required so an
+// import-only diff (exit 2) is not mistaken for a failure (see Plan).
+func planArgs(planPath string, parallelism int) []string {
+	return []string{
+		"plan",
+		"-input=false",
+		"-no-color",
+		"-detailed-exitcode",
+		fmt.Sprintf("-parallelism=%d", parallelism),
+		"-out=" + planPath,
+	}
 }
 
 func (r execTerraformRunner) bin() string {
@@ -107,7 +137,7 @@ func (r execTerraformRunner) Plan(ctx context.Context, dir, planPath string) err
 	// sink still receives the same bytes (the import wizard's log console
 	// keeps streaming); the buffer is only read on error.
 	var captured bytes.Buffer
-	cmd := exec.CommandContext(ctx, r.bin(), "plan", "-input=false", "-no-color", "-detailed-exitcode", "-out="+planPath)
+	cmd := exec.CommandContext(ctx, r.bin(), planArgs(planPath, r.planParallelism())...)
 	cmd.Dir = dir
 	cmd.Stdout = r.outW()
 	cmd.Stderr = io.MultiWriter(r.outW(), &captured)

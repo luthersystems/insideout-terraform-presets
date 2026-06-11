@@ -54,7 +54,7 @@ import (
 // a parallel one without unbounded fan-out hammering the AWS API rate
 // limits.
 //
-// Pinned to 4 to mirror awsdiscover.defaultDiscoverTypesConcurrency,
+// Pinned to 4 to mirror awsdiscover.DiscoverTypesConcurrency,
 // which was lowered from 8 to 4 in #632 after 8 simultaneous t=0
 // kickoffs tripped CloudControl's per-account rate budget with a
 // ThrottlingException.

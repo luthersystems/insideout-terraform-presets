@@ -83,6 +83,65 @@ exit 7
 	}
 }
 
+// TestPlanArgs is the mutation-resistant guard for the final-plan parallelism
+// (luthersystems/ui-core#420): planArgs MUST carry -parallelism=<n> and keep
+// -detailed-exitcode (so an import-only diff isn't read as a failure).
+func TestPlanArgs(t *testing.T) {
+	t.Parallel()
+	args := planArgs("/tmp/tfplan.bin", 25)
+	joined := strings.Join(args, " ")
+	for _, want := range []string{"plan", "-detailed-exitcode", "-parallelism=25", "-out=/tmp/tfplan.bin"} {
+		if !strings.Contains(joined, want) {
+			t.Fatalf("planArgs missing %q: %v", want, args)
+		}
+	}
+}
+
+// TestPlanParallelismDefaults pins that a zero/unset runner parallelism falls
+// back to DefaultParallelism (25) so the engine's final plan never silently
+// drops back to terraform's default of 10.
+func TestPlanParallelismDefaults(t *testing.T) {
+	t.Parallel()
+	if got := (execTerraformRunner{}).planParallelism(); got != DefaultParallelism {
+		t.Fatalf("zero-value runner planParallelism = %d, want %d", got, DefaultParallelism)
+	}
+	if got := (execTerraformRunner{parallelism: -2}).planParallelism(); got != DefaultParallelism {
+		t.Fatalf("negative runner planParallelism = %d, want %d", got, DefaultParallelism)
+	}
+	if got := (execTerraformRunner{parallelism: 33}).planParallelism(); got != 33 {
+		t.Fatalf("explicit runner planParallelism = %d, want 33", got)
+	}
+	if DefaultParallelism != 25 {
+		t.Fatalf("DefaultParallelism = %d, want 25", DefaultParallelism)
+	}
+}
+
+// TestExecTerraformRunnerPlanPassesParallelism drives the real Plan path
+// against a fake terraform that records its argv, proving the engine's final
+// plan actually shells out with -parallelism. End-to-end complement to
+// TestPlanArgs.
+func TestExecTerraformRunnerPlanPassesParallelism(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	argsFile := filepath.Join(dir, "args.txt")
+	bin := writeFakeTerraform(t, dir, `#!/bin/sh
+echo "$@" > `+argsFile+`
+exit 0
+`)
+	planPath := filepath.Join(dir, "tfplan.bin")
+	err := execTerraformRunner{binary: bin, parallelism: 25}.Plan(context.Background(), dir, planPath)
+	if err != nil {
+		t.Fatalf("Plan: %v", err)
+	}
+	recorded, readErr := os.ReadFile(argsFile)
+	if readErr != nil {
+		t.Fatalf("read recorded args: %v", readErr)
+	}
+	if !strings.Contains(string(recorded), "-parallelism=25") {
+		t.Fatalf("terraform plan argv missing -parallelism=25: %q", string(recorded))
+	}
+}
+
 func writeFakeTerraform(t *testing.T, dir, script string) string {
 	t.Helper()
 	path := filepath.Join(dir, "terraform")

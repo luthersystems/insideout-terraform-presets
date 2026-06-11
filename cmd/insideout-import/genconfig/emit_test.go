@@ -129,10 +129,24 @@ func TestEmitProviders_HappyPath(t *testing.T) {
 		"required_providers",
 		`source  = "hashicorp/aws"`,
 		`version = "~> 6.0"`,
-		`region = "us-west-2"`,
 	} {
 		if !strings.Contains(got, want) {
 			t.Errorf("providers.tf missing %q\n--- got ---\n%s", want, got)
+		}
+	}
+	// hclwrite aligns the `=` columns across the provider block, so match the
+	// region + retry-tuning attrs value-anchored (the retry attrs widen the
+	// gutter). retry_mode = "adaptive" + max_retries are the throttle-safety
+	// pairing for the raised genconfig readback parallelism
+	// (luthersystems/ui-core#420): without them the higher concurrency would
+	// trade wall-clock for ThrottlingException failures.
+	for _, pat := range []string{
+		`region\s*=\s*"us-west-2"`,
+		`retry_mode\s*=\s*"adaptive"`,
+		`max_retries\s*=\s*25`,
+	} {
+		if !regexp.MustCompile(pat).MatchString(got) {
+			t.Errorf("providers.tf missing pattern %q\n--- got ---\n%s", pat, got)
 		}
 	}
 	// LocalStack-only attrs must NOT appear when endpointURL is "".

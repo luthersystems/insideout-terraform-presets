@@ -62,6 +62,17 @@ variable "subnet_ids" {
   }
 }
 
+variable "home_efs_retention" {
+  description = "What to do with the Studio domain's auto-provisioned home EFS filesystem when the domain is destroyed. `Delete` (default) removes the EFS so its mount-target ENIs release and the enclosing VPC can be torn down cleanly — without this, AWS's default `Retain` orphans the EFS and its ENIs, which wedge VPC subnet deletion for ~20min and then fail. Set `Retain` to keep Studio home directories across a domain replace (you must then clean the EFS out-of-band)."
+  type        = string
+  default     = "Delete"
+
+  validation {
+    condition     = contains(["Delete", "Retain"], var.home_efs_retention)
+    error_message = "home_efs_retention must be one of: Delete, Retain."
+  }
+}
+
 variable "network_mode" {
   description = "SageMaker Studio app network access type. `PublicInternetOnly` (default) keeps egress through AWS-managed networking; `VpcOnly` forces all egress through the customer VPC (requires NAT or VPC endpoints for the SageMaker control plane)."
   type        = string
@@ -109,6 +120,72 @@ variable "studio_users" {
       can(regex("^[a-zA-Z0-9](-*[a-zA-Z0-9])*$", u)) && length(u) <= 63
     ])
     error_message = "Every studio_users entry must be 1-63 chars, alphanumeric or hyphen, not starting/ending with a hyphen (SageMaker user-profile naming rule)."
+  }
+}
+
+# -----------------------------------------------------------------------------
+# Real-time inference endpoint (#761) — gated on enable_inference. When off,
+# the preset stays Studio-only (the #615 behavior); when on, it adds a
+# model + endpoint-configuration + endpoint trio hosting a servable container.
+# -----------------------------------------------------------------------------
+
+variable "enable_inference" {
+  description = "When true, provision a real-time inference slice (aws_sagemaker_model + aws_sagemaker_endpoint_configuration + aws_sagemaker_endpoint) hosting model_image. When false (default) the preset stays Studio-only and none of the inference resources are created. The Studio domain + execution role are always provisioned regardless."
+  type        = bool
+  default     = false
+}
+
+variable "model_image" {
+  description = "ECR / SageMaker container image URI for the model's primary container (e.g. a Deep Learning Container or an LLM serving image). Required (non-empty) when enable_inference is true — SageMaker cannot host a model without a servable container. Ignored when enable_inference is false."
+  type        = string
+  default     = ""
+}
+
+variable "model_data_url" {
+  description = "Optional S3 URI to the model artifact tarball (model.tar.gz) loaded into the container at startup. Leave empty for images that bundle their own weights (many LLM serving images pull from the hub at runtime). Only consumed when enable_inference is true."
+  type        = string
+  default     = ""
+
+  validation {
+    # Require a bucket AND a key, not a bare `s3://` (which would derive an
+    # empty bucket ARN and 403 the model-data read at apply). Bucket segment:
+    # 3-63 chars, lowercase alphanumeric / hyphen / dot, start+end
+    # alphanumeric (S3 naming). Key segment: at least one non-slash char so
+    # `s3://bucket/` (bucket but no object) is also rejected.
+    condition     = var.model_data_url == "" ? true : can(regex("^s3://[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]/.+", var.model_data_url))
+    error_message = "model_data_url must be a full s3://<bucket>/<key> URI pointing at the model artifact (or empty to let the container supply its own weights). A bare s3:// or bucket-only s3://<bucket>/ is rejected."
+  }
+}
+
+variable "model_environment" {
+  description = "Environment variables injected into the model's primary container (a map of name → value). Threads straight through to the SageMaker `primary_container.environment`. Use it to configure the serving image — e.g. an AWS HuggingFace DLC needs HF_MODEL_ID + HF_TASK to know which hub model to pull and how to serve it; an LMI/TGI image takes its own model/engine vars here. Empty (default) leaves the container's own defaults in place. Only consumed when enable_inference is true. Not marked sensitive — these are serving knobs, not secrets; pass real secrets via a secrets manager, not container env."
+  type        = map(string)
+  default     = {}
+  sensitive   = false
+}
+
+variable "inference_iam_propagation_delay" {
+  description = "How long to wait after writing the endpoint's execution-role grants before creating the endpoint, to let IAM propagate to SageMaker's control plane. Without this delay CreateEndpoint fires before the role is validated, and the provider's create-retry then collides on `Cannot create already existing endpoint` (observed on a real-account run). A Go duration string (e.g. `30s`, `1m`). Only consumed when enable_inference is true."
+  type        = string
+  default     = "30s"
+
+  validation {
+    condition     = can(regex("^[0-9]+(s|m|h)$", var.inference_iam_propagation_delay))
+    error_message = "inference_iam_propagation_delay must be a Go duration like 30s, 1m, or 1h."
+  }
+}
+
+variable "endpoint_instance_type" {
+  description = "Instance type for the real-time endpoint's production variant (e.g. ml.m5.xlarge, ml.g5.xlarge for GPU LLM serving). Must be an ml.* family — SageMaker hosting only accepts ml-prefixed instance types. Only consumed when enable_inference is true."
+  type        = string
+  default     = "ml.m5.xlarge"
+
+  validation {
+    # SageMaker hosting instance types are always ml.<family>.<size>. A bare
+    # EC2 type (m5.xlarge) or a typo is rejected at plan so callers don't
+    # discover it only when the endpoint create fails at apply.
+    condition     = can(regex("^ml\\.[a-z0-9]+\\.[a-z0-9]+$", var.endpoint_instance_type))
+    error_message = "endpoint_instance_type must be a SageMaker ml.* hosting instance type (e.g. ml.m5.xlarge, ml.g5.xlarge)."
   }
 }
 
