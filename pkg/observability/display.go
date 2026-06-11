@@ -127,6 +127,8 @@ func ComponentDisplayName(key composer.ComponentKey) string {
 		return "AWS Bedrock Agent"
 	case composer.KeyAWSAgentCoreGateway:
 		return "AWS AgentCore Gateway"
+	case composer.KeyAWSKendra:
+		return "AWS Kendra"
 	case composer.KeyAWSBastion:
 		return "AWS Bastion"
 	case composer.KeyAWSGrafana:

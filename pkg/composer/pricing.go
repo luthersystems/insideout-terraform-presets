@@ -115,6 +115,7 @@ type PricingData struct {
 		AWSBedrock              *PricingItem    `json:"aws_bedrock,omitempty"`
 		AWSBedrockAgent         *PricingItem    `json:"aws_bedrock_agent,omitempty"`
 		AWSAgentCoreGateway     *PricingItem    `json:"aws_agentcore_gateway,omitempty"`
+		AWSKendra               *PricingItem    `json:"aws_kendra,omitempty"`
 		AWSSageMaker            *PricingItem    `json:"aws_sagemaker,omitempty"`
 		AWSSQS                  *PricingItem    `json:"aws_sqs,omitempty"`
 		AWSMSK                  *PricingItem    `json:"aws_msk,omitempty"`
@@ -230,6 +231,7 @@ func (p *PricingData) Normalize() {
 		c.AWSBedrock = nil
 		c.AWSBedrockAgent = nil
 		c.AWSAgentCoreGateway = nil
+		c.AWSKendra = nil
 		c.AWSSageMaker = nil
 		c.AWSSQS = nil
 		c.AWSMSK = nil
