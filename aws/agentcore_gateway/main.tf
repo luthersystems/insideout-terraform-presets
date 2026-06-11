@@ -50,6 +50,7 @@ module "name" {
 
 data "aws_caller_identity" "current" {}
 data "aws_region" "current" {}
+data "aws_partition" "current" {}
 
 locals {
   gateway_name = var.gateway_name == null ? "${var.project}-gateway" : var.gateway_name
@@ -85,7 +86,12 @@ resource "aws_iam_role" "gateway" {
             "aws:SourceAccount" = data.aws_caller_identity.current.account_id
           }
           ArnLike = {
-            "aws:SourceArn" = "arn:aws:bedrock-agentcore:${data.aws_region.current.region}:${data.aws_caller_identity.current.account_id}:gateway/*"
+            # Derive the partition from data.aws_partition so the SourceArn
+            # condition matches in GovCloud (aws-us-gov) / China (aws-cn), not
+            # just commercial aws — target_lambda_arn already admits those
+            # partitions, so the trust guard must too or the gateway role is
+            # unassumable there.
+            "aws:SourceArn" = "arn:${data.aws_partition.current.partition}:bedrock-agentcore:${data.aws_region.current.region}:${data.aws_caller_identity.current.account_id}:gateway/*"
           }
         }
       }

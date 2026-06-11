@@ -310,6 +310,13 @@ type Config struct {
 	AWSAgentCoreGateway *struct {
 		GatewayName  string `json:"gatewayName,omitempty"`
 		ProtocolType string `json:"protocolType,omitempty"`
+		// Inbound-auth surface: a composed deploy MUST be able to point the
+		// gateway's JWT authorizer at a real OIDC issuer (Cognito/Auth0/…) —
+		// the preset's default discovery_url is a placeholder. AllowedAudience
+		// and AllowedClients narrow which tokens the gateway accepts.
+		JwtDiscoveryURL    string   `json:"jwtDiscoveryUrl,omitempty"`
+		JwtAllowedAudience []string `json:"jwtAllowedAudience,omitempty"`
+		JwtAllowedClients  []string `json:"jwtAllowedClients,omitempty"`
 	} `json:"aws_agentcore_gateway,omitempty"`
 
 	AWSBackups *struct {

@@ -72,3 +72,64 @@ func TestComposeStack_AgentCoreGateway_ComposesAfterLambda(t *testing.T) {
 	require.Less(t, lambdaPos, gatewayPos,
 		"aws_lambda must be declared before aws_agentcore_gateway so the function_arn output is available to wire")
 }
+
+// TestComposeStack_AgentCoreGateway_JWTConfigFlows verifies a composed deploy
+// can point the gateway's JWT authorizer at a REAL OIDC issuer through Config
+// — the preset's jwt_discovery_url default is a placeholder, so without a
+// composer surface a composed gateway would ship unauthenticatable. This is
+// the end-to-end proof that Config.AWSAgentCoreGateway.JwtDiscoveryURL (and the
+// allowed-audience/clients allowlists) reach the emitted module block.
+func TestComposeStack_AgentCoreGateway_JWTConfigFlows(t *testing.T) {
+	t.Parallel()
+
+	discovery := "https://auth.example.com/.well-known/openid-configuration"
+
+	cfg := &Config{}
+	cfg.AWSAgentCoreGateway = &struct {
+		GatewayName        string   `json:"gatewayName,omitempty"`
+		ProtocolType       string   `json:"protocolType,omitempty"`
+		JwtDiscoveryURL    string   `json:"jwtDiscoveryUrl,omitempty"`
+		JwtAllowedAudience []string `json:"jwtAllowedAudience,omitempty"`
+		JwtAllowedClients  []string `json:"jwtAllowedClients,omitempty"`
+	}{
+		JwtDiscoveryURL:    discovery,
+		JwtAllowedAudience: []string{"insideout-agents"},
+		JwtAllowedClients:  []string{"client-abc"},
+	}
+
+	c := newTestClient()
+	out, err := c.ComposeStack(ComposeStackOpts{
+		Cloud:        "aws",
+		SelectedKeys: []ComponentKey{KeyAWSAgentCoreGateway},
+		Comps:        &Components{AWSAgentCoreGateway: ptrBool(true)},
+		Cfg:          cfg,
+		Project:      "demo",
+		Region:       "us-east-1",
+	})
+	require.NoError(t, err)
+
+	// The composer maps config values into a per-component auto.tfvars file
+	// (main.tf references them as root variables), so the literal JWT config
+	// lands there — assert the end-to-end flow against the tfvars output.
+	tfvars := string(out["/aws_agentcore_gateway.auto.tfvars"])
+	require.NotEmpty(t, tfvars, "the gateway component must emit an auto.tfvars file")
+
+	// The real discovery URL must reach the composed stack — NOT the preset's
+	// example.com placeholder default.
+	require.Contains(t, tfvars, discovery,
+		"a composed deploy must be able to supply a real jwt_discovery_url via Config")
+	require.NotContains(t, tfvars, "https://example.com/.well-known/openid-configuration",
+		"the placeholder example.com discovery URL must not leak into a configured composed stack")
+
+	// The allowlists must reach the stack too.
+	require.Contains(t, tfvars, "insideout-agents",
+		"jwt_allowed_audience must flow from Config into the composed stack")
+	require.Contains(t, tfvars, "client-abc",
+		"jwt_allowed_clients must flow from Config into the composed stack")
+
+	// main.tf wires the gateway module's jwt_discovery_url from the mapped root
+	// variable (proving the plumbing, independent of the literal value).
+	mainTF := string(out["/main.tf"])
+	require.True(t, wiresAttr(mainTF, "jwt_discovery_url", "var.aws_agentcore_gateway_jwt_discovery_url"),
+		"the gateway module's jwt_discovery_url must be wired from the mapped root variable")
+}

@@ -190,16 +190,27 @@ func kitchenSinkConfig() *Config {
 		Instruction     string `json:"instruction,omitempty"`
 		AgentName       string `json:"agentName,omitempty"`
 	}{FoundationModel: "anthropic.claude-3-5-sonnet-20240620-v1:0", Instruction: "You are a helpful assistant that answers questions about the customer's documents.", AgentName: "support-agent"}
-	// AWSAgentCoreGateway (#763): GatewayName + ProtocolType are the only
-	// config fields; ProtocolType is internally consistent with the preset's
-	// validation (MCP is the only accepted value) so the kitchen-sink config
-	// would also pass a real plan. The mapper emits gateway_name + protocol_type,
-	// both of which the keys-subset gate confirms are declared aws/agentcore_gateway
-	// variables.
+	// AWSAgentCoreGateway (#763): exercises every config field — GatewayName,
+	// ProtocolType, and the inbound-auth surface (JwtDiscoveryURL +
+	// allowed-audience/clients allowlists). ProtocolType "MCP" and the https://
+	// discovery URL are internally consistent with the preset's validations so
+	// the kitchen-sink config would also pass a real plan. The mapper emits
+	// gateway_name / protocol_type / jwt_discovery_url / jwt_allowed_audience /
+	// jwt_allowed_clients, all of which the keys-subset gate confirms are
+	// declared aws/agentcore_gateway variables.
 	cfg.AWSAgentCoreGateway = &struct {
-		GatewayName  string `json:"gatewayName,omitempty"`
-		ProtocolType string `json:"protocolType,omitempty"`
-	}{GatewayName: "support-tools", ProtocolType: "MCP"}
+		GatewayName        string   `json:"gatewayName,omitempty"`
+		ProtocolType       string   `json:"protocolType,omitempty"`
+		JwtDiscoveryURL    string   `json:"jwtDiscoveryUrl,omitempty"`
+		JwtAllowedAudience []string `json:"jwtAllowedAudience,omitempty"`
+		JwtAllowedClients  []string `json:"jwtAllowedClients,omitempty"`
+	}{
+		GatewayName:        "support-tools",
+		ProtocolType:       "MCP",
+		JwtDiscoveryURL:    "https://auth.example.com/.well-known/openid-configuration",
+		JwtAllowedAudience: []string{"insideout-agents"},
+		JwtAllowedClients:  []string{"client-abc"},
+	}
 	// AWSSageMaker exercises both the #615 Studio fields and the #761
 	// inference fields so the keys-subset gate confirms every emitted tfvar
 	// (network_mode … enable_inference / model_image / model_data_url /

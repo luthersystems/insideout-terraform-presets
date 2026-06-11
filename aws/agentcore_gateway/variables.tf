@@ -56,7 +56,7 @@ variable "protocol_type" {
 # --- Inbound auth (custom JWT authorizer) -------------------------------------
 
 variable "jwt_discovery_url" {
-  description = "OIDC discovery URL (the issuer's /.well-known/openid-configuration) for the custom JWT authorizer that guards inbound MCP requests. Point this at the Cognito user-pool / Auth0 tenant / OIDC issuer that mints caller tokens."
+  description = "OIDC discovery URL (the issuer's /.well-known/openid-configuration) for the custom JWT authorizer that guards inbound MCP requests. Point this at the Cognito user-pool / Auth0 tenant / OIDC issuer that mints caller tokens. MUST be overridden for a real deploy — the default is a syntactically-valid placeholder so single-module validate/preview-compose works, but a gateway left on it cannot authenticate real callers. In a composed stack the mapper supplies this from Config.aws_agentcore_gateway.jwtDiscoveryUrl."
   type        = string
   default     = "https://example.com/.well-known/openid-configuration"
 
