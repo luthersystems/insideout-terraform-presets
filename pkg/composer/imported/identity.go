@@ -113,6 +113,23 @@ type ResourceIdentity struct {
 	// rely on the nil-vs-empty distinction.
 	Tags map[string]string `json:"tags,omitempty"`
 
+	// ServiceManagedBy carries the cloud-side "managed by" principal for a
+	// resource that an AWS/GCP service owns on the customer's behalf, e.g.
+	// an EventBridge rule's ManagedBy ("autoscaling.amazonaws.com"). When
+	// non-empty the instance is service-managed and CANNOT be managed by
+	// Terraform: tag / create / delete operations are rejected by the
+	// provider (EventBridge ManagedRuleException, #785). This is a
+	// dedicated identity field rather than an Attrs/Tags entry so the
+	// signal survives the snapshot envelope round-trip and the
+	// schema-filter that drops computed-only attributes — the discoverer
+	// sets it from the type's ServiceManagedByFromProperties hook, and
+	// both the importability classifier (UnimportableReason →
+	// ReasonServiceManaged) and the composer provenance injector (skip +
+	// weak-lock) read it. Generic by design: any type that surfaces a
+	// service-owner marker can populate it. Empty for customer-owned
+	// resources.
+	ServiceManagedBy string `json:"service_managed_by,omitempty"`
+
 	// EnrichmentStatus reports whether the per-type enricher fully
 	// populated this resource's Attrs. Empty == not-yet-enriched (the
 	// discoverer hasn't run the enrich pass, or no enricher is

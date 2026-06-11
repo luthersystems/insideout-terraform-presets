@@ -111,6 +111,61 @@ func TestTaggable_AllowlistFallback(t *testing.T) {
 	assert.False(t, ok)
 }
 
+// TestTaggable_ServiceManagedInstance verifies the instance-level
+// untaggability override (#785): a resource whose type is normally taggable
+// (aws_cloudwatch_event_rule carries tags) must still be reported as
+// untaggable when its identity carries a service-managed marker, because
+// AWS rejects every tag operation on a service-managed rule.
+func TestTaggable_ServiceManagedInstance(t *testing.T) {
+	t.Parallel()
+	// Without the marker, an EventBridge rule is taggable.
+	plain := imported.ImportedResource{
+		Identity: imported.ResourceIdentity{Cloud: "aws", Type: "aws_cloudwatch_event_rule"},
+	}
+	attr, ok := taggable(plain)
+	assert.True(t, ok, "plain EventBridge rule must be taggable")
+	assert.Equal(t, "tags", attr)
+
+	// With the marker, the same type is NOT taggable regardless of selection.
+	managed := imported.ImportedResource{
+		Identity: imported.ResourceIdentity{
+			Cloud:            "aws",
+			Type:             "aws_cloudwatch_event_rule",
+			ServiceManagedBy: "autoscaling.amazonaws.com",
+		},
+	}
+	_, ok = taggable(managed)
+	assert.False(t, ok, "service-managed EventBridge rule must not be taggable")
+}
+
+// TestInjectProvenance_ServiceManagedSkipsAndWeakLocks is the composer
+// defense-in-depth for #785: even if a service-managed rule is selected and
+// reaches the composer, provenance injection must be skipped and the resource
+// weak-locked so no InsideOut* tags are stamped (apply would otherwise die
+// with ManagedRuleException).
+func TestInjectProvenance_ServiceManagedSkipsAndWeakLocks(t *testing.T) {
+	t.Parallel()
+	ir := imported.ImportedResource{
+		Identity: imported.ResourceIdentity{
+			Cloud:            "aws",
+			Type:             "aws_cloudwatch_event_rule",
+			Address:          "aws_cloudwatch_event_rule.autoscaling_managed_rule",
+			ServiceManagedBy: "autoscaling.amazonaws.com",
+		},
+		Tier:  imported.TierImportedFlat,
+		Attrs: []byte(`{"name":{"literal":"AutoScalingManagedRule"}}`),
+	}
+	body, _, err := emitTestBody(t, ir)
+	require.NoError(t, err)
+
+	got, err := injectProvenance(body, &ir, "io-stack-1", "sess-9", fixedTime())
+	require.NoError(t, err)
+	s := string(got)
+	assert.True(t, ir.WeakLocked, "service-managed resource must be weak-locked")
+	assert.NotContains(t, s, "InsideOutImportProject", "no provenance tags may be stamped on a service-managed rule")
+	assert.NotContains(t, s, "merge(", "no tag merge may be injected on a service-managed rule")
+}
+
 // TestProvenanceKeysFor_AWS verifies provenanceKeysFor wiring (key set,
 // order, session omission). The literal values of the marker keys are
 // pinned in TestMarkerTagKeyValues_PinnedLiterals; here we use the

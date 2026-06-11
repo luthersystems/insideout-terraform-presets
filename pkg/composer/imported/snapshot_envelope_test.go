@@ -79,6 +79,20 @@ func TestSnapshotEnvelope_RoundTrip(t *testing.T) {
 			Tier:   TierImportedMissing,
 			Source: SourceInspector,
 		},
+		{
+			// Service-managed instance (#785): the ServiceManagedBy marker
+			// must survive the snapshot envelope so the composer's
+			// defense-in-depth can skip provenance injection.
+			Identity: ResourceIdentity{
+				Cloud:            "aws",
+				Type:             "aws_cloudwatch_event_rule",
+				Address:          "aws_cloudwatch_event_rule.autoscaling_managed_rule",
+				NameHint:         "AutoScalingManagedRule",
+				ServiceManagedBy: "autoscaling.amazonaws.com",
+			},
+			Tier:   TierImportedFlat,
+			Source: SourceImporter,
+		},
 	}
 
 	envelope := map[string]json.RawMessage{
@@ -123,7 +137,8 @@ func equalIdentity(a, b ResourceIdentity) bool {
 		a.ProviderSource != b.ProviderSource || a.ProviderVersion != b.ProviderVersion ||
 		a.SchemaVersion != b.SchemaVersion || a.AccountID != b.AccountID ||
 		a.ProjectID != b.ProjectID || a.Region != b.Region ||
-		a.Location != b.Location || a.ImportID != b.ImportID {
+		a.Location != b.Location || a.ImportID != b.ImportID ||
+		a.ServiceManagedBy != b.ServiceManagedBy {
 		return false
 	}
 	return mapsEqual(a.ProviderIdentity, b.ProviderIdentity) &&

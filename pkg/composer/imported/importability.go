@@ -63,6 +63,16 @@ const (
 	// standalone aws_network_interface.
 	ReasonServiceManagedENI = "service_managed_eni"
 
+	// ReasonServiceManaged marks an instance that an AWS/GCP service owns on
+	// the customer's behalf, detected via a non-empty Identity.ServiceManagedBy
+	// marker (e.g. an EventBridge rule's ManagedBy =
+	// "autoscaling.amazonaws.com"). Terraform cannot manage these resources at
+	// all — tag, create, and delete operations are categorically rejected by
+	// the provider (EventBridge surfaces ManagedRuleException, #785). Generic
+	// across types: any discoverer that surfaces a service-owner marker routes
+	// the instance here.
+	ReasonServiceManaged = "service_managed"
+
 	// ReasonEphemeralLogStream marks an aws_cloudwatch_log_stream. Individual
 	// log streams are created automatically by their log group as events
 	// arrive and are continuously rotated — they are not declarative
@@ -130,6 +140,16 @@ func IsAWSManagedKMSKeyManager(keyManager string) bool {
 	return keyManager == awsManagedKMSKeyManager
 }
 
+// IsServiceManaged reports whether an identity carries a service-managed
+// marker (Identity.ServiceManagedBy is non-empty after trimming). A
+// service-managed instance is owned by an AWS/GCP service and cannot be
+// managed by Terraform. Generic across resource types; the discoverer
+// populates ServiceManagedBy from the per-type ServiceManagedByFromProperties
+// hook.
+func IsServiceManaged(id ResourceIdentity) bool {
+	return strings.TrimSpace(id.ServiceManagedBy) != ""
+}
+
 // IsServiceManagedENIInterfaceType reports whether an interface_type value
 // denotes an AWS-service-managed ENI (and therefore an un-importable one).
 // Forward-compatible: any interface_type AWS introduces for a managed ENI
@@ -175,6 +195,15 @@ func UnimportableReason(ir ImportedResource) string {
 		return ReasonInsideOutImported
 	}
 
+	// Service-managed instances are un-importable regardless of type: the
+	// owning service rejects tag/create/delete operations (EventBridge
+	// ManagedRuleException, #785). Checked here, before the type switch, so
+	// any type that surfaces a service-owner marker is covered without a
+	// per-type case.
+	if IsServiceManaged(ir.Identity) {
+		return ReasonServiceManaged
+	}
+
 	switch ir.Identity.Type {
 	case "aws_kms_alias":
 		if IsAWSManagedKMSAliasName(kmsAliasName(ir.Identity)) {
@@ -208,6 +237,8 @@ func ReasonDescription(reason string) string {
 		return "AWS-managed KMS key (KeyManager=AWS, e.g. the ACM default key) — cannot be imported into Terraform."
 	case ReasonServiceManagedENI:
 		return "Service-managed network interface (owned by its parent NAT gateway / VPC endpoint / load balancer) — cannot be imported as a standalone network interface."
+	case ReasonServiceManaged:
+		return "Service-managed resource (owned by an AWS/GCP service, e.g. an EventBridge ManagedBy rule) — tag, create, and delete operations are rejected by the provider, so it cannot be managed by Terraform."
 	case ReasonEphemeralLogStream:
 		return "Ephemeral CloudWatch log stream (auto-created and rotated by its log group) — not declarative infrastructure; manage the log group instead."
 	case ReasonInsideOutImported:
