@@ -7,15 +7,23 @@ resource "random_id" "suffix" {
   byte_length = 4
 
   lifecycle {
-    # GPU machine-type compatibility (#767). VALIDATE, don't mask. Hosted on the
-    # always-present suffix resource because the node pool is created inside the
-    # vendored gke module (no local resource to attach a precondition to). An
-    # accelerator attaches via the node pool accelerator config only on N1
-    # machines; A2/A3/A4/G2/G4 bundle their GPU with the machine type (so an
-    # explicit accelerator is invalid) and every other family takes none.
+    # GPU machine-type compatibility (#767, #752 review). VALIDATE, don't mask.
+    # Hosted on the always-present suffix resource because the node pool is
+    # created inside the vendored gke module (no local resource to attach a
+    # precondition to). Unlike a Compute VM, a GKE node pool DECLARES the
+    # accelerator even for the accelerator-optimized families: N1 attaches
+    # T4/V100/P100/P4, and A2/A3/A4/G2/G4 pair the machine type with its bundled
+    # accelerator (g2->nvidia-l4, a2->nvidia-tesla-a100, a3->nvidia-h100-80gb, ...).
+    # Every other family takes no GPU. Two preconditions: (1) the machine family
+    # must be GPU-capable; (2) on a bundled family the gpu_type must match the
+    # family's accelerator(s).
     precondition {
-      condition     = !local._gpu_enabled || (local._is_n1_machine && !local._is_bundled_gpu_machine)
-      error_message = "gpu_type is set but machine_type=${var.machine_type} cannot attach a GPU: GKE attaches accelerators via the node pool accelerator config only on N1 machines (e.g. n1-standard-4). A2/A3/A4/G2/G4 accelerator-optimized machines bundle their GPU with the machine type — use that machine type alone with no gpu_type."
+      condition     = !local._gpu_enabled || local._is_n1_machine || local._is_bundled_gpu_machine
+      error_message = "gpu_type is set but machine_type=${var.machine_type} cannot run a GPU node pool: GKE needs an N1 machine (attaches T4/V100/P100/P4) or an accelerator-optimized machine (a2-*/a3-*/a4-*/g2-*/g4-*, whose accelerator the node pool declares). Pick one of those machine types."
+    }
+    precondition {
+      condition     = !local._gpu_enabled || !local._is_bundled_gpu_machine || contains(local._gpu_bundled_family_accelerators, lower(trimspace(var.gpu_type)))
+      error_message = "gpu_type=${var.gpu_type} does not pair with machine_type=${var.machine_type}: a GKE ${upper(local._machine_family)} node pool declares the accelerator that matches the machine family (expected one of ${join(", ", local._gpu_bundled_family_accelerators)}). Use the matching accelerator type."
     }
   }
 }
@@ -30,11 +38,25 @@ locals {
   # the composer machineFamily() derive; kept in lockstep by TestGCPGPUFamiliesDrift.
   _machine_family = lower(split("-", trimspace(var.machine_type))[0])
 
-  # Accelerators attach to the node pool ONLY on N1 machines. A2/A3/A4/G2/G4
-  # accelerator-optimized machines bundle their GPU with the machine type.
+  # Accelerator-optimized families pair the machine type with a fixed accelerator
+  # (the node pool still DECLARES it, unlike a VM). N1 attaches T4/V100/P100/P4.
   _gpu_bundled_machine_families = ["a2", "a3", "a4", "a4x", "g2", "g4"]
   _is_n1_machine                = local._machine_family == "n1"
   _is_bundled_gpu_machine       = contains(local._gpu_bundled_machine_families, local._machine_family)
+
+  # Per-family accelerator pairing for the bundled families (#752 review). Mirrors
+  # the composer gpuBundledFamilyAccelerators map; the second GPU precondition
+  # above checks gpu_type against the entry for the selected family. Empty list
+  # for a non-bundled family (the lookup default) so the precondition is inert.
+  _gpu_bundled_family_accelerator_map = {
+    a2  = ["nvidia-tesla-a100", "nvidia-a100-80gb"]
+    a3  = ["nvidia-h100-80gb", "nvidia-h100-mega-80gb", "nvidia-h200-141gb"]
+    a4  = ["nvidia-b200"]
+    a4x = ["nvidia-gb200", "nvidia-gb300"]
+    g2  = ["nvidia-l4"]
+    g4  = ["nvidia-rtx-pro-6000"]
+  }
+  _gpu_bundled_family_accelerators = lookup(local._gpu_bundled_family_accelerator_map, local._machine_family, [])
 
   # Resolved accelerator config fed into the node pool object below. Inert (count
   # 0, empty type/driver) when no GPU, so the module skips guest_accelerator and

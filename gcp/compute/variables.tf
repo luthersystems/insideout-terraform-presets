@@ -50,13 +50,13 @@ variable "gpu_type" {
 }
 
 variable "gpu_count" {
-  description = "Number of GPUs of gpu_type to attach. Ignored unless gpu_type is set."
+  description = "Number of GPUs of gpu_type to attach. Ignored unless gpu_type is set. Valid counts are 1, 2, 4, 8, or 16 (0 = no GPU). The exact legal count is GPU-type/zone-specific (e.g. T4: 1/2/4, V100: 1/2/4/8) — a deploy-time/quota concern — but counts outside this set are always rejected by GCP."
   type        = number
   default     = 0
 
   validation {
-    condition     = var.gpu_count >= 0
-    error_message = "gpu_count must be >= 0."
+    condition     = contains([0, 1, 2, 4, 8, 16], var.gpu_count)
+    error_message = "gpu_count must be one of 0, 1, 2, 4, 8, 16."
   }
 }
 

@@ -954,17 +954,19 @@ func (m DefaultMapper) BuildModuleValues(
 				vals["disk_size_gb"] = cfg.GCPCompute.DiskSizeGb
 			}
 			// GPU instance (#767): VALIDATE, don't mask. Either GPUType or
-			// GPUCount signals "attach a GPU". GCP only attaches GPUs via
-			// guest_accelerator on N1 machines; A2/A3/A4/G2/G4 bundle their GPU
-			// with the machine type, and every other family takes none. Reject
-			// an incompatible machine type at compose time, and emit the GPU
-			// tfvars so the preset attaches the accelerator AND forces
-			// on_host_maintenance=TERMINATE (GCP rejects MIGRATE with a GPU).
+			// GPUCount signals "attach a GPU". On a Compute Engine VM, GCP only
+			// attaches GPUs via guest_accelerator on N1 machines; A2/A3/A4/G2/G4
+			// attach their GPU automatically by machine type (an explicit
+			// guest_accelerator is invalid there) and every other family takes
+			// none. Reject an incompatible machine type at compose time, and emit
+			// the GPU tfvars (canonical lower-case type) so the preset attaches
+			// the accelerator AND forces on_host_maintenance=TERMINATE (GCP rejects
+			// MIGRATE with a GPU).
 			if cfg.GCPCompute.GPUType != "" || cfg.GCPCompute.GPUCount > 0 {
-				if err := validateGCPGPU("GCPCompute", cfg.GCPCompute.MachineType, cfg.GCPCompute.GPUType); err != nil {
+				if err := validateGCPComputeGPU(cfg.GCPCompute.MachineType, cfg.GCPCompute.GPUType, cfg.GCPCompute.GPUCount); err != nil {
 					return nil, err
 				}
-				gpuType := cfg.GCPCompute.GPUType
+				gpuType := normalizeGPUType(cfg.GCPCompute.GPUType)
 				if gpuType == "" {
 					gpuType = defaultGCPAccelerator
 				}
@@ -995,18 +997,21 @@ func (m DefaultMapper) BuildModuleValues(
 			if cfg.GCPGKE.Regional != nil {
 				vals["regional"] = *cfg.GCPGKE.Regional
 			}
-			// GPU node pool (#767): VALIDATE, don't mask. Same N1-attachable vs
-			// bundled-family rule as gcp_compute. When a GPU is requested, emit
-			// the accelerator tfvars; the preset wires them into the node pool's
-			// accelerator config and turns on GKE auto NVIDIA driver install (no
-			// in-cluster device-plugin work, unlike EKS).
+			// GPU node pool (#767, #752 review): VALIDATE, don't mask. Unlike a
+			// Compute VM, a GKE node pool DECLARES the accelerator even for the
+			// accelerator-optimized families — g2 pairs with nvidia-l4, a2 with
+			// nvidia-tesla-a100, a3 with nvidia-h100-80gb, etc. — and N1 attaches
+			// the T4/V100/P100/P4 accelerators. When a GPU is requested, emit the
+			// accelerator tfvars (canonical lower-case type); the preset wires them
+			// into the node pool's accelerator config and turns on GKE auto NVIDIA
+			// driver install (no in-cluster device-plugin work, unlike EKS).
 			if cfg.GCPGKE.GPUType != "" || cfg.GCPGKE.GPUCount > 0 {
-				if err := validateGCPGPU("GCPGKE", cfg.GCPGKE.MachineType, cfg.GCPGKE.GPUType); err != nil {
+				if err := validateGCPGKEGPU(cfg.GCPGKE.MachineType, cfg.GCPGKE.GPUType, cfg.GCPGKE.GPUCount); err != nil {
 					return nil, err
 				}
-				gpuType := cfg.GCPGKE.GPUType
+				gpuType := normalizeGPUType(cfg.GCPGKE.GPUType)
 				if gpuType == "" {
-					gpuType = defaultGCPAccelerator
+					gpuType = defaultGKEGPUType(cfg.GCPGKE.MachineType)
 				}
 				gpuCount := cfg.GCPGKE.GPUCount
 				if gpuCount <= 0 {

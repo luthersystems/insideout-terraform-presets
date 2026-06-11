@@ -256,7 +256,16 @@ func applyGCPGPUDefaults(cfg, out *Config) {
 			reflect.ValueOf(&out.GCPGKE).Elem().Set(v)
 		}
 		if out.GCPGKE.GPUType == "" {
-			out.GCPGKE.GPUType = defaultGCPAccelerator
+			// GKE pairs a bundled accelerator-optimized family (g2/a2/a3/...) with
+			// its own GPU type; fall back to the shared N1 default only when the
+			// machine family has no bundled pairing (#752 review). Mirrors the
+			// mapper's defaultGKEGPUType so the pricing-facing overlay matches what
+			// deploys.
+			if def := defaultGKEGPUType(cfg.GCPGKE.MachineType); def != "" {
+				out.GCPGKE.GPUType = def
+			} else {
+				out.GCPGKE.GPUType = defaultGCPAccelerator
+			}
 		}
 		if out.GCPGKE.GPUCount == 0 {
 			out.GCPGKE.GPUCount = defaultGCPGPUCount

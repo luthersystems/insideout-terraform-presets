@@ -17,9 +17,12 @@ locals {
   # the composer machineFamily() derive; kept in lockstep by TestGCPGPUFamiliesDrift.
   _machine_family = lower(split("-", trimspace(var.machine_type))[0])
 
-  # GPUs attach via guest_accelerator ONLY on N1 machines. A2/A3/A4/G2/G4
-  # accelerator-optimized machines bundle their GPU with the machine type, so
-  # attaching a separate accelerator there is invalid and GCP rejects it.
+  # On a Compute Engine VM, GPUs attach via guest_accelerator ONLY on N1 machines.
+  # A2/A3/A4/G2/G4 accelerator-optimized machines have their GPU attached
+  # AUTOMATICALLY by the machine type, so passing a separate guest_accelerator
+  # there is invalid and GCP rejects it (verified: cloud.google.com/compute/docs/gpus
+  # — "the GPU model is automatically attached to the instance"). This is the VM
+  # rule; GKE node pools differ (they DO declare the accelerator) — see gcp/gke.
   _gpu_bundled_machine_families = ["a2", "a3", "a4", "a4x", "g2", "g4"]
   _is_n1_machine                = local._machine_family == "n1"
   _is_bundled_gpu_machine       = contains(local._gpu_bundled_machine_families, local._machine_family)
@@ -110,15 +113,15 @@ resource "google_compute_instance" "this" {
   allow_stopping_for_update = true
 
   lifecycle {
-    # GPU machine-type compatibility (#767). VALIDATE, don't mask. A GPU attaches
-    # via guest_accelerator only on N1 machines; A2/A3/A4/G2/G4 bundle their GPU
-    # with the machine type (so an explicit accelerator is invalid) and every
-    # other family takes none. Cross-variable rule lives here as a resource
-    # precondition (Terraform forbids multi-variable conditions in variable
-    # validation blocks).
+    # GPU machine-type compatibility (#767). VALIDATE, don't mask. On a VM a GPU
+    # attaches via guest_accelerator only on N1 machines; A2/A3/A4/G2/G4 attach
+    # their GPU automatically by machine type (so an explicit guest_accelerator is
+    # invalid) and every other family takes none. Cross-variable rule lives here
+    # as a resource precondition (Terraform forbids multi-variable conditions in
+    # variable validation blocks).
     precondition {
       condition     = !local._gpu_enabled || (local._is_n1_machine && !local._is_bundled_gpu_machine)
-      error_message = "gpu_type is set but machine_type=${var.machine_type} cannot attach a GPU: GCP attaches GPUs via guest_accelerator only on N1 machines (e.g. n1-standard-4). A2/A3/A4/G2/G4 accelerator-optimized machines bundle their GPU with the machine type — use that machine type alone with no gpu_type."
+      error_message = "gpu_type is set but machine_type=${var.machine_type} cannot attach a GPU: GCP attaches GPUs via guest_accelerator only on N1 machines (e.g. n1-standard-4). A2/A3/A4/G2/G4 accelerator-optimized machines attach their GPU automatically by the machine type — use that machine type alone with no gpu_type."
     }
   }
 }
