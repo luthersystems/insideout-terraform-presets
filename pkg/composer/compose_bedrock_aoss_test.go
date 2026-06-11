@@ -354,6 +354,52 @@ func TestGenerateProvidersTF_DiscoveryUnion(t *testing.T) {
 			"required_providers must have ≥3 entries")
 	})
 
+	t.Run("aws base provider stays exactly pinned despite a looser discovered constraint", func(t *testing.T) {
+		// Every aws/<module>/main.tf preset declares `version = ">= 6.0"`,
+		// which lands in Discovered["aws"]. The composed archive must NOT
+		// inherit that open range — it must keep the exact pin matching the
+		// mars provider-mirror bake (= 6.46.0) so terraform init hits the
+		// cache instead of resolving "newest at runtime" (#786).
+		withAWSDiscovered := map[string]*tfconfig.ProviderRequirement{
+			"aws":  {Source: "hashicorp/aws", VersionConstraints: []string{">= 6.0"}},
+			"time": {Source: "hashicorp/time", VersionConstraints: []string{">= 0.9"}},
+		}
+		got := string(generateProvidersTF(providersTFInput{
+			Cloud:      "aws",
+			Region:     "us-east-1",
+			Selected:   map[ComponentKey]bool{},
+			Discovered: withAWSDiscovered,
+		}))
+		require.Contains(t, got, `version = "= 6.46.0"`,
+			"aws base provider must stay exactly pinned to the mars-baked version, not the discovered >= 6.0 range")
+		require.NotContains(t, got, `version = ">= 6.0"`,
+			"the open >= 6.0 range must never reach the composed archive")
+		require.Contains(t, got, "hashicorp/time",
+			"discovered non-base providers must still flow through")
+	})
+
+	t.Run("gcp base providers stay exactly pinned despite a looser discovered constraint", func(t *testing.T) {
+		withGCPDiscovered := map[string]*tfconfig.ProviderRequirement{
+			"google":      {Source: "hashicorp/google", VersionConstraints: []string{">= 5.16"}},
+			"google-beta": {Source: "hashicorp/google-beta", VersionConstraints: []string{">= 5.16"}},
+		}
+		got := string(generateProvidersTF(providersTFInput{
+			Cloud:        "gcp",
+			Region:       "us-central1",
+			GCPProjectID: "demo-project-12345",
+			Selected:     map[ComponentKey]bool{},
+			Discovered:   withGCPDiscovered,
+		}))
+		// Assert BOTH google and google-beta are pinned — a regression that
+		// pinned only `google` and let `google-beta` keep the discovered range
+		// would still leave one `= 6.10.0` present, so count ≥2 occurrences to
+		// catch a dropped google-beta pin specifically (#786).
+		require.GreaterOrEqual(t, strings.Count(got, `version = "= 6.10.0"`), 2,
+			"both google AND google-beta must stay exactly pinned to the mars-baked version")
+		require.NotContains(t, got, `version = ">= 5.16"`,
+			"the open >= 5.16 range must never reach the composed archive for either provider")
+	})
+
 	t.Run("aws with no discovery falls back to aws only", func(t *testing.T) {
 		got := string(generateProvidersTF(providersTFInput{
 			Cloud:      "aws",
@@ -564,6 +610,73 @@ func TestGenerateProvidersTF_DiscoveryUnion(t *testing.T) {
 			"base aws provider block must be emitted")
 		require.Contains(t, got, `alias  = "imported"`,
 			"aws.imported alias block must be emitted unconditionally (#562)")
+	})
+}
+
+// TestPinBaseProviders covers the helper that re-asserts the exact base
+// provider pin after the discovered-provider union (#786) — the actual
+// mechanism that prevents an open `>= 6.0` from a preset reaching the archive.
+func TestPinBaseProviders(t *testing.T) {
+	t.Parallel()
+
+	t.Run("overwrites the discovered version range with the exact pin", func(t *testing.T) {
+		required := map[string]*tfconfig.ProviderRequirement{
+			"aws": {Source: "hashicorp/aws", VersionConstraints: []string{">= 6.0"}},
+		}
+		pinBaseProviders(required, map[string]string{"aws": "= 6.46.0"})
+		require.Equal(t, []string{"= 6.46.0"}, required["aws"].VersionConstraints,
+			"the open range must be replaced by the exact pin")
+		require.Equal(t, "hashicorp/aws", required["aws"].Source)
+	})
+
+	t.Run("preserves a non-default discovered Source when overwriting the version", func(t *testing.T) {
+		// A child module could legitimately declare the base provider from a
+		// mirror/registry override; pinBaseProviders must overwrite only the
+		// version, never the Source. A regression that hardcoded
+		// "hashicorp/"+name would drop the override and emit the wrong source.
+		required := map[string]*tfconfig.ProviderRequirement{
+			"aws": {Source: "registry.example.com/hashicorp/aws", VersionConstraints: []string{">= 6.0"}},
+		}
+		pinBaseProviders(required, map[string]string{"aws": "= 6.46.0"})
+		require.Equal(t, "registry.example.com/hashicorp/aws", required["aws"].Source,
+			"a non-default Source must survive the version pin")
+		require.Equal(t, []string{"= 6.46.0"}, required["aws"].VersionConstraints)
+	})
+
+	t.Run("synthesizes hashicorp/<name> Source when the provider is absent", func(t *testing.T) {
+		required := map[string]*tfconfig.ProviderRequirement{}
+		pinBaseProviders(required, map[string]string{"google-beta": "= 6.10.0"})
+		require.NotNil(t, required["google-beta"])
+		require.Equal(t, "hashicorp/google-beta", required["google-beta"].Source)
+		require.Equal(t, []string{"= 6.10.0"}, required["google-beta"].VersionConstraints)
+	})
+
+	t.Run("leaves non-pinned discovered providers untouched", func(t *testing.T) {
+		required := map[string]*tfconfig.ProviderRequirement{
+			"aws":  {Source: "hashicorp/aws", VersionConstraints: []string{">= 6.0"}},
+			"time": {Source: "hashicorp/time", VersionConstraints: []string{">= 0.9"}},
+		}
+		pinBaseProviders(required, map[string]string{"aws": "= 6.46.0"})
+		require.Equal(t, []string{">= 0.9"}, required["time"].VersionConstraints,
+			"a provider not named in the pin set must be left as-is")
+	})
+
+	t.Run("empty or nil pins is a no-op", func(t *testing.T) {
+		// The no-pins contract callers rely on for a cloud with no base pins:
+		// imported.BaseProviderPins("azure") returns nil, and the emitter then
+		// calls pinBaseProviders(required, nil). It must leave required exactly
+		// as the discovered union left it — never panic, never synthesize an
+		// entry.
+		base := map[string]*tfconfig.ProviderRequirement{
+			"aws": {Source: "hashicorp/aws", VersionConstraints: []string{">= 6.0"}},
+		}
+		for _, pins := range []map[string]string{nil, {}} {
+			required := map[string]*tfconfig.ProviderRequirement{
+				"aws": {Source: "hashicorp/aws", VersionConstraints: []string{">= 6.0"}},
+			}
+			pinBaseProviders(required, pins)
+			require.Equal(t, base, required, "no pins must leave required byte-for-byte unchanged")
+		}
 	})
 }
 
