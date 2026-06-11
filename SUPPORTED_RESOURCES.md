@@ -22,7 +22,7 @@ and is checked in lockstep with the runtime registries. See the
 
 ## Summary
 
-- **AWS:** 135 types · 81% Discoverable · 81% Enrichable · 100% DriftDetectable · 67% MetricsAvailable · 91% AgentEditable
+- **AWS:** 145 types · 75% Discoverable · 75% Enrichable · 100% DriftDetectable · 63% MetricsAvailable · 90% AgentEditable
 - **GCP:** 64 types · 84% Discoverable · 84% Enrichable · 100% DriftDetectable · 78% MetricsAvailable · 91% AgentEditable
 
 ## AWS
@@ -55,6 +55,11 @@ and is checked in lockstep with the runtime registries. See the
 | `aws_backup_vault` | ✓ | ✓ | ✓ | ✓ | – |
 | `aws_bedrock_guardrail` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `aws_bedrock_model_invocation_logging_configuration` | ✓ | ✓ | ✓ | – | ✓ |
+| `aws_bedrockagent_agent` | – | – | ✓ | – | ✓ |
+| `aws_bedrockagent_agent_action_group` | – | – | ✓ | – | ✓ |
+| `aws_bedrockagent_agent_alias` | – | – | ✓ | – | – |
+| `aws_bedrockagent_data_source` | – | – | ✓ | – | ✓ |
+| `aws_bedrockagent_knowledge_base` | – | – | ✓ | – | ✓ |
 | `aws_cloudfront_distribution` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `aws_cloudfront_function` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `aws_cloudfront_monitoring_subscription` | ✓ | ✓ | ✓ | – | ✓ |
@@ -145,7 +150,12 @@ and is checked in lockstep with the runtime registries. See the
 | `aws_s3_bucket_public_access_block` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_s3_bucket_server_side_encryption_configuration` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_s3_bucket_versioning` | ✓ | ✓ | ✓ | – | ✓ |
+| `aws_s3vectors_index` | – | – | ✓ | – | ✓ |
+| `aws_s3vectors_vector_bucket` | – | – | ✓ | – | ✓ |
 | `aws_sagemaker_domain` | – | – | ✓ | – | ✓ |
+| `aws_sagemaker_endpoint` | – | – | ✓ | – | – |
+| `aws_sagemaker_endpoint_configuration` | – | – | ✓ | – | ✓ |
+| `aws_sagemaker_model` | – | – | ✓ | – | ✓ |
 | `aws_sagemaker_user_profile` | – | – | ✓ | – | ✓ |
 | `aws_secretsmanager_secret` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `aws_secretsmanager_secret_rotation` | ✓ | ✓ | ✓ | ✓ | ✓ |

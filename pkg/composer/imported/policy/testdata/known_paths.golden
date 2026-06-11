@@ -386,6 +386,60 @@ aws_bedrock_model_invocation_logging_configuration	logging_config.image_data_del
 aws_bedrock_model_invocation_logging_configuration	logging_config.s3_config.bucket_name	Wiring	Reliability	SummaryVisible	RelationshipOnly		
 aws_bedrock_model_invocation_logging_configuration	logging_config.s3_config.key_prefix	Tuning	Reliability	SummaryVisible	ChatSafe		
 aws_bedrock_model_invocation_logging_configuration	logging_config.text_data_delivery_enabled	Tuning	Security	SummaryVisible	ChatSafe		
+aws_bedrockagent_agent	agent_arn	Identity		UIVisible	Never		
+aws_bedrockagent_agent	agent_id	Identity		UIVisible	Never		
+aws_bedrockagent_agent	agent_name	Identity		UIVisible	Never		AlwaysReplace
+aws_bedrockagent_agent	agent_resource_role_arn	Wiring	Security	UIVisible	RelationshipOnly		
+aws_bedrockagent_agent	agent_version	Identity		SummaryVisible	Never		
+aws_bedrockagent_agent	customer_encryption_key_arn	Wiring	Security	SummaryVisible	RelationshipOnly		
+aws_bedrockagent_agent	foundation_model	Tuning	Reliability	UIVisible	RequiresApproval		
+aws_bedrockagent_agent	guardrail_configuration	Wiring	Security	UIVisible	RelationshipOnly		
+aws_bedrockagent_agent	id	Identity		UIVisible	Never		
+aws_bedrockagent_agent	idle_session_ttl_in_seconds	Tuning	Reliability	SummaryVisible	ChatSafe		
+aws_bedrockagent_agent	instruction	Tuning	Reliability	UIVisible	RequiresApproval		
+aws_bedrockagent_agent	region	Identity		UIVisible	Never		AlwaysReplace
+aws_bedrockagent_agent	tags	Tuning		Hidden	SystemOnly	Redacted	
+aws_bedrockagent_agent	tags_all	Tuning		Hidden	SystemOnly	Redacted	
+aws_bedrockagent_agent_action_group	action_group_executor.lambda	Wiring	Security	UIVisible	RelationshipOnly		
+aws_bedrockagent_agent_action_group	action_group_id	Identity		UIVisible	Never		
+aws_bedrockagent_agent_action_group	action_group_name	Identity		UIVisible	Never		AlwaysReplace
+aws_bedrockagent_agent_action_group	action_group_state	Tuning	Security	UIVisible	RequiresApproval		
+aws_bedrockagent_agent_action_group	agent_id	Wiring	Reliability	UIVisible	RelationshipOnly		AlwaysReplace
+aws_bedrockagent_agent_action_group	agent_version	Wiring	Reliability	SummaryVisible	RelationshipOnly		AlwaysReplace
+aws_bedrockagent_agent_action_group	api_schema.s3.s3_bucket_name	Wiring	Reliability	SummaryVisible	RelationshipOnly		
+aws_bedrockagent_agent_action_group	api_schema.s3.s3_object_key	Wiring	Reliability	SummaryVisible	RelationshipOnly		
+aws_bedrockagent_agent_action_group	id	Identity		UIVisible	Never		
+aws_bedrockagent_agent_action_group	region	Identity		UIVisible	Never		AlwaysReplace
+aws_bedrockagent_agent_alias	agent_alias_arn	Identity		UIVisible	Never		
+aws_bedrockagent_agent_alias	agent_alias_id	Identity		UIVisible	Never		
+aws_bedrockagent_agent_alias	agent_alias_name	Identity		UIVisible	Never		AlwaysReplace
+aws_bedrockagent_agent_alias	agent_id	Wiring	Reliability	UIVisible	RelationshipOnly		AlwaysReplace
+aws_bedrockagent_agent_alias	id	Identity		UIVisible	Never		
+aws_bedrockagent_agent_alias	region	Identity		UIVisible	Never		AlwaysReplace
+aws_bedrockagent_agent_alias	routing_configuration	Wiring	Reliability	UIVisible	RelationshipOnly		
+aws_bedrockagent_agent_alias	tags	Tuning		Hidden	SystemOnly	Redacted	
+aws_bedrockagent_agent_alias	tags_all	Tuning		Hidden	SystemOnly	Redacted	
+aws_bedrockagent_data_source	data_deletion_policy	Tuning	Reliability	UIVisible	RequiresApproval		
+aws_bedrockagent_data_source	data_source_configuration.s3_configuration.bucket_arn	Wiring	Reliability	UIVisible	RelationshipOnly		
+aws_bedrockagent_data_source	data_source_configuration.type	Tuning	Reliability	UIVisible	RequiresApproval		AlwaysReplace
+aws_bedrockagent_data_source	data_source_id	Identity		UIVisible	Never		
+aws_bedrockagent_data_source	id	Identity		UIVisible	Never		
+aws_bedrockagent_data_source	knowledge_base_id	Wiring	Reliability	UIVisible	RelationshipOnly		AlwaysReplace
+aws_bedrockagent_data_source	name	Identity		UIVisible	Never		AlwaysReplace
+aws_bedrockagent_data_source	region	Identity		UIVisible	Never		AlwaysReplace
+aws_bedrockagent_data_source	server_side_encryption_configuration.kms_key_arn	Wiring	Security	SummaryVisible	RelationshipOnly		
+aws_bedrockagent_knowledge_base	arn	Identity		UIVisible	Never		
+aws_bedrockagent_knowledge_base	id	Identity		UIVisible	Never		
+aws_bedrockagent_knowledge_base	knowledge_base_configuration.type	Tuning	Reliability	SummaryVisible	RequiresApproval		AlwaysReplace
+aws_bedrockagent_knowledge_base	knowledge_base_configuration.vector_knowledge_base_configuration.embedding_model_arn	Wiring	Reliability	UIVisible	RelationshipOnly		AlwaysReplace
+aws_bedrockagent_knowledge_base	name	Identity		UIVisible	Never		AlwaysReplace
+aws_bedrockagent_knowledge_base	region	Identity		UIVisible	Never		AlwaysReplace
+aws_bedrockagent_knowledge_base	role_arn	Wiring	Security	UIVisible	RelationshipOnly		
+aws_bedrockagent_knowledge_base	storage_configuration.s3_vectors_configuration.index_arn	Wiring	Reliability	SummaryVisible	RelationshipOnly		
+aws_bedrockagent_knowledge_base	storage_configuration.s3_vectors_configuration.vector_bucket_arn	Wiring	Reliability	SummaryVisible	RelationshipOnly		
+aws_bedrockagent_knowledge_base	storage_configuration.type	Tuning	Reliability	UIVisible	RequiresApproval		AlwaysReplace
+aws_bedrockagent_knowledge_base	tags	Tuning		Hidden	SystemOnly	Redacted	
+aws_bedrockagent_knowledge_base	tags_all	Tuning		Hidden	SystemOnly	Redacted	
 aws_cloudfront_distribution	aliases	Wiring	Reliability	UIVisible	RelationshipOnly		
 aws_cloudfront_distribution	arn	Identity		UIVisible	Never		
 aws_cloudfront_distribution	caller_reference	Identity		UIVisible	Never		
@@ -2116,6 +2170,24 @@ aws_s3_bucket_versioning	id	Identity		UIVisible	Never
 aws_s3_bucket_versioning	mfa	Tuning	Security	UIVisible	SystemOnly		
 aws_s3_bucket_versioning	versioning_configuration.mfa_delete	Tuning	Security	SummaryVisible	RequiresApproval		
 aws_s3_bucket_versioning	versioning_configuration.status	Tuning	Reliability	SummaryVisible	ChatSafe		
+aws_s3vectors_index	data_type	Tuning	Reliability	UIVisible	RequiresApproval		AlwaysReplace
+aws_s3vectors_index	dimension	Tuning	Reliability	UIVisible	RequiresApproval		AlwaysReplace
+aws_s3vectors_index	distance_metric	Tuning	Reliability	UIVisible	RequiresApproval		AlwaysReplace
+aws_s3vectors_index	encryption_configuration	Wiring	Security	SummaryVisible	RelationshipOnly		
+aws_s3vectors_index	index_arn	Identity		UIVisible	Never		
+aws_s3vectors_index	index_name	Identity		UIVisible	Never		AlwaysReplace
+aws_s3vectors_index	metadata_configuration.non_filterable_metadata_keys	Tuning		SummaryVisible	RequiresApproval		AlwaysReplace
+aws_s3vectors_index	region	Identity		UIVisible	Never		AlwaysReplace
+aws_s3vectors_index	tags	Tuning		Hidden	SystemOnly	Redacted	
+aws_s3vectors_index	tags_all	Tuning		Hidden	SystemOnly	Redacted	
+aws_s3vectors_index	vector_bucket_name	Wiring	Reliability	UIVisible	RelationshipOnly		AlwaysReplace
+aws_s3vectors_vector_bucket	encryption_configuration	Wiring	Security	SummaryVisible	RelationshipOnly		
+aws_s3vectors_vector_bucket	force_destroy	Tuning	Reliability	SummaryVisible	RequiresApproval		
+aws_s3vectors_vector_bucket	region	Identity		UIVisible	Never		AlwaysReplace
+aws_s3vectors_vector_bucket	tags	Tuning		Hidden	SystemOnly	Redacted	
+aws_s3vectors_vector_bucket	tags_all	Tuning		Hidden	SystemOnly	Redacted	
+aws_s3vectors_vector_bucket	vector_bucket_arn	Identity		UIVisible	Never		
+aws_s3vectors_vector_bucket	vector_bucket_name	Identity		UIVisible	Never		AlwaysReplace
 aws_sagemaker_domain	app_network_access_type	Tuning	Security	UIVisible	RequiresApproval		
 aws_sagemaker_domain	app_security_group_management	Tuning	Security	SummaryVisible	RequiresApproval		
 aws_sagemaker_domain	arn	Identity		UIVisible	Never		
@@ -2139,6 +2211,40 @@ aws_sagemaker_domain	tags	Tuning		Hidden	SystemOnly	Redacted
 aws_sagemaker_domain	tags_all	Tuning		Hidden	SystemOnly	Redacted	
 aws_sagemaker_domain	url	Identity		UIVisible	Never		
 aws_sagemaker_domain	vpc_id	Wiring	Security	UIVisible	RelationshipOnly		AlwaysReplace
+aws_sagemaker_endpoint	arn	Identity		UIVisible	Never		
+aws_sagemaker_endpoint	endpoint_config_name	Wiring	Reliability	UIVisible	RelationshipOnly		
+aws_sagemaker_endpoint	id	Identity		UIVisible	Never		
+aws_sagemaker_endpoint	name	Identity		UIVisible	Never		AlwaysReplace
+aws_sagemaker_endpoint	region	Identity		UIVisible	Never		AlwaysReplace
+aws_sagemaker_endpoint	tags	Tuning		Hidden	SystemOnly	Redacted	
+aws_sagemaker_endpoint	tags_all	Tuning		Hidden	SystemOnly	Redacted	
+aws_sagemaker_endpoint_configuration	arn	Identity		UIVisible	Never		
+aws_sagemaker_endpoint_configuration	data_capture_config.enable_capture	Tuning	Security	SummaryVisible	RequiresApproval		AlwaysReplace
+aws_sagemaker_endpoint_configuration	data_capture_config.kms_key_id	Wiring	Security	SummaryVisible	RelationshipOnly		AlwaysReplace
+aws_sagemaker_endpoint_configuration	execution_role_arn	Wiring	Security	UIVisible	RelationshipOnly		AlwaysReplace
+aws_sagemaker_endpoint_configuration	id	Identity		UIVisible	Never		
+aws_sagemaker_endpoint_configuration	kms_key_arn	Wiring	Security	SummaryVisible	RelationshipOnly		AlwaysReplace
+aws_sagemaker_endpoint_configuration	name	Identity		UIVisible	Never		AlwaysReplace
+aws_sagemaker_endpoint_configuration	production_variants.initial_instance_count	Tuning	Reliability	UIVisible	RequiresApproval		AlwaysReplace
+aws_sagemaker_endpoint_configuration	production_variants.initial_variant_weight	Tuning	Reliability	SummaryVisible	RequiresApproval		AlwaysReplace
+aws_sagemaker_endpoint_configuration	production_variants.instance_type	Tuning	Performance	UIVisible	RequiresApproval		AlwaysReplace
+aws_sagemaker_endpoint_configuration	production_variants.model_name	Wiring	Reliability	UIVisible	RelationshipOnly		AlwaysReplace
+aws_sagemaker_endpoint_configuration	region	Identity		UIVisible	Never		AlwaysReplace
+aws_sagemaker_endpoint_configuration	tags	Tuning		Hidden	SystemOnly	Redacted	
+aws_sagemaker_endpoint_configuration	tags_all	Tuning		Hidden	SystemOnly	Redacted	
+aws_sagemaker_model	arn	Identity		UIVisible	Never		
+aws_sagemaker_model	enable_network_isolation	Tuning	Security	UIVisible	RequiresApproval		AlwaysReplace
+aws_sagemaker_model	execution_role_arn	Wiring	Security	UIVisible	RelationshipOnly		AlwaysReplace
+aws_sagemaker_model	id	Identity		UIVisible	Never		
+aws_sagemaker_model	name	Identity		UIVisible	Never		AlwaysReplace
+aws_sagemaker_model	primary_container.image	Wiring	Reliability	UIVisible	RelationshipOnly		AlwaysReplace
+aws_sagemaker_model	primary_container.mode	Tuning	Reliability	SummaryVisible	RequiresApproval		AlwaysReplace
+aws_sagemaker_model	primary_container.model_data_url	Wiring	Reliability	UIVisible	RelationshipOnly		AlwaysReplace
+aws_sagemaker_model	region	Identity		UIVisible	Never		AlwaysReplace
+aws_sagemaker_model	tags	Tuning		Hidden	SystemOnly	Redacted	
+aws_sagemaker_model	tags_all	Tuning		Hidden	SystemOnly	Redacted	
+aws_sagemaker_model	vpc_config.security_group_ids	Wiring	Security	SummaryVisible	RelationshipOnly		AlwaysReplace
+aws_sagemaker_model	vpc_config.subnets	Wiring	Reliability	SummaryVisible	RelationshipOnly		AlwaysReplace
 aws_sagemaker_user_profile	arn	Identity		UIVisible	Never		
 aws_sagemaker_user_profile	domain_id	Wiring	Security	UIVisible	RelationshipOnly		AlwaysReplace
 aws_sagemaker_user_profile	home_efs_file_system_uid	Identity		SummaryVisible	Never		

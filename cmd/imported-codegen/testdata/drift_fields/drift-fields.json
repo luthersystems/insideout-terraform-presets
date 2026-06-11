@@ -1463,6 +1463,208 @@
       "semantic": "Exact"
     }
   ],
+  "aws_bedrockagent_agent": [
+    {
+      "path": "agent_arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "agent_id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "agent_name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "agent_resource_role_arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "agent_version",
+      "semantic": "Exact"
+    },
+    {
+      "path": "customer_encryption_key_arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "foundation_model",
+      "semantic": "Exact"
+    },
+    {
+      "path": "guardrail_configuration",
+      "semantic": "Exact"
+    },
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "idle_session_ttl_in_seconds",
+      "semantic": "Exact"
+    },
+    {
+      "path": "instruction",
+      "semantic": "Exact"
+    },
+    {
+      "path": "region",
+      "semantic": "Exact"
+    }
+  ],
+  "aws_bedrockagent_agent_action_group": [
+    {
+      "path": "action_group_executor.lambda",
+      "semantic": "Exact"
+    },
+    {
+      "path": "action_group_id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "action_group_name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "action_group_state",
+      "semantic": "Exact"
+    },
+    {
+      "path": "agent_id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "agent_version",
+      "semantic": "Exact"
+    },
+    {
+      "path": "api_schema.s3.s3_bucket_name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "api_schema.s3.s3_object_key",
+      "semantic": "Exact"
+    },
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "region",
+      "semantic": "Exact"
+    }
+  ],
+  "aws_bedrockagent_agent_alias": [
+    {
+      "path": "agent_alias_arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "agent_alias_id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "agent_alias_name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "agent_id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "region",
+      "semantic": "Exact"
+    },
+    {
+      "path": "routing_configuration",
+      "semantic": "Exact"
+    }
+  ],
+  "aws_bedrockagent_data_source": [
+    {
+      "path": "data_deletion_policy",
+      "semantic": "Exact"
+    },
+    {
+      "path": "data_source_configuration.s3_configuration.bucket_arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "data_source_configuration.type",
+      "semantic": "Exact"
+    },
+    {
+      "path": "data_source_id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "knowledge_base_id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "region",
+      "semantic": "Exact"
+    },
+    {
+      "path": "server_side_encryption_configuration.kms_key_arn",
+      "semantic": "Exact"
+    }
+  ],
+  "aws_bedrockagent_knowledge_base": [
+    {
+      "path": "arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "knowledge_base_configuration.type",
+      "semantic": "Exact"
+    },
+    {
+      "path": "knowledge_base_configuration.vector_knowledge_base_configuration.embedding_model_arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "region",
+      "semantic": "Exact"
+    },
+    {
+      "path": "role_arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "storage_configuration.s3_vectors_configuration.index_arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "storage_configuration.s3_vectors_configuration.vector_bucket_arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "storage_configuration.type",
+      "semantic": "Exact"
+    }
+  ],
   "aws_cloudfront_distribution": [
     {
       "path": "aliases",
@@ -7999,6 +8201,66 @@
       "semantic": "Exact"
     }
   ],
+  "aws_s3vectors_index": [
+    {
+      "path": "data_type",
+      "semantic": "Exact"
+    },
+    {
+      "path": "dimension",
+      "semantic": "Exact"
+    },
+    {
+      "path": "distance_metric",
+      "semantic": "Exact"
+    },
+    {
+      "path": "encryption_configuration",
+      "semantic": "Exact"
+    },
+    {
+      "path": "index_arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "index_name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "metadata_configuration.non_filterable_metadata_keys",
+      "semantic": "WholeList"
+    },
+    {
+      "path": "region",
+      "semantic": "Exact"
+    },
+    {
+      "path": "vector_bucket_name",
+      "semantic": "Exact"
+    }
+  ],
+  "aws_s3vectors_vector_bucket": [
+    {
+      "path": "encryption_configuration",
+      "semantic": "Exact"
+    },
+    {
+      "path": "force_destroy",
+      "semantic": "Exact"
+    },
+    {
+      "path": "region",
+      "semantic": "Exact"
+    },
+    {
+      "path": "vector_bucket_arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "vector_bucket_name",
+      "semantic": "Exact"
+    }
+  ],
   "aws_sagemaker_domain": [
     {
       "path": "app_network_access_type",
@@ -8083,6 +8345,124 @@
     {
       "path": "vpc_id",
       "semantic": "Exact"
+    }
+  ],
+  "aws_sagemaker_endpoint": [
+    {
+      "path": "arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "endpoint_config_name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "region",
+      "semantic": "Exact"
+    }
+  ],
+  "aws_sagemaker_endpoint_configuration": [
+    {
+      "path": "arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "data_capture_config.enable_capture",
+      "semantic": "Exact"
+    },
+    {
+      "path": "data_capture_config.kms_key_id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "execution_role_arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "kms_key_arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "production_variants.initial_instance_count",
+      "semantic": "Exact"
+    },
+    {
+      "path": "production_variants.initial_variant_weight",
+      "semantic": "Exact"
+    },
+    {
+      "path": "production_variants.instance_type",
+      "semantic": "Exact"
+    },
+    {
+      "path": "production_variants.model_name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "region",
+      "semantic": "Exact"
+    }
+  ],
+  "aws_sagemaker_model": [
+    {
+      "path": "arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "enable_network_isolation",
+      "semantic": "Exact"
+    },
+    {
+      "path": "execution_role_arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "primary_container.image",
+      "semantic": "Exact"
+    },
+    {
+      "path": "primary_container.mode",
+      "semantic": "Exact"
+    },
+    {
+      "path": "primary_container.model_data_url",
+      "semantic": "Exact"
+    },
+    {
+      "path": "region",
+      "semantic": "Exact"
+    },
+    {
+      "path": "vpc_config.security_group_ids",
+      "semantic": "WholeList"
+    },
+    {
+      "path": "vpc_config.subnets",
+      "semantic": "WholeList"
     }
   ],
   "aws_sagemaker_user_profile": [
