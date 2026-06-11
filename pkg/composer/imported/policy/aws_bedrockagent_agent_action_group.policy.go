@@ -67,8 +67,22 @@ var awsBedrockagentAgentActionGroupPolicy = Map{
 		Edit:          EditRelationshipOnly,
 		DriftSemantic: DriftSemanticExact,
 	},
+	"action_group_executor.custom_control": {
+		// RETURN_CONTROL — the non-Lambda executor mode. Flipping between
+		// Lambda execution and return-control changes who runs the tool.
+		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilitySummaryVisible,
+		Edit:          EditRequiresApproval,
+		DriftSemantic: DriftSemanticExact,
+	},
 
 	// API schema — the tool contract ---------------------------------
+	"api_schema.payload": {
+		// Inline OpenAPI schema describing the callable tool surface. An
+		// out-of-band edit changes the contract the agent calls against.
+		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilitySummaryVisible,
+		Edit:          EditRequiresApproval,
+		DriftSemantic: DriftSemanticExact,
+	},
 	"api_schema.s3.s3_bucket_name": {
 		Role: RoleWiring, Pillar: PillarReliability, Visibility: VisibilitySummaryVisible,
 		Edit:          EditRelationshipOnly,
@@ -77,6 +91,15 @@ var awsBedrockagentAgentActionGroupPolicy = Map{
 	"api_schema.s3.s3_object_key": {
 		Role: RoleWiring, Pillar: PillarReliability, Visibility: VisibilitySummaryVisible,
 		Edit:          EditRelationshipOnly,
+		DriftSemantic: DriftSemanticExact,
+	},
+
+	// Function schema — the alternative (non-OpenAPI) tool contract ---
+	// Curated whole: a silent edit to the declared functions / parameters
+	// re-shapes the tool surface the agent can invoke.
+	"function_schema": {
+		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilitySummaryVisible,
+		Edit:          EditRequiresApproval,
 		DriftSemantic: DriftSemanticExact,
 	},
 }

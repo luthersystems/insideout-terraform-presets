@@ -74,6 +74,47 @@ var awsBedrockagentDataSourcePolicy = Map{
 		Edit:          EditRelationshipOnly,
 		DriftSemantic: DriftSemanticExact,
 	},
+	"data_source_configuration.s3_configuration.inclusion_prefixes": {
+		// Which S3 prefixes get ingested — same bucket, different corpus.
+		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilitySummaryVisible,
+		Edit:          EditRequiresApproval,
+		DriftSemantic: DriftSemanticWholeList,
+	},
+
+	// SaaS connector credentials — security-critical auth wiring ------
+	// Each connector authenticates via a Secrets Manager ARN. A silent
+	// rebind points ingestion at different credentials (and thus a
+	// potentially different tenant / corpus). Curated as Security wiring,
+	// Redacted so the ARN is shown for context but never treated as a
+	// raw secret value.
+	"data_source_configuration.confluence_configuration.source_configuration.credentials_secret_arn": {
+		Role: RoleWiring, Pillar: PillarSecurity, Visibility: VisibilitySummaryVisible,
+		Edit:          EditRelationshipOnly,
+		Sensitivity:   SensitivityRedacted,
+		DriftSemantic: DriftSemanticExact,
+	},
+	"data_source_configuration.salesforce_configuration.source_configuration.credentials_secret_arn": {
+		Role: RoleWiring, Pillar: PillarSecurity, Visibility: VisibilitySummaryVisible,
+		Edit:          EditRelationshipOnly,
+		Sensitivity:   SensitivityRedacted,
+		DriftSemantic: DriftSemanticExact,
+	},
+	"data_source_configuration.share_point_configuration.source_configuration.credentials_secret_arn": {
+		Role: RoleWiring, Pillar: PillarSecurity, Visibility: VisibilitySummaryVisible,
+		Edit:          EditRelationshipOnly,
+		Sensitivity:   SensitivityRedacted,
+		DriftSemantic: DriftSemanticExact,
+	},
+
+	// Vector ingestion — how documents are chunked before embedding ---
+	// chunking_strategy is replace-on-change; a silent edit re-chunks the
+	// retrieved excerpts and changes retrieval behavior against the corpus.
+	"vector_ingestion_configuration.chunking_configuration.chunking_strategy": {
+		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilitySummaryVisible,
+		Edit:          EditRequiresApproval,
+		ChangeRisk:    ChangeAlwaysReplace,
+		DriftSemantic: DriftSemanticExact,
+	},
 
 	// Encryption — at-rest protection of ingested content ------------
 	"server_side_encryption_configuration.kms_key_arn": {
