@@ -106,16 +106,31 @@ func TestFindSatisfyingVersion_AcceptsCompatibleAndRejectsImpossible(t *testing.
 	require.False(t, findSatisfyingVersion(mustParse("< 5.0,>= 7.0")))
 }
 
-// TestProviderSeedsMirrorComposer locks the providerSeeds constant
-// against drift from generateProvidersTF's hardcoded versions. If a
-// future contributor bumps the cloud-base aws or google constraint
-// in compose.go, this test fails until they bump providerSeeds too.
-// Without this guard, ValidateProviderConstraints would silently
-// validate against a stale seed.
+// TestProviderSeedsMirrorComposer locks the providerSeeds constant against
+// drift from generateProvidersTF's emitted pins. The composed root exact-pins
+// the cloud's base provider to the mars-baked version (#786), so the seed used
+// for pre-init conflict detection must equal that exact pin — otherwise
+// ValidateProviderConstraints would validate against a looser constraint than
+// the archive actually ships and miss a preset that pins an incompatible 6.x
+// range. The seed is derived from imported.AllBaseProviderPins (the emitter's
+// source of truth), so a version bump there flows to both together.
 func TestProviderSeedsMirrorComposer(t *testing.T) {
 	t.Parallel()
-	require.Equal(t, ">= 6.0", providerSeeds["aws"], "seed drift: providerSeeds[aws] must mirror generateProvidersTF")
-	require.Equal(t, ">= 5.0", providerSeeds["google"], "seed drift: providerSeeds[google] must mirror generateProvidersTF")
+	// providerSeeds is now derived from imported.AllBaseProviderPins (the same
+	// source of truth the emitter uses), so it cannot drift from the emitter by
+	// construction — no symbol-vs-symbol comparison is meaningful here (it would
+	// compare the map against a copy of itself). Instead pin the LITERAL emitted
+	// constraints: a value change is then a deliberate diff, and the
+	// imported-package guard (TestBaseProviderPins_ExactAndMatchMars) separately
+	// asserts these equal the mars bake.
+	require.Equal(t, "= 6.46.0", providerSeeds["aws"])
+	require.Equal(t, "= 6.10.0", providerSeeds["google"])
+	// google-beta MUST be seeded: the emitter pins it (pinBaseProviders
+	// re-asserts google-beta), so a GCP preset pinning an incompatible
+	// google-beta range must be caught pre-init too. A regression that dropped
+	// google-beta from the seed map fails here.
+	require.Equal(t, "= 6.10.0", providerSeeds["google-beta"])
+	require.Len(t, providerSeeds, 3, "seed must cover exactly the three pinned base providers")
 }
 
 // TestFindProviderConflicts_SeedParticipates exercises the seed-merge

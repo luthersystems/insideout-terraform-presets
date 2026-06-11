@@ -33,7 +33,7 @@ func TestForResource_AppendsRegionForAWSRegionAwareResource(t *testing.T) {
 	}
 }
 
-func TestForResource_DoesNotAppendRegionForS3Bucket(t *testing.T) {
+func TestForResource_AppendsRegionForS3Bucket(t *testing.T) {
 	t.Parallel()
 	attrs, err := json.Marshal(&generated.AWSS3Bucket{
 		Bucket: generated.LiteralOf("io-uploads"),
@@ -44,16 +44,26 @@ func TestForResource_DoesNotAppendRegionForS3Bucket(t *testing.T) {
 	}
 	ir := imported.ImportedResource{
 		Identity: imported.ResourceIdentity{
-			Cloud:    "aws",
-			Type:     "aws_s3_bucket",
-			Address:  "aws_s3_bucket.io_uploads",
-			Region:   "us-west-2",
+			Cloud:   "aws",
+			Type:    "aws_s3_bucket",
+			Address: "aws_s3_bucket.io_uploads",
+			// Identity.Region is the STALE scan region (#1860): discovery tags
+			// buckets by the region it listed them from, which differs from
+			// the bucket's true home region. Diverge it from Attrs.Region so
+			// this test independently proves regionForImport prefers the
+			// enriched Attrs region — a regression that dropped the Attrs
+			// candidate would emit @us-east-1 (wrong) and fail here.
+			Region:   "us-east-1",
 			ImportID: "io-uploads",
 		},
 		Attrs: attrs,
 	}
 
-	if got, want := ForResource(ir), "io-uploads"; got != want {
+	// Provider v6.50.0 requires the @region suffix to import a bucket that
+	// lives outside the provider's configured region (bare names no longer
+	// resolve cross-region). The suffix MUST be the enriched true bucket
+	// region from Attrs (us-west-2), never the us-east-1 scan region.
+	if got, want := ForResource(ir), "io-uploads@us-west-2"; got != want {
 		t.Fatalf("ForResource() = %q, want %q", got, want)
 	}
 }

@@ -18,6 +18,7 @@ func TestReasonCodes_WireStable(t *testing.T) {
 	assert.Equal(t, "aws_managed_kms_alias", ReasonAWSManagedKMSAlias)
 	assert.Equal(t, "aws_managed_kms_key", ReasonAWSManagedKMSKey)
 	assert.Equal(t, "service_managed_eni", ReasonServiceManagedENI)
+	assert.Equal(t, "service_managed", ReasonServiceManaged)
 	assert.Equal(t, "ephemeral_log_stream", ReasonEphemeralLogStream)
 	assert.Equal(t, "insideout_imported", ReasonInsideOutImported)
 }
@@ -74,6 +75,43 @@ func TestUnimportableReason_KMSKey(t *testing.T) {
 		}}
 		assert.Equal(t, "", UnimportableReason(ir))
 	})
+}
+
+func TestUnimportableReason_ServiceManaged(t *testing.T) {
+	t.Parallel()
+	t.Run("EventBridge rule with ManagedBy is un-importable", func(t *testing.T) {
+		// AutoScalingManagedRule: AWS stamps ManagedBy; tag/PutRule/DeleteRule
+		// are all rejected (ManagedRuleException), so the rule cannot be managed
+		// by Terraform at all (#785).
+		ir := ImportedResource{Identity: ResourceIdentity{
+			Type:             "aws_cloudwatch_event_rule",
+			NameHint:         "AutoScalingManagedRule",
+			ServiceManagedBy: "autoscaling.amazonaws.com",
+		}}
+		assert.Equal(t, ReasonServiceManaged, UnimportableReason(ir))
+	})
+	t.Run("rule without ManagedBy is importable", func(t *testing.T) {
+		ir := ImportedResource{Identity: ResourceIdentity{
+			Type:     "aws_cloudwatch_event_rule",
+			NameHint: "my-app-rule",
+		}}
+		assert.Equal(t, "", UnimportableReason(ir))
+	})
+	t.Run("marker is type-agnostic — any type with ServiceManagedBy is un-importable", func(t *testing.T) {
+		ir := ImportedResource{Identity: ResourceIdentity{
+			Type:             "aws_some_future_type",
+			ServiceManagedBy: "service.amazonaws.com",
+		}}
+		assert.Equal(t, ReasonServiceManaged, UnimportableReason(ir))
+	})
+}
+
+func TestIsServiceManaged(t *testing.T) {
+	t.Parallel()
+	assert.True(t, IsServiceManaged(ResourceIdentity{ServiceManagedBy: "autoscaling.amazonaws.com"}))
+	assert.True(t, IsServiceManaged(ResourceIdentity{ServiceManagedBy: "  spaces-trimmed  "}))
+	assert.False(t, IsServiceManaged(ResourceIdentity{}))
+	assert.False(t, IsServiceManaged(ResourceIdentity{ServiceManagedBy: "   "}))
 }
 
 func TestIsServiceManagedENIInterfaceType(t *testing.T) {
@@ -257,6 +295,9 @@ func TestReasonDescription(t *testing.T) {
 	assert.Truef(t, strings.Contains(eni, "network interface"), "ENI description must mention network interface, got %q", eni)
 	insideOut := ReasonDescription(ReasonInsideOutImported)
 	assert.Truef(t, strings.Contains(insideOut, "InsideOut"), "InsideOut-imported description must mention InsideOut, got %q", insideOut)
+	svcManaged := ReasonDescription(ReasonServiceManaged)
+	assert.Truef(t, strings.Contains(svcManaged, "Service-managed"), "service-managed description must mention Service-managed, got %q", svcManaged)
+	assert.NotEqual(t, eni, svcManaged, "the ENI and generic service-managed descriptions must be distinct")
 	assert.NotEqual(t, kms, eni, "the two descriptions must be distinct (guards against swapped case bodies)")
 	assert.NotEqual(t, kms, kmsKey, "the KMS-alias and KMS-key descriptions must be distinct")
 	assert.NotEqual(t, insideOut, kms, "the InsideOut-imported and KMS-alias descriptions must be distinct")

@@ -8,6 +8,7 @@ import (
 	"github.com/zclconf/go-cty/cty"
 
 	"github.com/luthersystems/insideout-terraform-presets/pkg/composer"
+	"github.com/luthersystems/insideout-terraform-presets/pkg/composer/imported"
 )
 
 var localstackEndpointServices = []string{
@@ -52,12 +53,12 @@ func renderImportedProvidersTF(opts importedProviderRenderOptions) ([]byte, erro
 	case "gcp":
 		rp.Body().SetAttributeValue("google", cty.ObjectVal(map[string]cty.Value{
 			"source":  cty.StringVal("hashicorp/google"),
-			"version": cty.StringVal("~> 5.0"),
+			"version": cty.StringVal(imported.BaseProviderPin("gcp", "google")),
 		}))
 		if opts.ProvidersUsed[composer.ProvidersUsedKeyGCPBeta] {
 			rp.Body().SetAttributeValue("google-beta", cty.ObjectVal(map[string]cty.Value{
 				"source":  cty.StringVal("hashicorp/google-beta"),
-				"version": cty.StringVal("~> 5.0"),
+				"version": cty.StringVal(imported.BaseProviderPin("gcp", "google-beta")),
 			}))
 		}
 		prov := body.AppendNewBlock("provider", []string{"google"})
@@ -77,7 +78,7 @@ func renderImportedProvidersTF(opts importedProviderRenderOptions) ([]byte, erro
 	case "aws", "":
 		rp.Body().SetAttributeValue("aws", cty.ObjectVal(map[string]cty.Value{
 			"source":  cty.StringVal("hashicorp/aws"),
-			"version": cty.StringVal("~> 6.0"),
+			"version": cty.StringVal(imported.BaseProviderPin("aws", "aws")),
 		}))
 		// Base `aws.imported` block (region = primary). Always emitted:
 		// back-compat with single-region stacks and the region-less
@@ -135,7 +136,7 @@ const awsProviderMaxRetries = 25
 // degrades to throttle backoff instead of failures (luthersystems/ui-core
 // #420). Mirrors genconfig.appendAWSRetryTuning; see it for the adaptive-mode
 // rationale. Both attributes are top-level arguments of the pinned
-// hashicorp/aws ~> 6.0 provider.
+// hashicorp/aws provider (exact pin via imported.BaseProviderPin, #786).
 func appendAWSRetryTuning(body *hclwrite.Body) {
 	body.SetAttributeValue("retry_mode", cty.StringVal("adaptive"))
 	body.SetAttributeValue("max_retries", cty.NumberIntVal(awsProviderMaxRetries))

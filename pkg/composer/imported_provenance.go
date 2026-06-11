@@ -99,6 +99,19 @@ func taggable(ir imported.ImportedResource) (attr string, ok bool) {
 		return "", false
 	}
 
+	// Instance-level untaggability (#785): a resource whose type is normally
+	// taggable is still NOT taggable when the cloud marks it service-managed.
+	// AWS rejects every tag operation on a service-managed instance (an
+	// EventBridge ManagedBy rule fails with ManagedRuleException), so the
+	// injector must skip provenance and weak-lock it. This sits alongside the
+	// type-level untaggableAWS map but keys off the per-instance marker the
+	// discoverer captured, so it works for any type and any selection path —
+	// the composer's last line of defense even if classification let the
+	// instance through.
+	if imported.IsServiceManaged(ir.Identity) {
+		return "", false
+	}
+
 	if _, schema, registered := generated.Lookup(tfType); registered {
 		switch cloud {
 		case "aws":

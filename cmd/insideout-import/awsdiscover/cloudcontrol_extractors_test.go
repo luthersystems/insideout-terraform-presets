@@ -234,6 +234,26 @@ func TestCloudWatchEventRuleConfig(t *testing.T) {
 	if native["arn"] != props["Arn"] {
 		t.Errorf("NativeIDs arn: got %q, want %q", native["arn"], props["Arn"])
 	}
+
+	// Service-managed marker (#785): AWS-managed rules (AutoScalingManagedRule,
+	// etc.) carry a ManagedBy property. The discoverer must surface it so the
+	// importability classifier greys them out — tag/PutRule/DeleteRule all fail
+	// with ManagedRuleException on a managed rule.
+	if cfg.ServiceManagedByFromProperties == nil {
+		t.Fatal("aws_cloudwatch_event_rule: ServiceManagedByFromProperties must be set to capture managed rules")
+	}
+	managedProps := map[string]any{
+		"Name":      "AutoScalingManagedRule",
+		"Arn":       "arn:aws:events:us-east-1:111111111111:rule/AutoScalingManagedRule",
+		"ManagedBy": "autoscaling.amazonaws.com",
+	}
+	if got := cfg.ServiceManagedByFromProperties(managedProps); got != "autoscaling.amazonaws.com" {
+		t.Errorf("ServiceManagedBy (managed rule): got %q, want autoscaling.amazonaws.com", got)
+	}
+	// A customer rule has no ManagedBy → empty marker → importable.
+	if got := cfg.ServiceManagedByFromProperties(props); got != "" {
+		t.Errorf("ServiceManagedBy (customer rule): got %q, want empty", got)
+	}
 }
 
 // TestKMSKeyConfig pins the per-type extractors for aws_kms_key, focused

@@ -332,6 +332,16 @@ var cloudControlTypeConfigs = []cloudControlConfig{
 		NameHintFromProperties:  nameOrIdentifier("Name"),
 		NativeIDsFromProperties: arnUnderKey("Arn"),
 		TagsFromProperties:      tagsFromKey("Tags"),
+		// Surface the AWS-managed marker so the importability classifier
+		// (imported.UnimportableReason → ReasonServiceManaged, #785) greys
+		// out service-managed rules (AutoScalingManagedRule, etc.) instead
+		// of offering them. AWS rejects tag / PutRule / DeleteRule on any
+		// rule with ManagedBy set (ManagedRuleException), so the rule cannot
+		// be managed by Terraform at all. Absent-safe: a customer rule has no
+		// ManagedBy → empty marker → importable.
+		ServiceManagedByFromProperties: func(props map[string]any) string {
+			return extractString(props, "ManagedBy")
+		},
 	},
 
 	// =====================================================================

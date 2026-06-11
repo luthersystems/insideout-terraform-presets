@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/luthersystems/insideout-terraform-presets/pkg/composer"
+	"github.com/luthersystems/insideout-terraform-presets/pkg/composer/imported"
 )
 
 func TestRenderImportedProvidersTF_AWSAssumesProjectRole(t *testing.T) {
@@ -48,6 +49,61 @@ func TestRenderImportedProvidersTF_AWSAssumesProjectRole(t *testing.T) {
 			t.Fatalf("providers-imported.tf missing pattern %q:\n%s", pat, s)
 		}
 	}
+}
+
+// TestRenderImportedProvidersTF_ExactProviderPins pins that the reverse-import
+// combined stack constrains its providers to the EXACT mars-baked versions
+// (not an open `~> 6.0` / `~> 5.0` range) so terraform init in the mars
+// container symlinks from the filesystem mirror instead of downloading
+// "newest at runtime" (#786). The pins are sourced from
+// imported.BaseProviderPin so this emitter and the composed-archive emitter
+// never drift.
+func TestRenderImportedProvidersTF_ExactProviderPins(t *testing.T) {
+	t.Run("aws", func(t *testing.T) {
+		body, err := renderImportedProvidersTF(importedProviderRenderOptions{
+			Cloud:  "aws",
+			Region: "us-west-2",
+			ProvidersUsed: map[string]bool{
+				composer.ProvidersUsedKeyAWS: true,
+			},
+		})
+		if err != nil {
+			t.Fatalf("renderImportedProvidersTF() error = %v", err)
+		}
+		s := string(body)
+		want := imported.BaseProviderPin("aws", "aws") // "= 6.46.0"
+		if !strings.Contains(s, `version = "`+want+`"`) {
+			t.Fatalf("aws provider must be exactly pinned to %q, got:\n%s", want, s)
+		}
+		if strings.Contains(s, `version = "~> 6.0"`) {
+			t.Fatalf("open ~> 6.0 range must not reach the imported stack:\n%s", s)
+		}
+	})
+	t.Run("gcp", func(t *testing.T) {
+		body, err := renderImportedProvidersTF(importedProviderRenderOptions{
+			Cloud:        "gcp",
+			Region:       "us-central1",
+			GCPProjectID: "demo-project",
+			ProvidersUsed: map[string]bool{
+				composer.ProvidersUsedKeyGCPBeta: true,
+			},
+		})
+		if err != nil {
+			t.Fatalf("renderImportedProvidersTF() error = %v", err)
+		}
+		s := string(body)
+		want := imported.BaseProviderPin("gcp", "google") // "= 6.10.0"
+		if !strings.Contains(s, `version = "`+want+`"`) {
+			t.Fatalf("google provider must be exactly pinned to %q, got:\n%s", want, s)
+		}
+		wantBeta := imported.BaseProviderPin("gcp", "google-beta")
+		if !strings.Contains(s, `version = "`+wantBeta+`"`) {
+			t.Fatalf("google-beta provider must be exactly pinned to %q, got:\n%s", wantBeta, s)
+		}
+		if strings.Contains(s, `version = "~> 5.0"`) {
+			t.Fatalf("open ~> 5.0 range must not reach the imported stack:\n%s", s)
+		}
+	})
 }
 
 // TestRenderImportedProvidersTF_MultiRegion pins that a multi-region batch

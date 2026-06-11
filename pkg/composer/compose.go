@@ -950,7 +950,7 @@ func generateProvidersFiles(in providersTFInput) providersTFFiles {
 		// blowing up the workflow tar with a fresh provider binary
 		// every plan. Bump both this pin AND the mars bake together.
 		// See luthersystems/mars/Dockerfile `GOOGLE_PROVIDER_VERSION`.
-		required["google"] = &tfconfig.ProviderRequirement{Source: "hashicorp/google", VersionConstraints: []string{"= 6.10.0"}}
+		required["google"] = &tfconfig.ProviderRequirement{Source: "hashicorp/google", VersionConstraints: []string{imported.BaseProviderPin("gcp", "google")}}
 		// google-beta is part of every GCP stack's provider set so the
 		// `google-beta.imported` alias block below always resolves —
 		// even when the current compose's Imported list is empty but
@@ -958,8 +958,16 @@ func generateProvidersFiles(in providersTFInput) providersTFFiles {
 		// google-beta only ships with GCP-cloud composes; the outer
 		// `switch cloud` keeps it out of AWS stacks. Mars bakes
 		// google-beta at the same version as google.
-		required["google-beta"] = &tfconfig.ProviderRequirement{Source: "hashicorp/google-beta", VersionConstraints: []string{"= 6.10.0"}}
+		required["google-beta"] = &tfconfig.ProviderRequirement{Source: "hashicorp/google-beta", VersionConstraints: []string{imported.BaseProviderPin("gcp", "google-beta")}}
 		maps.Copy(required, discovered)
+		// Re-assert the exact pin AFTER the discovered union: every
+		// gcp/<module>/main.tf preset declares an open `version = ">= 5.0"`
+		// (or similar), which maps.Copy would otherwise let override the
+		// seed above — re-emitting the open range into the composed archive
+		// and defeating the cache-hit guarantee (#786). The discovered union
+		// still flows for every NON-base provider (random, time, …); only
+		// the cloud's base providers are forced back to the mars-baked pin.
+		pinBaseProviders(required, imported.BaseProviderPins("gcp"))
 
 		// default_labels is a safety net so every GCP resource in the
 		// rendered stack carries the session's project label, even if a
@@ -1075,8 +1083,17 @@ variable "aws_external_id" {
 		// for sess_v2_CnqUJ6NRJnLC on 2026-05-25 — see
 		// luthersystems/mars#171. Bump this AND the mars bake
 		// (`AWS_PROVIDER_VERSION` in mars/Dockerfile) together.
-		required["aws"] = &tfconfig.ProviderRequirement{Source: "hashicorp/aws", VersionConstraints: []string{"= 6.46.0"}}
+		required["aws"] = &tfconfig.ProviderRequirement{Source: "hashicorp/aws", VersionConstraints: []string{imported.BaseProviderPin("aws", "aws")}}
 		maps.Copy(required, discovered)
+		// Re-assert the exact pin AFTER the discovered union: every
+		// aws/<module>/main.tf preset declares an open `version = ">= 6.0"`,
+		// which maps.Copy would otherwise let override the seed above —
+		// re-emitting `>= 6.0` into the composed archive so terraform init
+		// resolves "newest at runtime", drifts ahead of the mars bake, and
+		// falls back to a direct registry download (the 6.49→6.50 breakage,
+		// #786). The discovered union still flows for every NON-base provider
+		// (random, time, opensearch, …); only aws is forced back to the pin.
+		pinBaseProviders(required, imported.BaseProviderPins("aws"))
 
 		var main strings.Builder
 		// awsVarDecls (the bootstrap_role / aws_external_id declarations)
@@ -1142,6 +1159,26 @@ variable "aws_external_id" {
 			Main:     []byte(main.String()),
 			Aliases:  aliases,
 			Imported: []byte(imp.String()),
+		}
+	}
+}
+
+// pinBaseProviders forces each provider named in pins back to its exact pinned
+// constraint on required, overwriting whatever the discovered child-module
+// union left there. Used after maps.Copy(required, discovered) so the cloud's
+// base providers keep the mars-cache-aligned exact pin while every other
+// discovered provider (random, time, opensearch, …) flows through unchanged.
+// Each entry's Source is preserved from the seed already present in required;
+// pins only overrides VersionConstraints. See #786.
+func pinBaseProviders(required map[string]*tfconfig.ProviderRequirement, pins map[string]string) {
+	for name, constraint := range pins {
+		source := "hashicorp/" + name
+		if existing := required[name]; existing != nil && existing.Source != "" {
+			source = existing.Source
+		}
+		required[name] = &tfconfig.ProviderRequirement{
+			Source:             source,
+			VersionConstraints: []string{constraint},
 		}
 	}
 }

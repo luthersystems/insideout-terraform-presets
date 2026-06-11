@@ -249,6 +249,50 @@ func TestCloudControlDiscover_HappyPath(t *testing.T) {
 	}
 }
 
+// TestCloudControlDiscover_ServiceManagedByLandsOnIdentity proves the
+// ServiceManagedByFromProperties hook (#785) flows end-to-end: a resource
+// whose properties carry the managed-by marker emits an ImportedResource
+// with Identity.ServiceManagedBy populated, so the importability classifier
+// can grey it out. A resource without the marker leaves the field empty.
+func TestCloudControlDiscover_ServiceManagedByLandsOnIdentity(t *testing.T) {
+	t.Parallel()
+	fake := &fakeCloudControlClient{
+		listPages: []cloudcontrol.ListResourcesOutput{
+			listPage("", "managed-rule", "customer-rule"),
+		},
+		propsByIdentifier: map[string]map[string]any{
+			"managed-rule":  {"Name": "managed-rule", "ManagedBy": "autoscaling.amazonaws.com"},
+			"customer-rule": {"Name": "customer-rule"},
+		},
+	}
+	cfg := testConfig()
+	cfg.ServiceManagedByFromProperties = func(props map[string]any) string {
+		return extractString(props, "ManagedBy")
+	}
+	d := &cloudControlDiscoverer{
+		cfg:            cfg,
+		new:            func(_ string) cloudControlClient { return fake },
+		maxConcurrency: DefaultMaxConcurrency,
+	}
+	got, err := d.Discover(context.Background(), DiscoverArgs{
+		Regions:   []string{"us-east-1"},
+		AccountID: "123",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	byID := map[string]imported.ImportedResource{}
+	for _, ir := range got {
+		byID[ir.Identity.ImportID] = ir
+	}
+	if got := byID["managed-rule"].Identity.ServiceManagedBy; got != "autoscaling.amazonaws.com" {
+		t.Errorf("managed-rule ServiceManagedBy=%q, want autoscaling.amazonaws.com", got)
+	}
+	if got := byID["customer-rule"].Identity.ServiceManagedBy; got != "" {
+		t.Errorf("customer-rule ServiceManagedBy=%q, want empty", got)
+	}
+}
+
 // TestCloudControlDiscover_PaginatesUntilNoToken pins that pagination
 // continues until a page returns no NextToken. A regression that drops
 // the paginator loop (or only reads the first page) would only see

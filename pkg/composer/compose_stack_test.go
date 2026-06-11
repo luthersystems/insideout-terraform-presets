@@ -1790,7 +1790,9 @@ func TestComposeStack_GCP_Provider(t *testing.T) {
 	// resource regardless of whether the preset wires labels itself.
 	//
 	// Requires google provider 5.16+ (default_labels was introduced there);
-	// generateProvidersTF pins the GCP required_providers to ">= 5.16".
+	// generateProvidersTF exact-pins the GCP required_providers to the
+	// mars-baked version (= 6.10.0, via imported.BaseProviderPin, #786), which
+	// is well past 5.16.
 	require.Contains(t, provStr, "default_labels",
 		"GCP provider block should declare default_labels as the project-label safety net (#215)")
 	require.Contains(t, provStr, "project    = var.project",

@@ -128,11 +128,17 @@ func TestEmitProviders_HappyPath(t *testing.T) {
 	for _, want := range []string{
 		"required_providers",
 		`source  = "hashicorp/aws"`,
-		`version = "~> 6.0"`,
+		// Exact pin aligned with the mars provider-mirror bake so the
+		// genconfig readback hits the cache (#786) — sourced from the same
+		// single source of truth as the composed-archive emitter.
+		`version = "` + imported.BaseProviderPin("aws", "aws") + `"`,
 	} {
 		if !strings.Contains(got, want) {
 			t.Errorf("providers.tf missing %q\n--- got ---\n%s", want, got)
 		}
+	}
+	if strings.Contains(got, `version = "~> 6.0"`) {
+		t.Errorf("genconfig providers.tf must not emit the open ~> 6.0 range\n--- got ---\n%s", got)
 	}
 	// hclwrite aligns the `=` columns across the provider block, so match the
 	// region + retry-tuning attrs value-anchored (the retry attrs widen the
@@ -299,13 +305,18 @@ func TestEmitProviders_GCPHappyPath(t *testing.T) {
 	// patterns rather than alignment-dependent literals.
 	for _, pat := range []string{
 		`source\s*=\s*"hashicorp/google"`,
-		`version\s*=\s*"~> 5\.0"`,
+		// Exact pin aligned with the mars provider-mirror bake (#786),
+		// regexp-escaped from the single source of truth.
+		`version\s*=\s*"` + regexp.QuoteMeta(imported.BaseProviderPin("gcp", "google")) + `"`,
 		`project\s*=\s*"real-proj-12345"`,
 		`region\s*=\s*"us-central1"`,
 	} {
 		if !regexp.MustCompile(pat).MatchString(got) {
 			t.Errorf("providers.tf missing pattern %q\n--- got ---\n%s", pat, got)
 		}
+	}
+	if strings.Contains(got, `version = "~> 5.0"`) {
+		t.Errorf("genconfig GCP providers.tf must not emit the open ~> 5.0 range\n--- got ---\n%s", got)
 	}
 	// AWS-flavored attributes must NOT appear in a GCP block.
 	bannedPatterns := []string{

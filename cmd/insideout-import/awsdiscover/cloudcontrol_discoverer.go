@@ -128,8 +128,17 @@ type cloudControlConfig struct {
 	NameHintFromProperties  func(identifier string, props map[string]any) string
 	NativeIDsFromProperties func(identifier string, props map[string]any) map[string]string
 	TagsFromProperties      func(props map[string]any) map[string]string
-	ParentLister            func(ctx context.Context, awsCfg aws.Config, region string, args DiscoverArgs) ([]string, error)
-	SDKLister               func(ctx context.Context, awsCfg aws.Config, region string, args DiscoverArgs) ([]string, error)
+	// ServiceManagedByFromProperties, when non-nil, extracts the service
+	// owner of a service-managed instance from its Cloud Control properties
+	// (e.g. an EventBridge rule's ManagedBy = "autoscaling.amazonaws.com").
+	// A non-empty return stamps Identity.ServiceManagedBy so the importability
+	// classifier (imported.UnimportableReason → ReasonServiceManaged, #785)
+	// greys the instance out and the composer's provenance injector skips it.
+	// Return "" for customer-owned instances. Generic: any type whose service
+	// owns some instances on the customer's behalf can wire this hook.
+	ServiceManagedByFromProperties func(props map[string]any) string
+	ParentLister                   func(ctx context.Context, awsCfg aws.Config, region string, args DiscoverArgs) ([]string, error)
+	SDKLister                      func(ctx context.Context, awsCfg aws.Config, region string, args DiscoverArgs) ([]string, error)
 	// SkipIdentifier, when non-nil, is consulted for every identifier
 	// returned by ListResources / SDKLister: returning true drops that
 	// identifier before the GetResource fan-out (and short-circuits
@@ -600,6 +609,9 @@ func (d *cloudControlDiscoverer) Discover(ctx context.Context, args DiscoverArgs
 				native,
 				f.tags,
 			)
+			if d.cfg.ServiceManagedByFromProperties != nil {
+				ir.Identity.ServiceManagedBy = d.cfg.ServiceManagedByFromProperties(f.props)
+			}
 			if d.cfg.PostDiscover != nil {
 				if perr := d.cfg.PostDiscover(ctx, d.awsCfg, region, &ir); perr != nil {
 					// Soft-fail: the resource is still emitted with whatever
@@ -687,6 +699,9 @@ func (d *cloudControlDiscoverer) DiscoverByID(ctx context.Context, id, region, a
 		native,
 		tags,
 	)
+	if d.cfg.ServiceManagedByFromProperties != nil {
+		ir.Identity.ServiceManagedBy = d.cfg.ServiceManagedByFromProperties(props)
+	}
 	if d.cfg.PostDiscover != nil {
 		// Soft-fail to match the bulk Discover path: a follow-up SDK miss
 		// on a single dep-chased resource still returns the IR with

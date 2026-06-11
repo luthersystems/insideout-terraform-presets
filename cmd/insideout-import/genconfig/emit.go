@@ -93,7 +93,8 @@ type providerEmitOptions struct {
 // unaliased — see emitImports for why.
 //
 // On AWS (provider == ProviderAWS):
-//   - required_providers entry for hashicorp/aws ~> 6.0
+//   - required_providers entry for hashicorp/aws exact-pinned via
+//     imported.BaseProviderPin (mars-cache-aligned, #786)
 //   - provider "aws" { region = ... }
 //   - When awsEndpointURL is non-empty (LocalStack CI gate #272),
 //     emits the LocalStack attribute set + endpoints {} map.
@@ -101,7 +102,8 @@ type providerEmitOptions struct {
 //     readback runs through the project Terraform role.
 //
 // On GCP (provider == ProviderGCP):
-//   - required_providers entry for hashicorp/google ~> 5.0
+//   - required_providers entry for hashicorp/google exact-pinned via
+//     imported.BaseProviderPin (mars-cache-aligned, #786)
 //   - provider "google" { project = gcpProjectID; region = ... } (region
 //     omitted when empty so project-global stacks don't emit a stray
 //     attribute the provider would warn on).
@@ -121,7 +123,7 @@ func emitProviders(dir string, opts providerEmitOptions) error {
 	case ProviderGCP:
 		rp.Body().SetAttributeValue("google", cty.ObjectVal(map[string]cty.Value{
 			"source":  cty.StringVal("hashicorp/google"),
-			"version": cty.StringVal("~> 5.0"),
+			"version": cty.StringVal(imported.BaseProviderPin("gcp", "google")),
 		}))
 		prov := body.AppendNewBlock("provider", []string{"google"})
 		prov.Body().SetAttributeValue("project", cty.StringVal(opts.GCPProjectID))
@@ -131,7 +133,7 @@ func emitProviders(dir string, opts providerEmitOptions) error {
 	default: // ProviderAWS
 		rp.Body().SetAttributeValue("aws", cty.ObjectVal(map[string]cty.Value{
 			"source":  cty.StringVal("hashicorp/aws"),
-			"version": cty.StringVal("~> 6.0"),
+			"version": cty.StringVal(imported.BaseProviderPin("aws", "aws")),
 		}))
 		// Single default (unaliased) provider for this region. Each region
 		// in a multi-region import gets its own genconfig pass / workdir
@@ -187,7 +189,7 @@ const awsProviderMaxRetries = 25
 // concurrent Describe/Get reads from the raised parallelism is smoothed back
 // toward the account's real API budget rather than surfacing as a hard
 // ThrottlingException. Both attributes are top-level provider arguments
-// supported by the pinned hashicorp/aws ~> 6.0 provider (retry_mode has been
+// supported by the exact-pinned hashicorp/aws provider (retry_mode has been
 // a provider argument since v5.32; max_retries since the SDKv2 migration).
 func appendAWSRetryTuning(b *hclwrite.Body) {
 	b.SetAttributeValue("retry_mode", cty.StringVal("adaptive"))

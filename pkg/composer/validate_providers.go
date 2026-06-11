@@ -6,26 +6,33 @@ import (
 	"strings"
 
 	"github.com/hashicorp/go-version"
+
+	"github.com/luthersystems/insideout-terraform-presets/pkg/composer/imported"
 )
 
-// providerSeed represents the cloud-level required_provider entry that
+// providerSeeds represents the cloud-level required_provider entry that
 // generateProvidersTF stamps on every emitted root, regardless of what the
 // presets declare. ValidateProviderConstraints unions these into the
-// per-provider constraint set so a preset that pins (e.g.) `aws < 6.0`
-// surfaces as a conflict against the seed's `aws >= 6.0` instead of slipping
-// through to terraform init.
+// per-provider constraint set so a preset that pins (e.g.) `aws ~> 6.40`
+// surfaces as a conflict against the seed's exact `= 6.46.0` instead of
+// slipping through to terraform init.
 //
-// Mirror these constants on any change to the seeds in generateProvidersTF
-// (compose.go).
+// These mirror the EXACT pins generateProvidersTF emits (#786): the composed
+// root no longer ships an open `>= 6.0` range — it hard-pins the cloud's base
+// provider to the mars-baked version. Deriving the seeds from
+// imported.AllBaseProviderPins (the same source of truth the emitter uses)
+// keeps this validator faithful to the actual emitted constraint by
+// construction — so a preset pinning a different 6.x range is caught pre-init,
+// for EVERY base provider the emitter pins (aws, google, AND google-beta), and
+// the seed can never drift from the emitter. ValidateProviderConstraints only
+// layers a seed onto a provider some preset already declares, so seeding
+// google-beta is inert until a GCP preset pins it.
 //
 // The imported provider aliases (`aws.imported` / `google.imported`,
-// emitted by generateProvidersTF when ComposeStackOpts.Imported is
-// non-empty) share the same provider source/version as the default
-// alias; they introduce no new entry here.
-var providerSeeds = map[string]string{
-	"aws":    ">= 6.0",
-	"google": ">= 5.0",
-}
+// emitted by generateProvidersTF unconditionally per #562) share the same
+// provider source/version as the default alias; they introduce no new entry
+// here.
+var providerSeeds = imported.AllBaseProviderPins()
 
 // ValidateProviderConstraints unions the required_providers VersionConstraints
 // across every selected module's preset (plus the cloud-level seeds emitted
