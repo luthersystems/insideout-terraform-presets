@@ -1729,6 +1729,94 @@
       "semantic": "Exact"
     }
   ],
+  "aws_bedrockagentcore_gateway": [
+    {
+      "path": "authorizer_configuration.custom_jwt_authorizer.allowed_audience",
+      "semantic": "WholeList"
+    },
+    {
+      "path": "authorizer_configuration.custom_jwt_authorizer.allowed_clients",
+      "semantic": "WholeList"
+    },
+    {
+      "path": "authorizer_configuration.custom_jwt_authorizer.allowed_scopes",
+      "semantic": "WholeList"
+    },
+    {
+      "path": "authorizer_configuration.custom_jwt_authorizer.discovery_url",
+      "semantic": "Exact"
+    },
+    {
+      "path": "authorizer_type",
+      "semantic": "Exact"
+    },
+    {
+      "path": "gateway_arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "gateway_id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "gateway_url",
+      "semantic": "Exact"
+    },
+    {
+      "path": "interceptor_configuration.interceptor.lambda.arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "kms_key_arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "protocol_type",
+      "semantic": "Exact"
+    },
+    {
+      "path": "region",
+      "semantic": "Exact"
+    },
+    {
+      "path": "role_arn",
+      "semantic": "Exact"
+    }
+  ],
+  "aws_bedrockagentcore_gateway_target": [
+    {
+      "path": "credential_provider_configuration.api_key.provider_arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "credential_provider_configuration.oauth.provider_arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "gateway_identifier",
+      "semantic": "Exact"
+    },
+    {
+      "path": "name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "region",
+      "semantic": "Exact"
+    },
+    {
+      "path": "target_configuration.mcp.lambda.lambda_arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "target_id",
+      "semantic": "Exact"
+    }
+  ],
   "aws_cloudfront_distribution": [
     {
       "path": "aliases",

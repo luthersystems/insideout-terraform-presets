@@ -238,6 +238,19 @@ var awsCodegenOnlyTypes = []string{
 	"aws_bedrockagent_agent_alias",
 	"aws_bedrockagent_data_source",
 	"aws_bedrockagent_knowledge_base",
+	// #795 — AgentCore MCP/tool gateway reverse-import vocabulary for the
+	// aws/agentcore_gateway preset (#763 / #794), deferred by the #787
+	// AI-stack precedent. The aws_bedrockagentcore_* family is not
+	// cloud-control-routed, so a hand-rolled SDKLister in awsdiscover is
+	// the future promotion path; until that lands, Layer-1 codegen +
+	// curated Layer-2 policy ship here so out-of-band edits are visible to
+	// drift detection. The high-value surfaces are the gateway's role_arn
+	// (the identity it assumes to invoke its targets) and its CUSTOM_JWT
+	// authorizer wiring (discovery_url / allowed_clients / allowed_audience
+	// — the inbound auth surface), plus the target's bound lambda_arn.
+	// gateway is taggable; gateway_target carries no tags attribute.
+	"aws_bedrockagentcore_gateway",
+	"aws_bedrockagentcore_gateway_target",
 	"aws_cloudtrail",
 	"aws_cloudwatch_event_bus",
 	"aws_codebuild_project",
