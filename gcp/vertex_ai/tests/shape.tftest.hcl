@@ -404,11 +404,18 @@ run "serving" {
     error_message = "endpoint location must be fed from var.region (default us-central1)."
   }
 
-  # endpoint_name output mirrors the resource name on the serving path (and is
-  # null on the off path — see serving_off_by_default-adjacent coverage).
+  # endpoint_name output mirrors the resource name on the bare-serving path (and
+  # is null on the off path — see serving_off_by_default-adjacent coverage).
   assert {
     condition     = output.endpoint_name == "2676412545"
-    error_message = "endpoint_name output must surface the numeric endpoint name when serving is on."
+    error_message = "endpoint_name output must surface the numeric endpoint name when serving is on (bare path)."
+  }
+
+  # endpoint_id output is sourced from the bare endpoint on the no-model path
+  # (the model-garden deployment is absent here).
+  assert {
+    condition     = output.endpoint_id == google_vertex_ai_endpoint.serving[0].id
+    error_message = "endpoint_id output must surface the bare serving endpoint's resource name on the no-model path."
   }
 
   # Vector Search resources are untouched by the serving flag.
@@ -438,15 +445,33 @@ run "model_garden" {
     # EULA-true flow-through is exercised in model_garden_with_accelerator.
   }
 
-  # Both the bare endpoint AND the model-garden deployment compose.
+  # Mutually exclusive (#768 review): when a Model Garden model is named, the
+  # model_garden resource owns its own endpoint, so the BARE endpoint is NOT
+  # created. Otherwise the bare endpoint would sit empty and the outputs would
+  # point at the empty shell.
   assert {
-    condition     = length(google_vertex_ai_endpoint.serving) == 1
-    error_message = "model-garden path still creates the bare serving endpoint."
+    condition     = length(google_vertex_ai_endpoint.serving) == 0
+    error_message = "model-garden path must NOT create the bare serving endpoint (the deployment owns its own endpoint; they are mutually exclusive)."
   }
 
   assert {
     condition     = length(google_vertex_ai_endpoint_with_model_garden_deployment.model_garden) == 1
     error_message = "enable_serving + model_garden_model must create exactly one model-garden deployment."
+  }
+
+  # The serving outputs surface the Model Garden deployment's OWN endpoint, not
+  # the (absent) bare endpoint — this is the #768-review bug fix. endpoint_id is
+  # the deployment's full resource name; endpoint_name is its numeric endpoint
+  # ID segment. The mock provider supplies computed values, so assert they are
+  # non-null and sourced from the deployment rather than a literal.
+  assert {
+    condition     = output.endpoint_id == google_vertex_ai_endpoint_with_model_garden_deployment.model_garden[0].id
+    error_message = "endpoint_id output must surface the Model Garden deployment's own endpoint resource name, not the absent bare endpoint."
+  }
+
+  assert {
+    condition     = output.endpoint_name == google_vertex_ai_endpoint_with_model_garden_deployment.model_garden[0].endpoint
+    error_message = "endpoint_name output must surface the Model Garden deployment's endpoint ID segment, not the absent bare endpoint."
   }
 
   # The publisher model name flows through verbatim.

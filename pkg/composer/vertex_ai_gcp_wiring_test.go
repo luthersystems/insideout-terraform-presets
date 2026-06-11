@@ -49,10 +49,11 @@ func TestBuildModuleValues_GCPVertexAI_PartialConfig(t *testing.T) {
 		t.Parallel()
 		cfg := &Config{}
 		cfg.GCPVertexAI = &struct {
-			EnableVectorSearch *bool  `json:"enableVectorSearch,omitempty"`
-			IndexDimensions    int    `json:"indexDimensions,omitempty"`
-			EnableServing      *bool  `json:"enableServing,omitempty"`
-			ModelGardenModel   string `json:"modelGardenModel,omitempty"`
+			EnableVectorSearch    *bool  `json:"enableVectorSearch,omitempty"`
+			IndexDimensions       int    `json:"indexDimensions,omitempty"`
+			EnableServing         *bool  `json:"enableServing,omitempty"`
+			ModelGardenModel      string `json:"modelGardenModel,omitempty"`
+			ModelGardenAcceptEULA *bool  `json:"modelGardenAcceptEula,omitempty"`
 		}{EnableVectorSearch: &tr, IndexDimensions: 1536}
 		vals, err := m.BuildModuleValues(KeyGCPVertexAI, nil, cfg, "demo", "us-central1")
 		require.NoError(t, err)
@@ -69,10 +70,11 @@ func TestBuildModuleValues_GCPVertexAI_PartialConfig(t *testing.T) {
 		t.Parallel()
 		cfg := &Config{}
 		cfg.GCPVertexAI = &struct {
-			EnableVectorSearch *bool  `json:"enableVectorSearch,omitempty"`
-			IndexDimensions    int    `json:"indexDimensions,omitempty"`
-			EnableServing      *bool  `json:"enableServing,omitempty"`
-			ModelGardenModel   string `json:"modelGardenModel,omitempty"`
+			EnableVectorSearch    *bool  `json:"enableVectorSearch,omitempty"`
+			IndexDimensions       int    `json:"indexDimensions,omitempty"`
+			EnableServing         *bool  `json:"enableServing,omitempty"`
+			ModelGardenModel      string `json:"modelGardenModel,omitempty"`
+			ModelGardenAcceptEULA *bool  `json:"modelGardenAcceptEula,omitempty"`
 		}{EnableVectorSearch: &fa}
 		vals, err := m.BuildModuleValues(KeyGCPVertexAI, nil, cfg, "demo", "us-central1")
 		require.NoError(t, err)
@@ -87,10 +89,11 @@ func TestBuildModuleValues_GCPVertexAI_PartialConfig(t *testing.T) {
 		t.Parallel()
 		cfg := &Config{}
 		cfg.GCPVertexAI = &struct {
-			EnableVectorSearch *bool  `json:"enableVectorSearch,omitempty"`
-			IndexDimensions    int    `json:"indexDimensions,omitempty"`
-			EnableServing      *bool  `json:"enableServing,omitempty"`
-			ModelGardenModel   string `json:"modelGardenModel,omitempty"`
+			EnableVectorSearch    *bool  `json:"enableVectorSearch,omitempty"`
+			IndexDimensions       int    `json:"indexDimensions,omitempty"`
+			EnableServing         *bool  `json:"enableServing,omitempty"`
+			ModelGardenModel      string `json:"modelGardenModel,omitempty"`
+			ModelGardenAcceptEULA *bool  `json:"modelGardenAcceptEula,omitempty"`
 		}{EnableServing: &tr, ModelGardenModel: "publishers/google/models/gemma3@gemma-3-1b-it"}
 		vals, err := m.BuildModuleValues(KeyGCPVertexAI, nil, cfg, "demo", "us-central1")
 		require.NoError(t, err)
@@ -101,14 +104,61 @@ func TestBuildModuleValues_GCPVertexAI_PartialConfig(t *testing.T) {
 		assert.False(t, hasVS, "unset EnableVectorSearch must not emit enable_vector_search when only serving is set")
 	})
 
+	t.Run("ModelGardenAcceptEULA flows through only when set (#768 review)", func(t *testing.T) {
+		t.Parallel()
+
+		// Set true -> emitted (EULA-gated Gemma/Llama need it).
+		cfgYes := &Config{}
+		cfgYes.GCPVertexAI = &struct {
+			EnableVectorSearch    *bool  `json:"enableVectorSearch,omitempty"`
+			IndexDimensions       int    `json:"indexDimensions,omitempty"`
+			EnableServing         *bool  `json:"enableServing,omitempty"`
+			ModelGardenModel      string `json:"modelGardenModel,omitempty"`
+			ModelGardenAcceptEULA *bool  `json:"modelGardenAcceptEula,omitempty"`
+		}{EnableServing: &tr, ModelGardenModel: "publishers/google/models/gemma3@gemma-3-1b-it", ModelGardenAcceptEULA: &tr}
+		vals, err := m.BuildModuleValues(KeyGCPVertexAI, nil, cfgYes, "demo", "us-central1")
+		require.NoError(t, err)
+		assert.Equal(t, true, vals["model_garden_accept_eula"], "ModelGardenAcceptEULA=true must reach model_garden_accept_eula")
+
+		// Set false -> still emitted (explicit non-consent is a real choice the
+		// caller made; partial-config keys on nil, not on the zero value).
+		cfgNo := &Config{}
+		cfgNo.GCPVertexAI = &struct {
+			EnableVectorSearch    *bool  `json:"enableVectorSearch,omitempty"`
+			IndexDimensions       int    `json:"indexDimensions,omitempty"`
+			EnableServing         *bool  `json:"enableServing,omitempty"`
+			ModelGardenModel      string `json:"modelGardenModel,omitempty"`
+			ModelGardenAcceptEULA *bool  `json:"modelGardenAcceptEula,omitempty"`
+		}{EnableServing: &tr, ModelGardenModel: "publishers/google/models/gemma3@gemma-3-1b-it", ModelGardenAcceptEULA: &fa}
+		vals, err = m.BuildModuleValues(KeyGCPVertexAI, nil, cfgNo, "demo", "us-central1")
+		require.NoError(t, err)
+		assert.Equal(t, false, vals["model_garden_accept_eula"], "explicit ModelGardenAcceptEULA=false must reach model_garden_accept_eula")
+
+		// Unset (nil) -> NOT emitted so the preset's explicit-consent default
+		// (false) wins rather than a config-supplied value.
+		cfgUnset := &Config{}
+		cfgUnset.GCPVertexAI = &struct {
+			EnableVectorSearch    *bool  `json:"enableVectorSearch,omitempty"`
+			IndexDimensions       int    `json:"indexDimensions,omitempty"`
+			EnableServing         *bool  `json:"enableServing,omitempty"`
+			ModelGardenModel      string `json:"modelGardenModel,omitempty"`
+			ModelGardenAcceptEULA *bool  `json:"modelGardenAcceptEula,omitempty"`
+		}{EnableServing: &tr, ModelGardenModel: "publishers/google/models/gemma3@gemma-3-1b-it"}
+		vals, err = m.BuildModuleValues(KeyGCPVertexAI, nil, cfgUnset, "demo", "us-central1")
+		require.NoError(t, err)
+		_, hasEULA := vals["model_garden_accept_eula"]
+		assert.False(t, hasEULA, "unset ModelGardenAcceptEULA must not emit model_garden_accept_eula (preset default wins)")
+	})
+
 	t.Run("EnableServing=false flows through, empty model omitted (#768)", func(t *testing.T) {
 		t.Parallel()
 		cfg := &Config{}
 		cfg.GCPVertexAI = &struct {
-			EnableVectorSearch *bool  `json:"enableVectorSearch,omitempty"`
-			IndexDimensions    int    `json:"indexDimensions,omitempty"`
-			EnableServing      *bool  `json:"enableServing,omitempty"`
-			ModelGardenModel   string `json:"modelGardenModel,omitempty"`
+			EnableVectorSearch    *bool  `json:"enableVectorSearch,omitempty"`
+			IndexDimensions       int    `json:"indexDimensions,omitempty"`
+			EnableServing         *bool  `json:"enableServing,omitempty"`
+			ModelGardenModel      string `json:"modelGardenModel,omitempty"`
+			ModelGardenAcceptEULA *bool  `json:"modelGardenAcceptEula,omitempty"`
 		}{EnableServing: &fa}
 		vals, err := m.BuildModuleValues(KeyGCPVertexAI, nil, cfg, "demo", "us-central1")
 		require.NoError(t, err)

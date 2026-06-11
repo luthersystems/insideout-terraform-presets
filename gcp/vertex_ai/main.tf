@@ -81,9 +81,17 @@ locals {
   serving_endpoint_name = tostring(parseint(substr(sha256(var.project), 0, 8), 16))
 
   # The Model Garden one-shot deployment is created only when serving is on AND
-  # a model is named. A bare endpoint (no model) is the enable_serving-only
-  # path; attach a model out-of-band there.
+  # a model is named. It provisions its OWN managed endpoint (with the model
+  # deployed onto it), so the bare endpoint below is mutually exclusive with it:
+  # creating both would leave an empty bare endpoint sitting next to the real
+  # one the model lives on, and the outputs would point at the empty shell.
   model_garden_enabled = var.enable_serving && var.model_garden_model != null
+
+  # The bare serving endpoint is the enable_serving-WITHOUT-a-model path: a
+  # generic attach point for custom/other models, deployed out-of-band. When a
+  # Model Garden model IS named, that resource owns the endpoint instead, so the
+  # bare endpoint is NOT created (mutually exclusive count-gate).
+  bare_endpoint_enabled = var.enable_serving && var.model_garden_model == null
 
   # Attach dedicated accelerators only when an accelerator type is requested.
   # CPU-only serving (the default) omits the machine_spec accelerator fields so
@@ -230,26 +238,35 @@ resource "google_vertex_ai_index_endpoint_deployed_index" "this" {
 
 # --- Model serving (Endpoint + Model Garden) — issue #768 -------------------
 #
-# google_vertex_ai_endpoint:                            serving endpoint (a
+# google_vertex_ai_endpoint:                            bare serving endpoint (a
 #   managed front door for online predictions). Created when enable_serving is
-#   true. PUBLIC by default; the private-endpoint story is unchanged here (it
-#   reuses the same #774 PSC peering range the Vector Search endpoint needs and
-#   is out of scope for this issue).
+#   true AND no Model Garden model is named — the generic attach point for
+#   custom models deployed out-of-band. PUBLIC by default; the private-endpoint
+#   story is unchanged here (it reuses the same #774 PSC peering range the
+#   Vector Search endpoint needs and is out of scope for this issue).
 # google_vertex_ai_endpoint_with_model_garden_deployment: one-shot deploy of an
 #   open Model Garden model (Gemma/Llama/etc) onto its OWN managed endpoint.
 #   Created when enable_serving is true AND model_garden_model is named. The
 #   deploy is the long pole — model downloads + replica spin-up routinely take
 #   30+ minutes — so create/delete carry generous 60m timeouts.
 #
+# The two are MUTUALLY EXCLUSIVE: model_garden manages its own endpoint, so when
+# a model is named the bare endpoint is suppressed. Otherwise the bare endpoint
+# would sit empty next to the real one and the endpoint_id/endpoint_name outputs
+# would point at the empty shell (the bug fixed under #768 review). The outputs
+# return whichever endpoint actually exists.
+#
 # Resources verified against hashicorp/google v7.x (GA tier; both resources are
 # in the GA provider — see PR notes). The dataset and Vector Search resources
 # above are untouched by enable_serving.
 
-# A bare serving endpoint. Models can be deployed onto it out-of-band; the
-# Model Garden resource below provisions its own endpoint, so this one is the
-# generic attach point for custom/other models.
+# A bare serving endpoint, the generic attach point for custom/other models
+# deployed out-of-band. Created ONLY on the enable_serving-without-a-model path:
+# when a Model Garden model is named, the model_garden resource below provisions
+# its own endpoint with the model on it, so this bare one is suppressed (they are
+# mutually exclusive — see local.bare_endpoint_enabled / local.model_garden_enabled).
 resource "google_vertex_ai_endpoint" "serving" {
-  count        = var.enable_serving ? 1 : 0
+  count        = local.bare_endpoint_enabled ? 1 : 0
   name         = local.serving_endpoint_name
   display_name = "${var.project}-serving-endpoint"
   description  = "InsideOut Vertex AI serving endpoint for ${var.project}"

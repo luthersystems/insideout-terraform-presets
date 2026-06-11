@@ -1045,6 +1045,12 @@ func (m DefaultMapper) BuildModuleValues(
 			if cfg.GCPVertexAI.ModelGardenModel != "" {
 				vals["model_garden_model"] = cfg.GCPVertexAI.ModelGardenModel
 			}
+			// EULA acceptance for EULA-gated open models (Gemma/Llama). Only
+			// emit when the caller explicitly set it so the preset's
+			// explicit-consent default (false) wins when left unset.
+			if cfg.GCPVertexAI.ModelGardenAcceptEULA != nil {
+				vals["model_garden_accept_eula"] = *cfg.GCPVertexAI.ModelGardenAcceptEULA
+			}
 		}
 
 	case KeyGCPPubSub:

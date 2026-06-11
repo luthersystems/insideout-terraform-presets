@@ -374,15 +374,19 @@ type Config struct {
 	// EnableServing (#768) gates a serving endpoint; ModelGardenModel, when
 	// set alongside EnableServing, deploys that open Model Garden model
 	// (publishers/<pub>/models/<model>@<version>) onto a managed endpoint.
+	// ModelGardenAcceptEULA records the operator's acceptance of the model's
+	// EULA/ToS; EULA-gated open models (Gemma, Llama) will not deploy unless it
+	// is true. It defaults to the preset's explicit-consent false when unset.
 	// Vector Search and serving are orthogonal flags.
 	//
 	// Every field is partial-config: the mapper only emits a field the caller
 	// actually populated so the preset's own defaults win when left unset.
 	GCPVertexAI *struct {
-		EnableVectorSearch *bool  `json:"enableVectorSearch,omitempty"`
-		IndexDimensions    int    `json:"indexDimensions,omitempty"`
-		EnableServing      *bool  `json:"enableServing,omitempty"`
-		ModelGardenModel   string `json:"modelGardenModel,omitempty"`
+		EnableVectorSearch    *bool  `json:"enableVectorSearch,omitempty"`
+		IndexDimensions       int    `json:"indexDimensions,omitempty"`
+		EnableServing         *bool  `json:"enableServing,omitempty"`
+		ModelGardenModel      string `json:"modelGardenModel,omitempty"`
+		ModelGardenAcceptEULA *bool  `json:"modelGardenAcceptEula,omitempty"`
 	} `json:"gcp_vertex_ai,omitempty"`
 
 	GCPPubSub *struct {
