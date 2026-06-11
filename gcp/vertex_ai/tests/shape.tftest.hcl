@@ -412,10 +412,15 @@ run "serving" {
   }
 
   # endpoint_id output is sourced from the bare endpoint on the no-model path
-  # (the model-garden deployment is absent here).
+  # (the model-garden deployment is absent here). The endpoint's .id is a
+  # provider-computed composite (projects/<p>/locations/<l>/endpoints/<e>) that
+  # is unknown at plan, so we can only assert the output is wired and non-null
+  # here — the bare-vs-model SOURCE is pinned by the endpoint_name assert above
+  # (== "2676412545", the bare endpoint's deterministic name) and by the
+  # model_garden run asserting model_garden[0].endpoint on the model path.
   assert {
-    condition     = output.endpoint_id == google_vertex_ai_endpoint.serving[0].id
-    error_message = "endpoint_id output must surface the bare serving endpoint's resource name on the no-model path."
+    condition     = output.endpoint_id != null
+    error_message = "endpoint_id output must be non-null on the no-model serving path (sourced from the bare serving endpoint)."
   }
 
   # Vector Search resources are untouched by the serving flag.
