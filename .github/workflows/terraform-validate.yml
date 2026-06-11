@@ -296,11 +296,15 @@ jobs:
         with:
           terraform_version: "1.7.5"
       - run: go test -race ./...
-      # Build-tagged terraform-validate harness (imported_tfvalidate_test.go,
-      # #669): emits imported.tf and runs `terraform validate` against the
-      # real provider schema. Excluded from the untagged run above; run it
-      # explicitly so a computed-attr leak is caught end-to-end in CI.
-      - run: go test -tags tfvalidate -run TestImportedTF_TerraformValidate ./pkg/composer/
+      # Build-tagged terraform-validate harnesses: emit real HCL and run
+      # `terraform validate` against the live provider schema. Excluded from
+      # the untagged run above; run them explicitly so schema-level
+      # regressions are caught end-to-end in CI:
+      #   - imported.tf (#669): catches a computed-attr leak into a body.
+      #   - AWS provider blocks incl. retry tuning (#780 deferred-P2):
+      #     proves retry_mode/max_retries are accepted by the live provider
+      #     rather than only asserted by string/regex matching.
+      - run: make test-tfvalidate
 
   # NOTE (#406): the previous localstack-discover-gate job was removed
   # alongside Bundle 13c. The unified discoverer routes every AWS
