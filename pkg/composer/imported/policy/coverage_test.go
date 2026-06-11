@@ -212,6 +212,16 @@ var coveredTypes = []string{
 	"aws_internet_gateway",
 	// Bundle 11 (cont.) — EC2 key pair.
 	"aws_key_pair",
+	// #801 — Kendra enterprise-search / RAG-retrieval vocabulary for the
+	// aws/kendra preset (#760), deferred by the #760 PR (no terraform to
+	// refresh the schema locally) and matching the #787 / #795 precedent.
+	// Index (taggable) + data source (taggable). The index's role_arn +
+	// KMS key + user_context_policy access mode, and the data source's
+	// index_id binding + role_arn + crawled bucket_name + enrichment-hook
+	// IAM/Lambda surfaces are the high-value privilege / what-is-served /
+	// access-control drift signals.
+	"aws_kendra_data_source",
+	"aws_kendra_index",
 	// Bundle 4 (cont.) — Kinesis Data Stream.
 	"aws_kinesis_stream",
 	// Bundle 8 (cont.) — KMS alias.

@@ -5493,6 +5493,98 @@
       "semantic": "Exact"
     }
   ],
+  "aws_kendra_data_source": [
+    {
+      "path": "arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "configuration.s3_configuration.bucket_name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "custom_document_enrichment_configuration.post_extraction_hook_configuration.lambda_arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "custom_document_enrichment_configuration.pre_extraction_hook_configuration.lambda_arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "custom_document_enrichment_configuration.role_arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "data_source_id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "index_id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "region",
+      "semantic": "Exact"
+    },
+    {
+      "path": "role_arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "schedule",
+      "semantic": "Exact"
+    },
+    {
+      "path": "type",
+      "semantic": "Exact"
+    }
+  ],
+  "aws_kendra_index": [
+    {
+      "path": "arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "edition",
+      "semantic": "Exact"
+    },
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "region",
+      "semantic": "Exact"
+    },
+    {
+      "path": "role_arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "server_side_encryption_configuration.kms_key_id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "user_context_policy",
+      "semantic": "Exact"
+    },
+    {
+      "path": "user_token_configurations.jwt_token_type_configuration.secrets_manager_arn",
+      "semantic": "Exact"
+    }
+  ],
   "aws_key_pair": [
     {
       "path": "arn",

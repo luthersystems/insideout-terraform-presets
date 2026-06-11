@@ -262,6 +262,19 @@ var awsCodegenOnlyTypes = []string{
 	"aws_efs_file_system",
 	"aws_glue_catalog_database",
 	"aws_glue_job",
+	// #801 — Kendra enterprise-search / RAG-retrieval reverse-import
+	// vocabulary for the aws/kendra preset (#760), deferred by the #760
+	// PR (no terraform locally to refresh the pinned 6.45.0 schema) and
+	// matching the #787 / #795 AI-stack precedent. The aws_kendra_* family
+	// is not cloud-control-routed, so a hand-rolled SDKLister in
+	// awsdiscover is the future promotion path; until that lands, Layer-1
+	// codegen + curated Layer-2 policy ship here so out-of-band edits are
+	// visible to drift detection. The high-value surfaces are the index's
+	// role_arn (the CloudWatch-logging identity Kendra assumes) and KMS
+	// key, and the data source's role_arn (the S3-crawl identity), parent
+	// index_id binding, and crawled bucket_name. Both types are taggable.
+	"aws_kendra_data_source",
+	"aws_kendra_index",
 	"aws_kinesis_stream",
 	"aws_lambda_layer_version",
 	"aws_rds_cluster",
