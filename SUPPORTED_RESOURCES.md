@@ -22,7 +22,7 @@ and is checked in lockstep with the runtime registries. See the
 
 ## Summary
 
-- **AWS:** 147 types · 74% Discoverable · 74% Enrichable · 100% DriftDetectable · 62% MetricsAvailable · 90% AgentEditable
+- **AWS:** 149 types · 73% Discoverable · 73% Enrichable · 100% DriftDetectable · 61% MetricsAvailable · 90% AgentEditable
 - **GCP:** 64 types · 84% Discoverable · 84% Enrichable · 100% DriftDetectable · 78% MetricsAvailable · 91% AgentEditable
 
 ## AWS
@@ -116,6 +116,8 @@ and is checked in lockstep with the runtime registries. See the
 | `aws_iam_user` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `aws_instance` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `aws_internet_gateway` | ✓ | ✓ | ✓ | ✓ | ✓ |
+| `aws_kendra_data_source` | – | – | ✓ | – | ✓ |
+| `aws_kendra_index` | – | – | ✓ | – | ✓ |
 | `aws_key_pair` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `aws_kinesis_stream` | – | – | ✓ | ✓ | ✓ |
 | `aws_kms_alias` | ✓ | ✓ | ✓ | ✓ | – |
