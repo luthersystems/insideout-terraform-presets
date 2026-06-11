@@ -836,6 +836,26 @@ func (m DefaultMapper) BuildModuleValues(
 		// preview compose they are left unset — the preset defaults them to
 		// null and gates the action group / KB association on a non-null arn.
 
+	case KeyAWSAgentCoreGateway:
+		// Partial-config: only emit a field the caller actually populated so
+		// the preset's own defaults (gateway_name = {project}-gateway,
+		// protocol_type = MCP) win when the field is left unset. protocol_type
+		// is constrained to "MCP" by the preset's validation, so an out-of-set
+		// value surfaces as a plan-time precondition failure rather than a
+		// silent default — internally consistent with the variables.tf gate.
+		if cfg != nil && cfg.AWSAgentCoreGateway != nil {
+			if strings.TrimSpace(cfg.AWSAgentCoreGateway.GatewayName) != "" {
+				vals["gateway_name"] = strings.TrimSpace(cfg.AWSAgentCoreGateway.GatewayName)
+			}
+			if strings.TrimSpace(cfg.AWSAgentCoreGateway.ProtocolType) != "" {
+				vals["protocol_type"] = strings.TrimSpace(cfg.AWSAgentCoreGateway.ProtocolType)
+			}
+		}
+		// target_lambda_arn is wired by DefaultWiring (function_arn from the
+		// implicitly-added aws/lambda — KeyAWSLambda is a HARD dep). For
+		// single-module preview compose it is left unset; the preset defaults
+		// it to null and gates the Lambda target on a non-null arn.
+
 	case KeyAWSLambda:
 		vals["runtime"] = "nodejs20.x" // Default to nodejs
 		if cfg != nil && cfg.AWSLambda != nil {

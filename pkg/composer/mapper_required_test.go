@@ -122,6 +122,7 @@ func kitchenSinkComponents() *Components {
 		AWSSecretsManager:       &t,
 		AWSBedrock:              &t,
 		AWSBedrockAgent:         &t,
+		AWSAgentCoreGateway:     &t,
 		AWSSQS:                  &t,
 		AWSMSK:                  &t,
 		AWSCloudWatchLogs:       &t,

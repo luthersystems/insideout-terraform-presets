@@ -56,6 +56,7 @@ const (
 	KeyAWSOpenSearch           ComponentKey = "aws_opensearch"
 	KeyAWSBedrock              ComponentKey = "aws_bedrock"
 	KeyAWSBedrockAgent         ComponentKey = "aws_bedrock_agent"
+	KeyAWSAgentCoreGateway     ComponentKey = "aws_agentcore_gateway"
 	KeyAWSSQS                  ComponentKey = "aws_sqs"
 	KeyAWSMSK                  ComponentKey = "aws_msk"
 	KeyAWSCloudWatchLogs       ComponentKey = "aws_cloudwatch_logs"
@@ -164,6 +165,12 @@ var ComposeOrder = []ComponentKey{
 	// precede this consumer — TestImplicitDependencies_ComposeOrderRespected
 	// enforces that.
 	KeyAWSBedrockAgent,
+	// AgentCore Gateway (#763) composes after KeyAWSBedrockAgent — it is the
+	// next AI-stack layer (L7, MCP/tool gateway). Its hard ImplicitDependency
+	// on KeyAWSLambda (the gateway's Lambda target) is positioned far earlier
+	// (Lambda :~110), so the producer precedes this consumer —
+	// TestImplicitDependencies_ComposeOrderRespected enforces that.
+	KeyAWSAgentCoreGateway,
 	KeyAWSSageMaker,
 	KeyGCPVertexAI,
 	// App Runner (#598 row 2). Independent of EKS/ECS/Lambda compute
@@ -225,6 +232,7 @@ var ModulePath = map[ComponentKey]string{
 	KeyAWSSecretsManager:       "modules/secretsmanager",
 	KeyAWSBedrock:              "modules/bedrock",
 	KeyAWSBedrockAgent:         "modules/bedrock_agent",
+	KeyAWSAgentCoreGateway:     "modules/agentcore_gateway",
 	KeyAWSSQS:                  "modules/sqs",
 	KeyAWSMSK:                  "modules/msk",
 	KeyAWSCloudWatchLogs:       "modules/cloudwatchlogs",
@@ -311,6 +319,14 @@ var ImplicitDependencies = map[ComponentKey][]ComponentKey{
 	// dep: a Bedrock Agent is fully functional without RAG; the KB wire is
 	// added conditionally by DefaultWiring only when aws_bedrock is selected.
 	KeyAWSBedrockAgent: {KeyAWSLambda},
+	// AgentCore Gateway (#763): the gateway's default tool target is a Lambda
+	// function. aws_bedrockagentcore_gateway_target's lambda.lambda_arn has no
+	// source unless aws/lambda is in the stack, so the target_lambda_arn wire
+	// is unsatisfiable without it — a HARD dependency. The VPC arrives
+	// transitively (KeyAWSLambda → KeyAWSVPC). OpenAPI/REST targets are
+	// caller-supplied out-of-band and do NOT make this a hard dep on anything
+	// else; the Lambda target is the composed default.
+	KeyAWSAgentCoreGateway: {KeyAWSLambda},
 	// App Runner (#598 row 2). The public-only service does NOT strictly
 	// require a VPC, but the preset's optional VPC connector path
 	// (enable_vpc_connector = true) feeds vpc_id + subnet_ids from
@@ -451,6 +467,7 @@ var PresetKeyMap = map[ComponentKey]string{
 	KeyAWSSecretsManager:       "secretsmanager",
 	KeyAWSBedrock:              "bedrock",
 	KeyAWSBedrockAgent:         "bedrock_agent",
+	KeyAWSAgentCoreGateway:     "agentcore_gateway",
 	KeyAWSSQS:                  "sqs",
 	KeyAWSMSK:                  "msk",
 	KeyAWSCloudWatchLogs:       "cloudwatchlogs",
@@ -549,6 +566,7 @@ func CloudFromKeys(keys []string) string {
 var AllComponentKeys = []ComponentKey{
 	// AWS (alphabetical for reviewability)
 	KeyAWSACM,
+	KeyAWSAgentCoreGateway, // aws_agentcore_gateway — sorts between aws_acm and aws_alb
 	KeyAWSALB,
 	KeyAWSAPIGateway,
 	KeyAWSAppRunner,
@@ -1106,6 +1124,16 @@ func DefaultWiring(selected map[ComponentKey]bool, k ComponentKey, comps *Compon
 			wi.RawHCL["knowledge_base_id"] = bedrockRef(selected) + ".knowledge_base_id"
 			wi.Names = append(wi.Names, "knowledge_base_id")
 		}
+
+	case KeyAWSAgentCoreGateway:
+		// The gateway's default tool target is a Lambda function. KeyAWSLambda
+		// is a HARD ImplicitDependency of KeyAWSAgentCoreGateway, so aws/lambda
+		// is always in the stack here — wire the gateway's target_lambda_arn
+		// from the lambda module's function_arn output unconditionally. The
+		// preset gates the Lambda target / invoke policy / permission on a
+		// non-null arn, so the wire is what turns the Lambda into an MCP tool.
+		wi.RawHCL["target_lambda_arn"] = lambdaRef(selected) + ".function_arn"
+		wi.Names = append(wi.Names, "target_lambda_arn")
 
 	case KeyAWSBackups:
 		// Legacy sessions must Normalize before reaching DefaultWiring;

@@ -190,6 +190,16 @@ func kitchenSinkConfig() *Config {
 		Instruction     string `json:"instruction,omitempty"`
 		AgentName       string `json:"agentName,omitempty"`
 	}{FoundationModel: "anthropic.claude-3-5-sonnet-20240620-v1:0", Instruction: "You are a helpful assistant that answers questions about the customer's documents.", AgentName: "support-agent"}
+	// AWSAgentCoreGateway (#763): GatewayName + ProtocolType are the only
+	// config fields; ProtocolType is internally consistent with the preset's
+	// validation (MCP is the only accepted value) so the kitchen-sink config
+	// would also pass a real plan. The mapper emits gateway_name + protocol_type,
+	// both of which the keys-subset gate confirms are declared aws/agentcore_gateway
+	// variables.
+	cfg.AWSAgentCoreGateway = &struct {
+		GatewayName  string `json:"gatewayName,omitempty"`
+		ProtocolType string `json:"protocolType,omitempty"`
+	}{GatewayName: "support-tools", ProtocolType: "MCP"}
 	// AWSSageMaker exercises both the #615 Studio fields and the #761
 	// inference fields so the keys-subset gate confirms every emitted tfvar
 	// (network_mode … enable_inference / model_image / model_data_url /

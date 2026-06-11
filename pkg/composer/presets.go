@@ -84,7 +84,7 @@ func (c *Client) ListAvailableComponentKeys() ([]string, error) {
 		KeyAWSSageMaker,
 		KeyAWSALB, KeyAWSCloudfront, KeyAWSWAF, KeyAWSAPIGateway, KeyAWSRDS,
 		KeyAWSElastiCache, KeyAWSDynamoDB, KeyAWSS3, KeyAWSKMS, KeyAWSSecretsManager,
-		KeyAWSOpenSearch, KeyAWSBedrock, KeyAWSBedrockAgent, KeyAWSSQS, KeyAWSMSK, KeyAWSCloudWatchLogs, KeyAWSCloudWatchMonitoring,
+		KeyAWSOpenSearch, KeyAWSBedrock, KeyAWSBedrockAgent, KeyAWSAgentCoreGateway, KeyAWSSQS, KeyAWSMSK, KeyAWSCloudWatchLogs, KeyAWSCloudWatchMonitoring,
 		KeyAWSGrafana, KeyAWSCognito, KeyAWSBackups, KeyAWSGitHubActions, KeyAWSCodeBuild, KeyAWSCodePipeline,
 
 		// GCP keys
