@@ -109,6 +109,12 @@ func TestLive255_AWSInspectorsJSONShape(t *testing.T) {
 		// a hosted_zone_id and is exercised separately below.
 		{"route53", "list-hosted-zones"},
 		{"acm", "list-certificates"},
+		// #797: SageMaker account-wide slice actions. list-endpoints is
+		// the new EndpointName-discovery surface; list-domains /
+		// list-user-profiles ride along since they share the #255 guard.
+		{"sagemaker", "list-domains"},
+		{"sagemaker", "list-user-profiles"},
+		{"sagemaker", "list-endpoints"},
 	} {
 		probes = append(probes, mk(pair[0], pair[1])...)
 	}

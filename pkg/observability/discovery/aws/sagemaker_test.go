@@ -1,9 +1,10 @@
 // AWS SageMaker inspector tests (issue #622).
 //
-// Pins the #255 contract: empty list-domains / list-user-profiles
-// responses MUST marshal as JSON `[]`, never `null`. Also pins
-// describe-domain's required domain_id surface and the metrics-routing
-// arm.
+// Pins the #255 contract: empty list-domains / list-user-profiles /
+// list-endpoints responses MUST marshal as JSON `[]`, never `null`.
+// Also pins describe-domain's required domain_id surface and the
+// metrics-routing arm. list-endpoints (#797) is the account-wide
+// EndpointName discovery action for the AWS/SageMaker metrics namespace.
 
 package aws
 
@@ -25,6 +26,7 @@ type fakeSageMakerClient struct {
 	describeDomainOut   *sagemaker.DescribeDomainOutput
 	describeDomainIn    *sagemaker.DescribeDomainInput
 	listUserProfilesOut *sagemaker.ListUserProfilesOutput
+	listEndpointsOut    *sagemaker.ListEndpointsOutput
 	err                 error
 }
 
@@ -57,6 +59,16 @@ func (f *fakeSageMakerClient) ListUserProfiles(_ context.Context, _ *sagemaker.L
 		return &sagemaker.ListUserProfilesOutput{}, nil
 	}
 	return f.listUserProfilesOut, nil
+}
+
+func (f *fakeSageMakerClient) ListEndpoints(_ context.Context, _ *sagemaker.ListEndpointsInput, _ ...func(*sagemaker.Options)) (*sagemaker.ListEndpointsOutput, error) {
+	if f.err != nil {
+		return nil, f.err
+	}
+	if f.listEndpointsOut == nil {
+		return &sagemaker.ListEndpointsOutput{}, nil
+	}
+	return f.listEndpointsOut, nil
 }
 
 // TestListSageMakerDomains_EmptyResult — #255 contract: empty response
@@ -131,6 +143,54 @@ func TestListSageMakerUserProfiles_NonEmpty(t *testing.T) {
 	assert.Equal(t, "alice", aws.ToString(got[0].UserProfileName))
 }
 
+// TestListSageMakerEndpoints_EmptyResult — #255 contract (#797): an
+// empty endpoint list must marshal as JSON `[]`, never `null`, so the
+// downstream account-wide EndpointName discovery surface renders.
+func TestListSageMakerEndpoints_EmptyResult(t *testing.T) {
+	t.Parallel()
+	got, err := listSageMakerEndpoints(context.Background(), &fakeSageMakerClient{})
+	require.NoError(t, err)
+	require.NotNil(t, got, "#255: empty endpoint list must be non-nil")
+	b, err := json.Marshal(got)
+	require.NoError(t, err)
+	assert.Equal(t, "[]", string(b))
+}
+
+func TestListSageMakerEndpoints_ExplicitEmptySliceNormalized(t *testing.T) {
+	t.Parallel()
+	client := &fakeSageMakerClient{listEndpointsOut: &sagemaker.ListEndpointsOutput{
+		Endpoints: []sagemakertypes.EndpointSummary{}, // explicitly empty
+	}}
+	got, err := listSageMakerEndpoints(context.Background(), client)
+	require.NoError(t, err)
+	require.NotNil(t, got)
+	b, err := json.Marshal(got)
+	require.NoError(t, err)
+	assert.Equal(t, "[]", string(b))
+}
+
+func TestListSageMakerEndpoints_NonEmpty(t *testing.T) {
+	t.Parallel()
+	client := &fakeSageMakerClient{
+		listEndpointsOut: &sagemaker.ListEndpointsOutput{
+			Endpoints: []sagemakertypes.EndpointSummary{
+				{EndpointName: aws.String("my-endpoint")},
+			},
+		},
+	}
+	got, err := listSageMakerEndpoints(context.Background(), client)
+	require.NoError(t, err)
+	require.Len(t, got, 1)
+	assert.Equal(t, "my-endpoint", aws.ToString(got[0].EndpointName))
+}
+
+func TestListSageMakerEndpoints_APIError(t *testing.T) {
+	t.Parallel()
+	_, err := listSageMakerEndpoints(context.Background(), &fakeSageMakerClient{err: errors.New("AccessDenied")})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "AccessDenied")
+}
+
 func TestDescribeSageMakerDomain_PassesID(t *testing.T) {
 	t.Parallel()
 	client := &fakeSageMakerClient{}
@@ -191,4 +251,22 @@ func TestInspectSageMaker_UnknownAction(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "sagemaker")
 	assert.Contains(t, err.Error(), "no-such-action")
+}
+
+// TestInspectSageMaker_ListEndpointsRoutesToHandler — #797: the
+// list-endpoints arm must dispatch to the handler, not fall through to
+// unsupportedActionError. With an empty config the SDK call fails before
+// reaching AWS, so the contract we pin is "did NOT bounce off the switch
+// as an unsupported action" (mirrors the dispatcher drift gate). This
+// closes the gap that firstAction("sagemaker") leaves: it returns
+// list-domains, so TestInspectCoversAllAWSServices never exercises this
+// arm.
+func TestInspectSageMaker_ListEndpointsRoutesToHandler(t *testing.T) {
+	t.Parallel()
+	_, err := inspectSageMaker(context.Background(), aws.Config{Region: "us-east-1"}, "list-endpoints", "")
+	if err != nil {
+		assert.NotContains(t, err.Error(), "no-such-action")
+		assert.NotContains(t, err.Error(), "unsupported",
+			"list-endpoints must route to its handler, got unsupported-action error: %v", err)
+	}
 }
