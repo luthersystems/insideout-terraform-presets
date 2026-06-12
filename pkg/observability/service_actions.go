@@ -64,9 +64,12 @@ var AWSServiceActions = map[string][]string{
 	// top-level entity that holds user profiles + Studio apps.
 	// describe-domain fetches the full output for a given domain ID.
 	// list-user-profiles enumerates user profiles across visible domains.
+	// list-endpoints (#797) enumerates inference endpoints account-wide;
+	// EndpointName is the AWS/SageMaker CloudWatch dimension, so this is
+	// the action metrics-discovery uses to find dimension values.
 	// get-metrics routes to the metrics package for the AWS/SageMaker
 	// CloudWatch namespace.
-	"sagemaker": {"list-domains", "describe-domain", "list-user-profiles", "get-metrics"},
+	"sagemaker": {"list-domains", "describe-domain", "list-user-profiles", "list-endpoints", "get-metrics"},
 }
 
 // AWSServiceAliases maps caller-supplied aliases to canonical service

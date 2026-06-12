@@ -24,7 +24,7 @@
 | rds | describe-db-instances, describe-db-clusters, get-metrics |
 | route53 | list-hosted-zones, list-resource-record-sets |
 | s3 | list-buckets, get-metrics |
-| sagemaker | list-domains, describe-domain, list-user-profiles, get-metrics |
+| sagemaker | list-domains, describe-domain, list-user-profiles, list-endpoints, get-metrics |
 | secretsmanager | list-secrets, get-metrics |
 | sqs | list-queues, get-metrics |
 | vpc | describe-nat-gateways, get-metrics |

@@ -1,7 +1,7 @@
 // AWS SageMaker inspector (issue #622).
 //
 // Provides panel-default discovery for the aws/sagemaker preset (#615,
-// composer wiring #618). Three list/describe actions plus the metrics
+// composer wiring #618). Four list/describe actions plus the metrics
 // passthrough:
 //
 //   - list-domains — ListDomains; returns []sagemakertypes.DomainDetails.
@@ -15,12 +15,19 @@
 //     []sagemakertypes.UserProfileDetails across every domain visible to
 //     the credentials. No required filter; callers post-scope by
 //     DomainId in the panel layer if needed.
+//   - list-endpoints — ListEndpoints; returns
+//     []sagemakertypes.EndpointSummary account-wide (#797). SageMaker
+//     CloudWatch metrics (AWS/SageMaker namespace) are dimensioned by
+//     EndpointName, so this is the action that lets metrics-discovery
+//     enumerate the EndpointName dimension values account-wide. No
+//     required filter.
 //   - get-metrics — routed to pkg/observability/metrics; AWS/SageMaker
 //     emits CloudWatch metrics that the metrics package owns.
 //
-// Issue #255 contract: list-domains and list-user-profiles both use
-// nilSliceToEmpty so empty AWS responses marshal as `[]` not `null`.
-// describe-domain returns a single object (no top-level slice to guard).
+// Issue #255 contract: list-domains, list-user-profiles, and
+// list-endpoints all use nilSliceToEmpty so empty AWS responses marshal
+// as `[]` not `null`. describe-domain returns a single object (no
+// top-level slice to guard).
 
 package aws
 
@@ -40,6 +47,7 @@ type sageMakerClient interface {
 	ListDomains(ctx context.Context, params *sagemaker.ListDomainsInput, optFns ...func(*sagemaker.Options)) (*sagemaker.ListDomainsOutput, error)
 	DescribeDomain(ctx context.Context, params *sagemaker.DescribeDomainInput, optFns ...func(*sagemaker.Options)) (*sagemaker.DescribeDomainOutput, error)
 	ListUserProfiles(ctx context.Context, params *sagemaker.ListUserProfilesInput, optFns ...func(*sagemaker.Options)) (*sagemaker.ListUserProfilesOutput, error)
+	ListEndpoints(ctx context.Context, params *sagemaker.ListEndpointsInput, optFns ...func(*sagemaker.Options)) (*sagemaker.ListEndpointsOutput, error)
 }
 
 func inspectSageMaker(ctx context.Context, cfg aws.Config, action, filters string) (any, error) {
@@ -54,6 +62,8 @@ func inspectSageMaker(ctx context.Context, cfg aws.Config, action, filters strin
 		return describeSageMakerDomain(ctx, sagemaker.NewFromConfig(cfg), domainID)
 	case "list-user-profiles":
 		return listSageMakerUserProfiles(ctx, sagemaker.NewFromConfig(cfg))
+	case "list-endpoints":
+		return listSageMakerEndpoints(ctx, sagemaker.NewFromConfig(cfg))
 	case "get-metrics":
 		// SageMaker emits CloudWatch metrics under the AWS/SageMaker
 		// namespace; the metrics fetch path owns those. Route through
@@ -98,6 +108,22 @@ func listSageMakerUserProfiles(ctx context.Context, client sageMakerClient) ([]s
 		return nil, err
 	}
 	return nilSliceToEmpty(out.UserProfiles), nil
+}
+
+// listSageMakerEndpoints runs ListEndpoints account-wide and returns the
+// Endpoints slice with nil normalized to [] (#797). The EndpointSummary
+// entries carry EndpointName, the CloudWatch dimension the AWS/SageMaker
+// metrics namespace is keyed on, so this is the surface metrics-discovery
+// uses to enumerate dimension values account-wide. Pagination via
+// NextToken; current impl returns the first page (default 10 endpoints
+// per page — sufficient for most stacks). Multi-page fan-out is a
+// follow-up if needed.
+func listSageMakerEndpoints(ctx context.Context, client sageMakerClient) ([]sagemakertypes.EndpointSummary, error) {
+	out, err := client.ListEndpoints(ctx, &sagemaker.ListEndpointsInput{})
+	if err != nil {
+		return nil, err
+	}
+	return nilSliceToEmpty(out.Endpoints), nil
 }
 
 // sageMakerFilterDomainID parses the filters JSON envelope for a
