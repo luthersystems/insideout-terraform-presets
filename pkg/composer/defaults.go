@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math/big"
 	"reflect"
+	"strconv"
 	"strings"
 
 	hcl "github.com/hashicorp/hcl/v2"
@@ -210,6 +211,17 @@ func (c *Client) ComputePresetDefaults(cfg Config, comps *Components, selected [
 	// provenance-safe (it only rewrites the overlay's own zero-only default).
 	overrideNATGatewayDefaultForPrivateSubnets(&out, comps)
 
+	// Lambda-timeout default unit (same self-contradiction class as #393/#805,
+	// found by the class-level Guard B in selfvalidation_test.go).
+	// aws/lambda/variables.tf declares `timeout` as an HCL number (default 3
+	// seconds); the zero-only overlay stringifies that to the bare integer "3",
+	// but the mapper's strict duration parser (parseDurationToSeconds) accepts
+	// only unit-suffixed forms ("3s"/"30s"/"15m") and rejects a bare integer —
+	// so the composer's OWN default would trip its OWN validator. Normalise the
+	// overlay's own computed default to the "<N>s" form the mapper expects. See
+	// overrideLambdaTimeoutUnitDefault for why this is provenance-safe.
+	overrideLambdaTimeoutUnitDefault(&out)
+
 	return out, nil
 }
 
@@ -246,6 +258,47 @@ func overrideNATGatewayDefaultForPrivateSubnets(out *Config, comps *Components) 
 	}
 	enable := true
 	out.AWSVPC.EnableNATGateway = &enable
+}
+
+// overrideLambdaTimeoutUnitDefault makes the AWSLambda.Timeout preset default
+// mapper-valid. aws/lambda/variables.tf declares `timeout` as an HCL number
+// (default 3 seconds); overlayStructFromDefaults coerces that number into the
+// string Config.AWSLambda.Timeout field via fmt.Sprint, yielding the bare
+// integer "3". The mapper's strict duration parser (parseDurationToSeconds /
+// the validate registry's normalizeDurationSeconds) accepts only "<N>s" /
+// "<N>m" / "<N>h" and fails fast on a bare integer — so the composer's OWN
+// computed default trips its OWN validator. Rewrite the overlay's bare-integer
+// seconds default to the "<N>s" form. It mutates ONLY the overlay, never cfg.
+//
+// Provenance safety — this can never clobber a user-set value, by construction
+// (identical argument to overrideNATGatewayDefaultForPrivateSubnets):
+//
+//   - overlayStructFromDefaults is zero-only, so out.AWSLambda.Timeout is
+//     non-empty ONLY when the user left cfg.AWSLambda.Timeout blank. A non-empty
+//     overlay value therefore already PROVES the user didn't author it, and
+//     rewriting the composer's own "3" → "3s" is exactly "the computed default,
+//     spelled the way the mapper accepts."
+//   - A user-explicit Timeout (e.g. "30s") is never echoed into the overlay, so
+//     it is never seen here; the later zero-only MergeConfigs never touches the
+//     user's field and it reaches the mapper unchanged.
+//   - Only a BARE integer is rewritten. A value that is already unit-suffixed
+//     (or otherwise non-integer) is left untouched for the mapper to judge — we
+//     normalise the seconds-as-number default, we don't invent or relax format.
+func overrideLambdaTimeoutUnitDefault(out *Config) {
+	if out.AWSLambda == nil {
+		return
+	}
+	t := strings.TrimSpace(out.AWSLambda.Timeout)
+	if t == "" {
+		return
+	}
+	// strconv.Atoi succeeds only for a bare integer — exactly the shape the
+	// number→string coercion produces from the HCL default. "30s" fails here
+	// and is left alone.
+	if _, err := strconv.Atoi(t); err != nil {
+		return
+	}
+	out.AWSLambda.Timeout = t + "s"
 }
 
 // applyGPUInstanceTypeDefault overlays defaultGPUInstanceType onto the EC2/EKS

@@ -932,3 +932,83 @@ func TestCoherence_DefaultPathNAT_NoNeedsPrivateStaysOff(t *testing.T) {
 	assert.Equal(t, false, natVal,
 		"Public VPC with no consumers must keep NAT off in tfvars")
 }
+
+// TestCoherence_DefaultPathLambdaTimeoutUnit is the regression for the SECOND
+// instance of the composer self-contradiction class (same shape as the
+// #393/#805 NAT bug), surfaced by the class-level Guard B
+// (selfvalidation_test.go). A stack selecting aws_lambda built with DEFAULT
+// config (the user never authored AWSLambda.Timeout) used to:
+//
+//  1. get AWSLambda.Timeout="3" from the composer's OWN preset-default overlay
+//     — aws/lambda/variables.tf declares `timeout` as an HCL number (default
+//     3 seconds), and the zero-only overlay stringifies that to the bare
+//     integer "3"; then
+//  2. get rejected by the composer's OWN mapper validation
+//     (parseDurationToSeconds), which accepts only unit-suffixed durations
+//     ("3s"/"30s"/"15m") and fails fast on a bare integer.
+//
+// reliable would surface (2) as a red "Terraform Error" — exactly the NAT
+// symptom. The asymmetry: the IR enum default is "3s" (so the UI dodges it),
+// but ANY default-materialized stack with an empty Timeout hits the bare
+// integer.
+//
+// Pre-fix: this FAILS — BuildModuleValues returns the validation error.
+// Post-fix: overrideLambdaTimeoutUnitDefault normalises the overlay's own
+// bare-integer default to "3s", so the mapper emits timeout=3 and no error.
+func TestCoherence_DefaultPathLambdaTimeoutUnit(t *testing.T) {
+	t.Parallel()
+
+	comps := &Components{Cloud: "AWS", AWSVPC: "Public VPC", AWSLambda: boolPtr(true)}
+	// Empty/default config: the user NEVER authored AWSLambda.Timeout. This is
+	// the default path the bug lives on.
+	cfg := &Config{Cloud: "AWS"}
+	selected := []ComponentKey{KeyAWSVPC, KeyAWSLambda}
+
+	StripOrphanConfig(comps, cfg)
+	DeriveCrossComponentFields(comps, cfg)
+	require.NoError(t, New().ApplyPresetDefaults(cfg, comps, selected))
+	DeriveCrossComponentFields(comps, cfg)
+
+	require.NotNil(t, cfg.AWSLambda, "overlay must materialise the AWSLambda default block")
+	assert.Equal(t, "3s", cfg.AWSLambda.Timeout,
+		"the composer's own default timeout must be unit-suffixed (\"3s\"), not the "+
+			"bare HCL number (\"3\") its mapper rejects")
+
+	vals, err := DefaultMapper{}.BuildModuleValues(KeyAWSLambda, comps, cfg, "test", "us-east-1")
+	require.NoError(t, err,
+		"a default-config Lambda stack must NOT trip the composer's own Timeout "+
+			"fail-fast — the computed default must already be mapper-valid")
+	assert.Equal(t, 3, vals["timeout"], "mapper must emit timeout=3 (seconds) in tfvars")
+}
+
+// TestCoherence_DefaultPathLambdaTimeout_PreservesUserValue locks the
+// provenance guarantee for the Lambda-timeout fix: the overlay is zero-only, so
+// a user-explicit Timeout is never echoed into the overlay and therefore never
+// rewritten by overrideLambdaTimeoutUnitDefault. A user "120s" survives intact.
+func TestCoherence_DefaultPathLambdaTimeout_PreservesUserValue(t *testing.T) {
+	t.Parallel()
+
+	comps := &Components{Cloud: "AWS", AWSVPC: "Public VPC", AWSLambda: boolPtr(true)}
+	cfg := &Config{
+		Cloud: "AWS",
+		AWSLambda: &struct {
+			Runtime    string `json:"runtime,omitempty"`
+			MemorySize string `json:"memorySize,omitempty"`
+			Timeout    string `json:"timeout,omitempty"`
+		}{Timeout: "120s"},
+	}
+	selected := []ComponentKey{KeyAWSVPC, KeyAWSLambda}
+
+	StripOrphanConfig(comps, cfg)
+	DeriveCrossComponentFields(comps, cfg)
+	require.NoError(t, New().ApplyPresetDefaults(cfg, comps, selected))
+	DeriveCrossComponentFields(comps, cfg)
+
+	require.NotNil(t, cfg.AWSLambda)
+	assert.Equal(t, "120s", cfg.AWSLambda.Timeout,
+		"a user-explicit Timeout must be preserved, never rewritten by the default normaliser")
+
+	vals, err := DefaultMapper{}.BuildModuleValues(KeyAWSLambda, comps, cfg, "test", "us-east-1")
+	require.NoError(t, err)
+	assert.Equal(t, 120, vals["timeout"], "mapper must emit the user's timeout (120s -> 120)")
+}
