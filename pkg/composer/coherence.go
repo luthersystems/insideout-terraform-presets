@@ -271,6 +271,27 @@ func configTagToKey(tag string) ComponentKey {
 // component derive is the rule that catches "VPC stays, but its NAT-related
 // sub-fields no longer have a justification."
 //
+// ASYMMETRY — derive only ACTS on the !needsPrivate case (it clears NAT). It
+// deliberately does NOT force EnableNATGateway=true for the needsPrivate case.
+// Three-way contract for EnableNATGateway on a needs-private stack:
+//
+//   - user-explicit false → preserved here, and the mapper fail-fast rejects it
+//     (mapper.go, KeyAWSVPC). Forcing true here would silently flip an explicit
+//     false to true AND suppress that intentional error — so we must not.
+//   - user-explicit true → preserved here; the mapper emits enable_nat_gateway
+//     =true.
+//   - user-unset (nil) → the needs-private default of true is injected upstream
+//     by ComputePresetDefaults' component-aware overlay
+//     (overrideNATGatewayDefaultForPrivateSubnets, #393), NOT here. That layer
+//     is zero-only, so it can only ever fill the user's nil field — it can
+//     never clobber an explicit value. By the time this derive re-runs after
+//     MergeConfigs the field is already &true and this function leaves it alone.
+//
+// In short: derive turns NAT OFF when nothing needs it; the preset-default
+// overlay turns NAT ON (by default, never over an explicit value) when
+// something does. Keeping the "on" decision in the overlay is what preserves
+// the user-explicit-false → fail-fast guarantee.
+//
 // Idempotent in-place mutation. Not a pure function in the strict sense
 // (it writes through *cfg); calling it twice on the same inputs is a
 // no-op on the second call.

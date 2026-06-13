@@ -767,3 +767,168 @@ func setPointerToBoolTrueByTag(c *Components, tag string) {
 		return
 	}
 }
+
+// runDefaultCoherenceThenMapNAT runs the EXACT coherence + preset-default
+// sequence reliable applies before composing a stack (strip → derive →
+// ComputePresetDefaults → MergeConfigs → derive), then runs the mapper's
+// KeyAWSVPC validation. It returns the resolved enable_nat_gateway tfvar value
+// (nil if the mapper did not emit one), the in-place-resolved cfg, and the
+// mapper error.
+//
+// It uses New() so the REAL embedded aws/vpc preset HCL defaults flow through —
+// in particular enable_nat_gateway's intentional false "backstop" (#393). This
+// is what reproduces the self-contradiction: the overlay injects the backstop
+// false into the user's nil EnableNATGateway, then the mapper rejects that very
+// value. A composer with a stubbed/empty preset FS would NOT reproduce it.
+func runDefaultCoherenceThenMapNAT(t *testing.T, comps *Components, cfg *Config, selected []ComponentKey) (any, *Config, error) {
+	t.Helper()
+	c := New()
+	StripOrphanConfig(comps, cfg)
+	DeriveCrossComponentFields(comps, cfg)
+	overlay, err := c.ComputePresetDefaults(*cfg, comps, selected)
+	require.NoError(t, err)
+	MergeConfigs(cfg, &overlay)
+	DeriveCrossComponentFields(comps, cfg)
+	vals, mapErr := DefaultMapper{}.BuildModuleValues(KeyAWSVPC, comps, cfg, "test", "us-east-1")
+	if mapErr != nil {
+		return nil, cfg, mapErr
+	}
+	return vals["enable_nat_gateway"], cfg, nil
+}
+
+// TestCoherence_DefaultPathNATForNeedsPrivate_Issue393 is the HEADLINE
+// regression for the composer self-contradiction surfaced on staging session
+// sess_v2_ygVBb4cl1nJf (stack = aws_vpc + aws_rds + lambda + apigateway + s3 +
+// secretsmanager + bedrock + sqs + cognito + cloudwatch_logs + github_actions +
+// kms; default VPC config).
+//
+// A stack that has a VPC plus any component needing private subnets, built with
+// DEFAULT VPC config (the user never authored EnableNATGateway), used to:
+//  1. get AWSVPC.EnableNATGateway=false from the composer's OWN preset-default
+//     overlay (the aws/vpc HCL backstop, #393), then
+//  2. get rejected by the composer's OWN mapper validation with
+//     "AWSVPC.EnableNATGateway=false is incompatible with components that
+//     require private subnets ...".
+//
+// reliable surfaced (2) as a red "Terraform Error" button. The asymmetry: the
+// coherence derive only ACTS on the !needsPrivate case (clears NAT); for the
+// needsPrivate case it does nothing, so the overlay-injected false survives to
+// the mapper.
+//
+// Pre-fix: this FAILS — BuildModuleValues returns the validation error.
+// Post-fix: the COMPUTED default is component-aware, so the resolved
+// EnableNATGateway is true and no error is returned.
+func TestCoherence_DefaultPathNATForNeedsPrivate_Issue393(t *testing.T) {
+	t.Parallel()
+
+	comps := &Components{
+		Cloud:  "AWS",
+		AWSVPC: "Public VPC",
+		AWSRDS: boolPtr(true),
+	}
+	// Empty/default VPC config: the user NEVER authored EnableNATGateway. This
+	// is the default path the bug lives on.
+	cfg := &Config{Cloud: "AWS"}
+	selected := []ComponentKey{KeyAWSVPC, KeyAWSRDS}
+
+	natVal, resolved, err := runDefaultCoherenceThenMapNAT(t, comps, cfg, selected)
+	require.NoError(t, err,
+		"#393: a default-config VPC+RDS stack must NOT trip the composer's own "+
+			"EnableNATGateway=false fail-fast — the computed default must be NAT=true")
+	require.NotNil(t, resolved.AWSVPC, "AWSVPC sub-block must carry the derived NAT decision")
+	require.NotNil(t, resolved.AWSVPC.EnableNATGateway, "EnableNATGateway must be resolved, not left nil")
+	assert.True(t, *resolved.AWSVPC.EnableNATGateway,
+		"resolved EnableNATGateway must be true on a needs-private stack with default config")
+	assert.Equal(t, true, natVal, "mapper must emit enable_nat_gateway=true in tfvars")
+}
+
+// TestCoherence_DefaultPathNAT_AllNeedsPrivateComponents is the future-proofing
+// guard the user asked for: it sweeps the WHOLE needs-private component set
+// (EKS / ECS / RDS / ElastiCache / OpenSearch / EC2 node groups, plus a
+// combined stack) and asserts that, with a default VPC config, the
+// default+coherence+mapper path resolves NAT on and never trips the fail-fast.
+// Any new component added to stackNeedsPrivateSubnets should be added here too.
+func TestCoherence_DefaultPathNAT_AllNeedsPrivateComponents(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name     string
+		comps    *Components
+		selected []ComponentKey
+	}{
+		{"EKS", &Components{Cloud: "AWS", AWSVPC: "Public VPC", AWSEKS: boolPtr(true)},
+			[]ComponentKey{KeyAWSVPC, KeyAWSEKS}},
+		{"ECS", &Components{Cloud: "AWS", AWSVPC: "Public VPC", AWSECS: boolPtr(true)},
+			[]ComponentKey{KeyAWSVPC, KeyAWSECS}},
+		{"RDS", &Components{Cloud: "AWS", AWSVPC: "Public VPC", AWSRDS: boolPtr(true)},
+			[]ComponentKey{KeyAWSVPC, KeyAWSRDS}},
+		{"ElastiCache", &Components{Cloud: "AWS", AWSVPC: "Public VPC", AWSElastiCache: boolPtr(true)},
+			[]ComponentKey{KeyAWSVPC, KeyAWSElastiCache}},
+		{"OpenSearch", &Components{Cloud: "AWS", AWSVPC: "Public VPC", AWSOpenSearch: boolPtr(true)},
+			[]ComponentKey{KeyAWSVPC, KeyAWSOpenSearch}},
+		{"EC2 node group", &Components{Cloud: "AWS", AWSVPC: "Public VPC", AWSEC2: "Intel"},
+			[]ComponentKey{KeyAWSVPC, KeyAWSEC2}},
+		{"EKS + RDS combined", &Components{Cloud: "AWS", AWSVPC: "Public VPC", AWSEKS: boolPtr(true), AWSRDS: boolPtr(true)},
+			[]ComponentKey{KeyAWSVPC, KeyAWSEKS, KeyAWSRDS}},
+	}
+
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			cfg := &Config{Cloud: "AWS"} // default VPC config
+			natVal, resolved, err := runDefaultCoherenceThenMapNAT(t, tc.comps, cfg, tc.selected)
+			require.NoError(t, err,
+				"#393: default-config stack with %s must not trip the EnableNATGateway=false fail-fast", tc.name)
+			require.NotNil(t, resolved.AWSVPC)
+			require.NotNil(t, resolved.AWSVPC.EnableNATGateway)
+			assert.True(t, *resolved.AWSVPC.EnableNATGateway,
+				"resolved EnableNATGateway must be true for %s", tc.name)
+			assert.Equal(t, true, natVal, "mapper must emit enable_nat_gateway=true for %s", tc.name)
+		})
+	}
+}
+
+// TestCoherence_DefaultPathNAT_PreservesExplicitFalse locks the intentional
+// guard: a user who EXPLICITLY sets EnableNATGateway=false on a needs-private
+// stack must STILL get the validation error. The fix is overlay-only and the
+// overlay is zero-only, so an explicit (non-nil) false is never echoed back nor
+// flipped — it reaches the mapper unchanged and fails fast.
+func TestCoherence_DefaultPathNAT_PreservesExplicitFalse(t *testing.T) {
+	t.Parallel()
+
+	comps := &Components{Cloud: "AWS", AWSVPC: "Public VPC", AWSEKS: boolPtr(true)}
+	cfg := cfgWithVPCSubBlock(nil, boolPtr(false), nil) // user-explicit NAT=false
+	selected := []ComponentKey{KeyAWSVPC, KeyAWSEKS}
+
+	_, _, err := runDefaultCoherenceThenMapNAT(t, comps, cfg, selected)
+	require.Error(t, err,
+		"user-explicit EnableNATGateway=false on a needs-private stack must STILL fail fast — "+
+			"the overlay-only fix must not suppress the intentional guard")
+	assert.Contains(t, err.Error(), "AWSVPC.EnableNATGateway=false is incompatible",
+		"must surface the specific #389/#393 fail-fast, not some other error path")
+}
+
+// TestCoherence_DefaultPathNAT_NoNeedsPrivateStaysOff is the negative case: a
+// stack with NO private-subnet-needing component (VPC + S3) must NOT get NAT
+// turned on by the fix. The component-aware default only applies to
+// needs-private stacks; here NAT ends nil/off and no error is raised.
+func TestCoherence_DefaultPathNAT_NoNeedsPrivateStaysOff(t *testing.T) {
+	t.Parallel()
+
+	comps := &Components{Cloud: "AWS", AWSVPC: "Public VPC", AWSS3: boolPtr(true)}
+	cfg := &Config{Cloud: "AWS"} // default VPC config
+	selected := []ComponentKey{KeyAWSVPC, KeyAWSS3}
+
+	natVal, resolved, err := runDefaultCoherenceThenMapNAT(t, comps, cfg, selected)
+	require.NoError(t, err, "a non-needs-private stack must compose cleanly")
+	// The final derive clears NAT fields (and possibly the whole AWSVPC block)
+	// on a stack that doesn't need private subnets.
+	if resolved.AWSVPC != nil {
+		assert.Nil(t, resolved.AWSVPC.EnableNATGateway,
+			"NAT must stay off (nil) on a stack with no private-subnet consumers")
+	}
+	// Public VPC with no consumers: the mapper emits enable_nat_gateway=false.
+	assert.Equal(t, false, natVal,
+		"Public VPC with no consumers must keep NAT off in tfvars")
+}

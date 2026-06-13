@@ -198,7 +198,54 @@ func (c *Client) ComputePresetDefaults(cfg Config, comps *Components, selected [
 	// own cfg left the instance type blank — an explicit pick is preserved.
 	applyGPUInstanceTypeDefault(&cfg, &out)
 
+	// NAT-gateway default for needs-private stacks (#393, reliable "Terraform
+	// Error" regression). The aws/vpc preset's enable_nat_gateway HCL default is
+	// false — an intentional backstop so a stale-true value can't wedge a
+	// Public-VPC-only stack. But that backstop is the WRONG default for a stack
+	// that DOES need private subnets: the zero-only overlay would land
+	// EnableNATGateway=&false into the user's nil field, and the mapper's
+	// fail-fast would then reject the very value the composer itself chose.
+	// Make the COMPUTED default component-aware so the default path resolves to
+	// true. See overrideNATGatewayDefaultForPrivateSubnets for why this is
+	// provenance-safe (it only rewrites the overlay's own zero-only default).
+	overrideNATGatewayDefaultForPrivateSubnets(&out, comps)
+
 	return out, nil
+}
+
+// overrideNATGatewayDefaultForPrivateSubnets makes the EnableNATGateway preset
+// default component-aware: for stacks that need private subnets (EKS / ECS /
+// RDS / ElastiCache / OpenSearch / EC2 node groups), the overlay's NAT default
+// is true rather than the aws/vpc HCL backstop (false). It mutates ONLY the
+// overlay, never cfg.
+//
+// Provenance safety — this can never clobber a user-set value, by construction:
+//
+//   - The overlay carries a non-nil EnableNATGateway ONLY when the user left
+//     cfg.AWSVPC.EnableNATGateway zero (overlayStructFromDefaults is zero-only).
+//     So out.AWSVPC.EnableNATGateway != nil already PROVES the user didn't
+//     author it. Rewriting it false→true is safe and is exactly "the computed
+//     default for a needs-private stack."
+//   - When the user explicitly authored EnableNATGateway (incl. =false), the
+//     overlay leaves the field nil here; this function leaves it nil too, so
+//     the later zero-only MergeConfigs never touches the user's pointer and the
+//     intentional EnableNATGateway=false fail-fast still fires in the mapper.
+//   - We never ALLOCATE an overlay AWSVPC sub-block or invent the field: if the
+//     overlay didn't compute a default here (e.g. aws/vpc not in `selected`),
+//     there is no default to make component-aware, so we leave it untouched.
+//
+// Symmetric in spirit to applyGPUInstanceTypeDefault: adjust the overlay's
+// default value; the zero-only merge fills the blank without overriding an
+// explicit pick.
+func overrideNATGatewayDefaultForPrivateSubnets(out *Config, comps *Components) {
+	if !stackNeedsPrivateSubnets(comps) {
+		return
+	}
+	if out.AWSVPC == nil || out.AWSVPC.EnableNATGateway == nil {
+		return
+	}
+	enable := true
+	out.AWSVPC.EnableNATGateway = &enable
 }
 
 // applyGPUInstanceTypeDefault overlays defaultGPUInstanceType onto the EC2/EKS
