@@ -54,7 +54,7 @@ func TestValidateAWSVPCNATConsistency(t *testing.T) {
 		// VPC-shape gating.
 		{name: "Private VPC is a no-op (NAT is the documented default)", cloud: "aws", comps: &Components{AWSVPC: "Private VPC"}, cfg: awsVPCNATCfg(boolPtr(true)), wantIssue: false},
 		{name: "empty AWSVPC is a no-op", cloud: "aws", comps: &Components{}, cfg: awsVPCNATCfg(boolPtr(true)), wantIssue: false},
-		{name: "EnableNATGateway=false on Public VPC is a no-op (mapper's :120 reject handles the inverse)", cloud: "aws", comps: &Components{AWSVPC: "Public VPC"}, cfg: awsVPCNATCfg(boolPtr(false)), wantIssue: false},
+		{name: "EnableNATGateway=false on Public VPC is a no-op (the mapper heals the needs-private inverse)", cloud: "aws", comps: &Components{AWSVPC: "Public VPC"}, cfg: awsVPCNATCfg(boolPtr(false)), wantIssue: false},
 
 		// Consumer-presence gating — when a private-subnet-needing component
 		// is present, EnableNATGateway=true is legitimate. Cover every

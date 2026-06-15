@@ -2,6 +2,7 @@ package composer
 
 import (
 	"fmt"
+	"log"
 	"regexp"
 	"strconv"
 	"strings"
@@ -112,19 +113,18 @@ func (m DefaultMapper) BuildModuleValues(
 		// Topology knobs from Config.AWSVPC override Public-VPC-derived defaults.
 		// Unset pointer fields defer to the HCL default.
 		if cfg != nil && cfg.AWSVPC != nil {
-			// Reject EnableNATGateway=false when the stack has components that
-			// require private subnets with egress (EKS/ECS/RDS/ElastiCache/
-			// OpenSearch/EC2 node groups). Private subnets without NAT can't
-			// pull container images or run package installs, so the apply
-			// would break much later than it needs to. Fail fast here.
-			if cfg.AWSVPC.EnableNATGateway != nil && !*cfg.AWSVPC.EnableNATGateway && stackNeedsPrivateSubnets(comps) {
-				return nil, NewValidationError(
-					"AWSVPC.EnableNATGateway=false is incompatible with components that require private subnets " +
-						"(EKS/ECS/RDS/ElastiCache/OpenSearch/EC2 node groups): private subnets without NAT cannot reach " +
-						"the public internet, breaking image pulls and package installs. Either re-enable NAT or drop " +
-						"the downstream components",
-				)
-			}
+			// NOTE: EnableNATGateway=false on a stack that needs private subnets
+			// (EKS/ECS/RDS/ElastiCache/OpenSearch/EC2 node groups) is always
+			// invalid — private subnets without NAT can't pull container images
+			// or run package installs. #805 failed fast here, but existing
+			// stack snapshots froze EnableNATGateway=false into their stored
+			// config BEFORE #805 fixed the defaulting path, and reliable
+			// composes that stored config verbatim (no re-derive), so a
+			// fail-fast only yields an error the user can't act on. We now HEAL
+			// it instead: the coercion at the end of this case forces
+			// enable_nat_gateway=true (the final word over the explicit-false
+			// assignment below). See the heal block tagged "heal frozen NAT".
+			//
 			// AZCount bounds — HCL validation says >= 1; enforce the same at
 			// the mapper so users see a Go-level error before `terraform plan`.
 			if cfg.AWSVPC.AZCount != nil && *cfg.AWSVPC.AZCount < 1 {
@@ -166,6 +166,28 @@ func (m DefaultMapper) BuildModuleValues(
 		// coercion to upstream callers so the stale field can be cleared.
 		if pSubn, ok := vals["enable_private_subnets"].(bool); ok && !pSubn {
 			vals["enable_nat_gateway"] = false
+		}
+
+		// Heal frozen NAT: a stack that needs private subnets but ends up with
+		// enable_nat_gateway=false is always invalid (private subnets without
+		// NAT can't reach the internet). This supersedes #805's explicit-false
+		// fail-fast — pre-#805 snapshots froze that bad value into stored
+		// config that reliable composes verbatim, so we coerce instead of
+		// erroring. This runs LAST so it is the final word over the
+		// explicit-false / derived-false assignments above; the #389 coercion
+		// just above only sets NAT=false when private subnets are disabled,
+		// which never overlaps a needs-private stack. enable_private_subnets is
+		// pinned true so the outputs.tf invariant "enable_nat_gateway=true
+		// requires enable_private_subnets=true" cannot trip.
+		if stackNeedsPrivateSubnets(comps) {
+			if nat, ok := vals["enable_nat_gateway"].(bool); ok && !nat {
+				log.Printf("[composer/mapper] AWSVPC heal: enable_nat_gateway=false is " +
+					"incompatible with a stack that needs private subnets " +
+					"(EKS/ECS/RDS/ElastiCache/OpenSearch/EC2); coercing " +
+					"enable_nat_gateway=true and enable_private_subnets=true (frozen pre-#805 value)")
+				vals["enable_nat_gateway"] = true
+				vals["enable_private_subnets"] = true
+			}
 		}
 
 	case KeyCloud:
@@ -917,13 +939,26 @@ func (m DefaultMapper) BuildModuleValues(
 				vals["memory_size"] = n
 			}
 			if cfg.AWSLambda.Timeout != "" {
-				// Strict: support only "<N>s", "<N>m", "<N>h" — the IR
-				// enum is {"3s","30s","15m"}. Earlier versions dropped
-				// anything that didn't end in s or m (e.g. "1h", bare
-				// "30", "30 s") and produced 0 by accident on a few
-				// malformed shapes. Fail fast on unrecognised format
-				// rather than silently feeding the module its default.
-				secs, err := parseDurationToSeconds(cfg.AWSLambda.Timeout, "AWSLambda.Timeout")
+				// Support "<N>s", "<N>m", "<N>h" — the IR enum is
+				// {"3s","30s","15m"}.
+				//
+				// Heal frozen bare integers: pre-#805 snapshots froze a
+				// bare-integer timeout (e.g. "3", "30") — the composer's own
+				// preset overlay stringified the HCL number default — into
+				// stored config that reliable composes verbatim. The strict
+				// parser rejects a bare integer (it wants a unit), so erroring
+				// only yields an error the user can't act on. A bare integer is
+				// unambiguously seconds, so coerce "<N>" -> "<N>s" before
+				// parsing. Genuinely malformed values (e.g. "abc", "5y") still
+				// error — only bare integers are the known-safe coercion.
+				timeout := strings.TrimSpace(cfg.AWSLambda.Timeout)
+				if bareIntRe.MatchString(timeout) {
+					coerced := timeout + "s"
+					log.Printf("[composer/mapper] AWSLambda heal: timeout=%q is a bare "+
+						"integer; coercing to %q (seconds) (frozen pre-#805 value)", timeout, coerced)
+					timeout = coerced
+				}
+				secs, err := parseDurationToSeconds(timeout, "AWSLambda.Timeout")
 				if err != nil {
 					return nil, err
 				}
@@ -1614,6 +1649,10 @@ var (
 	leadingIntRe     = regexp.MustCompile(`^\s*(-?\d+)`)
 	storageSizeRe    = regexp.MustCompile(`^\s*(\d+)\s*(GB|TB|MB)\s*$`)
 	mapperDurationRe = regexp.MustCompile(`^\s*(\d+)\s*([smh])\s*$`)
+	// bareIntRe matches an unsuffixed non-negative integer ("3", "30"). Used to
+	// heal frozen pre-#805 Lambda timeouts that lack a unit by coercing to
+	// "<N>s" (seconds) before the strict duration parser runs.
+	bareIntRe = regexp.MustCompile(`^[0-9]+$`)
 )
 
 // canonicalDdbBillingMode maps IR enum values to the uppercase tokens
