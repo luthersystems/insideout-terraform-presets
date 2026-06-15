@@ -180,21 +180,21 @@ func TestBuildModuleValues_VPC_PublicPrivateMode(t *testing.T) {
 			"mapper must explicitly emit enable_nat_gateway=true when private subnets are needed and the user hasn't authored AWSVPC.EnableNATGateway (#393)")
 	})
 
-	t.Run("user-authored AWSVPC.EnableNATGateway=false wins over #393 explicit-true branch", func(t *testing.T) {
-		// Regression guard: the #393 explicit-true branch must NOT clobber a
-		// user who deliberately set EnableNATGateway=false. The fail-fast
-		// branch at mapper.go:120-127 catches the truly inconsistent
-		// "false + needs private subnets" combination and rejects with an
-		// error before vals is returned.
+	t.Run("AWSVPC.EnableNATGateway=false on a needs-private stack is HEALED to NAT=true", func(t *testing.T) {
+		// REVERSED contract (supersedes #805's fail-fast, per the heal
+		// decision): EnableNATGateway=false + a needs-private component is a
+		// known-always-invalid value that pre-#805 snapshots froze into stored
+		// config reliable composes verbatim. The mapper now coerces it instead
+		// of erroring: enable_nat_gateway=true AND enable_private_subnets=true
+		// (the latter pins the outputs.tf invariant).
 		comps := &Components{AWSVPC: "Private VPC", AWSEKS: boolPtr(true)}
 		cfg := cfgWithAWSVPC(nil, boolPtr(false), nil)
-		_, err := m.BuildModuleValues(KeyAWSVPC, comps, cfg, "test", "us-east-1")
-		require.Error(t, err, "user-authored EnableNATGateway=false + EKS must fail-fast at the mapper, NOT be silently overridden to true by the #393 branch")
-		// Pin the specific fail-fast at mapper.go:120-127; a future
-		// refactor returning a different error from a different code path
-		// would still satisfy require.Error and silently weaken this gate.
-		assert.Contains(t, err.Error(), "AWSVPC.EnableNATGateway=false is incompatible",
-			"must surface the specific #389 fail-fast, not some other error path")
+		vals, err := m.BuildModuleValues(KeyAWSVPC, comps, cfg, "test", "us-east-1")
+		require.NoError(t, err, "frozen EnableNATGateway=false + EKS must be HEALED, not rejected")
+		assert.Equal(t, true, vals["enable_nat_gateway"],
+			"mapper must coerce enable_nat_gateway=true (final word over the explicit false)")
+		assert.Equal(t, true, vals["enable_private_subnets"],
+			"mapper must pin enable_private_subnets=true so the outputs.tf NAT invariant cannot trip")
 	})
 }
 
@@ -313,30 +313,34 @@ func TestBuildModuleValues_VPC_AWSVPCConfig(t *testing.T) {
 }
 
 // TestBuildModuleValues_VPC_AWSVPCConfig_Validation pins the mapper-level
-// validation for invalid Config.AWSVPC combinations that would produce a
-// broken stack (private subnets without egress) or fail at `terraform validate`.
-// Catching these in Go fails fast and gives actionable errors.
+// validation for invalid Config.AWSVPC combinations. AZCount bounds still fail
+// fast (the user can fix them). The NAT-off + needs-private combination is no
+// longer a fail-fast: it is a known-always-invalid value pre-#805 snapshots
+// froze into stored config reliable composes verbatim, so the mapper now HEALS
+// it (coerces NAT=true) instead of erroring — see the inverted subtests below.
 func TestBuildModuleValues_VPC_AWSVPCConfig_Validation(t *testing.T) {
 	m := DefaultMapper{}
 	boolPtr := func(v bool) *bool { return &v }
 	intPtr := func(v int) *int { return &v }
 
-	t.Run("EnableNATGateway=false with EKS returns ValidationError", func(t *testing.T) {
+	t.Run("EnableNATGateway=false with EKS is HEALED to NAT=true (was ValidationError)", func(t *testing.T) {
+		// REVERSED contract (supersedes #805's fail-fast): heal instead of error.
 		comps := &Components{AWSEKS: boolPtr(true)}
 		cfg := cfgWithAWSVPC(nil, boolPtr(false), nil)
-		_, err := m.BuildModuleValues(KeyAWSVPC, comps, cfg, "test", "us-east-1")
-		require.Error(t, err)
-		var verr *ValidationError
-		assert.ErrorAs(t, err, &verr, "should return ValidationError so API-layer can HTTP 400")
-		assert.Contains(t, err.Error(), "EnableNATGateway=false",
-			"error should name the offending knob")
+		vals, err := m.BuildModuleValues(KeyAWSVPC, comps, cfg, "test", "us-east-1")
+		require.NoError(t, err, "frozen NAT=false + EKS must be healed, not rejected")
+		assert.Equal(t, true, vals["enable_nat_gateway"], "coerced enable_nat_gateway=true")
+		assert.Equal(t, true, vals["enable_private_subnets"], "coerced enable_private_subnets=true")
 	})
 
-	t.Run("EnableNATGateway=false with RDS returns ValidationError", func(t *testing.T) {
+	t.Run("EnableNATGateway=false with RDS is HEALED to NAT=true (was ValidationError)", func(t *testing.T) {
+		// REVERSED contract (supersedes #805's fail-fast): heal instead of error.
 		comps := &Components{AWSRDS: boolPtr(true)}
 		cfg := cfgWithAWSVPC(nil, boolPtr(false), nil)
-		_, err := m.BuildModuleValues(KeyAWSVPC, comps, cfg, "test", "us-east-1")
-		require.Error(t, err)
+		vals, err := m.BuildModuleValues(KeyAWSVPC, comps, cfg, "test", "us-east-1")
+		require.NoError(t, err, "frozen NAT=false + RDS must be healed, not rejected")
+		assert.Equal(t, true, vals["enable_nat_gateway"], "coerced enable_nat_gateway=true")
+		assert.Equal(t, true, vals["enable_private_subnets"], "coerced enable_private_subnets=true")
 	})
 
 	t.Run("EnableNATGateway=false without downstream components is allowed", func(t *testing.T) {

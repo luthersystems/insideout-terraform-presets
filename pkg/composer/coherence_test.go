@@ -889,24 +889,35 @@ func TestCoherence_DefaultPathNAT_AllNeedsPrivateComponents(t *testing.T) {
 	}
 }
 
-// TestCoherence_DefaultPathNAT_PreservesExplicitFalse locks the intentional
-// guard: a user who EXPLICITLY sets EnableNATGateway=false on a needs-private
-// stack must STILL get the validation error. The fix is overlay-only and the
-// overlay is zero-only, so an explicit (non-nil) false is never echoed back nor
-// flipped — it reaches the mapper unchanged and fails fast.
-func TestCoherence_DefaultPathNAT_PreservesExplicitFalse(t *testing.T) {
+// TestCoherence_DefaultPathNAT_CoercesExplicitFalse locks the REVERSED
+// contract (supersedes #805's fail-fast, per the heal decision): an explicit
+// EnableNATGateway=false on a needs-private stack is a known-always-invalid
+// value that pre-#805 snapshots froze into stored config reliable composes
+// verbatim, so the mapper now HEALS it — coercing enable_nat_gateway=true with
+// no error — instead of failing fast the user can't act on.
+//
+// This was TestCoherence_DefaultPathNAT_PreservesExplicitFalse (#805), which
+// asserted the opposite (STILL errors). It is intentionally inverted, not
+// deleted: the explicit-false guard is replaced by the heal coercion.
+func TestCoherence_DefaultPathNAT_CoercesExplicitFalse(t *testing.T) {
 	t.Parallel()
 
 	comps := &Components{Cloud: "AWS", AWSVPC: "Public VPC", AWSEKS: boolPtr(true)}
 	cfg := cfgWithVPCSubBlock(nil, boolPtr(false), nil) // user-explicit NAT=false
 	selected := []ComponentKey{KeyAWSVPC, KeyAWSEKS}
 
-	_, _, err := runDefaultCoherenceThenMapNAT(t, comps, cfg, selected)
-	require.Error(t, err,
-		"user-explicit EnableNATGateway=false on a needs-private stack must STILL fail fast — "+
-			"the overlay-only fix must not suppress the intentional guard")
-	assert.Contains(t, err.Error(), "AWSVPC.EnableNATGateway=false is incompatible",
-		"must surface the specific #389/#393 fail-fast, not some other error path")
+	natVal, resolved, err := runDefaultCoherenceThenMapNAT(t, comps, cfg, selected)
+	require.NoError(t, err,
+		"explicit EnableNATGateway=false on a needs-private stack must now be HEALED "+
+			"(coerced to NAT=true), not rejected — supersedes the #805 fail-fast")
+	assert.Equal(t, true, natVal,
+		"mapper must coerce enable_nat_gateway=true for a needs-private stack with frozen NAT=false")
+	// Provenance: the heal rewrites only the emitted tfvars, never the stored
+	// Config — the explicit false survives in cfg (reliable's source of truth).
+	require.NotNil(t, resolved.AWSVPC)
+	require.NotNil(t, resolved.AWSVPC.EnableNATGateway)
+	assert.False(t, *resolved.AWSVPC.EnableNATGateway,
+		"the stored Config is NOT mutated by the heal; only the emitted tfvars are coerced")
 }
 
 // TestCoherence_DefaultPathNAT_NoNeedsPrivateStaysOff is the negative case: a

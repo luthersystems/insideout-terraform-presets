@@ -468,12 +468,20 @@ func TestBuildModuleValues_AWSLambda_MemoryAndTimeout(t *testing.T) {
 		assertValidationError(t, err)
 	})
 
-	t.Run("rejects bare-integer timeout (no unit) with ValidationError", func(t *testing.T) {
-		_, err := m.BuildModuleValues(KeyAWSLambda, nil, lambdaCfg("", "", "30"), "", "")
-		assertValidationError(t, err)
+	t.Run("normalizes bare-integer timeout (no unit) to seconds instead of erroring", func(t *testing.T) {
+		// REVERSED contract (supersedes #805's fail-fast, per the heal
+		// decision): a bare-integer timeout is a known-always-invalid frozen
+		// value (pre-#805 snapshots stringified the HCL number default) that
+		// reliable composes verbatim. A bare integer is unambiguously seconds,
+		// so the mapper coerces "30" -> "30s" instead of rejecting it.
+		vals, err := m.BuildModuleValues(KeyAWSLambda, nil, lambdaCfg("", "", "30"), "", "")
+		require.NoError(t, err, "bare-integer timeout must be healed, not rejected")
+		assert.Equal(t, 30, vals["timeout"], `"30" normalizes to 30 seconds`)
 	})
 
 	t.Run("rejects unknown timeout unit with ValidationError", func(t *testing.T) {
+		// Only bare integers are the known-safe coercion; a non-numeric /
+		// unknown-unit value still fails fast.
 		_, err := m.BuildModuleValues(KeyAWSLambda, nil, lambdaCfg("", "", "5y"), "", "")
 		assertValidationError(t, err)
 	})
