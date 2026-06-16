@@ -61,6 +61,15 @@ variables {
 run "defaults" {
   command = plan
 
+  # The CUSTOM_JWT authorizer requires at least one non-empty allowlist — AWS
+  # CreateGateway rejects an authorizer with neither, enforced by the gateway
+  # precondition in main.tf. So even the "defaults" shape must pin one. Audience
+  # is set here; clients is left unset so the null-emission security assertion
+  # below still exercises the unset path.
+  variables {
+    jwt_allowed_audience = ["insideout-agents"]
+  }
+
   # Gateway role is always created (the gateway requires role_arn).
   assert {
     condition     = aws_iam_role.gateway.name == "iotest-gw-agentcore-gw-role"
@@ -117,16 +126,18 @@ run "defaults" {
     error_message = "Gateway MCP block must carry the default instructions."
   }
 
-  # SECURITY: unset JWT allowlists must be null (not []) so the gateway does
-  # not pin an empty allowlist — the preset promises this (main.tf header on
-  # the conditional). An empty-list allowlist on a JWT authorizer is
-  # ambiguous (allow-none vs allow-all depending on provider); pinning null
-  # is the safe, documented shape.
+  # The set allowlist (audience) flows through to the authorizer.
   assert {
-    condition     = aws_bedrockagentcore_gateway.this.authorizer_configuration[0].custom_jwt_authorizer[0].allowed_audience == null
-    error_message = "Unset jwt_allowed_audience must emit null, not an empty allowlist."
+    condition     = contains(aws_bedrockagentcore_gateway.this.authorizer_configuration[0].custom_jwt_authorizer[0].allowed_audience, "insideout-agents")
+    error_message = "Gateway JWT authorizer must carry the supplied allowed_audience."
   }
 
+  # SECURITY: an unset JWT allowlist must be null (not []) so the gateway does
+  # not pin an empty allowlist — the preset promises this (main.tf header on
+  # the conditional). An empty-list allowlist on a JWT authorizer is ambiguous
+  # (allow-none vs allow-all depending on provider); pinning null is the safe,
+  # documented shape. Asserted on the unset clients allowlist (audience is set
+  # above to satisfy the gateway precondition).
   assert {
     condition     = aws_bedrockagentcore_gateway.this.authorizer_configuration[0].custom_jwt_authorizer[0].allowed_clients == null
     error_message = "Unset jwt_allowed_clients must emit null, not an empty allowlist."
@@ -163,7 +174,8 @@ run "with_lambda_target" {
   command = apply
 
   variables {
-    target_lambda_arn = "arn:aws:lambda:us-east-1:111111111111:function:iotest-gw-fn"
+    target_lambda_arn    = "arn:aws:lambda:us-east-1:111111111111:function:iotest-gw-fn"
+    jwt_allowed_audience = ["insideout-agents"]
   }
 
   assert {
@@ -283,7 +295,8 @@ run "govcloud_lambda_arn_accepted" {
   command = plan
 
   variables {
-    target_lambda_arn = "arn:aws-us-gov:lambda:us-gov-west-1:111111111111:function:iotest-gw-fn"
+    target_lambda_arn    = "arn:aws-us-gov:lambda:us-gov-west-1:111111111111:function:iotest-gw-fn"
+    jwt_allowed_audience = ["insideout-agents"]
   }
 
   assert {
@@ -328,6 +341,13 @@ run "bad_lambda_arn_rejected" {
 
   variables {
     target_lambda_arn = "not-an-arn"
+    # An allowlist is required to satisfy the gateway precondition: target_lambda_arn
+    # is not consumed by aws_bedrockagentcore_gateway.this, so an invalid value does
+    # not block that resource from planning (and evaluating its precondition) the way
+    # an invalid protocol_type / discovery_url / search_type / gateway_name does. The
+    # expected failure here is the target_lambda_arn variable validation, not the
+    # precondition.
+    jwt_allowed_audience = ["insideout-agents"]
   }
 
   expect_failures = [
@@ -358,4 +378,73 @@ run "bad_gateway_name_rejected" {
   expect_failures = [
     var.gateway_name,
   ]
+}
+
+# --- Precondition: CUSTOM_JWT requires an allowlist --------------------------
+#
+# Denial test for the gateway precondition (main.tf): a CUSTOM_JWT authorizer
+# with NEITHER allowlist must be rejected at plan, not deferred to AWS
+# CreateGateway's ValidationException. Deleting the precondition leaves the rest
+# of the suite green, so this is the only run that guards it.
+run "jwt_neither_allowlist_rejected" {
+  command = plan
+
+  # No jwt_allowed_audience, no jwt_allowed_clients (both default []).
+  expect_failures = [
+    aws_bedrockagentcore_gateway.this,
+  ]
+}
+
+# Symmetric to the defaults run (audience set, clients asserted null): set only
+# clients and assert the unset audience collapses to null, not []. The two
+# allowlist conditionals (main.tf) are independent, so each null branch needs
+# its own coverage.
+run "clients_only_audience_emits_null" {
+  command = plan
+
+  variables {
+    jwt_allowed_clients = ["client-abc"]
+  }
+
+  assert {
+    condition     = aws_bedrockagentcore_gateway.this.authorizer_configuration[0].custom_jwt_authorizer[0].allowed_audience == null
+    error_message = "Unset jwt_allowed_audience must emit null, not an empty allowlist."
+  }
+
+  assert {
+    condition     = contains(aws_bedrockagentcore_gateway.this.authorizer_configuration[0].custom_jwt_authorizer[0].allowed_clients, "client-abc")
+    error_message = "Gateway JWT authorizer must carry the supplied allowed_clients."
+  }
+}
+
+# --- Module half of the count-on-computed fix (#807) -------------------------
+#
+# The composer gates the Lambda target on a plan-time-known enable_lambda_target
+# flag, not the computed target_lambda_arn. Prove the preset honors it: with the
+# flag false but a non-null ARN supplied, NO target / invoke policy / permission
+# may be created — count must follow the bool, not the ARN. A revert to
+# `count = var.target_lambda_arn != null` makes this run fail.
+run "enable_lambda_target_false_overrides_arn" {
+  command = plan
+
+  variables {
+    target_lambda_arn    = "arn:aws:lambda:us-east-1:111111111111:function:iotest-gw-fn"
+    enable_lambda_target = false
+    jwt_allowed_audience = ["insideout-agents"]
+  }
+
+  assert {
+    condition     = length(aws_bedrockagentcore_gateway_target.lambda) == 0
+    error_message = "enable_lambda_target=false must suppress the Lambda target even when target_lambda_arn is set."
+  }
+
+  assert {
+    condition     = length(aws_iam_role_policy.gateway_invoke) == 0
+    error_message = "enable_lambda_target=false must suppress the gateway invoke policy."
+  }
+
+  assert {
+    condition     = length(aws_lambda_permission.gateway_invoke) == 0
+    error_message = "enable_lambda_target=false must suppress the Lambda invoke permission."
+  }
 }

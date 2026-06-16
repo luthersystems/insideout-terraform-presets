@@ -176,6 +176,20 @@ resource "aws_bedrockagentcore_gateway" "this" {
 
   tags = merge(module.name.tags, var.tags)
 
+  # AWS CreateGateway rejects a CUSTOM_JWT authorizer that defines none of
+  # allowedAudience / allowedClients (ValidationException). The provider treats
+  # both as optional, so this only surfaces at apply against the real API — fail
+  # fast at plan with an actionable message instead. A working gateway must pin
+  # the audiences and/or client IDs its issuer mints; there is no safe default
+  # to invent, so the caller supplies one via
+  # Config.aws_agentcore_gateway.jwtAllowedAudience / jwtAllowedClients.
+  lifecycle {
+    precondition {
+      condition     = length(var.jwt_allowed_audience) > 0 || length(var.jwt_allowed_clients) > 0
+      error_message = "AgentCore CUSTOM_JWT authorizer requires at least one of jwt_allowed_audience or jwt_allowed_clients to be non-empty — AWS CreateGateway rejects an authorizer with neither. Set Config.aws_agentcore_gateway.jwtAllowedAudience and/or jwtAllowedClients to the audience(s) / client ID(s) your OIDC issuer mints."
+    }
+  }
+
   depends_on = [aws_iam_role.gateway]
 }
 
