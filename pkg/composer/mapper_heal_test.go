@@ -149,14 +149,27 @@ func TestBuildModuleValues_Heal_EmitsWarning(t *testing.T) {
 // A sizing value like "2 vCPU" was once compose-valid under a permissive legacy
 // TS mapper but the strict Go composer hard-errors (the IR enum is {1,4,8}
 // vCPU). That frozen value lives in stored config reliable composes verbatim,
-// so the mapper now HEALS it: snap UP to the nearest valid tier (rounding up),
-// snap above-max to the max, and leave valid tiers + concrete provider
-// instance/node types untouched. Genuinely-malformed labels still error.
-// Mirrors the #805/#806 heal style.
+// so the mapper now HEALS it — PRESERVING THE DEPLOYED FOOTPRINT: an out-of-enum
+// "<N> vCPU" maps to the CONCRETE same-family class with EXACTLY N vCPU
+// (e.g. "2 vCPU" -> db.m7i.large / cache.r6g.large), the same class the resource
+// is already running as. An earlier revision of this heal rounded UP to the next
+// tier ("2 vCPU" -> xlarge, 4 vCPU); that is a real instance_class / node_type
+// change → an RDS restart / ElastiCache node replacement (~2x cost) on the next
+// apply, so it was changed to preserve the footprint (reliable#2097; a Codex
+// review confirmed the round-up emitted xlarge while the legacy TS mapper
+// emitted large for this Intel session). Only a vCPU with no concrete class
+// falls back to rounding up to the nearest tier; valid tiers + concrete provider
+// instance/node types pass through untouched; genuinely-malformed labels still
+// error. Mirrors the #805/#806 heal style.
 
-// TestSnapVCPUTier pins the round-up-to-nearest-tier rule directly, including
-// the "only the <integer> vCPU shape matches" guard that keeps malformed values
-// erroring at the call sites.
+// TestSnapVCPUTier pins the round-up-to-nearest-tier rule of the FALLBACK helper
+// directly, including the "only the <integer> vCPU shape matches" guard that
+// keeps malformed values erroring at the call sites. NOTE: snapVCPUTier is now
+// only the fallback — the mapper intercepts exact-vCPU counts (2, 16, 32, ...)
+// via vcpuExactSuffix and preserves the footprint BEFORE snapVCPUTier runs, so
+// e.g. "2 vCPU" / "16 vCPU" never reach this helper through the mapper (see
+// TestBuildModuleValues_VCPUSizingHeal). The cases below pin the pure helper
+// math, which still backs the genuinely-no-concrete-class gap values (3,5,6,7).
 func TestSnapVCPUTier(t *testing.T) {
 	t.Parallel()
 
@@ -199,37 +212,64 @@ func TestSnapVCPUTier(t *testing.T) {
 
 // TestBuildModuleValues_VCPUSizingHeal exercises the heal through the mapper for
 // both doubly-affected fields (the reliable#2097 session has BOTH
-// AWSElastiCache.NodeSize="2 vCPU" and AWSRDS.CPUSize="2 vCPU"): out-of-enum
-// snaps up, valid tiers and concrete provider types pass through unchanged, and
-// a genuinely-malformed value still errors.
+// AWSElastiCache.NodeSize="2 vCPU" and AWSRDS.CPUSize="2 vCPU"): an out-of-enum
+// vCPU with a concrete same-family class heals to THAT class (preserve the
+// deployed footprint — no resize), a vCPU with no concrete class falls back to
+// rounding up, valid tiers and concrete provider types pass through unchanged,
+// and a genuinely-malformed value still errors.
 func TestBuildModuleValues_VCPUSizingHeal(t *testing.T) {
 	t.Parallel()
 
 	m := DefaultMapper{}
 
-	t.Run("ElastiCache NodeSize 2 vCPU heals to 4 vCPU node type", func(t *testing.T) {
+	// PRESERVE-FOOTPRINT contract (reliable#2097): the Intel session deployed
+	// "2 vCPU" via the legacy TS mapper as db.m7i.large / (cache.)r6g.large — the
+	// 2-vCPU `large` size, NOT the 4-vCPU `xlarge`. An earlier revision rounded
+	// "2 vCPU" UP to xlarge; a Codex review flagged that as a silent RESIZE (RDS
+	// restart / ElastiCache node replacement, ~2x cost) on the next apply because
+	// the running resource is `large`. So "2 vCPU" must heal to the concrete
+	// 2-vCPU `large` class, leaving the footprint identical.
+	t.Run("ElastiCache NodeSize 2 vCPU heals to the concrete 2-vCPU node type (preserve)", func(t *testing.T) {
 		t.Parallel()
 		vals, err := m.BuildModuleValues(KeyAWSElastiCache, nil, elasticacheCfg("2 vCPU", "", ""), "", "")
 		require.NoError(t, err, "frozen out-of-enum NodeSize must heal, not error")
-		assert.Equal(t, "cache.r6g.xlarge", vals["node_type"], `"2 vCPU" snaps up to the 4 vCPU tier`)
+		assert.Equal(t, "cache.r6g.large", vals["node_type"],
+			`"2 vCPU" heals to the concrete 2-vCPU node type (cache.r6g.large), preserving the deployed footprint — NOT cache.r6g.xlarge (4 vCPU)`)
 	})
 
-	t.Run("RDS CPUSize 2 vCPU heals to 4 vCPU instance class", func(t *testing.T) {
+	t.Run("RDS CPUSize 2 vCPU heals to the concrete 2-vCPU instance class (preserve)", func(t *testing.T) {
 		t.Parallel()
 		vals, err := m.BuildModuleValues(KeyAWSRDS, nil, rdsCfg("2 vCPU", "", ""), "", "")
 		require.NoError(t, err, "frozen out-of-enum CPUSize must heal, not error")
-		assert.Equal(t, "db.m7i.xlarge", vals["instance_class"], `"2 vCPU" snaps up to the 4 vCPU tier`)
+		assert.Equal(t, "db.m7i.large", vals["instance_class"],
+			`"2 vCPU" heals to the concrete 2-vCPU instance class (db.m7i.large) — the exact class the reliable#2097 Intel session deployed — NOT db.m7i.xlarge (4 vCPU)`)
 	})
 
-	t.Run("above-max snaps to the max tier", func(t *testing.T) {
+	t.Run("larger exact-vCPU labels also preserve (16 vCPU)", func(t *testing.T) {
 		t.Parallel()
+		// 16 vCPU has a concrete same-family class (4xlarge), so it PRESERVES at
+		// 16 vCPU rather than snapping down to the 8-vCPU max tier (the earlier
+		// round-up contract). Preserve beats clamp for any vCPU with a concrete class.
 		ecVals, err := m.BuildModuleValues(KeyAWSElastiCache, nil, elasticacheCfg("16 vCPU", "", ""), "", "")
 		require.NoError(t, err)
-		assert.Equal(t, "cache.r6g.2xlarge", ecVals["node_type"], `"16 vCPU" snaps to the 8 vCPU max tier`)
+		assert.Equal(t, "cache.r6g.4xlarge", ecVals["node_type"], `"16 vCPU" preserves at the concrete 16-vCPU node type`)
 
 		rdsVals, err := m.BuildModuleValues(KeyAWSRDS, nil, rdsCfg("16 vCPU", "", ""), "", "")
 		require.NoError(t, err)
-		assert.Equal(t, "db.m7i.2xlarge", rdsVals["instance_class"], `"16 vCPU" snaps to the 8 vCPU max tier`)
+		assert.Equal(t, "db.m7i.4xlarge", rdsVals["instance_class"], `"16 vCPU" preserves at the concrete 16-vCPU instance class`)
+	})
+
+	t.Run("out-of-enum vCPU with no concrete class falls back to round-up", func(t *testing.T) {
+		t.Parallel()
+		// 3 and 5 vCPU have no concrete same-family class, so the heal falls back
+		// to rounding UP to the nearest valid tier (3 -> 4 vCPU, 5 -> 8 vCPU).
+		ec3, err := m.BuildModuleValues(KeyAWSElastiCache, nil, elasticacheCfg("3 vCPU", "", ""), "", "")
+		require.NoError(t, err)
+		assert.Equal(t, "cache.r6g.xlarge", ec3["node_type"], `"3 vCPU" rounds up to the 4 vCPU tier (no concrete 3-vCPU class)`)
+
+		rds5, err := m.BuildModuleValues(KeyAWSRDS, nil, rdsCfg("5 vCPU", "", ""), "", "")
+		require.NoError(t, err)
+		assert.Equal(t, "db.m7i.2xlarge", rds5["instance_class"], `"5 vCPU" rounds up to the 8 vCPU tier (no concrete 5-vCPU class)`)
 	})
 
 	t.Run("valid tiers are preserved (no heal)", func(t *testing.T) {

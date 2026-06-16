@@ -278,14 +278,18 @@ func TestBuildModuleValues_AWSRDS_VariableNames(t *testing.T) {
 		assert.Equal(t, "db.r6g.4xlarge", vals["instance_class"])
 	})
 
-	t.Run("above-max vCPU label snaps to the max tier (was ValidationError)", func(t *testing.T) {
-		// REVERSED contract (heal, mirroring #806): "16 vCPU" exceeds the max
-		// {1,4,8} tier, so instead of erroring the mapper snaps it UP to the
-		// max (8 vCPU -> db.m7i.2xlarge). Frozen formerly-valid value; see
-		// reliable#2097.
+	t.Run("out-of-enum vCPU label heals to its concrete same-vCPU class (was ValidationError)", func(t *testing.T) {
+		// REVERSED contract (heal, mirroring #806) — PRESERVE FOOTPRINT, not
+		// round up: "16 vCPU" is outside the {1,4,8} tier set but has a concrete
+		// db.m7i class with exactly 16 vCPU (4xlarge), so instead of erroring the
+		// mapper heals it to db.m7i.4xlarge — the same footprint the resource is
+		// already running as. The earlier revision snapped this DOWN to the
+		// 8-vCPU max tier (db.m7i.2xlarge), which would resize the instance; a
+		// Codex review flagged that resize for the "2 vCPU" case. Frozen
+		// formerly-valid value; see reliable#2097.
 		vals, err := m.BuildModuleValues(KeyAWSRDS, nil, rdsCfg("16 vCPU", "", ""), "", "")
-		require.NoError(t, err, "above-max vCPU must snap to the max tier, not error")
-		assert.Equal(t, "db.m7i.2xlarge", vals["instance_class"])
+		require.NoError(t, err, "out-of-enum vCPU with a concrete class must heal, not error")
+		assert.Equal(t, "db.m7i.4xlarge", vals["instance_class"])
 	})
 
 	t.Run("genuinely-malformed CPU label still errors with ValidationError", func(t *testing.T) {
