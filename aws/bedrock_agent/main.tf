@@ -28,9 +28,17 @@ locals {
 
   # The action group / Lambda invoke permission only exist when a backing
   # Lambda is wired in. A KB-only or chat-only agent leaves these off.
-  has_action_group = var.action_group_lambda_arn != null
+  #
+  # The enable_* toggles are the plan-time-known gates. Composed stacks wire
+  # action_group_lambda_arn / knowledge_base_id from other modules' outputs,
+  # whose values are unknown at plan, so `var.x != null` is itself unknown and
+  # Terraform rejects it as a count argument. The composer sets the toggles
+  # explicitly (enable_knowledge_base_association from the bedrock module's
+  # plan-time-known knowledge_base_enabled output); standalone callers leave
+  # them null and fall back to auto-detecting from the (literal) inputs.
+  has_action_group = var.enable_action_group != null ? var.enable_action_group : (var.action_group_lambda_arn != null)
   # The KB association only exists when a Knowledge Base id is wired in.
-  has_knowledge_base = var.knowledge_base_id != null
+  has_knowledge_base = var.enable_knowledge_base_association != null ? var.enable_knowledge_base_association : (var.knowledge_base_id != null)
 }
 
 # --- Agent resource IAM role --------------------------------------------------

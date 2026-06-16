@@ -1123,17 +1123,25 @@ func DefaultWiring(selected map[ComponentKey]bool, k ComponentKey, comps *Compon
 		// in the stack here — wire the agent's action_group_lambda_arn from the
 		// lambda module's function_arn output unconditionally.
 		wi.RawHCL["action_group_lambda_arn"] = lambdaRef(selected) + ".function_arn"
-		wi.Names = append(wi.Names, "action_group_lambda_arn")
+		// enable_action_group is the plan-time-known gate for the action group /
+		// invoke permission. action_group_lambda_arn above is a computed output,
+		// so the preset can't gate its count on `!= null` (unknown at plan).
+		// Lambda is a HARD dep here, so the action group always exists → true.
+		wi.RawHCL["enable_action_group"] = "true"
+		wi.Names = append(wi.Names, "action_group_lambda_arn", "enable_action_group")
 		// "Agent that does RAG": when aws/bedrock is also selected with its
 		// Knowledge Base enabled, wire the KB's id into the agent so the preset
 		// creates an aws_bedrockagent_agent_knowledge_base_association. The
 		// bedrock preset's knowledge_base_id output is null when the KB is
-		// disabled, so the association is gated preset-side on a non-null id —
-		// composing aws_bedrock without enable_knowledge_base leaves the agent
-		// KB-less, which is correct.
+		// disabled — but its null-ness is unknown at plan, so we gate the
+		// association on the bedrock module's plan-time-known
+		// knowledge_base_enabled output (true iff the KB is provisioned) rather
+		// than on knowledge_base_id. Composing aws_bedrock without
+		// enable_knowledge_base leaves the agent KB-less, which is correct.
 		if selected[KeyAWSBedrock] {
 			wi.RawHCL["knowledge_base_id"] = bedrockRef(selected) + ".knowledge_base_id"
-			wi.Names = append(wi.Names, "knowledge_base_id")
+			wi.RawHCL["enable_knowledge_base_association"] = bedrockRef(selected) + ".knowledge_base_enabled"
+			wi.Names = append(wi.Names, "knowledge_base_id", "enable_knowledge_base_association")
 		}
 
 	case KeyAWSAgentCoreGateway:
@@ -1144,7 +1152,12 @@ func DefaultWiring(selected map[ComponentKey]bool, k ComponentKey, comps *Compon
 		// preset gates the Lambda target / invoke policy / permission on a
 		// non-null arn, so the wire is what turns the Lambda into an MCP tool.
 		wi.RawHCL["target_lambda_arn"] = lambdaRef(selected) + ".function_arn"
-		wi.Names = append(wi.Names, "target_lambda_arn")
+		// enable_lambda_target is the plan-time-known gate for the Lambda target /
+		// invoke policy / permission. target_lambda_arn above is a computed
+		// output, so the preset can't gate their count on `!= null` (unknown at
+		// plan). Lambda is a HARD dep here, so the target always exists → true.
+		wi.RawHCL["enable_lambda_target"] = "true"
+		wi.Names = append(wi.Names, "target_lambda_arn", "enable_lambda_target")
 
 	case KeyAWSKendra:
 		// Kendra has NO hard dependency — a bare index is valid. The optional
@@ -1156,7 +1169,12 @@ func DefaultWiring(selected map[ComponentKey]bool, k ComponentKey, comps *Compon
 			s3 := s3Ref(selected)
 			wi.RawHCL["s3_bucket_name"] = s3 + ".bucket_name"
 			wi.RawHCL["s3_bucket_arn"] = s3 + ".bucket_arn"
-			wi.Names = append(wi.Names, "s3_bucket_name", "s3_bucket_arn")
+			// enable_s3_data_source is the plan-time-known gate for the S3 data
+			// source / access role / policy. s3_bucket_name above is a computed
+			// output, so the preset can't gate their count on `!= null` (unknown
+			// at plan). aws_s3 is selected here, so the data source exists → true.
+			wi.RawHCL["enable_s3_data_source"] = "true"
+			wi.Names = append(wi.Names, "s3_bucket_name", "s3_bucket_arn", "enable_s3_data_source")
 		}
 
 	case KeyAWSBackups:

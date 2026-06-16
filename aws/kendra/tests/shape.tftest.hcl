@@ -342,3 +342,34 @@ run "bad_bucket_arn_rejected" {
     var.s3_bucket_arn,
   ]
 }
+
+# --- Module half of the count-on-computed fix (#807) -------------------------
+#
+# The composer gates the S3 data source on a plan-time-known enable_s3_data_source
+# flag, not the (composed: computed) s3_bucket_name. Prove the preset honors it:
+# with the flag false but a non-null bucket name supplied, NO data source /
+# access role / policy may be created — count must follow the bool, not the name.
+# A revert to `count = var.s3_bucket_name != null` makes this run fail.
+run "enable_s3_data_source_false_overrides_name" {
+  command = plan
+
+  variables {
+    s3_bucket_name        = "iotkdr-docs"
+    enable_s3_data_source = false
+  }
+
+  assert {
+    condition     = length(aws_kendra_data_source.s3) == 0
+    error_message = "enable_s3_data_source=false must suppress the S3 data source even when s3_bucket_name is set."
+  }
+
+  assert {
+    condition     = length(aws_iam_role.data_source) == 0
+    error_message = "enable_s3_data_source=false must suppress the data-source access role."
+  }
+
+  assert {
+    condition     = length(aws_iam_role_policy.data_source) == 0
+    error_message = "enable_s3_data_source=false must suppress the data-source access policy."
+  }
+}

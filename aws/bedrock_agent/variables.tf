@@ -87,6 +87,12 @@ variable "action_group_lambda_arn" {
   }
 }
 
+variable "enable_action_group" {
+  description = "Explicitly enable (true) or disable (false) the action group, its Lambda invoke permission, and the alias's tool wiring. Null (the default) auto-detects from action_group_lambda_arn — correct for standalone use where the ARN is a literal known at plan. The InsideOut composer sets this true when it wires action_group_lambda_arn from module.aws_lambda.function_arn: a wired output's value is unknown at plan, so `action_group_lambda_arn != null` cannot gate a count (Terraform raises 'Invalid count argument'). This plan-time-known toggle is the gate instead."
+  type        = bool
+  default     = null
+}
+
 variable "action_group_name" {
   description = "Name of the agent's action group. Defaults to \"actions\" when null."
   type        = string
@@ -98,6 +104,12 @@ variable "action_group_name" {
 variable "knowledge_base_id" {
   description = "ID of a Bedrock Knowledge Base to associate with the agent for RAG. When null no association is created (the agent answers without retrieval). In a composed stack DefaultWiring supplies this from module.aws_bedrock.knowledge_base_id when aws_bedrock is selected with its Knowledge Base enabled."
   type        = string
+  default     = null
+}
+
+variable "enable_knowledge_base_association" {
+  description = "Explicitly enable (true) or disable (false) the Knowledge Base association. Null (the default) auto-detects from knowledge_base_id — correct for standalone use where the id is a literal known at plan. The InsideOut composer sets this from module.aws_bedrock.knowledge_base_enabled (a plan-time-known bool reflecting whether the KB is provisioned): the wired knowledge_base_id is a computed output whose null-ness is unknown at plan, so it cannot gate a count (Terraform raises 'Invalid count argument'). This plan-time-known toggle is the gate instead."
+  type        = bool
   default     = null
 }
 

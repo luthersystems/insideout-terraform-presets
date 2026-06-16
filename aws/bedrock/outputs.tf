@@ -33,6 +33,11 @@ output "knowledge_base_id" {
   description = "ID of the Bedrock Knowledge Base. null when enable_knowledge_base is false. Pass to aws_bedrockagent_agent_knowledge_base_association or RetrieveAndGenerate at runtime."
 }
 
+output "knowledge_base_enabled" {
+  value       = var.enable_knowledge_base
+  description = "Whether the Knowledge Base is provisioned. Plan-time-known (it is the input toggle, not a computed resource attribute), so a consumer can gate count/for_each on it — unlike knowledge_base_id, whose null-ness is unknown at plan when wired across modules. The composer feeds this into aws_bedrock_agent's enable_knowledge_base_association."
+}
+
 output "knowledge_base_arn" {
   value       = var.enable_knowledge_base ? aws_bedrockagent_knowledge_base.this[0].arn : null
   description = "ARN of the Bedrock Knowledge Base. null when disabled."

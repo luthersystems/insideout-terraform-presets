@@ -59,7 +59,14 @@ locals {
   # The S3 data source (and its access role/policy) only exist when a backing
   # S3 bucket is wired in. A Kendra index with documents ingested out-of-band,
   # or one stood up before its corpus, leaves the data source off.
-  has_s3_source = var.s3_bucket_name != null
+  #
+  # enable_s3_data_source (when set) is the plan-time-known gate: composed
+  # stacks wire s3_bucket_name from module.aws_s3.bucket_name, an output whose
+  # value is unknown at plan, so `var.s3_bucket_name != null` is itself unknown
+  # and Terraform rejects it as a count argument. The composer sets
+  # enable_s3_data_source explicitly; standalone callers leave it null and fall
+  # back to auto-detecting from the (literal, plan-time-known) bucket name.
+  has_s3_source = var.enable_s3_data_source != null ? var.enable_s3_data_source : (var.s3_bucket_name != null)
 }
 
 # --- Index IAM role -----------------------------------------------------------

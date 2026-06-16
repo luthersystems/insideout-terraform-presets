@@ -239,3 +239,38 @@ run "bad_lambda_arn_rejected" {
     var.action_group_lambda_arn,
   ]
 }
+
+# --- Module half of the count-on-computed fix (#807) -------------------------
+#
+# The composer gates the action group on a plan-time-known enable_action_group
+# flag and the KB association on enable_knowledge_base_association (fed from
+# bedrock's plan-time-known knowledge_base_enabled output), NOT on the computed
+# action_group_lambda_arn / knowledge_base_id. Prove the preset honors the
+# flags: with both false but non-null inputs supplied, NO action group, invoke
+# permission, or KB association may be created — counts must follow the bools,
+# not the inputs. A revert to `count = var.<input> != null` makes this run fail.
+run "enable_flags_false_override_inputs" {
+  command = plan
+
+  variables {
+    action_group_lambda_arn           = "arn:aws:lambda:us-east-1:111111111111:function:iotest-bra-fn"
+    knowledge_base_id                 = "EMDPPAYPZI"
+    enable_action_group               = false
+    enable_knowledge_base_association = false
+  }
+
+  assert {
+    condition     = length(aws_bedrockagent_agent_action_group.this) == 0
+    error_message = "enable_action_group=false must suppress the action group even when action_group_lambda_arn is set."
+  }
+
+  assert {
+    condition     = length(aws_lambda_permission.agent_invoke) == 0
+    error_message = "enable_action_group=false must suppress the Lambda invoke permission."
+  }
+
+  assert {
+    condition     = length(aws_bedrockagent_agent_knowledge_base_association.this) == 0
+    error_message = "enable_knowledge_base_association=false must suppress the KB association even when knowledge_base_id is set."
+  }
+}
