@@ -278,8 +278,21 @@ func TestBuildModuleValues_AWSRDS_VariableNames(t *testing.T) {
 		assert.Equal(t, "db.r6g.4xlarge", vals["instance_class"])
 	})
 
-	t.Run("rejects unknown CPU label with ValidationError", func(t *testing.T) {
-		_, err := m.BuildModuleValues(KeyAWSRDS, nil, rdsCfg("16 vCPU", "", ""), "", "")
+	t.Run("above-max vCPU label snaps to the max tier (was ValidationError)", func(t *testing.T) {
+		// REVERSED contract (heal, mirroring #806): "16 vCPU" exceeds the max
+		// {1,4,8} tier, so instead of erroring the mapper snaps it UP to the
+		// max (8 vCPU -> db.m7i.2xlarge). Frozen formerly-valid value; see
+		// reliable#2097.
+		vals, err := m.BuildModuleValues(KeyAWSRDS, nil, rdsCfg("16 vCPU", "", ""), "", "")
+		require.NoError(t, err, "above-max vCPU must snap to the max tier, not error")
+		assert.Equal(t, "db.m7i.2xlarge", vals["instance_class"])
+	})
+
+	t.Run("genuinely-malformed CPU label still errors with ValidationError", func(t *testing.T) {
+		// Only the recognizable "<integer> vCPU" shape heals; a non-numeric /
+		// otherwise-malformed label must STILL fail fast (mirror #806's "bare
+		// int heals, 'abc' still errors").
+		_, err := m.BuildModuleValues(KeyAWSRDS, nil, rdsCfg("ginormous", "", ""), "", "")
 		assertValidationError(t, err)
 	})
 }
