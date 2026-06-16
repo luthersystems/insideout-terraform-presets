@@ -143,3 +143,206 @@ func TestBuildModuleValues_Heal_EmitsWarning(t *testing.T) {
 	assert.NotContains(t, buf.String(), "heal",
 		"an already-valid value must not emit any heal warning")
 }
+
+// --- Third frozen-value heal: out-of-enum "<N> vCPU" sizing (reliable#2097) ---
+//
+// A sizing value like "2 vCPU" was once compose-valid under a permissive legacy
+// TS mapper but the strict Go composer hard-errors (the IR enum is {1,4,8}
+// vCPU). That frozen value lives in stored config reliable composes verbatim,
+// so the mapper now HEALS it — PRESERVING THE DEPLOYED FOOTPRINT: an out-of-enum
+// "<N> vCPU" maps to the CONCRETE same-family class with EXACTLY N vCPU
+// (e.g. "2 vCPU" -> db.m7i.large / cache.r6g.large), the same class the resource
+// is already running as. An earlier revision of this heal rounded UP to the next
+// tier ("2 vCPU" -> xlarge, 4 vCPU); that is a real instance_class / node_type
+// change → an RDS restart / ElastiCache node replacement (~2x cost) on the next
+// apply, so it was changed to preserve the footprint (reliable#2097; a Codex
+// review confirmed the round-up emitted xlarge while the legacy TS mapper
+// emitted large for this Intel session). Only a vCPU with no concrete class
+// falls back to rounding up to the nearest tier; valid tiers + concrete provider
+// instance/node types pass through untouched; genuinely-malformed labels still
+// error. Mirrors the #805/#806 heal style.
+
+// TestSnapVCPUTier pins the round-up-to-nearest-tier rule of the FALLBACK helper
+// directly, including the "only the <integer> vCPU shape matches" guard that
+// keeps malformed values erroring at the call sites. NOTE: snapVCPUTier is now
+// only the fallback — the mapper intercepts exact-vCPU counts (2, 16, 32, ...)
+// via vcpuExactSuffix and preserves the footprint BEFORE snapVCPUTier runs, so
+// e.g. "2 vCPU" / "16 vCPU" never reach this helper through the mapper (see
+// TestBuildModuleValues_VCPUSizingHeal). The cases below pin the pure helper
+// math, which still backs the genuinely-no-concrete-class gap values (3,5,6,7).
+func TestSnapVCPUTier(t *testing.T) {
+	t.Parallel()
+
+	t.Run("snaps up to the nearest valid tier", func(t *testing.T) {
+		t.Parallel()
+		cases := []struct {
+			in   string
+			want string
+		}{
+			{"1 vCPU", "1 vCPU"},     // exact tier, unchanged
+			{"2 vCPU", "4 vCPU"},     // round up across the 1->4 gap
+			{"3 vCPU", "4 vCPU"},     // round up
+			{"4 vCPU", "4 vCPU"},     // exact tier, unchanged
+			{"5 vCPU", "8 vCPU"},     // round up across the 4->8 gap
+			{"7 vCPU", "8 vCPU"},     // round up
+			{"8 vCPU", "8 vCPU"},     // exact max tier, unchanged
+			{"16 vCPU", "8 vCPU"},    // above max -> snap to max
+			{"  2  vCPU ", "4 vCPU"}, // whitespace tolerated
+			{"2 vcpu", "4 vCPU"},     // case-insensitive
+		}
+		for _, tc := range cases {
+			tc := tc
+			t.Run(tc.in, func(t *testing.T) {
+				t.Parallel()
+				got, ok := snapVCPUTier(tc.in)
+				require.True(t, ok, "%q must be recognized as a vCPU label", tc.in)
+				assert.Equal(t, tc.want, got)
+			})
+		}
+	})
+
+	t.Run("does not match non-vCPU / malformed shapes", func(t *testing.T) {
+		t.Parallel()
+		for _, in := range []string{"abc", "2.5 vCPU", "vCPU", "2 cpu", "cache.r6g.large", "db.m7i.large", ""} {
+			_, ok := snapVCPUTier(in)
+			assert.False(t, ok, "%q must NOT be treated as a healable vCPU label", in)
+		}
+	})
+}
+
+// TestBuildModuleValues_VCPUSizingHeal exercises the heal through the mapper for
+// both doubly-affected fields (the reliable#2097 session has BOTH
+// AWSElastiCache.NodeSize="2 vCPU" and AWSRDS.CPUSize="2 vCPU"): an out-of-enum
+// vCPU with a concrete same-family class heals to THAT class (preserve the
+// deployed footprint — no resize), a vCPU with no concrete class falls back to
+// rounding up, valid tiers and concrete provider types pass through unchanged,
+// and a genuinely-malformed value still errors.
+func TestBuildModuleValues_VCPUSizingHeal(t *testing.T) {
+	t.Parallel()
+
+	m := DefaultMapper{}
+
+	// PRESERVE-FOOTPRINT contract (reliable#2097): the Intel session deployed
+	// "2 vCPU" via the legacy TS mapper as db.m7i.large / (cache.)r6g.large — the
+	// 2-vCPU `large` size, NOT the 4-vCPU `xlarge`. An earlier revision rounded
+	// "2 vCPU" UP to xlarge; a Codex review flagged that as a silent RESIZE (RDS
+	// restart / ElastiCache node replacement, ~2x cost) on the next apply because
+	// the running resource is `large`. So "2 vCPU" must heal to the concrete
+	// 2-vCPU `large` class, leaving the footprint identical.
+	t.Run("ElastiCache NodeSize 2 vCPU heals to the concrete 2-vCPU node type (preserve)", func(t *testing.T) {
+		t.Parallel()
+		vals, err := m.BuildModuleValues(KeyAWSElastiCache, nil, elasticacheCfg("2 vCPU", "", ""), "", "")
+		require.NoError(t, err, "frozen out-of-enum NodeSize must heal, not error")
+		assert.Equal(t, "cache.r6g.large", vals["node_type"],
+			`"2 vCPU" heals to the concrete 2-vCPU node type (cache.r6g.large), preserving the deployed footprint — NOT cache.r6g.xlarge (4 vCPU)`)
+	})
+
+	t.Run("RDS CPUSize 2 vCPU heals to the concrete 2-vCPU instance class (preserve)", func(t *testing.T) {
+		t.Parallel()
+		vals, err := m.BuildModuleValues(KeyAWSRDS, nil, rdsCfg("2 vCPU", "", ""), "", "")
+		require.NoError(t, err, "frozen out-of-enum CPUSize must heal, not error")
+		assert.Equal(t, "db.m7i.large", vals["instance_class"],
+			`"2 vCPU" heals to the concrete 2-vCPU instance class (db.m7i.large) — the exact class the reliable#2097 Intel session deployed — NOT db.m7i.xlarge (4 vCPU)`)
+	})
+
+	t.Run("larger exact-vCPU labels also preserve (16 vCPU)", func(t *testing.T) {
+		t.Parallel()
+		// 16 vCPU has a concrete same-family class (4xlarge), so it PRESERVES at
+		// 16 vCPU rather than snapping down to the 8-vCPU max tier (the earlier
+		// round-up contract). Preserve beats clamp for any vCPU with a concrete class.
+		ecVals, err := m.BuildModuleValues(KeyAWSElastiCache, nil, elasticacheCfg("16 vCPU", "", ""), "", "")
+		require.NoError(t, err)
+		assert.Equal(t, "cache.r6g.4xlarge", ecVals["node_type"], `"16 vCPU" preserves at the concrete 16-vCPU node type`)
+
+		rdsVals, err := m.BuildModuleValues(KeyAWSRDS, nil, rdsCfg("16 vCPU", "", ""), "", "")
+		require.NoError(t, err)
+		assert.Equal(t, "db.m7i.4xlarge", rdsVals["instance_class"], `"16 vCPU" preserves at the concrete 16-vCPU instance class`)
+	})
+
+	t.Run("out-of-enum vCPU with no concrete class falls back to round-up", func(t *testing.T) {
+		t.Parallel()
+		// 3 and 5 vCPU have no concrete same-family class, so the heal falls back
+		// to rounding UP to the nearest valid tier (3 -> 4 vCPU, 5 -> 8 vCPU).
+		ec3, err := m.BuildModuleValues(KeyAWSElastiCache, nil, elasticacheCfg("3 vCPU", "", ""), "", "")
+		require.NoError(t, err)
+		assert.Equal(t, "cache.r6g.xlarge", ec3["node_type"], `"3 vCPU" rounds up to the 4 vCPU tier (no concrete 3-vCPU class)`)
+
+		rds5, err := m.BuildModuleValues(KeyAWSRDS, nil, rdsCfg("5 vCPU", "", ""), "", "")
+		require.NoError(t, err)
+		assert.Equal(t, "db.m7i.2xlarge", rds5["instance_class"], `"5 vCPU" rounds up to the 8 vCPU tier (no concrete 5-vCPU class)`)
+	})
+
+	t.Run("valid tiers are preserved (no heal)", func(t *testing.T) {
+		t.Parallel()
+		ec := map[string]string{"1 vCPU": "cache.t3.medium", "4 vCPU": "cache.r6g.xlarge", "8 vCPU": "cache.r6g.2xlarge"}
+		for in, want := range ec {
+			vals, err := m.BuildModuleValues(KeyAWSElastiCache, nil, elasticacheCfg(in, "", ""), "", "")
+			require.NoError(t, err)
+			assert.Equal(t, want, vals["node_type"], "%s must map to its canonical node type unchanged", in)
+		}
+		rds := map[string]string{"1 vCPU": "db.t3.medium", "4 vCPU": "db.m7i.xlarge", "8 vCPU": "db.m7i.2xlarge"}
+		for in, want := range rds {
+			vals, err := m.BuildModuleValues(KeyAWSRDS, nil, rdsCfg(in, "", ""), "", "")
+			require.NoError(t, err)
+			assert.Equal(t, want, vals["instance_class"], "%s must map to its canonical instance class unchanged", in)
+		}
+	})
+
+	t.Run("concrete provider types pass through untouched", func(t *testing.T) {
+		t.Parallel()
+		ecVals, err := m.BuildModuleValues(KeyAWSElastiCache, nil, elasticacheCfg("cache.m6g.large", "", ""), "", "")
+		require.NoError(t, err)
+		assert.Equal(t, "cache.m6g.large", ecVals["node_type"], "a concrete cache.* type must not be healed")
+
+		rdsVals, err := m.BuildModuleValues(KeyAWSRDS, nil, rdsCfg("db.r6g.4xlarge", "", ""), "", "")
+		require.NoError(t, err)
+		assert.Equal(t, "db.r6g.4xlarge", rdsVals["instance_class"], "a concrete db.* type must not be healed")
+	})
+
+	t.Run("genuinely-malformed sizing still errors", func(t *testing.T) {
+		t.Parallel()
+		_, err := m.BuildModuleValues(KeyAWSElastiCache, nil, elasticacheCfg("ginormous", "", ""), "", "")
+		var ecVerr *ValidationError
+		require.ErrorAs(t, err, &ecVerr, "a non-vCPU NodeSize must still fail fast as ValidationError")
+
+		_, err = m.BuildModuleValues(KeyAWSRDS, nil, rdsCfg("2.5 vCPU", "", ""), "", "")
+		var rdsVerr *ValidationError
+		require.ErrorAs(t, err, &rdsVerr, `"2.5 vCPU" is not the integer-vCPU shape and must still error`)
+	})
+}
+
+// TestBuildModuleValues_VCPUSizingHeal_EmitsWarning verifies the sizing heal
+// logs a "[composer/mapper] ... heal" warning, and that a valid tier does not.
+// Serial (no t.Parallel) for the same reason as TestBuildModuleValues_Heal_EmitsWarning.
+func TestBuildModuleValues_VCPUSizingHeal_EmitsWarning(t *testing.T) {
+	m := DefaultMapper{}
+
+	var buf bytes.Buffer
+	prevOut := log.Writer()
+	prevFlags := log.Flags()
+	log.SetOutput(&buf)
+	log.SetFlags(0)
+	defer func() {
+		log.SetOutput(prevOut)
+		log.SetFlags(prevFlags)
+	}()
+
+	buf.Reset()
+	_, err := m.BuildModuleValues(KeyAWSElastiCache, nil, elasticacheCfg("2 vCPU", "", ""), "", "")
+	require.NoError(t, err)
+	assert.Contains(t, buf.String(), "[composer/mapper] AWSElastiCache heal",
+		"out-of-enum NodeSize must emit a [composer/mapper] AWSElastiCache heal warning")
+
+	buf.Reset()
+	_, err = m.BuildModuleValues(KeyAWSRDS, nil, rdsCfg("2 vCPU", "", ""), "", "")
+	require.NoError(t, err)
+	assert.Contains(t, buf.String(), "[composer/mapper] AWSRDS heal",
+		"out-of-enum CPUSize must emit a [composer/mapper] AWSRDS heal warning")
+
+	// Negative control: a valid tier must NOT emit a heal warning.
+	buf.Reset()
+	_, err = m.BuildModuleValues(KeyAWSRDS, nil, rdsCfg("4 vCPU", "", ""), "", "")
+	require.NoError(t, err)
+	assert.NotContains(t, buf.String(), "heal",
+		"an already-valid tier must not emit any heal warning")
+}

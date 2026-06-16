@@ -278,8 +278,25 @@ func TestBuildModuleValues_AWSRDS_VariableNames(t *testing.T) {
 		assert.Equal(t, "db.r6g.4xlarge", vals["instance_class"])
 	})
 
-	t.Run("rejects unknown CPU label with ValidationError", func(t *testing.T) {
-		_, err := m.BuildModuleValues(KeyAWSRDS, nil, rdsCfg("16 vCPU", "", ""), "", "")
+	t.Run("out-of-enum vCPU label heals to its concrete same-vCPU class (was ValidationError)", func(t *testing.T) {
+		// REVERSED contract (heal, mirroring #806) — PRESERVE FOOTPRINT, not
+		// round up: "16 vCPU" is outside the {1,4,8} tier set but has a concrete
+		// db.m7i class with exactly 16 vCPU (4xlarge), so instead of erroring the
+		// mapper heals it to db.m7i.4xlarge — the same footprint the resource is
+		// already running as. The earlier revision snapped this DOWN to the
+		// 8-vCPU max tier (db.m7i.2xlarge), which would resize the instance; a
+		// Codex review flagged that resize for the "2 vCPU" case. Frozen
+		// formerly-valid value; see reliable#2097.
+		vals, err := m.BuildModuleValues(KeyAWSRDS, nil, rdsCfg("16 vCPU", "", ""), "", "")
+		require.NoError(t, err, "out-of-enum vCPU with a concrete class must heal, not error")
+		assert.Equal(t, "db.m7i.4xlarge", vals["instance_class"])
+	})
+
+	t.Run("genuinely-malformed CPU label still errors with ValidationError", func(t *testing.T) {
+		// Only the recognizable "<integer> vCPU" shape heals; a non-numeric /
+		// otherwise-malformed label must STILL fail fast (mirror #806's "bare
+		// int heals, 'abc' still errors").
+		_, err := m.BuildModuleValues(KeyAWSRDS, nil, rdsCfg("ginormous", "", ""), "", "")
 		assertValidationError(t, err)
 	})
 }

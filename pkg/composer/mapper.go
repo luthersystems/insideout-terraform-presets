@@ -1653,7 +1653,92 @@ var (
 	// heal frozen pre-#805 Lambda timeouts that lack a unit by coercing to
 	// "<N>s" (seconds) before the strict duration parser runs.
 	bareIntRe = regexp.MustCompile(`^[0-9]+$`)
+	// vcpuLabelRe matches a "<N> vCPU" sizing label (case-insensitive, optional
+	// surrounding/inner whitespace, e.g. "2 vCPU", "16 VCPU"). Used to heal
+	// frozen out-of-enum vCPU sizes (RDS CPUSize / ElastiCache NodeSize) by
+	// mapping N to the CONCRETE same-family class with exactly N vCPU (preserving
+	// the deployed footprint), or — for a vCPU count with no concrete class —
+	// falling back to the nearest valid tier. See vcpuExactSuffix / snapVCPUTier
+	// and the canonicalRdsInstanceClass / canonicalRedisNodeType heal blocks
+	// (#805/#806/#2097). Only the integer-vCPU shape matches, so genuinely
+	// malformed labels (e.g. "abc", "2.5 vCPU") still fall through to an error.
+	vcpuLabelRe = regexp.MustCompile(`(?i)^\s*(\d+)\s*vcpu\s*$`)
 )
+
+// vcpuTiers is the ascending set of valid IR vCPU sizing tiers, derived from
+// the canonicalRdsInstanceClass / canonicalRedisNodeType switch cases below
+// (the typed IR enum is {1, 4, 8} vCPU; both RDS and ElastiCache share it).
+// snapVCPUTier (the heal FALLBACK) snaps an out-of-enum label up to the nearest
+// of these — but only for a vCPU count that has no concrete class of its own.
+var vcpuTiers = []int{1, 4, 8}
+
+// vcpuExactSuffix maps an EXACT vCPU count to the AWS instance-size suffix used
+// by the m7i / r6g families the composer's 4/8-vCPU tiers already emit
+// (large=2, xlarge=4, 2xlarge=8, 4xlarge=16, ...; the same vCPU→suffix ladder
+// the legacy TS sizing mapper used). It is the PRIMARY heal for a frozen
+// out-of-enum "<N> vCPU" label: map N to the CONCRETE class with EXACTLY N vCPU
+// (e.g. "2 vCPU" -> db.m7i.large / cache.r6g.large) so the healed value is the
+// same footprint the resource is already running as, NOT a larger tier — which
+// would be a real instance_class / node_type change (RDS restart / ElastiCache
+// node replacement, ~2x cost) on the next apply (reliable#2097). The 4/8 entries
+// are in-enum and never reach the heal (the switch returns first); they are
+// listed only to keep the vCPU→suffix ladder self-documenting.
+var vcpuExactSuffix = map[int]string{
+	2:  "large",
+	4:  "xlarge",
+	8:  "2xlarge",
+	16: "4xlarge",
+	32: "8xlarge",
+	48: "12xlarge",
+	64: "16xlarge",
+	96: "24xlarge",
+}
+
+// parseVCPULabel extracts N from a "<N> vCPU" label (case-insensitive, optional
+// surrounding/inner whitespace). ok is true ONLY for that integer-vCPU shape;
+// any other value (e.g. "abc", "2.5 vCPU", a concrete db.*/cache.* type) returns
+// ok=false so the caller still errors.
+func parseVCPULabel(t string) (int, bool) {
+	m := vcpuLabelRe.FindStringSubmatch(t)
+	if m == nil {
+		return 0, false
+	}
+	n, err := strconv.Atoi(m[1])
+	if err != nil { // unreachable given the \d+ regex, but keep it honest
+		return 0, false
+	}
+	return n, true
+}
+
+// snapVCPUTier is the heal FALLBACK for a frozen out-of-enum "<N> vCPU" label
+// whose N has NO concrete same-family class (i.e. N is not in vcpuExactSuffix —
+// e.g. 3, 5, 6, 7). It snaps N UP to the nearest valid vCPU tier (vcpuTiers),
+// returning the canonical tier label (e.g. "3 vCPU" -> "4 vCPU"); N above the
+// max tier snaps to the max. ok mirrors parseVCPULabel. Callers invoke this only
+// AFTER both the exact-tier switch AND the preserve-footprint exact-vCPU path
+// miss, so a match here is always a genuinely out-of-enum gap value to heal.
+//
+// This is the third frozen-value heal after #805 (defaulting) and #806
+// (NAT-off / bare-int lambda timeout): pre-strict-composer snapshots froze a
+// formerly-compose-valid size (e.g. "2 vCPU", per reliable#2097) into stored
+// config that reliable composes verbatim, so a hard error here is one the user
+// can't act on. The PRIMARY heal preserves the footprint (exact-vCPU concrete
+// class, vcpuExactSuffix); this round-up only covers vCPU counts with no
+// concrete class.
+func snapVCPUTier(t string) (string, bool) {
+	n, ok := parseVCPULabel(t)
+	if !ok {
+		return "", false
+	}
+	snap := vcpuTiers[len(vcpuTiers)-1] // N exceeds the max tier -> snap to max
+	for _, tier := range vcpuTiers {
+		if n <= tier {
+			snap = tier
+			break
+		}
+	}
+	return fmt.Sprintf("%d vCPU", snap), true
+}
 
 // canonicalDdbBillingMode maps IR enum values to the uppercase tokens
 // aws/dynamodb/variables.tf accepts: "PAY_PER_REQUEST" or "PROVISIONED".
@@ -1686,12 +1771,43 @@ func canonicalRdsInstanceClass(s string) (string, error) {
 		return "db.m7i.xlarge", nil
 	case "8 vcpu":
 		return "db.m7i.2xlarge", nil
-	default:
-		return "", NewValidationError(fmt.Sprintf(
-			"AWSRDS.CPUSize=%q: expected \"1 vCPU\" / \"4 vCPU\" / \"8 vCPU\" or a concrete db.* instance class (e.g. \"db.m7i.large\")",
-			s,
-		))
 	}
+	// Heal frozen out-of-enum vCPU sizes: an "<N> vCPU" label outside the
+	// {1,4,8} enum (e.g. "2 vCPU", reliable#2097) was once compose-valid under
+	// a permissive legacy TS mapper but the strict Go composer rejects it. That
+	// frozen value lives in stored config reliable composes verbatim, so a hard
+	// error is one the user can't act on — the third frozen-value heal after
+	// #805/#806.
+	//
+	// PRESERVE THE DEPLOYED FOOTPRINT (do NOT round up). The legacy TS mapper
+	// emitted the CONCRETE db.m7i.<size> class with exactly N vCPU for "<N> vCPU"
+	// (large=2, xlarge=4, ...), so the reliable#2097 Intel session deployed
+	// "2 vCPU" as db.m7i.large. Rounding up to the next tier (db.m7i.xlarge,
+	// 4 vCPU) would be a real instance_class change → an RDS restart + ~2x cost
+	// on the next apply (a Codex review confirmed the round-up branch emitted
+	// xlarge while legacy emitted large). Instead, map N to the concrete
+	// same-family class with EXACTLY N vCPU — identical to what is already
+	// running. Only a vCPU with no concrete class (e.g. 3,5,6,7) falls back to
+	// rounding UP to the nearest tier. Malformed labels (e.g. "abc", "2.5 vCPU")
+	// don't match the integer-vCPU shape and still error below.
+	if n, ok := parseVCPULabel(t); ok {
+		if suffix, exact := vcpuExactSuffix[n]; exact {
+			cls := "db.m7i." + suffix
+			log.Printf("[composer/mapper] AWSRDS heal: CPUSize=%q is an out-of-enum vCPU "+
+				"label; healed frozen %d vCPU to concrete %q to preserve the deployed "+
+				"footprint (no resize) (frozen formerly-valid value; see #805/#806/#2097)", s, n, cls)
+			return cls, nil
+		}
+		snapped, _ := snapVCPUTier(t) // N has no concrete class; round up to nearest tier
+		log.Printf("[composer/mapper] AWSRDS heal: CPUSize=%q has no exact-vCPU concrete "+
+			"class; snapping to %q (nearest valid tier, rounding up) "+
+			"(frozen formerly-valid value; see #805/#806/#2097)", s, snapped)
+		return canonicalRdsInstanceClass(snapped)
+	}
+	return "", NewValidationError(fmt.Sprintf(
+		"AWSRDS.CPUSize=%q: expected \"1 vCPU\" / \"4 vCPU\" / \"8 vCPU\" or a concrete db.* instance class (e.g. \"db.m7i.large\")",
+		s,
+	))
 }
 
 // canonicalRedisNodeType maps the IR vCPU enum to a cache.* node type.
@@ -1708,12 +1824,41 @@ func canonicalRedisNodeType(s string) (string, error) {
 		return "cache.r6g.xlarge", nil
 	case "8 vcpu":
 		return "cache.r6g.2xlarge", nil
-	default:
-		return "", NewValidationError(fmt.Sprintf(
-			"AWSElastiCache.NodeSize=%q: expected \"1 vCPU\" / \"4 vCPU\" / \"8 vCPU\" or a concrete cache.* node type (e.g. \"cache.r6g.large\")",
-			s,
-		))
 	}
+	// Heal frozen out-of-enum vCPU sizes (see canonicalRdsInstanceClass for the
+	// full rationale): PRESERVE the deployed footprint by mapping "<N> vCPU" to
+	// the concrete cache.r6g.<size> node type with EXACTLY N vCPU (large=2,
+	// xlarge=4, ...) instead of rounding up to a larger tier — which would
+	// replace the ElastiCache node on the next apply (reliable#2097). Only a vCPU
+	// with no concrete class (e.g. 3,5,6,7) falls back to rounding up. Malformed
+	// labels (e.g. "abc", "2.5 vCPU") don't match the integer-vCPU shape and
+	// still error below.
+	//
+	// Family note: the legacy TS mapper emitted r7i/r7g.<size> WITHOUT the
+	// "cache." prefix — an invalid, un-deployable ElastiCache node type, so there
+	// is no real r7i.* resource to preserve. The composer's canonical ElastiCache
+	// family is cache.r6g (its 4/8-vCPU tiers and the preset default
+	// cache.r6g.xlarge), so we emit cache.r6g.<size>: a valid node type matching
+	// the composer/preset family, with the size (large = 2 vCPU) footprint-
+	// identical to the frozen request.
+	if n, ok := parseVCPULabel(t); ok {
+		if suffix, exact := vcpuExactSuffix[n]; exact {
+			typ := "cache.r6g." + suffix
+			log.Printf("[composer/mapper] AWSElastiCache heal: NodeSize=%q is an out-of-enum vCPU "+
+				"label; healed frozen %d vCPU to concrete %q to preserve the deployed "+
+				"footprint (no resize) (frozen formerly-valid value; see #805/#806/#2097)", s, n, typ)
+			return typ, nil
+		}
+		snapped, _ := snapVCPUTier(t) // N has no concrete class; round up to nearest tier
+		log.Printf("[composer/mapper] AWSElastiCache heal: NodeSize=%q has no exact-vCPU "+
+			"concrete class; snapping to %q (nearest valid tier, rounding up) "+
+			"(frozen formerly-valid value; see #805/#806/#2097)", s, snapped)
+		return canonicalRedisNodeType(snapped)
+	}
+	return "", NewValidationError(fmt.Sprintf(
+		"AWSElastiCache.NodeSize=%q: expected \"1 vCPU\" / \"4 vCPU\" / \"8 vCPU\" or a concrete cache.* node type (e.g. \"cache.r6g.large\")",
+		s,
+	))
 }
 
 // parseLeadingInt extracts the leading integer from a string like
