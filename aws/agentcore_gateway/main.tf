@@ -58,7 +58,14 @@ locals {
   # The Lambda target (and the gateway's permission to invoke it) only exist
   # when a backing Lambda ARN is wired in. A gateway with OpenAPI/REST targets
   # supplied out-of-band, or one stood up before its tools, leaves this off.
-  has_lambda_target = var.target_lambda_arn != null
+  #
+  # enable_lambda_target (when set) is the plan-time-known gate: composed stacks
+  # wire target_lambda_arn from module.aws_lambda.function_arn, an output whose
+  # value is unknown at plan, so `var.target_lambda_arn != null` is itself
+  # unknown and Terraform rejects it as a count argument. The composer sets
+  # enable_lambda_target explicitly; standalone callers leave it null and fall
+  # back to auto-detecting from the (literal, plan-time-known) ARN.
+  has_lambda_target = var.enable_lambda_target != null ? var.enable_lambda_target : (var.target_lambda_arn != null)
 }
 
 # --- Gateway IAM role ---------------------------------------------------------

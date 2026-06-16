@@ -115,3 +115,9 @@ variable "target_lambda_arn" {
     error_message = "target_lambda_arn must be a Lambda function ARN (arn:aws:lambda:...) or null."
   }
 }
+
+variable "enable_lambda_target" {
+  description = "Explicitly enable (true) or disable (false) the Lambda target, its gateway invoke policy, and the Lambda invoke permission. Null (the default) auto-detects from target_lambda_arn — correct for standalone use where the ARN is a literal known at plan. The InsideOut composer sets this true when it wires target_lambda_arn from module.aws_lambda.function_arn: a wired output's value is unknown at plan, so `target_lambda_arn != null` cannot gate a count (Terraform raises 'Invalid count argument'). This plan-time-known toggle is the gate instead."
+  type        = bool
+  default     = null
+}

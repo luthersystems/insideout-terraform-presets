@@ -89,6 +89,12 @@ variable "s3_bucket_name" {
   }
 }
 
+variable "enable_s3_data_source" {
+  description = "Explicitly enable (true) or disable (false) the S3 data source and its access role/policy. Null (the default) auto-detects from s3_bucket_name — correct for standalone use where s3_bucket_name is a literal whose null-ness is known at plan. The InsideOut composer sets this true when it wires s3_bucket_name from another module's output: a wired output's value is unknown at plan, so `s3_bucket_name != null` cannot gate a count/for_each (Terraform raises 'Invalid count argument'). This plan-time-known toggle is the gate instead."
+  type        = bool
+  default     = null
+}
+
 variable "s3_bucket_arn" {
   description = "Optional ARN of the S3 bucket named by s3_bucket_name, used to scope the data-source access policy least-privilege. When null it is derived from s3_bucket_name. In a composed stack DefaultWiring supplies this from module.aws_s3.bucket_arn."
   type        = string
