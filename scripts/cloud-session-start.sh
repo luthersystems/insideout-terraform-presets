@@ -3,43 +3,49 @@
 # SessionStart hook for Claude Code (wired in .claude/settings.json).
 #
 # Runs on EVERY session -- local AND Claude Code on the web -- AFTER Claude launches,
-# with the repository already cloned. Unlike the cached setup script, this repeats each
-# session, so keep it light. Cloud-only behaviour is gated on CLAUDE_CODE_REMOTE so it
-# never touches a local developer's machine.
+# with the repository cloned. Kept light (it repeats each session, unlike the cached
+# setup script). Cloud-only work is gated on CLAUDE_CODE_REMOTE so a developer's local
+# machine is never touched. This script is committed identically in `reliable` and
+# `insideout-terraform-presets`; behaviour adapts to which files the repo actually has.
 #
 set -uo pipefail
 
-# Pre-warm the Go module cache so the first `go build` / `go test -race ./...` is fast.
-# Fresh cloud VM has no module cache; locally this is a no-op. Non-fatal.
-if command -v go >/dev/null 2>&1; then
-  go mod download || true
+ROOT="${CLAUDE_PROJECT_DIR:-.}"
+
+# Pre-warm Go modules so the first build/test is fast. Cheap locally; useful on a fresh
+# cloud VM. Non-fatal.
+if [ -f "$ROOT/go.mod" ] && command -v go >/dev/null 2>&1; then
+  ( cd "$ROOT" && go mod download ) || true
 fi
 
-# --- Cloud-only: pull secrets from 1Password into the session env -----------------
-# The cloud environment holds ONLY a scoped 1Password service-account token
-# (OP_SERVICE_ACCOUNT_TOKEN, set in the web UI env-vars field). Real secrets live in
-# 1Password and are resolved here at runtime. `.claude/cloud-secrets.env.tpl` lists
-# which vars to pull as `op://` references (no secrets committed). `op inject` resolves
-# them; writing to $CLAUDE_ENV_FILE exposes them to subsequent tool calls (e.g. the
-# codex plugin), so the values never enter the persisted environment config.
+# --- Cloud-only -------------------------------------------------------------------
 if [ "${CLAUDE_CODE_REMOTE:-}" = "true" ]; then
-  tpl="${CLAUDE_PROJECT_DIR:-.}/scripts/cloud-secrets.op.tpl"
-  if [ -n "${OP_SERVICE_ACCOUNT_TOKEN:-}" ] && command -v op >/dev/null 2>&1 && [ -f "$tpl" ]; then
-    if [ -n "${CLAUDE_ENV_FILE:-}" ]; then
-      # Resolve op:// refs to KEY=value lines and append to the session env file.
-      if op inject -i "$tpl" >> "$CLAUDE_ENV_FILE" 2>/tmp/op-inject.err; then
-        echo "[cloud-session-start] injected secrets from 1Password into session env"
+  # Secrets: the environment holds only a scoped 1Password service-account token
+  # (OP_SERVICE_ACCOUNT_TOKEN). Resolve real secrets at runtime from the repo's
+  # `op://` sources and write them to $CLAUDE_ENV_FILE so subsequent tool calls (incl.
+  # the codex plugin) see them. Values never enter the persisted environment config.
+  #   - .env.local.example: reliable's canonical dev env (all Reliable-Dev refs)
+  #   - scripts/cloud-secrets.op.tpl: cloud-only extras (e.g. codex's OPENAI_API_KEY)
+  if [ -n "${OP_SERVICE_ACCOUNT_TOKEN:-}" ] && command -v op >/dev/null 2>&1 && [ -n "${CLAUDE_ENV_FILE:-}" ]; then
+    for src in "$ROOT/.env.local.example" "$ROOT/scripts/cloud-secrets.op.tpl"; do
+      [ -f "$src" ] || continue
+      if op inject -i "$src" >> "$CLAUDE_ENV_FILE" 2>/tmp/op-inject.err; then
+        echo "[cloud-session-start] injected secrets from $(basename "$src")"
       else
-        echo "[cloud-session-start] WARNING: op inject failed: $(cat /tmp/op-inject.err 2>/dev/null)" >&2
+        echo "[cloud-session-start] WARNING: op inject failed for $(basename "$src"): $(cat /tmp/op-inject.err 2>/dev/null)" >&2
       fi
-    fi
+    done
   else
-    echo "[cloud-session-start] skipping secret injection (need OP_SERVICE_ACCOUNT_TOKEN, the op CLI, and $tpl)" >&2
+    echo "[cloud-session-start] skipping secret injection (need OP_SERVICE_ACCOUNT_TOKEN + op CLI + CLAUDE_ENV_FILE)" >&2
   fi
 
-  # Force the codex CLI to use API-key auth (it reads OPENAI_API_KEY, now injected
-  # above). The headless sandbox has no interactive `codex login` / ~/.codex/auth.json.
-  # Never written locally, so a developer's existing codex login is untouched.
+  # Pull Git LFS objects (reliable's go tests read an LFS-tracked tokenizer model).
+  if command -v git-lfs >/dev/null 2>&1 && [ -f "$ROOT/.gitattributes" ] && grep -q 'filter=lfs' "$ROOT/.gitattributes" 2>/dev/null; then
+    ( cd "$ROOT" && git lfs pull ) || echo "[cloud-session-start] WARNING: git lfs pull failed" >&2
+  fi
+
+  # Force codex to API-key auth (it reads the injected OPENAI_API_KEY). The headless
+  # sandbox has no interactive `codex login` / ~/.codex/auth.json. Never written locally.
   mkdir -p "${HOME}/.codex"
   if ! grep -q '^preferred_auth_method' "${HOME}/.codex/config.toml" 2>/dev/null; then
     printf 'preferred_auth_method = "apikey"\n' >> "${HOME}/.codex/config.toml"

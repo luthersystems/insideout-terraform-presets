@@ -8,11 +8,18 @@ There are two halves: **what lives in this repo** (committed, travels to every c
 session automatically) and **what you configure once in the web UI** (the environment:
 setup script, env vars, network — these cannot be committed).
 
+**Shared environment.** This repo and `reliable` share ONE Claude Code on the web
+environment. The setup script below is the **union** of both repos' tools and is committed
+identically in both — copy it from either. The environment supplies the tool image + the
+1Password token + the network allowlist; each repo's committed `.claude/` config decides
+what to run and which secrets to pull. (For a TF-only, leaner environment, drop reliable's
+tools from the script.)
+
 ## What's in the repo vs the web UI
 
 | Thing | Where | File / location |
 |---|---|---|
-| System tools install (terraform, tflint, gh, go, codex CLI, **op CLI**) | repo, **pasted into the UI setup script** | [`scripts/cloud-web-setup.sh`](../scripts/cloud-web-setup.sh) |
+| System tools (union: terraform, tflint, golangci-lint, gh, op, codex, vercel, git-lfs, go) | repo, **pasted into the shared UI setup script** | [`scripts/cloud-web-setup.sh`](../scripts/cloud-web-setup.sh) |
 | Go warmup + **secret fetch from 1Password** + codex auth mode | repo (SessionStart hook) | [`scripts/cloud-session-start.sh`](../scripts/cloud-session-start.sh) |
 | Which secrets to pull, as `op://` references (no secret values) | repo | [`scripts/cloud-secrets.op.tpl`](../scripts/cloud-secrets.op.tpl) |
 | codex plugin enablement + the hook wiring | repo | `.claude/settings.json` (see below) |
