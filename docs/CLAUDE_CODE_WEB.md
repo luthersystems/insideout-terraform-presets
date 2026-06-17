@@ -61,15 +61,16 @@ keep it least-privilege (read-only, single vault) and rotate it.
    [`scripts/cloud-web-setup.sh`](../scripts/cloud-web-setup.sh). Runs once as root,
    cached ~7 days. Installs Terraform 1.7.5 (matches CI), tflint, gh, Go (if the
    preinstalled one is older than `go.mod`), the OpenAI `codex` CLI, and the `op` CLI.
-4. **Environment variables** (`.env` format, one per line, **no quotes**) — two bootstrap
-   tokens only (real secrets come from 1Password at session start):
+4. **Environment variables** (`.env` format, one per line, **no quotes**) — just the
+   bootstrap token (real secrets come from 1Password at session start):
    ```
    OP_SERVICE_ACCOUNT_TOKEN=ops_...
-   GH_TOKEN=github_pat_...
    ```
-   `GH_TOKEN` is a **read-only, fine-grained** PAT scoped to `sam-at-luther/claude-config`
-   (Contents: read) — needed at session start to fetch the **private** `claude-config`
-   plugin marketplace (op-injected secrets arrive too late for plugin install).
+   **No GitHub PAT needed up front:** cloud's GitHub proxy authenticates git as your
+   connected identity (it's how the private working repo clones), so the private
+   `claude-config` marketplace should fetch with no extra token. *Only if* the
+   `claude-config:*` skills fail to install, add a read-only fine-grained PAT
+   (Contents: read, scoped to `sam-at-luther/claude-config`) as `GH_TOKEN`.
 5. **Network access**: switch to **Custom**, keep "include default package managers"
    checked, and add:
    ```
@@ -114,9 +115,10 @@ block:
 ```
 
 - `claude-config@claude-config` brings qa-professor + pr + golang-guidance etc. It's a
-  **private** marketplace — needs the `GH_TOKEN` above. **Unverified in cloud**: if it
-  doesn't load on the first session, fall back to committing those skills into this repo's
-  `.claude/agents` + `.claude/skills`.
+  **private** marketplace; the cloud GitHub proxy should fetch it as your connected
+  identity (no token), with the `GH_TOKEN` fallback above if not. **Unverified in cloud**:
+  if it doesn't load even with the PAT, fall back to committing those skills into this
+  repo's `.claude/agents` + `.claude/skills`.
 - `firecrawl@claude-plugins-official` is a bundled Anthropic marketplace, so it needs no
   `extraKnownMarketplaces` entry. Needs `FIRECRAWL_API_KEY` (op-injected) +
   `api.firecrawl.dev` in the allowlist.
