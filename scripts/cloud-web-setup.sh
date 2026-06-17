@@ -10,10 +10,14 @@
 # It runs ONCE as root on a fresh Ubuntu 24.04 VM and its filesystem output is
 # CACHED (~7-day expiry), so it only re-runs when you edit it. Keep it to
 # repo-independent system tools only -- the repo is NOT reliably present here.
-# Repo-specific warmup (go mod download, codex auth) lives in
-# scripts/cloud-session-start.sh, wired as a SessionStart hook in .claude/settings.json.
+# Repo-specific warmup + secret fetching live in scripts/cloud-session-start.sh,
+# wired as a SessionStart hook in .claude/settings.json.
 #
-# This file is version-controlled so the pasted script and the repo stay in sync.
+# Secrets are NOT handled here. The only credential in the cloud environment is a
+# scoped 1Password service-account token (OP_SERVICE_ACCOUNT_TOKEN, set in the
+# environment's "Environment variables" field). The session hook uses it + the `op`
+# CLI installed below to pull real secrets at runtime. See docs/CLAUDE_CODE_WEB.md.
+#
 # Pins mirror .github/workflows/terraform-validate.yml.
 #
 set -euo pipefail
@@ -32,32 +36,48 @@ install_terraform() {
 }
 
 install_tflint() {
-  log "installing tflint (plugins are fetched lazily via 'tflint --init')"
+  log "installing tflint (plugins fetched lazily via 'tflint --init')"
   curl -fsSL https://raw.githubusercontent.com/terraform-linters/tflint/master/install_linux.sh | bash
   tflint --version
 }
 
-install_gh() {
-  command -v gh >/dev/null 2>&1 && { log "gh already present"; return 0; }
-  log "installing gh CLI"
+install_codex() {
+  # Codex CLI backs the `codex` Claude Code plugin (enabled in .claude/settings.json).
+  # node/npm are preinstalled; a global install puts `codex` on PATH for the session user.
+  log "installing OpenAI codex CLI (@openai/codex)"
+  npm install -g @openai/codex
+  codex --version
+}
+
+# gh + the 1Password CLI both use apt, so they share ONE apt transaction (no parallel
+# dpkg lock contention). This whole function is run as a single background job.
+install_apt_extras() {
+  export DEBIAN_FRONTEND=noninteractive
+  log "configuring gh apt repo"
   install -m 0755 -d /etc/apt/keyrings
   curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
     | tee /etc/apt/keyrings/githubcli-archive-keyring.gpg >/dev/null
   chmod go+r /etc/apt/keyrings/githubcli-archive-keyring.gpg
   echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" \
     > /etc/apt/sources.list.d/github-cli.list
-  apt-get update -y
-  apt-get install -y gh
-}
 
-install_codex() {
-  # Codex CLI backs the `codex` Claude Code plugin (enabled in .claude/settings.json).
-  # node/npm are preinstalled in the sandbox; a global install puts `codex` on PATH for
-  # the session user. AUTH is via the OPENAI_API_KEY env var you set in the environment's
-  # "Environment variables" field -- it is NOT, and must not be, committed to this repo.
-  log "installing OpenAI codex CLI (@openai/codex)"
-  npm install -g @openai/codex
-  codex --version
+  log "configuring 1Password CLI apt repo"
+  curl -fsSL https://downloads.1password.com/linux/keys/1password.asc \
+    | gpg --dearmor --output /usr/share/keyrings/1password-archive-keyring.gpg
+  echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/1password-archive-keyring.gpg] https://downloads.1password.com/linux/debian/$(dpkg --print-architecture) stable main" \
+    > /etc/apt/sources.list.d/1password.list
+  mkdir -p /etc/debsig/policies/AC2D62742012EA22/
+  curl -fsSL https://downloads.1password.com/linux/debian/debsig/1password.pol \
+    -o /etc/debsig/policies/AC2D62742012EA22/1password.pol
+  mkdir -p /usr/share/debsig/keyrings/AC2D62742012EA22
+  curl -fsSL https://downloads.1password.com/linux/keys/1password.asc \
+    | gpg --dearmor --output /usr/share/debsig/keyrings/AC2D62742012EA22/debsig.gpg
+
+  log "installing gh + 1password-cli"
+  apt-get update -y
+  apt-get install -y gh 1password-cli
+  gh --version | head -1
+  op --version
 }
 
 ensure_go() {
@@ -68,7 +88,7 @@ ensure_go() {
       log "preinstalled go ${have} satisfies go.mod (>= ${want}); skipping"
       return 0
     fi
-    log "preinstalled go ${have} is older than ${want}; installing ${GO_VERSION}"
+    log "preinstalled go ${have} older than ${want}; installing ${GO_VERSION}"
   else
     log "go not found; installing ${GO_VERSION}"
   fi
@@ -79,20 +99,19 @@ ensure_go() {
   go version
 }
 
-# Phase 1 (sync): base packages the parallel installers depend on (unzip for
-# terraform/tflint, jq for the lint scripts).
+# Phase 1 (sync): base packages the parallel installers depend on.
 log "installing base apt packages"
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -y
 apt-get install -y --no-install-recommends unzip jq ca-certificates curl gnupg
 
-# Phase 2 (parallel): independent installers. gh is the only apt user here.
+# Phase 2 (parallel): independent installers. install_apt_extras is the only apt user.
 pids=()
-install_terraform & pids+=("$!")
-install_tflint    & pids+=("$!")
-install_codex     & pids+=("$!")
-ensure_go         & pids+=("$!")
-install_gh        & pids+=("$!")
+install_terraform  & pids+=("$!")
+install_tflint     & pids+=("$!")
+install_codex      & pids+=("$!")
+ensure_go          & pids+=("$!")
+install_apt_extras & pids+=("$!")
 
 fail=0
 for pid in "${pids[@]}"; do wait "$pid" || fail=1; done
@@ -101,4 +120,4 @@ if [ "$fail" -ne 0 ]; then
   exit 1
 fi
 
-log "setup complete: $(terraform version | head -1), $(tflint --version | head -1), go $(go version | awk '{print $3}'), codex $(codex --version 2>/dev/null | head -1)"
+log "setup complete: $(terraform version | head -1), $(tflint --version | head -1), go $(go version | awk '{print $3}'), codex $(codex --version 2>/dev/null | head -1), op $(op --version)"
