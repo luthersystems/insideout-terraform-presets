@@ -61,39 +61,45 @@ keep it least-privilege (read-only, single vault) and rotate it.
    [`scripts/cloud-web-setup.sh`](../scripts/cloud-web-setup.sh). Runs once as root,
    cached ~7 days. Installs Terraform 1.7.5 (matches CI), tflint, gh, Go (if the
    preinstalled one is older than `go.mod`), the OpenAI `codex` CLI, and the `op` CLI.
-4. **Environment variables** (`.env` format, one per line, **no quotes**) — only the
-   bootstrap token goes here:
+4. **Environment variables** (`.env` format, one per line, **no quotes**) — two bootstrap
+   tokens only (real secrets come from 1Password at session start):
    ```
    OP_SERVICE_ACCOUNT_TOKEN=ops_...
+   GH_TOKEN=github_pat_...
    ```
+   `GH_TOKEN` is a **read-only, fine-grained** PAT scoped to `sam-at-luther/claude-config`
+   (Contents: read) — needed at session start to fetch the **private** `claude-config`
+   plugin marketplace (op-injected secrets arrive too late for plugin install).
 5. **Network access**: switch to **Custom**, keep "include default package managers"
    checked, and add:
    ```
    api.openai.com
+   api.firecrawl.dev
    *.1password.com
    ```
-   `api.openai.com` is what codex calls at runtime; `*.1password.com` covers both the
-   `op` CLI download (`downloads.1password.com`) and its runtime API. Neither is in the
-   default "Trusted" set. (If the rare Go-toolchain install path fires, also allow
-   `go.dev`.)
+   `api.openai.com` is what codex calls at runtime; `api.firecrawl.dev` is for the
+   firecrawl plugin; `*.1password.com` covers both the `op` CLI download
+   (`downloads.1password.com`) and its runtime API. None are in the default "Trusted" set.
+   (If the rare Go-toolchain install path fires, also allow `go.dev`.)
 
 ## The `.claude/settings.json` change
 
-This enables the `codex` plugin and wires the SessionStart hook for **everyone** who opens
-this repo in Claude Code (local and cloud). Add these keys alongside the existing
-`permissions` block:
+This enables the plugins and wires the SessionStart hook for **everyone** who opens this
+repo in Claude Code (local and cloud). Add these keys alongside the existing `permissions`
+block:
 
 ```jsonc
 {
   "permissions": { /* unchanged */ },
 
   "extraKnownMarketplaces": {
-    "openai-codex": {
-      "source": { "source": "github", "repo": "openai/codex-plugin-cc" }
-    }
+    "openai-codex":  { "source": { "source": "github", "repo": "openai/codex-plugin-cc" } },
+    "claude-config": { "source": { "source": "github", "repo": "sam-at-luther/claude-config" } }
   },
   "enabledPlugins": {
-    "codex@openai-codex": true
+    "codex@openai-codex": true,
+    "claude-config@claude-config": true,
+    "firecrawl@claude-plugins-official": true
   },
   "hooks": {
     "SessionStart": [
@@ -106,6 +112,14 @@ this repo in Claude Code (local and cloud). Add these keys alongside the existin
   }
 }
 ```
+
+- `claude-config@claude-config` brings qa-professor + pr + golang-guidance etc. It's a
+  **private** marketplace — needs the `GH_TOKEN` above. **Unverified in cloud**: if it
+  doesn't load on the first session, fall back to committing those skills into this repo's
+  `.claude/agents` + `.claude/skills`.
+- `firecrawl@claude-plugins-official` is a bundled Anthropic marketplace, so it needs no
+  `extraKnownMarketplaces` entry. Needs `FIRECRAWL_API_KEY` (op-injected) +
+  `api.firecrawl.dev` in the allowlist.
 
 ## How it fits together at session start
 

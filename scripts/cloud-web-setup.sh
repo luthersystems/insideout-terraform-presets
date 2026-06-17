@@ -47,10 +47,10 @@ install_golangci() {
 }
 
 install_npm_clis() {
-  # codex backs the Claude Code `codex` plugin; vercel for reliable's vercel-* targets.
-  # node/npm are preinstalled.
-  log "installing global npm CLIs: @openai/codex, vercel"
-  npm install -g @openai/codex vercel
+  # codex backs the `codex` plugin; firecrawl-cli backs the `firecrawl` plugin; vercel
+  # for reliable's vercel-* targets. node/npm are preinstalled.
+  log "installing global npm CLIs: @openai/codex, firecrawl-cli, vercel"
+  npm install -g @openai/codex firecrawl-cli vercel
   codex --version
   vercel --version
 }
