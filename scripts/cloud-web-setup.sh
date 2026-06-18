@@ -46,6 +46,15 @@ install_golangci() {
   golangci-lint --version
 }
 
+install_gopls() {
+  # Go language server for Claude Code's LSP (diagnostics, hover, go-to-def). Not part of
+  # the Go toolchain, so it must be installed separately. GOBIN puts it on /usr/local/bin
+  # (on PATH). Best-effort: a gopls hiccup shouldn't poison the whole cache.
+  log "installing gopls (Go LSP)"
+  GOBIN=/usr/local/bin go install golang.org/x/tools/gopls@latest && gopls version \
+    || log "gopls install failed (non-fatal; Go LSP unavailable)"
+}
+
 install_npm_clis() {
   # codex backs the `codex` plugin; firecrawl-cli backs the `firecrawl` plugin; vercel
   # for reliable's vercel-* targets. node/npm are preinstalled.
@@ -137,11 +146,12 @@ if [ "$fail" -ne 0 ]; then
   exit 1
 fi
 
-# Phase 3 (sequential apt): Playwright OS deps run after apt_extras so the two don't
-# contend on the dpkg lock. Best-effort (only reliable's make test-mock needs chromium).
+# Phase 3 (sequential): runs after phase 2 so it doesn't race the dpkg lock (playwright)
+# and so the Go toolchain is guaranteed present (gopls). Both best-effort.
 install_playwright_deps || true
+install_gopls
 
 # Docker is preinstalled but its daemon won't be running in a fresh session VM. If a task
 # needs it, start it on demand: `sudo service docker start`. Not required for the standard
 # build/lint/test flow (Postgres is reached via POSTGRES_URL).
-log "setup complete: terraform, tflint, golangci-lint, go, codex, firecrawl-cli, vercel, op, gh, git-lfs installed"
+log "setup complete: terraform, tflint, golangci-lint, gopls, go, codex, firecrawl-cli, vercel, op, gh, git-lfs installed"
