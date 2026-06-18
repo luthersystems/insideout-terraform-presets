@@ -22,7 +22,7 @@ set -euo pipefail
 TERRAFORM_VERSION=1.7.5     # presets CI pin (hashicorp/setup-terraform)
 GOLANGCI_VERSION=v2.6.2     # reliable CI pin (golangci-lint-action)
 GO_VERSION=1.25.0           # both repos' go.mod
-ARCH=amd64                  # cloud sandbox is x86_64
+ARCH="$(dpkg --print-architecture)"   # auto-detect: amd64 or arm64
 
 log() { echo "[cloud-web-setup] $*"; }
 
@@ -30,13 +30,13 @@ install_terraform() {
   log "installing terraform ${TERRAFORM_VERSION}"
   curl -fsSL "https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}/terraform_${TERRAFORM_VERSION}_linux_${ARCH}.zip" -o /tmp/terraform.zip
   unzip -o /tmp/terraform.zip -d /usr/local/bin
-  terraform version | head -1
+  terraform version
 }
 
 install_tflint() {
   log "installing tflint (plugins fetched lazily via 'tflint --init')"
   curl -fsSL https://raw.githubusercontent.com/terraform-linters/tflint/master/install_linux.sh | bash
-  tflint --version | head -1
+  tflint --version
 }
 
 install_golangci() {
@@ -88,7 +88,7 @@ install_apt_extras() {
   log "installing gh + 1password-cli"
   apt-get update -y
   apt-get install -y gh 1password-cli
-  gh --version | head -1
+  gh --version
   op --version
 }
 
@@ -119,13 +119,14 @@ apt-get update -y
 apt-get install -y --no-install-recommends unzip jq ca-certificates curl gnupg git-lfs
 git lfs install --system || true
 
-# Phase 2 (parallel): independent installers. install_apt_extras is the only apt user.
+# Phase 2 (parallel): non-apt installers PLUS the single apt user (install_apt_extras).
+# install_playwright_deps is intentionally NOT here -- it also runs apt (install-deps),
+# and two concurrent apt processes deadlock on the dpkg lock. It runs in phase 3.
 pids=()
 install_terraform        & pids+=("$!")
 install_tflint           & pids+=("$!")
 install_golangci         & pids+=("$!")
 install_npm_clis         & pids+=("$!")
-install_playwright_deps  & pids+=("$!")
 ensure_go                & pids+=("$!")
 install_apt_extras       & pids+=("$!")
 
@@ -136,7 +137,11 @@ if [ "$fail" -ne 0 ]; then
   exit 1
 fi
 
+# Phase 3 (sequential apt): Playwright OS deps run after apt_extras so the two don't
+# contend on the dpkg lock. Best-effort (only reliable's make test-mock needs chromium).
+install_playwright_deps || true
+
 # Docker is preinstalled but its daemon won't be running in a fresh session VM. If a task
 # needs it, start it on demand: `sudo service docker start`. Not required for the standard
 # build/lint/test flow (Postgres is reached via POSTGRES_URL).
-log "setup complete: $(terraform version | head -1), tflint $(tflint --version|head -1), $(golangci-lint --version), go $(go version|awk '{print $3}'), codex $(codex --version 2>/dev/null|head -1), vercel $(vercel --version 2>/dev/null), op $(op --version), gh $(gh --version|head -1)"
+log "setup complete: terraform, tflint, golangci-lint, go, codex, firecrawl-cli, vercel, op, gh, git-lfs installed"
