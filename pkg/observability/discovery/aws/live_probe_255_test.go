@@ -115,6 +115,10 @@ func TestLive255_AWSInspectorsJSONShape(t *testing.T) {
 		{"sagemaker", "list-domains"},
 		{"sagemaker", "list-user-profiles"},
 		{"sagemaker", "list-endpoints"},
+		// #760: Kendra account-wide index discovery. list-indices is the
+		// IndexId-discovery surface for the AWS/Kendra metrics namespace.
+		// (list-data-sources needs an index_id and is not probed here.)
+		{"kendra", "list-indices"},
 	} {
 		probes = append(probes, mk(pair[0], pair[1])...)
 	}

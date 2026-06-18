@@ -84,6 +84,10 @@ var ComponentMetricsMapping = map[composer.ComponentKey]ComponentMetricsBinding{
 	// (#615 / #618) → sagemaker.list-domains.
 	composer.KeyAWSAppRunner: {Service: "apprunner", Action: "list-services"},
 	composer.KeyAWSSageMaker: {Service: "sagemaker", Action: "list-domains"},
+	// Kendra (#760): the index is the panel-default surface (the top-level
+	// entity that holds data sources + FAQs). kendra.list-indices resolves
+	// the IndexId dimension the AWS/Kendra CloudWatch namespace is keyed on.
+	composer.KeyAWSKendra: {Service: "kendra", Action: "list-indices"},
 	// GCP
 	composer.KeyGCPCompute:          {Service: "compute", Action: "list-instances"},
 	composer.KeyGCPGKE:              {Service: "gke", Action: "list-clusters"},

@@ -127,6 +127,34 @@ run "defaults" {
     condition     = length(aws_iam_role_policy.data_source) == 0
     error_message = "S3 data-source access policy must NOT be created when no bucket is wired."
   }
+
+  # Observability (#760): the DocumentsFailedToIndex alarm is emitted by
+  # default (enable_observability defaults true) and keyed on the IndexId
+  # dimension the AWS/Kendra namespace publishes under.
+  assert {
+    condition     = length(aws_cloudwatch_metric_alarm.documents_failed_to_index_high) == 1
+    error_message = "DocumentsFailedToIndex alarm must be emitted by default."
+  }
+
+  assert {
+    condition     = aws_cloudwatch_metric_alarm.documents_failed_to_index_high["0"].metric_name == "DocumentsFailedToIndex"
+    error_message = "The default alarm must watch the DocumentsFailedToIndex metric in the AWS/Kendra namespace."
+  }
+}
+
+# --- Observability can be disabled -------------------------------------------
+
+run "observability_disabled_suppresses_alarm" {
+  command = plan
+
+  variables {
+    enable_observability = false
+  }
+
+  assert {
+    condition     = length(aws_cloudwatch_metric_alarm.documents_failed_to_index_high) == 0
+    error_message = "enable_observability=false must suppress the DocumentsFailedToIndex alarm."
+  }
 }
 
 # --- With S3 data source (corpus wired in) -----------------------------------

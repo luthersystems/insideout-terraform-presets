@@ -70,6 +70,8 @@ var expectedResourceTypesByAction = map[string][]string{
 	// #622 parity-roll-up.
 	"aws/apprunner/list-services": {"aws_apprunner_service"},
 	"aws/sagemaker/list-domains":  {"aws_sagemaker_domain"},
+	// #760: Kendra panel surfaces the search index.
+	"aws/kendra/list-indices": {"aws_kendra_index"},
 
 	// GCP
 	"gcp/compute/list-instances":              {"google_compute_instance", "google_compute_instance_template", "google_compute_instance_group_manager"},
