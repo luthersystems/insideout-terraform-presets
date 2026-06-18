@@ -32,7 +32,19 @@ if [ "${CLAUDE_CODE_REMOTE:-}" = "true" ]; then
       # Strip comment lines first: op inject does raw text substitution and aborts the
       # whole file if it sees any "op:" token in a comment (e.g. .env.local.example's
       # explanatory comments). Comments carry no env vars, so dropping them is safe.
-      if grep -vE '^[[:space:]]*#' "$src" | op inject >> "$CLAUDE_ENV_FILE" 2>/tmp/op-inject.err; then
+      if resolved=$(grep -vE '^[[:space:]]*#' "$src" | op inject 2>/tmp/op-inject.err); then
+        # $CLAUDE_ENV_FILE is shell-sourced, so SINGLE-QUOTE every value: raw values can
+        # contain &, spaces, $, etc. (e.g. POSTGRES_URL ends in ...&channel_binding=require,
+        # whose unquoted & backgrounds the assignment and drops the var). Escape embedded
+        # single quotes as '\''.
+        printf '%s\n' "$resolved" | while IFS= read -r kv; do
+          case "$kv" in
+            *=*)
+              k=${kv%%=*}; v=${kv#*=}; v=${v//\'/\'\\\'\'}
+              printf "%s='%s'\n" "$k" "$v" >> "$CLAUDE_ENV_FILE"
+              ;;
+          esac
+        done
         echo "[cloud-session-start] injected secrets from $(basename "$src")"
       else
         echo "[cloud-session-start] WARNING: op inject failed for $(basename "$src"): $(cat /tmp/op-inject.err 2>/dev/null)" >&2
