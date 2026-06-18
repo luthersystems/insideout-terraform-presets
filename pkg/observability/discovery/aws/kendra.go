@@ -41,15 +41,16 @@ type kendraClient interface {
 }
 
 func inspectKendra(ctx context.Context, cfg aws.Config, action, filters string) (any, error) {
+	client := kendra.NewFromConfig(cfg)
 	switch action {
 	case "list-indices":
-		return listKendraIndices(ctx, kendra.NewFromConfig(cfg))
+		return listKendraIndices(ctx, client)
 	case "list-data-sources":
 		indexID, err := kendraFilterIndexID(filters)
 		if err != nil {
 			return nil, err
 		}
-		return listKendraDataSources(ctx, kendra.NewFromConfig(cfg), indexID)
+		return listKendraDataSources(ctx, client, indexID)
 	case "get-metrics":
 		// Kendra emits CloudWatch metrics under the AWS/Kendra namespace;
 		// the metrics fetch path owns those. Route through metricsRouted so

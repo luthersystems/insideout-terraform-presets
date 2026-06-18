@@ -145,6 +145,10 @@ func TestListAgentCoreGateways_ListAPIError(t *testing.T) {
 	assert.Contains(t, err.Error(), "AccessDenied")
 }
 
+// TestListAgentCoreGateways_GetGatewayError — a per-id GetGateway failure must
+// NOT abort the whole listing. The gateway is still returned (id-keyed, ARN
+// left empty) so one throttled/AccessDenied gateway can't collapse the panel to
+// the #255 empty state. Matches the documented continue-on-error behavior.
 func TestListAgentCoreGateways_GetGatewayError(t *testing.T) {
 	t.Parallel()
 	client := &fakeAgentCoreClient{
@@ -153,9 +157,11 @@ func TestListAgentCoreGateways_GetGatewayError(t *testing.T) {
 		},
 		getErr: errors.New("ThrottlingException"),
 	}
-	_, err := listAgentCoreGateways(context.Background(), client)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "ThrottlingException")
+	got, err := listAgentCoreGateways(context.Background(), client)
+	require.NoError(t, err, "a single GetGateway failure must not abort the whole listing")
+	require.Len(t, got, 1, "the gateway is still returned despite the failed ARN lookup")
+	assert.Equal(t, "gw-abc", got[0].GatewayID)
+	assert.Empty(t, got[0].GatewayArn, "a failed GetGateway leaves the ARN empty rather than failing the panel")
 }
 
 // TestInspectAgentCore_GetMetricsRoutesToMetricsPackage — get-metrics

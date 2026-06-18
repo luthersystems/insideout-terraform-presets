@@ -91,15 +91,15 @@ func listAgentCoreGateways(ctx context.Context, client agentCoreClient) ([]Agent
 			// GatewaySummary has no ARN; resolve it (the Resource dimension
 			// value) via GetGateway. A failed lookup leaves the ARN empty
 			// rather than aborting the whole listing — the id-keyed record is
-			// still useful for the panel.
+			// still useful for the panel, and one throttled/AccessDenied gateway
+			// must not collapse the whole panel to the #255 empty state.
 			if id != "" {
 				g, gerr := client.GetGateway(ctx, &bedrockagentcorecontrol.GetGatewayInput{
 					GatewayIdentifier: aws.String(id),
 				})
-				if gerr != nil {
-					return nil, gerr
+				if gerr == nil {
+					rec.GatewayArn = aws.ToString(g.GatewayArn)
 				}
-				rec.GatewayArn = aws.ToString(g.GatewayArn)
 			}
 			gateways = append(gateways, rec)
 		}
