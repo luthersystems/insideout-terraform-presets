@@ -10,7 +10,7 @@
 # Add a line per secret you need in the sandbox. Vault is `Reliable-Dev` (see the
 # project's .env.*.example files for the reference convention).
 
-# Used by the codex CLI/plugin and the firecrawl CLI/plugin. Create these items in
-# 1Password (vault Reliable-Dev) and adjust the item/field names to match what you store.
-OPENAI_API_KEY=op://Reliable-Dev/openai-api-key/credential
-FIRECRAWL_API_KEY=op://Reliable-Dev/firecrawl/api_key
+# Items live in 1Password vault Reliable-Dev. `openai` already exists; create `firecrawl`.
+# (If the OpenAI key lives in the item's `api_key` field rather than `credential`, swap it.)
+OPENAI_API_KEY=op://Reliable-Dev/openai/credential
+FIRECRAWL_API_KEY=op://Reliable-Dev/firecrawl/credential
