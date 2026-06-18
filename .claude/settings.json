@@ -30,5 +30,30 @@
       "Bash(mkdir:*)",
       "Bash(go build:*)"
     ]
+  },
+  "extraKnownMarketplaces": {
+    "openai-codex": {
+      "source": { "source": "github", "repo": "openai/codex-plugin-cc" }
+    },
+    "claude-config": {
+      "source": { "source": "github", "repo": "sam-at-luther/claude-config" }
+    }
+  },
+  "enabledPlugins": {
+    "codex@openai-codex": true,
+    "claude-config@claude-config": true,
+    "firecrawl@claude-plugins-official": true
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/scripts/cloud-session-start.sh\""
+          }
+        ]
+      }
+    ]
   }
 }
