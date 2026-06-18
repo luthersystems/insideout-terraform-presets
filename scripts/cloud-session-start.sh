@@ -29,7 +29,10 @@ if [ "${CLAUDE_CODE_REMOTE:-}" = "true" ]; then
   if [ -n "${OP_SERVICE_ACCOUNT_TOKEN:-}" ] && command -v op >/dev/null 2>&1 && [ -n "${CLAUDE_ENV_FILE:-}" ]; then
     for src in "$ROOT/.env.local.example" "$ROOT/scripts/cloud-secrets.op.tpl"; do
       [ -f "$src" ] || continue
-      if op inject -i "$src" >> "$CLAUDE_ENV_FILE" 2>/tmp/op-inject.err; then
+      # Strip comment lines first: op inject does raw text substitution and aborts the
+      # whole file if it sees any "op:" token in a comment (e.g. .env.local.example's
+      # explanatory comments). Comments carry no env vars, so dropping them is safe.
+      if grep -vE '^[[:space:]]*#' "$src" | op inject >> "$CLAUDE_ENV_FILE" 2>/tmp/op-inject.err; then
         echo "[cloud-session-start] injected secrets from $(basename "$src")"
       else
         echo "[cloud-session-start] WARNING: op inject failed for $(basename "$src"): $(cat /tmp/op-inject.err 2>/dev/null)" >&2

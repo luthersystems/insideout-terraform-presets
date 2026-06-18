@@ -1,16 +1,14 @@
-# Secrets to pull from 1Password into a Claude Code on the web session.
+# Cloud-only secrets for a Claude Code on the web session, pulled from 1Password.
 #
-# SAFE TO COMMIT: this file contains only `op://` references, never secret values.
-# scripts/cloud-session-start.sh resolves these via `op inject` (using the scoped
-# OP_SERVICE_ACCOUNT_TOKEN set in the cloud environment) and writes the resolved
-# KEY=value lines into the session env. The real secrets never enter the persisted
-# environment config or this repo.
+# SAFE TO COMMIT: only 1Password secret references, never secret values.
+# scripts/cloud-session-start.sh resolves these with the op CLI (using the scoped
+# OP_SERVICE_ACCOUNT_TOKEN) into the session env. Real secret values never enter the
+# persisted environment config or this repo.
 #
-# Format:  ENV_VAR=op://<vault>/<item>/<field>
-# Add a line per secret you need in the sandbox. Vault is `Reliable-Dev` (see the
-# project's .env.*.example files for the reference convention).
-
-# Items live in 1Password vault Reliable-Dev. `openai` already exists; create `firecrawl`.
-# (If the OpenAI key lives in the item's `api_key` field rather than `credential`, swap it.)
-OPENAI_API_KEY=op://Reliable-Dev/openai/credential
+# NOTE: keep this file free of stray "op:" tokens in comments -- op inject does raw
+# text substitution and treats any such token as a (malformed) reference.
+#
+# Used by the codex CLI/plugin and the firecrawl CLI/plugin.
+# Items live in 1Password vault Reliable-Dev (openai + firecrawl).
+OPENAI_API_KEY=op://Reliable-Dev/openai/api_key
 FIRECRAWL_API_KEY=op://Reliable-Dev/firecrawl/credential
