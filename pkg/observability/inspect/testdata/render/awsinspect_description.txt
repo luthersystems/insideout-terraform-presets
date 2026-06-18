@@ -12,7 +12,7 @@ RESPONSE TIERS (default is summary for token efficiency):
 - Raw: Complete unprocessed API response. Set raw=true.
 
 REQUIRES: session_id from convoopen response (format: sess_v2_...).
-Supported services: account, acm, alb, apigateway, apprunner, backup, bedrock, cloudfront, cloudwatchlogs, cognito, cost-explorer, dynamodb, ebs, ec2, ecs, eks, elasticache, kendra, kms, lambda, msk, opensearch, rds, route53, s3, sagemaker, secretsmanager, sqs, vpc, waf
+Supported services: account, acm, agentcore, alb, apigateway, apprunner, backup, bedrock, cloudfront, cloudwatchlogs, cognito, cost-explorer, dynamodb, ebs, ec2, ecs, eks, elasticache, kendra, kms, lambda, msk, opensearch, rds, route53, s3, sagemaker, secretsmanager, sqs, vpc, waf
 For a specific service's actions, call with action="list-actions".
 METRICS: Use list-metrics to discover available metrics for a service (no credentials needed). Then use get-metrics to retrieve data (auto-discovers resources). Most services return CloudWatch time-series. KMS returns key health (rotation, state). SecretsManager returns secret health (rotation, last accessed/rotated). Optional filters JSON: {"hours":6,"period":300}.
 BILLING: Use service=cost-explorer to inspect AWS costs. Actions: get-cost-summary (last 30 days by service, filters: {"days":7,"granularity":"DAILY"}), get-cost-forecast (projected spend through end of month), get-cost-by-tag (costs grouped by tag, filters: {"tag_key":"Environment","days":30}). Requires ce:GetCostAndUsage and ce:GetCostForecast IAM permissions.

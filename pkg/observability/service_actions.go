@@ -80,6 +80,15 @@ var AWSServiceActions = map[string][]string{
 	// get-metrics routes to the metrics package for the AWS/Kendra
 	// CloudWatch namespace.
 	"kendra": {"list-indices", "list-data-sources", "get-metrics"},
+	// Bedrock AgentCore Gateway (#763). list-gateways returns the
+	// account+region gateway summaries (GatewaySummary carries only
+	// GatewayId — the inspector resolves each id to its ARN via GetGateway).
+	// The gateway ARN is the Resource dimension value the
+	// AWS/Bedrock-AgentCore CloudWatch namespace is keyed on, so list-gateways
+	// is the action metrics-discovery uses to enumerate dimension values.
+	// get-metrics routes to the metrics package for the
+	// AWS/Bedrock-AgentCore CloudWatch namespace.
+	"agentcore": {"list-gateways", "get-metrics"},
 }
 
 // AWSServiceAliases maps caller-supplied aliases to canonical service

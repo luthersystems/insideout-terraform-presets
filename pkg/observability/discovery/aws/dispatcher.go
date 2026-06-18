@@ -146,6 +146,8 @@ func Inspect(ctx context.Context, cfg aws.Config, service, action, filtersJSON s
 		return inspectSageMaker(ctx, cfg, action, filtersJSON)
 	case "kendra":
 		return inspectKendra(ctx, cfg, action, filtersJSON)
+	case "agentcore":
+		return inspectAgentCore(ctx, cfg, action, filtersJSON)
 	default:
 		return nil, unsupportedServiceError(service)
 	}

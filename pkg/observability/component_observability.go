@@ -415,6 +415,27 @@ var awsServiceMetrics = map[string]AWSObs{
 			{Name: "DocumentsFailedToIndex", Stat: "Sum"},
 		},
 	},
+	// Bedrock AgentCore Gateway metrics (#763). Published under the
+	// AWS/Bedrock-AgentCore namespace, keyed by the Resource dimension whose
+	// value is the gateway ARN (= GetGatewayOutput.GatewayArn, resolved from
+	// agentcore.list-gateways — GatewaySummary itself has no ARN). Metric
+	// names verified against AWS's AgentCore alarm example
+	// (Name=Resource,Value=<gateway-arn>): Invocations / Throttles /
+	// SystemErrors / UserErrors (Sum) + Latency (Average). SystemErrors is
+	// the natural alarm metric — gateway-side failures the caller can't fix
+	// by retrying. Treated conservatively; the AgentCore metric surface is
+	// new and still maturing (see preset maturity caveat).
+	"agentcore": {
+		Namespace:     "AWS/Bedrock-AgentCore",
+		DimensionName: "Resource",
+		Metrics: []AWSMetricSpec{
+			{Name: "Invocations", Stat: "Sum"},
+			{Name: "Throttles", Stat: "Sum"},
+			{Name: "SystemErrors", Stat: "Sum"},
+			{Name: "UserErrors", Stat: "Sum"},
+			{Name: "Latency", Stat: "Average"},
+		},
+	},
 }
 
 // gcpServiceMetrics is the per-service catalog ported from the InsideOut backend's
@@ -694,6 +715,12 @@ var alarmedAWSMetrics = map[composer.ComponentKey]AlarmAuthor{
 	// alarm lives in aws/kendra/observability.tf; the metric_name string
 	// matches the AWS/Kendra catalog above.
 	composer.KeyAWSKendra: {Module: "aws/kendra", Metrics: []string{"DocumentsFailedToIndex"}},
+	// Bedrock AgentCore Gateway (#763): SystemErrors — gateway-side failures
+	// the caller can't fix by retrying (the natural alarm metric per AWS's
+	// AgentCore alarm example). The alarm lives in
+	// aws/agentcore_gateway/observability.tf; the metric_name string matches
+	// the AWS/Bedrock-AgentCore catalog above.
+	composer.KeyAWSAgentCoreGateway: {Module: "aws/agentcore_gateway", Metrics: []string{"SystemErrors"}},
 }
 
 // alarmedGCPMetrics is the GCP analogue. Metric strings match
@@ -771,6 +798,11 @@ var Observability = func() map[composer.ComponentKey]ComponentObservability {
 // metric surface at all (e.g. KeyAWSGitHubActions). C9 removes a key
 // from this list once every spec it owns has Alarmed=true.
 var observabilityDeferred = map[composer.ComponentKey]string{
+	// AgentCore Gateway (#763): SystemErrors is alarmed in
+	// aws/agentcore_gateway/observability.tf, but Invocations / Throttles /
+	// UserErrors / Latency remain Alarmed=false, so the key stays deferred
+	// until full alarm coverage lands.
+	composer.KeyAWSAgentCoreGateway:     "#763",
 	composer.KeyAWSALB:                  "#204",
 	composer.KeyAWSAPIGateway:           "#204",
 	composer.KeyAWSBackups:              "#204",

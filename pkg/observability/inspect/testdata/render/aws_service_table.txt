@@ -2,6 +2,7 @@
 |---------|----------------|
 | account | get-info |
 | acm | list-certificates, describe-certificate, get-metrics |
+| agentcore | list-gateways, get-metrics |
 | alb | describe-load-balancers, get-metrics |
 | apigateway | get-apis, get-domain-names, get-metrics |
 | apprunner | list-services, describe-service, get-metrics |

@@ -119,6 +119,10 @@ func TestLive255_AWSInspectorsJSONShape(t *testing.T) {
 		// IndexId-discovery surface for the AWS/Kendra metrics namespace.
 		// (list-data-sources needs an index_id and is not probed here.)
 		{"kendra", "list-indices"},
+		// #763: AgentCore account-wide gateway discovery. list-gateways is
+		// the Resource-dimension (gateway-ARN) discovery surface for the
+		// AWS/Bedrock-AgentCore metrics namespace.
+		{"agentcore", "list-gateways"},
 	} {
 		probes = append(probes, mk(pair[0], pair[1])...)
 	}

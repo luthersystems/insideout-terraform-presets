@@ -33,6 +33,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/backup v1.55.2
 	github.com/aws/aws-sdk-go-v2/service/bedrock v1.59.2
 	github.com/aws/aws-sdk-go-v2/service/bedrockagent v1.53.2
+	github.com/aws/aws-sdk-go-v2/service/bedrockagentcorecontrol v1.42.2
 	github.com/aws/aws-sdk-go-v2/service/cloudcontrol v1.29.15
 	github.com/aws/aws-sdk-go-v2/service/cloudfront v1.62.0
 	github.com/aws/aws-sdk-go-v2/service/cloudwatch v1.57.0

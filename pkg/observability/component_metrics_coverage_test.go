@@ -49,14 +49,6 @@ var metricsDeferredKeys = map[composer.ComponentKey]string{
 	// Backfill alongside the inspector landing (mirrors the #622 backfill
 	// of apprunner + sagemaker after #618 / #620 added their inspectors).
 	composer.KeyAWSCodeBuild: "[#619] discovery inspector deferred; ComponentMetricsMapping entry pending the codebuild.list-projects handler registration alongside the inspector backfill PR",
-	// AgentCore Gateway (#763). AgentCore CloudWatch metrics are immature
-	// (the preset deliberately wires NO observability alarms and is not in
-	// the CloudWatchMonitoring driver list), so there is no (service, action)
-	// to bind a panel to yet — a mapping pointing at an AgentCore metrics
-	// surface would dispatch to an unregistered service. Backfill once the
-	// AgentCore metrics namespace stabilizes and a discovery inspector lands
-	// (mirrors the aws_bedrock_agent inspector deferral precedent).
-	composer.KeyAWSAgentCoreGateway: "[#763] AgentCore metrics immature; no observability wiring shipped (no CloudWatchMonitoring driver entry / no alarms), so ComponentMetricsMapping entry is deferred until the metrics namespace stabilizes and a discovery inspector lands",
 }
 
 // metricsNonComponentKeys are AllComponentKeys entries that genuinely

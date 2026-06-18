@@ -106,6 +106,8 @@ github.com/aws/aws-sdk-go-v2/service/bedrock v1.59.2 h1:TdYgGWLuNqQGNNVHzMwBEkg1
 github.com/aws/aws-sdk-go-v2/service/bedrock v1.59.2/go.mod h1:v/+a2bHvfo04yQC/p2HOK1iJF6V59OwCfCSf4iYgob4=
 github.com/aws/aws-sdk-go-v2/service/bedrockagent v1.53.2 h1:5WfuuVf0Mie5g3ibps8fgYDrlTVMc7PQpdycZmI1R+k=
 github.com/aws/aws-sdk-go-v2/service/bedrockagent v1.53.2/go.mod h1:zue4MN4ji6nlKYQYwVLmaPXJ66wB9JnIePX1e1yg5MU=
+github.com/aws/aws-sdk-go-v2/service/bedrockagentcorecontrol v1.42.2 h1:jryZyT2rm7xAuBDln0qt3r2wJZZygTIgKQh230Hzr2M=
+github.com/aws/aws-sdk-go-v2/service/bedrockagentcorecontrol v1.42.2/go.mod h1:3Q4ah3P3HKjYPDZgOZrI33j1qRFySenhlta6zpUnXT0=
 github.com/aws/aws-sdk-go-v2/service/cloudcontrol v1.29.15 h1:E3HjmGRKmA5R7YUzdidZWuxOSKqW95tZZlZ06wND9a0=
 github.com/aws/aws-sdk-go-v2/service/cloudcontrol v1.29.15/go.mod h1:qdsQO5+urrlkcsolFWgiNQ0lpFB0UCQbTKK9j79b1Wg=
 github.com/aws/aws-sdk-go-v2/service/cloudfront v1.62.0 h1:Vd4U87ecTyeQwOTezwqAYW9qcWdZpwicC96MlqXd67M=
