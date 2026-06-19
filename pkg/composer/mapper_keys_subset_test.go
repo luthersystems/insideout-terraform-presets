@@ -262,16 +262,24 @@ func kitchenSinkConfig() *Config {
 	}{DomainName: "example.com", SubjectAlternativeNames: []string{"www.example.com"}, KeyAlgorithm: "RSA_2048", CertificateTransparencyLogging: "ENABLED", CreateValidation: &t, ValidationTimeout: "45m"}
 
 	// GCP
+	// GPU fields set on N1 machines so the kitchen-sink stays internally
+	// consistent with the #767 GPU machine-type validation (a GPU on an e2/g2
+	// machine would be rejected). This also exercises the gpu_type/gpu_count
+	// keys through the subset gate.
 	cfg.GCPCompute = &struct {
 		NumServers  string `json:"numServers,omitempty"`
 		MachineType string `json:"machineType,omitempty"`
 		DiskSizeGb  int    `json:"diskSizeGb,omitempty"`
-	}{NumServers: "1", MachineType: "e2-medium", DiskSizeGb: 50}
+		GPUType     string `json:"gpuType,omitempty"`
+		GPUCount    int    `json:"gpuCount,omitempty"`
+	}{NumServers: "1", MachineType: "n1-standard-4", DiskSizeGb: 50, GPUType: "nvidia-tesla-t4", GPUCount: 1}
 	cfg.GCPGKE = &struct {
 		Regional    *bool  `json:"regional,omitempty"`
 		NodeCount   string `json:"nodeCount,omitempty"`
 		MachineType string `json:"machineType,omitempty"`
-	}{Regional: &t, NodeCount: "3", MachineType: "e2-standard-2"}
+		GPUType     string `json:"gpuType,omitempty"`
+		GPUCount    int    `json:"gpuCount,omitempty"`
+	}{Regional: &t, NodeCount: "3", MachineType: "n1-standard-4", GPUType: "nvidia-tesla-t4", GPUCount: 1}
 	cfg.GCPCloudSQL = &struct {
 		Tier             string `json:"tier,omitempty"`
 		DiskSizeGb       int    `json:"diskSizeGb,omitempty"`
@@ -286,9 +294,12 @@ func kitchenSinkConfig() *Config {
 		Versioning   *bool  `json:"versioning,omitempty"`
 	}{StorageClass: "STANDARD", Versioning: &t}
 	cfg.GCPVertexAI = &struct {
-		EnableVectorSearch *bool `json:"enableVectorSearch,omitempty"`
-		IndexDimensions    int   `json:"indexDimensions,omitempty"`
-	}{EnableVectorSearch: &t, IndexDimensions: 768}
+		EnableVectorSearch    *bool  `json:"enableVectorSearch,omitempty"`
+		IndexDimensions       int    `json:"indexDimensions,omitempty"`
+		EnableServing         *bool  `json:"enableServing,omitempty"`
+		ModelGardenModel      string `json:"modelGardenModel,omitempty"`
+		ModelGardenAcceptEULA *bool  `json:"modelGardenAcceptEula,omitempty"`
+	}{EnableVectorSearch: &t, IndexDimensions: 768, EnableServing: &t, ModelGardenModel: "publishers/google/models/gemma3@gemma-3-1b-it", ModelGardenAcceptEULA: &t}
 	cfg.GCPPubSub = &struct {
 		MessageRetentionDuration string `json:"messageRetentionDuration,omitempty"`
 	}{MessageRetentionDuration: "604800s"}

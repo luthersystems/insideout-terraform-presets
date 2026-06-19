@@ -135,6 +135,8 @@ func TestConfig_Normalize_ClearsGCPFieldsForAWS(t *testing.T) {
 			Regional    *bool  `json:"regional,omitempty"`
 			NodeCount   string `json:"nodeCount,omitempty"`
 			MachineType string `json:"machineType,omitempty"`
+			GPUType     string `json:"gpuType,omitempty"`
+			GPUCount    int    `json:"gpuCount,omitempty"`
 		}{
 			NodeCount: "3",
 		},

@@ -140,9 +140,37 @@ variable "max_node_count" {
 }
 
 variable "machine_type" {
-  description = "Machine type for nodes"
+  description = "Machine type for nodes. For a GPU node pool, use an N1 machine (e.g. n1-standard-4, attaches T4/V100/P100/P4) or an accelerator-optimized machine (a2-*/a3-*/a4-*/g2-*/g4-*, whose accelerator the node pool declares — paired with the family's GPU type). Unlike a Compute VM, a GKE node pool DECLARES the accelerator even for the accelerator-optimized families."
   type        = string
   default     = "e2-standard-4"
+}
+
+variable "gpu_type" {
+  description = "NVIDIA accelerator type the node pool declares (e.g. nvidia-tesla-t4 on N1, nvidia-l4 on g2, nvidia-tesla-a100 on a2, nvidia-h100-80gb on a3). Empty = no GPU. Must pair with the machine family. When set, GKE auto-installs the NVIDIA driver (gpu_driver_version=DEFAULT) — no in-cluster device-plugin work needed, unlike EKS. GPU types are zone-constrained and quota-gated — a deploy-time operator concern."
+  type        = string
+  default     = ""
+}
+
+variable "gpu_count" {
+  description = "Number of GPUs of gpu_type per node. Ignored unless gpu_type is set. Valid counts are 1, 2, 4, 8, or 16 (0 = no GPU). The exact legal count is GPU-type/zone/machine-specific (e.g. T4: 1/2/4; a2-highgpu-8g exposes 8) — a deploy-time/quota concern — but counts outside this set are always rejected by GCP."
+  type        = number
+  default     = 0
+
+  validation {
+    condition     = contains([0, 1, 2, 4, 8, 16], var.gpu_count)
+    error_message = "gpu_count must be one of 0, 1, 2, 4, 8, 16."
+  }
+}
+
+variable "gpu_driver_version" {
+  description = "GKE GPU driver auto-install version: DEFAULT (driver for the node GKE version), LATEST, or INSTALLATION_DISABLED. Applied only when gpu_type is set."
+  type        = string
+  default     = "DEFAULT"
+
+  validation {
+    condition     = contains(["DEFAULT", "LATEST", "INSTALLATION_DISABLED"], var.gpu_driver_version)
+    error_message = "gpu_driver_version must be one of: DEFAULT, LATEST, INSTALLATION_DISABLED."
+  }
 }
 
 variable "disk_size_gb" {
