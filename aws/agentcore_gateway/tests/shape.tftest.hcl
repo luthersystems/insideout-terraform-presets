@@ -159,6 +159,41 @@ run "defaults" {
     condition     = length(aws_lambda_permission.gateway_invoke) == 0
     error_message = "Lambda invoke permission must NOT be created when no Lambda target is wired."
   }
+
+  # Observability (#763): the SystemErrors alarm is emitted by default
+  # (enable_observability defaults true) and keyed on the Resource dimension
+  # the AWS/Bedrock-AgentCore namespace publishes under.
+  assert {
+    condition     = length(aws_cloudwatch_metric_alarm.system_errors_high) == 1
+    error_message = "SystemErrors alarm must be emitted by default."
+  }
+
+  assert {
+    condition     = aws_cloudwatch_metric_alarm.system_errors_high["0"].metric_name == "SystemErrors"
+    error_message = "The default alarm must watch the SystemErrors metric."
+  }
+
+  assert {
+    condition     = aws_cloudwatch_metric_alarm.system_errors_high["0"].namespace == "AWS/Bedrock-AgentCore"
+    error_message = "The default alarm must be scoped to the AWS/Bedrock-AgentCore namespace."
+  }
+}
+
+# --- Observability can be disabled -------------------------------------------
+
+run "observability_disabled_suppresses_alarm" {
+  command = plan
+
+  variables {
+    enable_observability = false
+    # Satisfy the gateway CUSTOM_JWT precondition so plan reaches the alarm.
+    jwt_allowed_audience = ["insideout-agents"]
+  }
+
+  assert {
+    condition     = length(aws_cloudwatch_metric_alarm.system_errors_high) == 0
+    error_message = "enable_observability=false must suppress the SystemErrors alarm."
+  }
 }
 
 # --- With Lambda target (executor wired in) ----------------------------------

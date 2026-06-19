@@ -2,6 +2,7 @@
 |---------|----------------|
 | account | get-info |
 | acm | list-certificates, describe-certificate, get-metrics |
+| agentcore | list-gateways, get-metrics |
 | alb | describe-load-balancers, get-metrics |
 | apigateway | get-apis, get-domain-names, get-metrics |
 | apprunner | list-services, describe-service, get-metrics |
@@ -17,6 +18,7 @@
 | ecs | list-clusters, list-services, describe-services, get-metrics |
 | eks | list-clusters, describe-cluster, list-nodes, get-metrics |
 | elasticache | describe-cache-clusters, describe-replication-groups, get-metrics |
+| kendra | list-indices, list-data-sources, get-metrics |
 | kms | list-keys, list-aliases, get-metrics |
 | lambda | list-functions, get-metrics |
 | msk | list-clusters, get-metrics |

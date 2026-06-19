@@ -399,6 +399,43 @@ var awsServiceMetrics = map[string]AWSObs{
 			{Name: "Invocation5XXErrors", Stat: "Sum"},
 		},
 	},
+	// Kendra enterprise-search index metrics (#760). Published under the
+	// AWS/Kendra namespace, keyed by IndexId (= IndexConfigurationSummary.Id
+	// from kendra.list-indices). Metric names verified against the AWS/Kendra
+	// CloudWatch metric table: IndexQueryCount is the headline query-volume
+	// signal; DocumentsIndexed / DocumentsFailedToIndex track ingestion
+	// health (DocumentsFailedToIndex is the natural alarm metric — a
+	// connector that can't ingest its corpus leaves the index stale).
+	"kendra": {
+		Namespace:     "AWS/Kendra",
+		DimensionName: "IndexId",
+		Metrics: []AWSMetricSpec{
+			{Name: "IndexQueryCount", Stat: "Sum"},
+			{Name: "DocumentsIndexed", Stat: "Sum"},
+			{Name: "DocumentsFailedToIndex", Stat: "Sum"},
+		},
+	},
+	// Bedrock AgentCore Gateway metrics (#763). Published under the
+	// AWS/Bedrock-AgentCore namespace, keyed by the Resource dimension whose
+	// value is the gateway ARN (= GetGatewayOutput.GatewayArn, resolved from
+	// agentcore.list-gateways — GatewaySummary itself has no ARN). Metric
+	// names verified against AWS's AgentCore alarm example
+	// (Name=Resource,Value=<gateway-arn>): Invocations / Throttles /
+	// SystemErrors / UserErrors (Sum) + Latency (Average). SystemErrors is
+	// the natural alarm metric — gateway-side failures the caller can't fix
+	// by retrying. Treated conservatively; the AgentCore metric surface is
+	// new and still maturing (see preset maturity caveat).
+	"agentcore": {
+		Namespace:     "AWS/Bedrock-AgentCore",
+		DimensionName: "Resource",
+		Metrics: []AWSMetricSpec{
+			{Name: "Invocations", Stat: "Sum"},
+			{Name: "Throttles", Stat: "Sum"},
+			{Name: "SystemErrors", Stat: "Sum"},
+			{Name: "UserErrors", Stat: "Sum"},
+			{Name: "Latency", Stat: "Average"},
+		},
+	},
 }
 
 // gcpServiceMetrics is the per-service catalog ported from the InsideOut backend's
@@ -673,6 +710,17 @@ var alarmedAWSMetrics = map[composer.ComponentKey]AlarmAuthor{
 	// otherwise, but the metric_name strings still match this catalog.
 	composer.KeyAWSSageMaker: {Module: "aws/sagemaker", Metrics: []string{"Invocation5XXErrors", "ModelLatency"}},
 	composer.KeyAWSSQS:       {Module: "aws/sqs", Metrics: []string{"ApproximateNumberOfMessagesVisible"}},
+	// Kendra (#760): DocumentsFailedToIndex — a data-source connector that
+	// can't ingest documents leaves the index serving a stale corpus. The
+	// alarm lives in aws/kendra/observability.tf; the metric_name string
+	// matches the AWS/Kendra catalog above.
+	composer.KeyAWSKendra: {Module: "aws/kendra", Metrics: []string{"DocumentsFailedToIndex"}},
+	// Bedrock AgentCore Gateway (#763): SystemErrors — gateway-side failures
+	// the caller can't fix by retrying (the natural alarm metric per AWS's
+	// AgentCore alarm example). The alarm lives in
+	// aws/agentcore_gateway/observability.tf; the metric_name string matches
+	// the AWS/Bedrock-AgentCore catalog above.
+	composer.KeyAWSAgentCoreGateway: {Module: "aws/agentcore_gateway", Metrics: []string{"SystemErrors"}},
 }
 
 // alarmedGCPMetrics is the GCP analogue. Metric strings match
@@ -750,6 +798,11 @@ var Observability = func() map[composer.ComponentKey]ComponentObservability {
 // metric surface at all (e.g. KeyAWSGitHubActions). C9 removes a key
 // from this list once every spec it owns has Alarmed=true.
 var observabilityDeferred = map[composer.ComponentKey]string{
+	// AgentCore Gateway (#763): SystemErrors is alarmed in
+	// aws/agentcore_gateway/observability.tf, but Invocations / Throttles /
+	// UserErrors / Latency remain Alarmed=false, so the key stays deferred
+	// until full alarm coverage lands.
+	composer.KeyAWSAgentCoreGateway:     "#763",
 	composer.KeyAWSALB:                  "#204",
 	composer.KeyAWSAPIGateway:           "#204",
 	composer.KeyAWSBackups:              "#204",
@@ -769,37 +822,42 @@ var observabilityDeferred = map[composer.ComponentKey]string{
 	composer.KeyAWSGitHubActions:        "#204",
 	composer.KeyAWSGrafana:              "#204",
 	composer.KeyAWSKMS:                  "#204",
-	composer.KeyAWSLambda:               "#204",
-	composer.KeyAWSMSK:                  "#204",
-	composer.KeyAWSOpenSearch:           "#204",
-	composer.KeyAWSRDS:                  "#204",
-	composer.KeyAWSS3:                   "#204",
-	composer.KeyAWSSQS:                  "#204",
-	composer.KeyAWSSecretsManager:       "#204",
-	composer.KeyAWSVPC:                  "#204",
-	composer.KeyAWSWAF:                  "#204",
-	composer.KeyGCPAPIGateway:           "#204",
-	composer.KeyGCPBackups:              "#204",
-	composer.KeyGCPBastion:              "#204",
-	composer.KeyGCPCloudArmor:           "#204",
-	composer.KeyGCPCloudBuild:           "#204",
-	composer.KeyGCPCloudFunctions:       "#204",
-	composer.KeyGCPCloudKMS:             "#204",
-	composer.KeyGCPCloudLogging:         "#204",
-	composer.KeyGCPCloudMonitoring:      "#204",
-	composer.KeyGCPCloudRun:             "#204",
-	composer.KeyGCPCloudSQL:             "#204",
-	composer.KeyGCPCompute:              "#204",
-	composer.KeyGCPFirestore:            "#204",
-	composer.KeyGCPGCS:                  "#204",
-	composer.KeyGCPGKE:                  "#204",
-	composer.KeyGCPIdentityPlatform:     "#204",
-	composer.KeyGCPLoadbalancer:         "#204",
-	composer.KeyGCPMemorystore:          "#204",
-	composer.KeyGCPPubSub:               "#204",
-	composer.KeyGCPSecretManager:        "#204",
-	composer.KeyGCPVPC:                  "#204",
-	composer.KeyGCPVertexAI:             "#204",
+	// Kendra (#760): DocumentsFailedToIndex is alarmed in
+	// aws/kendra/observability.tf, but IndexQueryCount / DocumentsIndexed
+	// remain Alarmed=false, so the key stays deferred until full alarm
+	// coverage lands.
+	composer.KeyAWSKendra:           "#760",
+	composer.KeyAWSLambda:           "#204",
+	composer.KeyAWSMSK:              "#204",
+	composer.KeyAWSOpenSearch:       "#204",
+	composer.KeyAWSRDS:              "#204",
+	composer.KeyAWSS3:               "#204",
+	composer.KeyAWSSQS:              "#204",
+	composer.KeyAWSSecretsManager:   "#204",
+	composer.KeyAWSVPC:              "#204",
+	composer.KeyAWSWAF:              "#204",
+	composer.KeyGCPAPIGateway:       "#204",
+	composer.KeyGCPBackups:          "#204",
+	composer.KeyGCPBastion:          "#204",
+	composer.KeyGCPCloudArmor:       "#204",
+	composer.KeyGCPCloudBuild:       "#204",
+	composer.KeyGCPCloudFunctions:   "#204",
+	composer.KeyGCPCloudKMS:         "#204",
+	composer.KeyGCPCloudLogging:     "#204",
+	composer.KeyGCPCloudMonitoring:  "#204",
+	composer.KeyGCPCloudRun:         "#204",
+	composer.KeyGCPCloudSQL:         "#204",
+	composer.KeyGCPCompute:          "#204",
+	composer.KeyGCPFirestore:        "#204",
+	composer.KeyGCPGCS:              "#204",
+	composer.KeyGCPGKE:              "#204",
+	composer.KeyGCPIdentityPlatform: "#204",
+	composer.KeyGCPLoadbalancer:     "#204",
+	composer.KeyGCPMemorystore:      "#204",
+	composer.KeyGCPPubSub:           "#204",
+	composer.KeyGCPSecretManager:    "#204",
+	composer.KeyGCPVPC:              "#204",
+	composer.KeyGCPVertexAI:         "#204",
 }
 
 // Lookup returns the ComponentObservability record for a key. Unknown

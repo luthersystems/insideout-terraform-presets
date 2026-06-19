@@ -70,6 +70,25 @@ var AWSServiceActions = map[string][]string{
 	// get-metrics routes to the metrics package for the AWS/SageMaker
 	// CloudWatch namespace.
 	"sagemaker": {"list-domains", "describe-domain", "list-user-profiles", "list-endpoints", "get-metrics"},
+	// Kendra (#760). list-indices returns the account+region index
+	// summaries (no server-side tag filter — caller post-filters). The
+	// IndexConfigurationSummary.Id is the IndexId dimension value the
+	// AWS/Kendra CloudWatch namespace is keyed on, so list-indices is the
+	// action metrics-discovery uses to resolve dimension values.
+	// list-data-sources enumerates the S3 (and other) connectors hanging
+	// off a given index (requires an index_id in the filters envelope).
+	// get-metrics routes to the metrics package for the AWS/Kendra
+	// CloudWatch namespace.
+	"kendra": {"list-indices", "list-data-sources", "get-metrics"},
+	// Bedrock AgentCore Gateway (#763). list-gateways returns the
+	// account+region gateway summaries (GatewaySummary carries only
+	// GatewayId — the inspector resolves each id to its ARN via GetGateway).
+	// The gateway ARN is the Resource dimension value the
+	// AWS/Bedrock-AgentCore CloudWatch namespace is keyed on, so list-gateways
+	// is the action metrics-discovery uses to enumerate dimension values.
+	// get-metrics routes to the metrics package for the
+	// AWS/Bedrock-AgentCore CloudWatch namespace.
+	"agentcore": {"list-gateways", "get-metrics"},
 }
 
 // AWSServiceAliases maps caller-supplied aliases to canonical service

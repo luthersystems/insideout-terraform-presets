@@ -39,6 +39,14 @@ var observableParityNonChartable = map[composer.ComponentKey]nonChartableObserva
 		Class:  "inventory-only",
 		Reason: "#762 - aws_bedrockagent_agent uses bedrock.list-agents inventory; no default imported chart metrics binding (imported discovery support is a follow-up, cf. #712)",
 	},
+	composer.KeyAWSAgentCoreGateway: {
+		Class:  "inventory-only",
+		Reason: "#763 - aws_bedrockagentcore_gateway uses agentcore.list-gateways inventory; the live AWS/Bedrock-AgentCore CloudWatch panel ships, but there is no default imported chart metrics binding yet (imported discovery support is a follow-up, cf. #712)",
+	},
+	composer.KeyAWSKendra: {
+		Class:  "inventory-only",
+		Reason: "#760 - aws_kendra_index uses kendra.list-indices inventory; the live AWS/Kendra CloudWatch panel ships, but there is no default imported chart metrics binding yet (imported discovery support is a follow-up, cf. #712)",
+	},
 	composer.KeyGCPCloudDeploy: {
 		Class:  "inventory-only",
 		Reason: "#712 - google_clouddeploy_delivery_pipeline uses clouddeploy.list-delivery-pipelines inventory; no default imported chart metrics",

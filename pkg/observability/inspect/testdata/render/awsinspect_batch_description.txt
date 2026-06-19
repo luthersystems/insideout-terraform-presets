@@ -20,7 +20,7 @@ result — do NOT abort on the first error. A credential fetch failure
 leaves cred-less probes (list-actions, list-metrics) succeeding anyway.
 
 REQUIRES: session_id from convoopen response (format: sess_v2_...).
-Supported services: account, acm, alb, apigateway, apprunner, backup, bedrock, cloudfront, cloudwatchlogs, cognito, cost-explorer, dynamodb, ebs, ec2, ecs, eks, elasticache, kms, lambda, msk, opensearch, rds, route53, s3, sagemaker, secretsmanager, sqs, vpc, waf
+Supported services: account, acm, agentcore, alb, apigateway, apprunner, backup, bedrock, cloudfront, cloudwatchlogs, cognito, cost-explorer, dynamodb, ebs, ec2, ecs, eks, elasticache, kendra, kms, lambda, msk, opensearch, rds, route53, s3, sagemaker, secretsmanager, sqs, vpc, waf
 For a specific service's actions, use awsinspect (singular) with
 action="list-actions" — batch is not the place for discovery.
 Batch responses are always summarized (no detail/raw per-sub); use
