@@ -1175,6 +1175,23 @@ func (m DefaultMapper) BuildModuleValues(
 			if cfg.GCPVertexAI.IndexDimensions > 0 {
 				vals["index_dimensions"] = cfg.GCPVertexAI.IndexDimensions
 			}
+			// Serving (#768): orthogonal to Vector Search. enable_serving
+			// gates the endpoint; model_garden_model (when set) drives the
+			// Model Garden deployment. Same partial-config discipline: only
+			// emit a field the caller populated so the preset defaults
+			// (enable_serving=false, no model) win when left unset.
+			if cfg.GCPVertexAI.EnableServing != nil {
+				vals["enable_serving"] = *cfg.GCPVertexAI.EnableServing
+			}
+			if cfg.GCPVertexAI.ModelGardenModel != "" {
+				vals["model_garden_model"] = cfg.GCPVertexAI.ModelGardenModel
+			}
+			// EULA acceptance for EULA-gated open models (Gemma/Llama). Only
+			// emit when the caller explicitly set it so the preset's
+			// explicit-consent default (false) wins when left unset.
+			if cfg.GCPVertexAI.ModelGardenAcceptEULA != nil {
+				vals["model_garden_accept_eula"] = *cfg.GCPVertexAI.ModelGardenAcceptEULA
+			}
 		}
 
 	case KeyGCPAgentEngine:

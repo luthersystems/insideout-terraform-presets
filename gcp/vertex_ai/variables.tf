@@ -169,3 +169,91 @@ variable "deployed_index_max_replicas" {
     error_message = "deployed_index_max_replicas must be greater than 0."
   }
 }
+
+# --- Model serving (Endpoint + Model Garden) --------------------------------
+# Issue #768. Independent of Vector Search: enable_serving gates a
+# google_vertex_ai_endpoint, and (optionally) a one-shot Model Garden open-model
+# deployment onto its own managed endpoint. The dataset and Vector Search
+# resources are untouched by these flags.
+
+variable "enable_serving" {
+  description = "When true, provision a Vertex AI serving endpoint (google_vertex_ai_endpoint). With model_garden_model also set, additionally deploy that open model from Model Garden onto a managed endpoint. The dataset and Vector Search resources are unaffected by this flag."
+  type        = bool
+  default     = false
+}
+
+variable "model_garden_model" {
+  description = "Model Garden publisher model to deploy when enable_serving is true. Format: publishers/<publisher>/models/<model>@<version> (e.g. publishers/google/models/gemma3@gemma-3-1b-it). Null provisions a bare endpoint with no model deployed (attach a model out-of-band)."
+  type        = string
+  default     = null
+
+  validation {
+    # Mirror the provider's documented publisher_model_name format
+    # publishers/{publisher}/models/{publisher_model}@{version_id}. Reject a
+    # bare model name or a Hugging Face id here so a malformed value fails at
+    # plan time rather than ~30min into a live model deploy.
+    condition     = var.model_garden_model == null ? true : can(regex("^publishers/[^/]+/models/[^/@]+@[^/@]+$", var.model_garden_model))
+    error_message = "model_garden_model must be null or match publishers/<publisher>/models/<model>@<version> (e.g. publishers/google/models/gemma3@gemma-3-1b-it)."
+  }
+}
+
+variable "model_garden_accept_eula" {
+  description = "Whether the operator accepts the model's End User License Agreement (EULA / ToS). Many Model Garden open models (Gemma, Llama) require this to be true before they will deploy. Surfaced as model_config.accept_eula on the deployment."
+  type        = bool
+  default     = false
+}
+
+variable "serving_machine_type" {
+  description = "Compute Engine machine type for the Model Garden deployment's dedicated serving resources. Defaults to a CPU-only machine (n1-standard-4); pick a GPU-capable type (e.g. g2-standard-16) when pairing with an accelerator."
+  type        = string
+  default     = "n1-standard-4"
+
+  validation {
+    condition     = can(regex("^[a-z][a-z0-9]*-[a-z0-9-]+$", var.serving_machine_type))
+    error_message = "serving_machine_type must be a Compute Engine machine type (e.g. n1-standard-4, g2-standard-16)."
+  }
+}
+
+variable "serving_accelerator_type" {
+  description = "GPU/TPU accelerator type for the Model Garden deployment (e.g. NVIDIA_L4, NVIDIA_TESLA_T4). Null = CPU-only serving (the default). Must be paired with serving_accelerator_count > 0."
+  type        = string
+  default     = null
+
+  validation {
+    condition     = var.serving_accelerator_type == null ? true : can(regex("^[A-Z][A-Z0-9_]+$", var.serving_accelerator_type))
+    error_message = "serving_accelerator_type must be null or an uppercase accelerator enum (e.g. NVIDIA_L4)."
+  }
+}
+
+variable "serving_accelerator_count" {
+  description = "Number of accelerators to attach per serving replica. 0 (default) = CPU-only. Must be > 0 when serving_accelerator_type is set (enforced by a precondition on the deployment)."
+  type        = number
+  default     = 0
+
+  validation {
+    condition     = var.serving_accelerator_count >= 0
+    error_message = "serving_accelerator_count must be >= 0."
+  }
+}
+
+variable "serving_min_replicas" {
+  description = "Minimum serving replicas for the Model Garden deployment's dedicated resources."
+  type        = number
+  default     = 1
+
+  validation {
+    condition     = var.serving_min_replicas > 0
+    error_message = "serving_min_replicas must be greater than 0."
+  }
+}
+
+variable "serving_max_replicas" {
+  description = "Maximum serving replicas (autoscaling ceiling) for the Model Garden deployment. Must be >= serving_min_replicas (enforced by a precondition on the deployment)."
+  type        = number
+  default     = 1
+
+  validation {
+    condition     = var.serving_max_replicas > 0
+    error_message = "serving_max_replicas must be greater than 0."
+  }
+}

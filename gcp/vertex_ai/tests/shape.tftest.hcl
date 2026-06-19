@@ -314,6 +314,299 @@ run "alert_policy_absent_when_vector_search_off" {
 }
 
 # -----------------------------------------------------------------------------
+# Model serving (#768): endpoint + Model Garden deployment, gated on
+# enable_serving. The dataset and Vector Search resources stay untouched.
+# -----------------------------------------------------------------------------
+
+run "serving_off_by_default" {
+  command = plan
+
+  variables {
+    project    = "test"
+    project_id = "test-project"
+  }
+
+  # Serving is off by default -> no endpoint, no model-garden deployment.
+  assert {
+    condition     = length(google_vertex_ai_endpoint.serving) == 0
+    error_message = "serving endpoint must NOT be created when enable_serving is false (default)."
+  }
+
+  assert {
+    condition     = length(google_vertex_ai_endpoint_with_model_garden_deployment.model_garden) == 0
+    error_message = "model-garden deployment must NOT be created when enable_serving is false (default)."
+  }
+
+  # And no serving alarms.
+  assert {
+    condition     = length(google_monitoring_alert_policy.serving_prediction_latency_high) == 0
+    error_message = "serving prediction-latency alarm must be absent when serving is off."
+  }
+
+  # Serving outputs are null when serving is off (guards the [0]-index-on-empty
+  # short-circuit in outputs.tf).
+  assert {
+    condition     = output.endpoint_id == null
+    error_message = "endpoint_id output must be null when serving is disabled."
+  }
+
+  assert {
+    condition     = output.endpoint_name == null
+    error_message = "endpoint_name output must be null when serving is disabled."
+  }
+}
+
+run "serving" {
+  command = plan
+
+  variables {
+    project        = "test"
+    project_id     = "test-project"
+    enable_serving = true
+    # No model named -> a bare endpoint, no model-garden deployment.
+  }
+
+  # Exactly one bare serving endpoint, no model-garden deployment.
+  assert {
+    condition     = length(google_vertex_ai_endpoint.serving) == 1
+    error_message = "enable_serving=true must create exactly one serving endpoint."
+  }
+
+  assert {
+    condition     = length(google_vertex_ai_endpoint_with_model_garden_deployment.model_garden) == 0
+    error_message = "no model named -> no model-garden deployment (bare endpoint path)."
+  }
+
+  # Endpoint name is the deterministic NUMERIC id the API requires (no leading
+  # zeros, <=10 digits). Asserting the exact literal pins the sha256-derived
+  # name against a mutation of the derivation:
+  # parseint(substr(sha256("test"),0,8),16) = 2676412545.
+  assert {
+    condition     = google_vertex_ai_endpoint.serving[0].name == "2676412545"
+    error_message = "endpoint name must be the deterministic numeric id derived from sha256(var.project)."
+  }
+
+  assert {
+    condition     = can(regex("^[1-9][0-9]{0,9}$", google_vertex_ai_endpoint.serving[0].name))
+    error_message = "endpoint name must be numeric, no leading zeros, <=10 digits (the API constraint)."
+  }
+
+  # Display name carries the var.project prefix (name-prefix scoping).
+  assert {
+    condition     = google_vertex_ai_endpoint.serving[0].display_name == "test-serving-endpoint"
+    error_message = "endpoint display_name must be var.project-prefixed."
+  }
+
+  # location (the required field) is fed from var.region — pin the flow-through
+  # so a swap to the wrong source is caught.
+  assert {
+    condition     = google_vertex_ai_endpoint.serving[0].location == "us-central1"
+    error_message = "endpoint location must be fed from var.region (default us-central1)."
+  }
+
+  # endpoint_name output mirrors the resource name on the bare-serving path (and
+  # is null on the off path — see serving_off_by_default-adjacent coverage).
+  assert {
+    condition     = output.endpoint_name == "2676412545"
+    error_message = "endpoint_name output must surface the numeric endpoint name when serving is on (bare path)."
+  }
+
+  # endpoint_id output is sourced from the bare endpoint on the no-model path
+  # (the model-garden deployment is absent here). The endpoint's .id is a
+  # provider-computed composite (projects/<p>/locations/<l>/endpoints/<e>) that
+  # is unknown at plan, so we can only assert the output is wired and non-null
+  # here — the bare-vs-model SOURCE is pinned by the endpoint_name assert above
+  # (== "2676412545", the bare endpoint's deterministic name) and by the
+  # model_garden run asserting model_garden[0].endpoint on the model path.
+  assert {
+    condition     = output.endpoint_id != null
+    error_message = "endpoint_id output must be non-null on the no-model serving path (sourced from the bare serving endpoint)."
+  }
+
+  # Vector Search resources are untouched by the serving flag.
+  assert {
+    condition     = length(google_vertex_ai_index.this) == 0
+    error_message = "enable_serving must not create Vector Search resources (orthogonal flags)."
+  }
+
+  # Dataset still composes.
+  assert {
+    condition     = google_vertex_ai_dataset.dataset.display_name == "main-dataset"
+    error_message = "dataset must still be created when only serving is enabled."
+  }
+}
+
+run "model_garden" {
+  command = plan
+
+  variables {
+    project            = "test"
+    project_id         = "test-project"
+    enable_serving     = true
+    model_garden_model = "publishers/google/models/gemma3@gemma-3-1b-it"
+    # model_garden_accept_eula left at its FALSE default on purpose: asserting
+    # accept_eula == false below pins the variable->attribute edge in the
+    # direction a hardcoded `accept_eula = true` would otherwise survive. The
+    # EULA-true flow-through is exercised in model_garden_with_accelerator.
+  }
+
+  # Mutually exclusive (#768 review): when a Model Garden model is named, the
+  # model_garden resource owns its own endpoint, so the BARE endpoint is NOT
+  # created. Otherwise the bare endpoint would sit empty and the outputs would
+  # point at the empty shell.
+  assert {
+    condition     = length(google_vertex_ai_endpoint.serving) == 0
+    error_message = "model-garden path must NOT create the bare serving endpoint (the deployment owns its own endpoint; they are mutually exclusive)."
+  }
+
+  assert {
+    condition     = length(google_vertex_ai_endpoint_with_model_garden_deployment.model_garden) == 1
+    error_message = "enable_serving + model_garden_model must create exactly one model-garden deployment."
+  }
+
+  # The serving outputs surface the Model Garden deployment's OWN endpoint, not
+  # the (absent) bare endpoint — this is the #768-review bug fix. endpoint_id is
+  # the deployment's full resource name; endpoint_name is its numeric endpoint
+  # ID segment. The mock provider supplies computed values, so assert they are
+  # non-null and sourced from the deployment rather than a literal.
+  assert {
+    condition     = output.endpoint_id == google_vertex_ai_endpoint_with_model_garden_deployment.model_garden[0].id
+    error_message = "endpoint_id output must surface the Model Garden deployment's own endpoint resource name, not the absent bare endpoint."
+  }
+
+  assert {
+    condition     = output.endpoint_name == google_vertex_ai_endpoint_with_model_garden_deployment.model_garden[0].endpoint
+    error_message = "endpoint_name output must surface the Model Garden deployment's endpoint ID segment, not the absent bare endpoint."
+  }
+
+  # The publisher model name flows through verbatim.
+  assert {
+    condition     = google_vertex_ai_endpoint_with_model_garden_deployment.model_garden[0].publisher_model_name == "publishers/google/models/gemma3@gemma-3-1b-it"
+    error_message = "model_garden_model must reach publisher_model_name verbatim."
+  }
+
+  # EULA default (false) reaches model_config.accept_eula. Catches a hardcoded
+  # `accept_eula = true` (consent must not be silently granted).
+  assert {
+    condition     = google_vertex_ai_endpoint_with_model_garden_deployment.model_garden[0].model_config[0].accept_eula == false
+    error_message = "model_garden_accept_eula default (false) must reach model_config.accept_eula — EULA consent must not be hardcoded."
+  }
+
+  # CPU-only default: machine_type set, accelerator fields null.
+  assert {
+    condition     = google_vertex_ai_endpoint_with_model_garden_deployment.model_garden[0].deploy_config[0].dedicated_resources[0].machine_spec[0].machine_type == "n1-standard-4"
+    error_message = "serving_machine_type default (n1-standard-4) must reach machine_spec.machine_type."
+  }
+
+  assert {
+    condition     = google_vertex_ai_endpoint_with_model_garden_deployment.model_garden[0].deploy_config[0].dedicated_resources[0].machine_spec[0].accelerator_type == null
+    error_message = "CPU-only default must leave machine_spec.accelerator_type null (no GPU quota demanded)."
+  }
+
+  # Generous create timeout for the long-running model deploy.
+  assert {
+    condition     = google_vertex_ai_endpoint_with_model_garden_deployment.model_garden[0].timeouts.create == "60m"
+    error_message = "model-garden deployment must carry a generous create timeout (deploys run 30+ min)."
+  }
+}
+
+run "model_garden_with_accelerator" {
+  command = plan
+
+  variables {
+    project                   = "test"
+    project_id                = "test-project"
+    enable_serving            = true
+    model_garden_model        = "publishers/google/models/llama3-2@llama-3.2-1b"
+    model_garden_accept_eula  = true
+    serving_machine_type      = "g2-standard-16"
+    serving_accelerator_type  = "NVIDIA_L4"
+    serving_accelerator_count = 1
+  }
+
+  # GPU path: accelerator type + count flow through to machine_spec.
+  assert {
+    condition     = google_vertex_ai_endpoint_with_model_garden_deployment.model_garden[0].deploy_config[0].dedicated_resources[0].machine_spec[0].accelerator_type == "NVIDIA_L4"
+    error_message = "serving_accelerator_type must reach machine_spec.accelerator_type when set."
+  }
+
+  assert {
+    condition     = google_vertex_ai_endpoint_with_model_garden_deployment.model_garden[0].deploy_config[0].dedicated_resources[0].machine_spec[0].accelerator_count == 1
+    error_message = "serving_accelerator_count must reach machine_spec.accelerator_count when an accelerator type is set."
+  }
+
+  # EULA acceptance flows through when set true (the catch-the-hardcoded-false
+  # direction, paired with the accept_eula == false assert in run "model_garden").
+  assert {
+    condition     = google_vertex_ai_endpoint_with_model_garden_deployment.model_garden[0].model_config[0].accept_eula == true
+    error_message = "model_garden_accept_eula=true must reach model_config.accept_eula."
+  }
+}
+
+run "serving_alarms_emitted_when_serving_and_observability_on" {
+  command = plan
+
+  variables {
+    project              = "test"
+    project_id           = "test-project"
+    enable_serving       = true
+    enable_observability = true
+  }
+
+  assert {
+    condition     = length(google_monitoring_alert_policy.serving_prediction_latency_high) == 1
+    error_message = "prediction-latency alarm must be emitted when serving AND observability are both on."
+  }
+
+  assert {
+    condition     = length(google_monitoring_alert_policy.serving_prediction_errors_high) == 1
+    error_message = "prediction-error alarm must be emitted when serving AND observability are both on."
+  }
+
+  # Filters must carry the metric.types verified against Google's official list
+  # and registered in the pkg/observability vertexai catalog.
+  assert {
+    condition = strcontains(
+      google_monitoring_alert_policy.serving_prediction_latency_high["0"].conditions[0].condition_threshold[0].filter,
+      "metric.type=\"aiplatform.googleapis.com/prediction/online/prediction_latencies\""
+    )
+    error_message = "latency alarm filter must reference prediction/online/prediction_latencies."
+  }
+
+  assert {
+    condition = strcontains(
+      google_monitoring_alert_policy.serving_prediction_errors_high["0"].conditions[0].condition_threshold[0].filter,
+      "metric.type=\"aiplatform.googleapis.com/prediction/online/error_count\""
+    )
+    error_message = "error alarm filter must reference prediction/online/error_count."
+  }
+}
+
+run "serving_alarms_absent_when_serving_off" {
+  command = plan
+
+  variables {
+    project              = "test"
+    project_id           = "test-project"
+    enable_serving       = false
+    enable_observability = true
+    # Vector Search on so observability is clearly active for the vector alarm,
+    # proving the serving alarms gate on enable_serving specifically.
+    enable_vector_search = true
+  }
+
+  assert {
+    condition     = length(google_monitoring_alert_policy.serving_prediction_latency_high) == 0
+    error_message = "serving alarms must gate on enable_serving, not enable_vector_search."
+  }
+
+  assert {
+    condition     = length(google_monitoring_alert_policy.serving_prediction_errors_high) == 0
+    error_message = "serving error alarm must be absent when serving is off."
+  }
+}
+
+# -----------------------------------------------------------------------------
 # Negative cases: validation blocks must reject misconfigurations at plan time.
 # -----------------------------------------------------------------------------
 
@@ -405,4 +698,78 @@ run "rejects_max_replicas_below_min" {
   # The cross-variable invariant is a resource precondition, not a variable
   # validation, so the failure surfaces on the deployed-index resource.
   expect_failures = [google_vertex_ai_index_endpoint_deployed_index.this]
+}
+
+run "rejects_bad_model_garden_format" {
+  command = plan
+
+  variables {
+    project        = "test"
+    project_id     = "test-project"
+    enable_serving = true
+    # Bare model name, not the publishers/.../models/...@version form.
+    model_garden_model = "gemma-3-1b-it"
+  }
+
+  expect_failures = [var.model_garden_model]
+}
+
+run "rejects_model_garden_missing_version" {
+  command = plan
+
+  variables {
+    project        = "test"
+    project_id     = "test-project"
+    enable_serving = true
+    # Missing the @<version> suffix the API requires.
+    model_garden_model = "publishers/google/models/gemma3"
+  }
+
+  expect_failures = [var.model_garden_model]
+}
+
+run "rejects_serving_max_replicas_below_min" {
+  command = plan
+
+  variables {
+    project              = "test"
+    project_id           = "test-project"
+    enable_serving       = true
+    model_garden_model   = "publishers/google/models/gemma3@gemma-3-1b-it"
+    serving_min_replicas = 3
+    serving_max_replicas = 1 # ceiling below floor
+  }
+
+  # Cross-variable invariant is a precondition on the deployment resource.
+  expect_failures = [google_vertex_ai_endpoint_with_model_garden_deployment.model_garden]
+}
+
+run "rejects_accelerator_type_without_count" {
+  command = plan
+
+  variables {
+    project                  = "test"
+    project_id               = "test-project"
+    enable_serving           = true
+    model_garden_model       = "publishers/google/models/gemma3@gemma-3-1b-it"
+    serving_accelerator_type = "NVIDIA_L4"
+    # count left at its 0 default -> half-configured GPU request.
+  }
+
+  expect_failures = [google_vertex_ai_endpoint_with_model_garden_deployment.model_garden]
+}
+
+run "rejects_accelerator_count_without_type" {
+  command = plan
+
+  variables {
+    project                   = "test"
+    project_id                = "test-project"
+    enable_serving            = true
+    model_garden_model        = "publishers/google/models/gemma3@gemma-3-1b-it"
+    serving_accelerator_count = 2
+    # type left null -> half-configured GPU request.
+  }
+
+  expect_failures = [google_vertex_ai_endpoint_with_model_garden_deployment.model_garden]
 }
