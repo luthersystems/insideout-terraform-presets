@@ -76,6 +76,7 @@ type Components struct {
 	GCPCloudKMS         *bool  `json:"gcp_cloud_kms,omitempty"`
 	GCPSecretManager    *bool  `json:"gcp_secret_manager,omitempty"`
 	GCPVertexAI         *bool  `json:"gcp_vertex_ai,omitempty"`
+	GCPAgentEngine      *bool  `json:"gcp_agent_engine,omitempty"`
 	GCPPubSub           *bool  `json:"gcp_pubsub,omitempty"`
 	GCPCloudLogging     *bool  `json:"gcp_cloud_logging,omitempty"`
 	GCPCloudMonitoring  *bool  `json:"gcp_cloud_monitoring,omitempty"`
@@ -363,12 +364,28 @@ type Config struct {
 		NumServers  string `json:"numServers,omitempty"`
 		MachineType string `json:"machineType,omitempty"`
 		DiskSizeGb  int    `json:"diskSizeGb,omitempty"`
+		// GPU attachment (#767). GPUType is an NVIDIA accelerator type that
+		// attaches to an N1 machine via guest_accelerator (e.g. nvidia-tesla-t4);
+		// GPUCount is how many. Either field signals "attach a GPU" — the mapper
+		// fills the other from a default and forces on_host_maintenance=TERMINATE.
+		// Only N1 machines accept attached GPUs; A2/A3/A4/G2/G4 bundle their GPU
+		// with the machine type, so setting GPUType there is rejected.
+		GPUType  string `json:"gpuType,omitempty"`
+		GPUCount int    `json:"gpuCount,omitempty"`
 	} `json:"gcp_compute,omitempty"`
 
 	GCPGKE *struct {
 		Regional    *bool  `json:"regional,omitempty"`
 		NodeCount   string `json:"nodeCount,omitempty"`
 		MachineType string `json:"machineType,omitempty"`
+		// GPU node pool (#767). GPUType is an NVIDIA accelerator type that
+		// attaches to an N1 node machine via the node pool's accelerator config
+		// (e.g. nvidia-tesla-t4); GPUCount is per-node. Either field signals "GPU
+		// node pool" — the mapper fills the other from a default and enables GKE
+		// auto driver install. Only N1 node machines accept attached accelerators;
+		// A2/A3/A4/G2/G4 bundle their GPU, so setting GPUType there is rejected.
+		GPUType  string `json:"gpuType,omitempty"`
+		GPUCount int    `json:"gpuCount,omitempty"`
 	} `json:"gcp_gke,omitempty"`
 
 	GCPCloudSQL *struct {
@@ -387,17 +404,43 @@ type Config struct {
 		Versioning   *bool  `json:"versioning,omitempty"`
 	} `json:"gcp_gcs,omitempty"`
 
-	// GCPVertexAI carries the caller-supplied Vertex AI configuration (#764).
+	// GCPVertexAI carries the caller-supplied Vertex AI configuration (#764,
+	// #768).
+	//
 	// EnableVectorSearch gates the Vector Search resources (index + endpoint +
 	// deployed index) in the gcp/vertex_ai preset; the dataset is always
 	// created. IndexDimensions is the embedding dimensionality of the Vector
-	// Search index (immutable — changing it forces destroy/recreate). Both are
-	// partial-config: the mapper only emits a field the caller actually
-	// populated so the preset's own defaults win when left unset.
+	// Search index (immutable — changing it forces destroy/recreate).
+	//
+	// EnableServing (#768) gates a serving endpoint; ModelGardenModel, when
+	// set alongside EnableServing, deploys that open Model Garden model
+	// (publishers/<pub>/models/<model>@<version>) onto a managed endpoint.
+	// ModelGardenAcceptEULA records the operator's acceptance of the model's
+	// EULA/ToS; EULA-gated open models (Gemma, Llama) will not deploy unless it
+	// is true. It defaults to the preset's explicit-consent false when unset.
+	// Vector Search and serving are orthogonal flags.
+	//
+	// Every field is partial-config: the mapper only emits a field the caller
+	// actually populated so the preset's own defaults win when left unset.
 	GCPVertexAI *struct {
-		EnableVectorSearch *bool `json:"enableVectorSearch,omitempty"`
-		IndexDimensions    int   `json:"indexDimensions,omitempty"`
+		EnableVectorSearch    *bool  `json:"enableVectorSearch,omitempty"`
+		IndexDimensions       int    `json:"indexDimensions,omitempty"`
+		EnableServing         *bool  `json:"enableServing,omitempty"`
+		ModelGardenModel      string `json:"modelGardenModel,omitempty"`
+		ModelGardenAcceptEULA *bool  `json:"modelGardenAcceptEula,omitempty"`
 	} `json:"gcp_vertex_ai,omitempty"`
+
+	// GCPAgentEngine carries the caller-supplied Vertex AI Agent Engine
+	// configuration (#769). DisplayName overrides the preset's project-prefixed
+	// default for the Reasoning Engine. The packaged-artifact URI / staging
+	// bucket are not modeled here: the artifact is built by the application
+	// layer and its URI is supplied directly to the preset, and staging_bucket
+	// is wired by DefaultWiring from gcp/gcs. Partial-config: the mapper only
+	// emits a field the caller actually populated so the preset's own defaults
+	// win when left unset.
+	GCPAgentEngine *struct {
+		DisplayName string `json:"displayName,omitempty"`
+	} `json:"gcp_agent_engine,omitempty"`
 
 	GCPPubSub *struct {
 		MessageRetentionDuration string `json:"messageRetentionDuration,omitempty"`
@@ -670,6 +713,7 @@ func (c *Components) Normalize() {
 		c.GCPCloudKMS = nil
 		c.GCPSecretManager = nil
 		c.GCPVertexAI = nil
+		c.GCPAgentEngine = nil
 		c.GCPPubSub = nil
 		c.GCPCloudLogging = nil
 		c.GCPCloudMonitoring = nil
@@ -773,7 +817,7 @@ func (c *Config) Normalize() {
 	}
 	switch c.Cloud {
 	case "AWS":
-		// Clear every GCP sub-config (15 fields — keep in sync with the
+		// Clear every GCP sub-config (18 fields — keep in sync with the
 		// GCPConfiguration section of the Config struct).
 		c.GCPCompute = nil
 		c.GCPGKE = nil
@@ -781,6 +825,7 @@ func (c *Config) Normalize() {
 		c.GCPMemorystore = nil
 		c.GCPGCS = nil
 		c.GCPVertexAI = nil
+		c.GCPAgentEngine = nil
 		c.GCPPubSub = nil
 		c.GCPCloudLogging = nil
 		c.GCPCloudRun = nil

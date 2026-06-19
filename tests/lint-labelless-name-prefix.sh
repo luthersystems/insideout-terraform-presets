@@ -131,6 +131,14 @@ EXEMPT_LABELLESS_GCP=(
   # dashboard_json carries operator-defined display labels. Project-
   # scoped via API parent (`projects/<id>`).
   google_monitoring_dashboard
+  # google_vertex_ai_endpoint_with_model_garden_deployment — a one-shot
+  # Model Garden deploy keyed by publisher_model_name + location; it has
+  # NO name/display_name/account_id field to carry var.project (the
+  # managed endpoint it creates is named server-side). The sibling bare
+  # google_vertex_ai_endpoint.serving DOES carry the var.project prefix.
+  # Inspector attribution flows through the project-scoped Vertex API
+  # path (`projects/<id>/locations/<loc>/endpoints`).
+  google_vertex_ai_endpoint_with_model_garden_deployment
 )
 
 # Build regex patterns from the arrays.

@@ -37,11 +37,17 @@ variable "alarm_threshold_overrides" {
 locals {
   _obs_user_labels = { project = var.project, severity = var.alarm_severity }
   _obs_thresholds = merge({
-    query_latency_p99_ms = 500
+    query_latency_p99_ms      = 500
+    prediction_latency_p99_ms = 2000
+    prediction_error_rate     = 1
   }, var.alarm_threshold_overrides)
 
   # Alarms only make sense when Vector Search is serving queries.
   _obs_enabled = var.enable_observability && var.enable_vector_search
+
+  # Serving alarms (prediction latency / errors) only make sense when a serving
+  # endpoint exists. Gated on enable_serving, independent of Vector Search.
+  _obs_serving_enabled = var.enable_observability && var.enable_serving
 }
 
 resource "google_monitoring_alert_policy" "vector_search_query_latency_high" {
@@ -67,6 +73,68 @@ resource "google_monitoring_alert_policy" "vector_search_query_latency_high" {
       aggregations {
         alignment_period   = "60s"
         per_series_aligner = "ALIGN_PERCENTILE_99"
+      }
+    }
+  }
+
+  notification_channels = var.notification_channels
+  user_labels           = local._obs_user_labels
+}
+
+# --- Serving alarms (#768) --------------------------------------------------
+# Online-prediction latency + error alarms on the serving endpoint. Emitted
+# only when enable_serving (and observability) are on; the bare dataset / a
+# Vector-Search-only stack has no online-prediction surface to alarm on.
+#
+# Metric paths + monitored resource verified against Google's official metrics
+# list (cloud.google.com/monitoring/api/metrics_gcp_a_b#gcp-aiplatform) and the
+# pkg/observability `vertexai` catalog (registered in alarmedGCPMetrics so the
+# inspector flips Alarmed=true): prediction/online/prediction_latencies and
+# prediction/online/error_count, both reported on
+# aiplatform.googleapis.com/Endpoint.
+
+resource "google_monitoring_alert_policy" "serving_prediction_latency_high" {
+  for_each = local._obs_serving_enabled ? { "0" = true } : {}
+
+  project      = var.project_id
+  display_name = "${var.project}-vertex-prediction-latency"
+  combiner     = "OR"
+
+  conditions {
+    display_name = "Online prediction p99 latency above ${local._obs_thresholds["prediction_latency_p99_ms"]}ms"
+    condition_threshold {
+      filter          = "metric.type=\"aiplatform.googleapis.com/prediction/online/prediction_latencies\" AND resource.type=\"aiplatform.googleapis.com/Endpoint\""
+      duration        = "300s"
+      comparison      = "COMPARISON_GT"
+      threshold_value = local._obs_thresholds["prediction_latency_p99_ms"]
+      aggregations {
+        alignment_period   = "60s"
+        per_series_aligner = "ALIGN_PERCENTILE_99"
+      }
+    }
+  }
+
+  notification_channels = var.notification_channels
+  user_labels           = local._obs_user_labels
+}
+
+resource "google_monitoring_alert_policy" "serving_prediction_errors_high" {
+  for_each = local._obs_serving_enabled ? { "0" = true } : {}
+
+  project      = var.project_id
+  display_name = "${var.project}-vertex-prediction-errors"
+  combiner     = "OR"
+
+  conditions {
+    display_name = "Online prediction error rate above ${local._obs_thresholds["prediction_error_rate"]}/s"
+    condition_threshold {
+      filter          = "metric.type=\"aiplatform.googleapis.com/prediction/online/error_count\" AND resource.type=\"aiplatform.googleapis.com/Endpoint\""
+      duration        = "300s"
+      comparison      = "COMPARISON_GT"
+      threshold_value = local._obs_thresholds["prediction_error_rate"]
+      aggregations {
+        alignment_period   = "60s"
+        per_series_aligner = "ALIGN_RATE"
       }
     }
   }

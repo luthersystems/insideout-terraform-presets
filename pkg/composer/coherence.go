@@ -142,6 +142,8 @@ func ComponentSelected(c *Components, key ComponentKey) bool {
 		return boolPtrTrue(c.GCPSecretManager)
 	case KeyGCPVertexAI:
 		return boolPtrTrue(c.GCPVertexAI)
+	case KeyGCPAgentEngine:
+		return boolPtrTrue(c.GCPAgentEngine)
 	case KeyGCPPubSub:
 		return boolPtrTrue(c.GCPPubSub)
 	case KeyGCPCloudLogging:
@@ -331,7 +333,7 @@ func isOrphanStrippableKey(key ComponentKey) bool {
 		KeyGCPCompute, KeyGCPGKE, KeyGCPCloudRun,
 		KeyGCPCloudFunctions, KeyGCPLoadbalancer,
 		KeyGCPCloudSQL, KeyGCPMemorystore, KeyGCPGCS,
-		KeyGCPVertexAI,
+		KeyGCPVertexAI, KeyGCPAgentEngine,
 		KeyGCPPubSub, KeyGCPCloudLogging,
 		KeyGCPIdentityPlatform, KeyGCPAPIGateway, KeyGCPBackups,
 		KeyGCPCloudDNS, KeyGCPGitHubActions, KeyGCPCloudDeploy:

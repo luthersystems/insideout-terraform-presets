@@ -198,6 +198,7 @@ func (c *Client) ComputePresetDefaults(cfg Config, comps *Components, selected [
 	// instance type the mapper will actually deploy. Only fills when the user's
 	// own cfg left the instance type blank — an explicit pick is preserved.
 	applyGPUInstanceTypeDefault(&cfg, &out)
+	applyGCPGPUDefaults(&cfg, &out)
 
 	// NAT-gateway default for needs-private stacks (#393, reliable "Terraform
 	// Error" regression). The aws/vpc preset's enable_nat_gateway HCL default is
@@ -325,6 +326,50 @@ func applyGPUInstanceTypeDefault(cfg, out *Config) {
 			reflect.ValueOf(&out.AWSEKS).Elem().Set(v)
 		}
 		out.AWSEKS.InstanceType = defaultGPUInstanceType
+	}
+}
+
+// applyGCPGPUDefaults backfills the GCP GPU overlay so the pricing-facing Config
+// is self-consistent when a caller signalled GPU intent with a partial spec
+// (#767): supplying only GPUType leaves GPUCount blank, and supplying only
+// GPUCount leaves GPUType blank. The mapper fills the same blanks at compose
+// time (defaultGCPAccelerator / defaultGCPGPUCount); mirroring it here keeps the
+// overlay Config in sync with what actually deploys. Only fills when the user's
+// cfg signalled a GPU and left the paired field blank — explicit picks are
+// preserved (the overlay is merged zero-only downstream).
+func applyGCPGPUDefaults(cfg, out *Config) {
+	if cfg.GCPCompute != nil && (cfg.GCPCompute.GPUType != "" || cfg.GCPCompute.GPUCount > 0) {
+		if out.GCPCompute == nil {
+			v := reflect.New(reflect.TypeOf(out.GCPCompute).Elem())
+			reflect.ValueOf(&out.GCPCompute).Elem().Set(v)
+		}
+		if out.GCPCompute.GPUType == "" {
+			out.GCPCompute.GPUType = defaultGCPAccelerator
+		}
+		if out.GCPCompute.GPUCount == 0 {
+			out.GCPCompute.GPUCount = defaultGCPGPUCount
+		}
+	}
+	if cfg.GCPGKE != nil && (cfg.GCPGKE.GPUType != "" || cfg.GCPGKE.GPUCount > 0) {
+		if out.GCPGKE == nil {
+			v := reflect.New(reflect.TypeOf(out.GCPGKE).Elem())
+			reflect.ValueOf(&out.GCPGKE).Elem().Set(v)
+		}
+		if out.GCPGKE.GPUType == "" {
+			// GKE pairs a bundled accelerator-optimized family (g2/a2/a3/...) with
+			// its own GPU type; fall back to the shared N1 default only when the
+			// machine family has no bundled pairing (#752 review). Mirrors the
+			// mapper's defaultGKEGPUType so the pricing-facing overlay matches what
+			// deploys.
+			if def := defaultGKEGPUType(cfg.GCPGKE.MachineType); def != "" {
+				out.GCPGKE.GPUType = def
+			} else {
+				out.GCPGKE.GPUType = defaultGCPAccelerator
+			}
+		}
+		if out.GCPGKE.GPUCount == 0 {
+			out.GCPGKE.GPUCount = defaultGCPGPUCount
+		}
 	}
 }
 

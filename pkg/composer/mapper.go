@@ -1047,6 +1047,30 @@ func (m DefaultMapper) BuildModuleValues(
 			if cfg.GCPCompute.DiskSizeGb > 0 {
 				vals["disk_size_gb"] = cfg.GCPCompute.DiskSizeGb
 			}
+			// GPU instance (#767): VALIDATE, don't mask. Either GPUType or
+			// GPUCount signals "attach a GPU". On a Compute Engine VM, GCP only
+			// attaches GPUs via guest_accelerator on N1 machines; A2/A3/A4/G2/G4
+			// attach their GPU automatically by machine type (an explicit
+			// guest_accelerator is invalid there) and every other family takes
+			// none. Reject an incompatible machine type at compose time, and emit
+			// the GPU tfvars (canonical lower-case type) so the preset attaches
+			// the accelerator AND forces on_host_maintenance=TERMINATE (GCP rejects
+			// MIGRATE with a GPU).
+			if cfg.GCPCompute.GPUType != "" || cfg.GCPCompute.GPUCount > 0 {
+				if err := validateGCPComputeGPU(cfg.GCPCompute.MachineType, cfg.GCPCompute.GPUType, cfg.GCPCompute.GPUCount); err != nil {
+					return nil, err
+				}
+				gpuType := normalizeGPUType(cfg.GCPCompute.GPUType)
+				if gpuType == "" {
+					gpuType = defaultGCPAccelerator
+				}
+				gpuCount := cfg.GCPCompute.GPUCount
+				if gpuCount <= 0 {
+					gpuCount = defaultGCPGPUCount
+				}
+				vals["gpu_type"] = gpuType
+				vals["gpu_count"] = gpuCount
+			}
 		}
 
 	case KeyGCPGKE:
@@ -1066,6 +1090,29 @@ func (m DefaultMapper) BuildModuleValues(
 			}
 			if cfg.GCPGKE.Regional != nil {
 				vals["regional"] = *cfg.GCPGKE.Regional
+			}
+			// GPU node pool (#767, #752 review): VALIDATE, don't mask. Unlike a
+			// Compute VM, a GKE node pool DECLARES the accelerator even for the
+			// accelerator-optimized families — g2 pairs with nvidia-l4, a2 with
+			// nvidia-tesla-a100, a3 with nvidia-h100-80gb, etc. — and N1 attaches
+			// the T4/V100/P100/P4 accelerators. When a GPU is requested, emit the
+			// accelerator tfvars (canonical lower-case type); the preset wires them
+			// into the node pool's accelerator config and turns on GKE auto NVIDIA
+			// driver install (no in-cluster device-plugin work, unlike EKS).
+			if cfg.GCPGKE.GPUType != "" || cfg.GCPGKE.GPUCount > 0 {
+				if err := validateGCPGKEGPU(cfg.GCPGKE.MachineType, cfg.GCPGKE.GPUType, cfg.GCPGKE.GPUCount); err != nil {
+					return nil, err
+				}
+				gpuType := normalizeGPUType(cfg.GCPGKE.GPUType)
+				if gpuType == "" {
+					gpuType = defaultGKEGPUType(cfg.GCPGKE.MachineType)
+				}
+				gpuCount := cfg.GCPGKE.GPUCount
+				if gpuCount <= 0 {
+					gpuCount = defaultGCPGPUCount
+				}
+				vals["gpu_type"] = gpuType
+				vals["gpu_count"] = gpuCount
 			}
 		}
 
@@ -1127,6 +1174,36 @@ func (m DefaultMapper) BuildModuleValues(
 			}
 			if cfg.GCPVertexAI.IndexDimensions > 0 {
 				vals["index_dimensions"] = cfg.GCPVertexAI.IndexDimensions
+			}
+			// Serving (#768): orthogonal to Vector Search. enable_serving
+			// gates the endpoint; model_garden_model (when set) drives the
+			// Model Garden deployment. Same partial-config discipline: only
+			// emit a field the caller populated so the preset defaults
+			// (enable_serving=false, no model) win when left unset.
+			if cfg.GCPVertexAI.EnableServing != nil {
+				vals["enable_serving"] = *cfg.GCPVertexAI.EnableServing
+			}
+			if cfg.GCPVertexAI.ModelGardenModel != "" {
+				vals["model_garden_model"] = cfg.GCPVertexAI.ModelGardenModel
+			}
+			// EULA acceptance for EULA-gated open models (Gemma/Llama). Only
+			// emit when the caller explicitly set it so the preset's
+			// explicit-consent default (false) wins when left unset.
+			if cfg.GCPVertexAI.ModelGardenAcceptEULA != nil {
+				vals["model_garden_accept_eula"] = *cfg.GCPVertexAI.ModelGardenAcceptEULA
+			}
+		}
+
+	case KeyGCPAgentEngine:
+		// Vertex AI Agent Engine (#769). Partial-config: only emit a field the
+		// caller actually populated so the preset's own defaults win when left
+		// unset (display_name defaults to "<project>-agent-engine"). The
+		// packaged-artifact URI is app-layer (supplied via package_artifact_uri
+		// directly, not modeled in Config), and staging_bucket is wired by
+		// DefaultWiring from gcp/gcs — neither is emitted here.
+		if cfg != nil && cfg.GCPAgentEngine != nil {
+			if strings.TrimSpace(cfg.GCPAgentEngine.DisplayName) != "" {
+				vals["display_name"] = strings.TrimSpace(cfg.GCPAgentEngine.DisplayName)
 			}
 		}
 

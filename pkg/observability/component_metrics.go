@@ -84,6 +84,15 @@ var ComponentMetricsMapping = map[composer.ComponentKey]ComponentMetricsBinding{
 	// (#615 / #618) → sagemaker.list-domains.
 	composer.KeyAWSAppRunner: {Service: "apprunner", Action: "list-services"},
 	composer.KeyAWSSageMaker: {Service: "sagemaker", Action: "list-domains"},
+	// Kendra (#760): the index is the panel-default surface (the top-level
+	// entity that holds data sources + FAQs). kendra.list-indices resolves
+	// the IndexId dimension the AWS/Kendra CloudWatch namespace is keyed on.
+	composer.KeyAWSKendra: {Service: "kendra", Action: "list-indices"},
+	// Bedrock AgentCore Gateway (#763): the gateway is the panel-default
+	// surface. agentcore.list-gateways resolves the gateway ARN — the
+	// Resource dimension value the AWS/Bedrock-AgentCore CloudWatch namespace
+	// is keyed on — via a per-id GetGateway call.
+	composer.KeyAWSAgentCoreGateway: {Service: "agentcore", Action: "list-gateways"},
 	// GCP
 	composer.KeyGCPCompute:          {Service: "compute", Action: "list-instances"},
 	composer.KeyGCPGKE:              {Service: "gke", Action: "list-clusters"},
