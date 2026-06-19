@@ -122,10 +122,13 @@ ensure_go() {
 
 # Phase 1 (sync): base packages the parallel installers depend on. git-lfs is needed by
 # reliable's go tests (LFS-tracked tokenizer model); 'git lfs install' is system-wide here.
-log "installing base apt packages (incl. git-lfs)"
+# bubblewrap is codex's sandbox runtime -- without it on PATH codex warns on every invocation
+# and falls back to its bundled copy. Installed in this single synchronous transaction (not the
+# parallel phase) to avoid dpkg-lock contention with install_apt_extras.
+log "installing base apt packages (incl. git-lfs, bubblewrap)"
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -y
-apt-get install -y --no-install-recommends unzip jq ca-certificates curl gnupg git-lfs
+apt-get install -y --no-install-recommends unzip jq ca-certificates curl gnupg git-lfs bubblewrap
 git lfs install --system || true
 
 # Phase 2 (parallel): non-apt installers PLUS the single apt user (install_apt_extras).
@@ -154,4 +157,4 @@ install_gopls
 # Docker is preinstalled but its daemon won't be running in a fresh session VM. If a task
 # needs it, start it on demand: `sudo service docker start`. Not required for the standard
 # build/lint/test flow (Postgres is reached via POSTGRES_URL).
-log "setup complete: terraform, tflint, golangci-lint, gopls, go, codex, firecrawl-cli, vercel, op, gh, git-lfs installed"
+log "setup complete: terraform, tflint, golangci-lint, gopls, go, codex, firecrawl-cli, vercel, op, gh, git-lfs, bubblewrap installed"
