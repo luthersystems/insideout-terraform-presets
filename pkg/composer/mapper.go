@@ -1177,6 +1177,19 @@ func (m DefaultMapper) BuildModuleValues(
 			}
 		}
 
+	case KeyGCPAgentEngine:
+		// Vertex AI Agent Engine (#769). Partial-config: only emit a field the
+		// caller actually populated so the preset's own defaults win when left
+		// unset (display_name defaults to "<project>-agent-engine"). The
+		// packaged-artifact URI is app-layer (supplied via package_artifact_uri
+		// directly, not modeled in Config), and staging_bucket is wired by
+		// DefaultWiring from gcp/gcs — neither is emitted here.
+		if cfg != nil && cfg.GCPAgentEngine != nil {
+			if strings.TrimSpace(cfg.GCPAgentEngine.DisplayName) != "" {
+				vals["display_name"] = strings.TrimSpace(cfg.GCPAgentEngine.DisplayName)
+			}
+		}
+
 	case KeyGCPPubSub:
 		vals["topic_name"] = "events"
 		if cfg != nil && cfg.GCPPubSub != nil {
