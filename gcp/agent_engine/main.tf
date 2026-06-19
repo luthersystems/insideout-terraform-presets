@@ -110,8 +110,18 @@ resource "google_vertex_ai_reasoning_engine" "this" {
     # startswith — the missing-artifact case is already reported by the
     # precondition above, and Terraform evaluates every precondition.
     precondition {
-      condition = var.staging_bucket == null || var.package_artifact_uri == null || (
-        startswith(var.package_artifact_uri, "${trimsuffix(var.staging_bucket, "/")}/")
+      # Ternary, not `||`: Terraform does NOT short-circuit `||`, so a
+      # `var.staging_bucket == null || ... trimsuffix(var.staging_bucket, ...)`
+      # form still evaluates trimsuffix on a null bucket and errors with
+      # "argument must not be null" (the defaults_compose_engine case, where
+      # the bucket is unwired). Nesting ternaries guards trimsuffix behind the
+      # null checks so it only runs when both inputs are non-null.
+      condition = (
+        var.staging_bucket == null ? true : (
+          var.package_artifact_uri == null ? true : (
+            startswith(var.package_artifact_uri, "${trimsuffix(var.staging_bucket, "/")}/")
+          )
+        )
       )
       error_message = "package_artifact_uri must live under staging_bucket. Got artifact=\"${coalesce(var.package_artifact_uri, "<null>")}\" staging_bucket=\"${coalesce(var.staging_bucket, "<null>")}\". Stage the packaged object inside the wired bucket, or clear staging_bucket to use an absolute artifact URI."
     }

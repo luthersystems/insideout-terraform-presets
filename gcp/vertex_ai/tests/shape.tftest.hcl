@@ -357,7 +357,14 @@ run "serving_off_by_default" {
 }
 
 run "serving" {
-  command = plan
+  # apply, not plan: this run asserts on output.endpoint_id, which is sourced
+  # from google_vertex_ai_endpoint.serving[0].id — a provider-computed resource
+  # name (projects/<p>/locations/<l>/endpoints/<e>) that stays "known after
+  # apply" under mock_provider, so `output.endpoint_id != null` cannot be
+  # evaluated at plan ("Unknown condition value"). The mock provider materializes
+  # computed attributes on apply, making the wiring assertion evaluable. The
+  # input-derived asserts (name, display_name, location) hold identically.
+  command = apply
 
   variables {
     project        = "test"
@@ -437,7 +444,11 @@ run "serving" {
 }
 
 run "model_garden" {
-  command = plan
+  # apply, not plan: the endpoint_id / endpoint_name asserts below compare the
+  # outputs against the model-garden deployment's computed .id / .endpoint, which
+  # are "known after apply" under mock_provider (see run "serving"). Apply lets
+  # the mock provider materialize them so the source-wiring equality is evaluable.
+  command = apply
 
   variables {
     project            = "test"

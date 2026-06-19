@@ -14,18 +14,21 @@
 # is therefore intentionally NOT listed in PricingDependencies[gcp_cloud_
 # monitoring] (no emitter to wire), mirroring gcp/vertex_ai's dataset-only path.
 
+# tflint-ignore: terraform_unused_declarations  # contract-surface var (issue #204): no alert policy is emitted yet (the Reasoning Engine has no catalog-registered Cloud Monitoring metric in this repo — see header), so the module body does not reference it. Declared for parity with the other GCP presets' observability surface.
 variable "enable_observability" {
   description = "When true, emit per-component Cloud Monitoring alert policies (issue #204). No-op today — the Reasoning Engine has no catalog-registered metric yet."
   type        = bool
   default     = true
 }
 
+# tflint-ignore: terraform_unused_declarations  # contract-surface var (issue #204): unused until a Reasoning Engine alarm is catalog-registered and an alert policy references these channels.
 variable "notification_channels" {
   description = "Cloud Monitoring notification channel names alert policies would page. Unused until a Reasoning Engine alarm is catalog-registered."
   type        = list(string)
   default     = []
 }
 
+# tflint-ignore: terraform_unused_declarations  # contract-surface var (issue #204): the severity tag is attached to alert policies, of which none are emitted yet; the validation still guards the input shape.
 variable "alarm_severity" {
   description = "Severity tag that would be attached to alert policies."
   type        = string
@@ -37,6 +40,7 @@ variable "alarm_severity" {
   }
 }
 
+# tflint-ignore: terraform_unused_declarations  # contract-surface var (issue #204): per-metric threshold overrides for the future alert policies described in the header; unreferenced until they land.
 variable "alarm_threshold_overrides" {
   description = "Per-metric numeric threshold overrides for future alert policies."
   type        = map(number)
