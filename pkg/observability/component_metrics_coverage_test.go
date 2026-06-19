@@ -49,6 +49,14 @@ var metricsDeferredKeys = map[composer.ComponentKey]string{
 	// Backfill alongside the inspector landing (mirrors the #622 backfill
 	// of apprunner + sagemaker after #618 / #620 added their inspectors).
 	composer.KeyAWSCodeBuild: "[#619] discovery inspector deferred; ComponentMetricsMapping entry pending the codebuild.list-projects handler registration alongside the inspector backfill PR",
+	// Agent Engine (#769). google_vertex_ai_reasoning_engine is deploy-only
+	// (landed in hashicorp/google v7.6.0; this repo's discovery/import schema
+	// pin is 6.10), so there is no reasoning-engine discovery inspector or
+	// vertexai.list-reasoning-engines handler registered in GCPServiceActions
+	// yet. A ComponentMetricsMapping entry would dispatch to an unregistered
+	// service and surface "unsupported service" at runtime. Backfill alongside
+	// the inspector landing once the schema pin advances past 7.6.
+	composer.KeyGCPAgentEngine: "[#769] reasoning-engine discovery inspector deferred; resource is deploy-only on provider >= 7.6 (repo schema pinned 6.10), no vertexai.list-reasoning-engines handler registered yet",
 }
 
 // metricsNonComponentKeys are AllComponentKeys entries that genuinely

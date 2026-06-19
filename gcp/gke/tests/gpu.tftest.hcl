@@ -232,7 +232,7 @@ run "gpu_on_bundled_g2_with_mismatched_type_fails_pairing" {
     services_range_name = "svcs"
     regional            = false
     node_zones          = ["us-central1-a"]
-    machine_type        = "g2-standard-4"  # G2 pairs with nvidia-l4 only
+    machine_type        = "g2-standard-4"     # G2 pairs with nvidia-l4 only
     gpu_type            = "nvidia-tesla-a100" # A100 is an A2 GPU — wrong pairing
   }
 

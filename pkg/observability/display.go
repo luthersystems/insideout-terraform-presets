@@ -181,6 +181,8 @@ func ComponentDisplayName(key composer.ComponentKey) string {
 		return "GCP Identity Platform"
 	case composer.KeyGCPVertexAI:
 		return "GCP Vertex AI"
+	case composer.KeyGCPAgentEngine:
+		return "GCP Agent Engine"
 	case composer.KeyGCPBastion:
 		return "GCP Bastion"
 	case composer.KeyGCPAPIGateway:
