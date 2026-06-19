@@ -85,6 +85,64 @@ func configWithAWSEKS(in awsEKSCfgInput) *Config {
 	}
 }
 
+// gcpComputeCfgInput mirrors the subset of Config.GCPCompute fields exercised
+// by GPU mapper tests (#767).
+type gcpComputeCfgInput struct {
+	MachineType string
+	DiskSizeGb  int
+	GPUType     string
+	GPUCount    int
+}
+
+// configWithGCPCompute returns *Config with GCPCompute populated from input,
+// eliding the anonymous-struct redeclaration at each call site.
+func configWithGCPCompute(in gcpComputeCfgInput) *Config {
+	return &Config{
+		GCPCompute: &struct {
+			NumServers  string `json:"numServers,omitempty"`
+			MachineType string `json:"machineType,omitempty"`
+			DiskSizeGb  int    `json:"diskSizeGb,omitempty"`
+			GPUType     string `json:"gpuType,omitempty"`
+			GPUCount    int    `json:"gpuCount,omitempty"`
+		}{
+			MachineType: in.MachineType,
+			DiskSizeGb:  in.DiskSizeGb,
+			GPUType:     in.GPUType,
+			GPUCount:    in.GPUCount,
+		},
+	}
+}
+
+// gcpGKECfgInput mirrors the subset of Config.GCPGKE fields exercised by GPU
+// mapper tests (#767).
+type gcpGKECfgInput struct {
+	Regional    *bool
+	NodeCount   string
+	MachineType string
+	GPUType     string
+	GPUCount    int
+}
+
+// configWithGCPGKE returns *Config with GCPGKE populated from input, eliding the
+// anonymous-struct redeclaration at each call site.
+func configWithGCPGKE(in gcpGKECfgInput) *Config {
+	return &Config{
+		GCPGKE: &struct {
+			Regional    *bool  `json:"regional,omitempty"`
+			NodeCount   string `json:"nodeCount,omitempty"`
+			MachineType string `json:"machineType,omitempty"`
+			GPUType     string `json:"gpuType,omitempty"`
+			GPUCount    int    `json:"gpuCount,omitempty"`
+		}{
+			Regional:    in.Regional,
+			NodeCount:   in.NodeCount,
+			MachineType: in.MachineType,
+			GPUType:     in.GPUType,
+			GPUCount:    in.GPUCount,
+		},
+	}
+}
+
 // awsCognitoCfgInput mirrors the subset of Config.AWSCognito fields exercised
 // by mapper / validator tests.
 type awsCognitoCfgInput struct {

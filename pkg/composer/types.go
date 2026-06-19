@@ -363,12 +363,28 @@ type Config struct {
 		NumServers  string `json:"numServers,omitempty"`
 		MachineType string `json:"machineType,omitempty"`
 		DiskSizeGb  int    `json:"diskSizeGb,omitempty"`
+		// GPU attachment (#767). GPUType is an NVIDIA accelerator type that
+		// attaches to an N1 machine via guest_accelerator (e.g. nvidia-tesla-t4);
+		// GPUCount is how many. Either field signals "attach a GPU" — the mapper
+		// fills the other from a default and forces on_host_maintenance=TERMINATE.
+		// Only N1 machines accept attached GPUs; A2/A3/A4/G2/G4 bundle their GPU
+		// with the machine type, so setting GPUType there is rejected.
+		GPUType  string `json:"gpuType,omitempty"`
+		GPUCount int    `json:"gpuCount,omitempty"`
 	} `json:"gcp_compute,omitempty"`
 
 	GCPGKE *struct {
 		Regional    *bool  `json:"regional,omitempty"`
 		NodeCount   string `json:"nodeCount,omitempty"`
 		MachineType string `json:"machineType,omitempty"`
+		// GPU node pool (#767). GPUType is an NVIDIA accelerator type that
+		// attaches to an N1 node machine via the node pool's accelerator config
+		// (e.g. nvidia-tesla-t4); GPUCount is per-node. Either field signals "GPU
+		// node pool" — the mapper fills the other from a default and enables GKE
+		// auto driver install. Only N1 node machines accept attached accelerators;
+		// A2/A3/A4/G2/G4 bundle their GPU, so setting GPUType there is rejected.
+		GPUType  string `json:"gpuType,omitempty"`
+		GPUCount int    `json:"gpuCount,omitempty"`
 	} `json:"gcp_gke,omitempty"`
 
 	GCPCloudSQL *struct {
