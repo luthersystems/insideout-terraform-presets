@@ -110,6 +110,43 @@ resource "google_compute_firewall" "allow_ssh_iap" {
   source_ranges = ["35.235.240.0/20"]
 }
 
+# Private Services Access (servicenetworking) peering — issue #774.
+#
+# A reserved VPC_PEERING range + a google_service_networking_connection so a
+# fully private Vertex AI index endpoint (#764/#600) — and private-IP CloudSQL/
+# Memorystore that consume this VPC — can reach Google-managed services over a
+# VPC peering. Gated on var.enable_service_networking (off by default: the
+# public-endpoint paths need none of this). When gcp/vpc owns the peering, all
+# consumers of this network share one range instead of each provisioning their
+# own (gcp/cloudsql still provisions its own when it owns the network).
+resource "google_compute_global_address" "private_service_access" {
+  count = var.enable_service_networking ? 1 : 0
+
+  name          = "${var.project}-psa-${random_id.suffix.hex}"
+  project       = var.project_id
+  purpose       = "VPC_PEERING"
+  address_type  = "INTERNAL"
+  prefix_length = var.service_networking_prefix_length
+  network       = module.vpc.network_id
+
+  labels = merge(
+    {
+      project = var.project
+    },
+    var.labels
+  )
+}
+
+resource "google_service_networking_connection" "private_vpc_connection" {
+  count = var.enable_service_networking ? 1 : 0
+
+  network = module.vpc.network_id
+  service = "servicenetworking.googleapis.com"
+  # try() guards the empty-tuple plan-time reference when the gate is off
+  # (issue #178 pattern); count already prevents instantiation.
+  reserved_peering_ranges = [try(google_compute_global_address.private_service_access[0].name, null)]
+}
+
 # Serverless VPC Access Connector for Cloud Run / Cloud Functions
 resource "google_vpc_access_connector" "serverless" {
   count = var.enable_serverless_connector ? 1 : 0

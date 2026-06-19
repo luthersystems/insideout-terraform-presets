@@ -1322,10 +1322,18 @@ func DefaultWiring(selected map[ComponentKey]bool, k ComponentKey, comps *Compon
 		// actually requires (it cannot accept the project-ID form), so the wire
 		// stays vpc_id and the form conversion lives in the preset. The endpoint
 		// is still PUBLIC unless the operator also sets enable_private_endpoint
-		// (the private path needs #774 PSC peering that gcp/vpc lacks today).
+		// (the private path consumes the #774 PSC peering wired below).
 		if selected[KeyGCPVPC] {
 			wi.RawHCL["network"] = WireRef(KeyGCPVPC, "vpc_id")
 			wi.Names = append(wi.Names, "network")
+			// Servicenetworking PSC peering (#774). gcp/vpc provisions the
+			// peering range when its enable_service_networking flag is set;
+			// wiring the connection id orders a private index endpoint after
+			// the peering and lets the preset fail loud at plan time if a
+			// private endpoint is requested without it. Null on the public
+			// path (the default), which needs no peering.
+			wi.RawHCL["service_networking_connection"] = WireRef(KeyGCPVPC, "service_networking_connection_id")
+			wi.Names = append(wi.Names, "service_networking_connection")
 		}
 		// When GCS is selected, seed the index from a dedicated prefix under the
 		// bucket rather than the bucket root. bucket_url is the gs://<bucket>

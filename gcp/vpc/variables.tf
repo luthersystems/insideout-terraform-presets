@@ -114,3 +114,34 @@ variable "connector_max_instances" {
   }
 }
 
+# Private Services Access / servicenetworking peering (issue #774). A fully
+# private Vertex AI index endpoint (#764/#600) requires the consumer VPC to
+# have a servicenetworking.googleapis.com private connection: a reserved
+# VPC_PEERING global address + a google_service_networking_connection. gcp/vpc
+# does not provision this today, so #773's private-endpoint path needs the
+# peering created out-of-band. This lets gcp/vpc own one shared peering range
+# that the Vertex private endpoint (and private-IP CloudSQL/Memorystore) can
+# consume. Off by default — the public-endpoint paths need none of it.
+variable "enable_service_networking" {
+  description = "Create a Private Services Access (servicenetworking) peering on this VPC: a reserved VPC_PEERING range + a google_service_networking_connection. Required for fully private Vertex AI index endpoints (#774/#600) and any managed service that consumes this VPC's peering for private IP. Default false (public paths need none of it)."
+  type        = bool
+  default     = false
+}
+
+variable "service_networking_prefix_length" {
+  description = "Prefix length of the reserved VPC_PEERING range allocated for Private Services Access. GCP requires /8../30; /16 (the default) matches the gcp/cloudsql reservation."
+  type        = number
+  default     = 16
+
+  validation {
+    condition     = var.service_networking_prefix_length >= 8 && var.service_networking_prefix_length <= 30
+    error_message = "service_networking_prefix_length must be between 8 and 30."
+  }
+}
+
+variable "labels" {
+  description = "Resource labels merged with the standard { project = var.project } identity label on label-capable resources (e.g. the Private Services Access range)."
+  type        = map(string)
+  default     = {}
+}
+

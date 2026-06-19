@@ -136,6 +136,9 @@ run "vector_search_private_opt_in" {
     # Project-ID full path: the parser must keep the network NAME and the
     # rebuild must swap the project ID for the pinned project NUMBER.
     network = "projects/test-project/global/networks/test-vpc"
+    # Private path requires the servicenetworking PSC peering (#774) — supplied
+    # here as it would be wired from gcp/vpc.service_networking_connection_id.
+    service_networking_connection = "projects/test-project/global/networks/test-vpc/serviceNetworkingConnections/servicenetworking-googleapis-com"
   }
 
   # network + enable_private_endpoint -> private endpoint (public disabled).
@@ -173,6 +176,8 @@ run "vector_search_private_bare_network_name" {
     enable_vector_search    = true
     enable_private_endpoint = true
     network                 = "my-vpc"
+    # Private path requires the servicenetworking PSC peering (#774).
+    service_networking_connection = "projects/test-project/global/networks/my-vpc/serviceNetworkingConnections/servicenetworking-googleapis-com"
   }
 
   assert {
@@ -201,6 +206,26 @@ run "vector_search_private_opt_in_without_network_stays_public" {
     condition     = google_vertex_ai_index_endpoint.this[0].network == null
     error_message = "endpoint network must be null when no network is wired, regardless of enable_private_endpoint."
   }
+}
+
+# Issue #774: a private (VPC-peered) endpoint requires the servicenetworking PSC
+# peering. When a network is wired AND enable_private_endpoint is set but no
+# service_networking_connection is supplied, the fail-loud precondition must
+# reject the plan rather than let a live apply hang ~30-90min into the
+# deployed-index step.
+run "private_endpoint_without_service_networking_fails" {
+  command = plan
+
+  variables {
+    project                 = "test"
+    project_id              = "test-project"
+    enable_vector_search    = true
+    enable_private_endpoint = true
+    network                 = "projects/test-project/global/networks/test-vpc"
+    # service_networking_connection deliberately left null.
+  }
+
+  expect_failures = [google_vertex_ai_index_endpoint.this]
 }
 
 run "vector_search_public_endpoint_without_network" {
