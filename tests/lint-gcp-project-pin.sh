@@ -66,8 +66,10 @@ REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 # scoped by a parent reference. Keep sorted alphabetically with a
 # one-line rationale identifying the parent attribute.
 EXEMPT_PROJECT_PIN_GCP=(
+  google_document_ai_processor_default_version  # parent: processor (gcp/document_ai/main.tf; no project attr in provider schema)
   google_kms_crypto_key                 # parent: key_ring (gcp/kms/main.tf:82,103)
   google_kms_crypto_key_iam_binding     # parent: crypto_key_id (gcp/kms/main.tf:126)
+  google_model_armor_floorsetting       # parent: parent=projects/<id>/locations/<loc> (gcp/model_armor/main.tf; no project attr in provider schema)
   google_secret_manager_secret_version  # parent: secret (gcp/cloud_build, gcp/secretmanager)
   google_service_account_iam_binding    # parent: service_account_id (gcp/github_actions/main.tf, #597)
   google_service_networking_connection  # parent: network (gcp/cloudsql/main.tf:41)

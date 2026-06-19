@@ -93,6 +93,8 @@ const (
 	KeyGCPFirestore        ComponentKey = "gcp_firestore"
 	KeyGCPVertexAI         ComponentKey = "gcp_vertex_ai"
 	KeyGCPAgentEngine      ComponentKey = "gcp_agent_engine"
+	KeyGCPDocumentAI       ComponentKey = "gcp_document_ai"
+	KeyGCPModelArmor       ComponentKey = "gcp_model_armor"
 	KeyGCPCloudArmor       ComponentKey = "gcp_cloud_armor"
 	KeyGCPAPIGateway       ComponentKey = "gcp_api_gateway"
 	KeyGCPBackups          ComponentKey = "gcp_backups"
@@ -189,6 +191,12 @@ var ComposeOrder = []ComponentKey{
 	// caller-supplied artifact URI (public by default; PSC-private networking
 	// is out of scope until gcp/vpc provisions a network attachment).
 	KeyGCPAgentEngine,
+	// Document AI (#765) and Model Armor (#766) compose adjacent to the Vertex
+	// keys. Both are standalone (no hard ImplicitDependency): Document AI's
+	// optional GCS input bucket is app-layer, and Model Armor templates are
+	// project-level. Ordering is not significant for either.
+	KeyGCPDocumentAI,
+	KeyGCPModelArmor,
 	// App Runner (#598 row 2). Independent of EKS/ECS/Lambda compute
 	// keys — App Runner is a peer managed-container service (Cloud Run
 	// analog), not a downstream consumer of them. Position adjacent to
@@ -282,6 +290,8 @@ var ModulePath = map[ComponentKey]string{
 	KeyGCPSecretManager:    "gcp/secret_manager",
 	KeyGCPVertexAI:         "gcp/vertex_ai",
 	KeyGCPAgentEngine:      "gcp/agent_engine",
+	KeyGCPDocumentAI:       "gcp/document_ai",
+	KeyGCPModelArmor:       "gcp/model_armor",
 	KeyGCPPubSub:           "gcp/pubsub",
 	KeyGCPCloudLogging:     "gcp/cloud_logging",
 	KeyGCPCloudMonitoring:  "gcp/cloud_monitoring",
@@ -513,6 +523,8 @@ var PresetKeyMap = map[ComponentKey]string{
 	KeyGCPCloudMonitoring:      "cloud_monitoring",
 	KeyGCPVertexAI:             "vertex_ai",
 	KeyGCPAgentEngine:          "agent_engine",
+	KeyGCPDocumentAI:           "document_ai",
+	KeyGCPModelArmor:           "model_armor",
 	KeyGCPCloudBuild:           "cloud_build",
 	KeyGCPFirestore:            "firestore",
 	KeyGCPCloudArmor:           "cloud_armor",
@@ -637,6 +649,7 @@ var AllComponentKeys = []ComponentKey{
 	KeyGCPCloudRun,
 	KeyGCPCloudSQL,
 	KeyGCPCompute,
+	KeyGCPDocumentAI,
 	KeyGCPFirestore,
 	KeyGCPGCS,
 	KeyGCPGKE,
@@ -644,6 +657,7 @@ var AllComponentKeys = []ComponentKey{
 	KeyGCPIdentityPlatform,
 	KeyGCPLoadbalancer,
 	KeyGCPMemorystore,
+	KeyGCPModelArmor,
 	KeyGCPPubSub,
 	KeyGCPSecretManager,
 	KeyGCPVPC,

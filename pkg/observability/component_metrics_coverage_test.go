@@ -57,6 +57,15 @@ var metricsDeferredKeys = map[composer.ComponentKey]string{
 	// service and surface "unsupported service" at runtime. Backfill alongside
 	// the inspector landing once the schema pin advances past 7.6.
 	composer.KeyGCPAgentEngine: "[#769] reasoning-engine discovery inspector deferred; resource is deploy-only on provider >= 7.6 (repo schema pinned 6.10), no vertexai.list-reasoning-engines handler registered yet",
+	// Document AI (#765). No documentai discovery inspector or
+	// documentai.list-processors handler is registered in GCPServiceActions
+	// yet; a ComponentMetricsMapping entry would dispatch to an unregistered
+	// service. Backfill alongside a documentai inspector landing.
+	composer.KeyGCPDocumentAI: "[#765] document-ai discovery inspector deferred; no documentai.list-processors handler registered in GCPServiceActions yet",
+	// Model Armor (#766). google_model_armor_* are newer/region-limited and
+	// not in this repo's discovery/import schema pin; no modelarmor inspector
+	// or list-templates handler is registered. Backfill alongside the inspector.
+	composer.KeyGCPModelArmor: "[#766] model-armor discovery inspector deferred; resource is newer/region-limited (repo schema pinned 6.10), no modelarmor.list-templates handler registered yet",
 }
 
 // metricsNonComponentKeys are AllComponentKeys entries that genuinely

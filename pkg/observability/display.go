@@ -183,6 +183,10 @@ func ComponentDisplayName(key composer.ComponentKey) string {
 		return "GCP Vertex AI"
 	case composer.KeyGCPAgentEngine:
 		return "GCP Agent Engine"
+	case composer.KeyGCPDocumentAI:
+		return "GCP Document AI"
+	case composer.KeyGCPModelArmor:
+		return "GCP Model Armor"
 	case composer.KeyGCPBastion:
 		return "GCP Bastion"
 	case composer.KeyGCPAPIGateway:
