@@ -106,7 +106,7 @@ block:
     "SessionStart": [
       {
         "hooks": [
-          { "type": "command", "command": "bash \"$CLAUDE_PROJECT_DIR/scripts/cloud-session-start.sh\"" }
+          { "type": "command", "command": "bash \"${CLAUDE_PROJECT_DIR:-.}/scripts/cloud-session-start.sh\"" }
         ]
       }
     ]
@@ -122,6 +122,13 @@ block:
 - `firecrawl@claude-plugins-official` is a bundled Anthropic marketplace, so it needs no
   `extraKnownMarketplaces` entry. Needs `FIRECRAWL_API_KEY` (op-injected) +
   `api.firecrawl.dev` in the allowlist.
+- **Use `${CLAUDE_PROJECT_DIR:-.}`, not `$CLAUDE_PROJECT_DIR`, in the hook command.** Local
+  Claude Code exports `CLAUDE_PROJECT_DIR`, but the cloud / remote-execution harness (CCR)
+  does **not** — with the bare variable the command expands to `bash "/scripts/…"`, a path
+  that does not exist, so the SessionStart hook silently no-ops and codex auth + the
+  `codex`/`claude-config` plugins (incl. the `/codex:review` skill) never install. The
+  `:-.` fallback resolves to the session cwd (the repo root); the script additionally
+  re-derives its root from `BASH_SOURCE`.
 
 ## How it fits together at session start
 

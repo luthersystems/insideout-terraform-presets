@@ -10,7 +10,18 @@
 #
 set -uo pipefail
 
-ROOT="${CLAUDE_PROJECT_DIR:-.}"
+# Resolve the repo root robustly. Local Claude Code exports CLAUDE_PROJECT_DIR;
+# the Claude-Code-on-the-web / remote-execution harness (CCR) does NOT, and it
+# invokes hooks with that variable unset. The settings.json hook used to call
+# `bash "$CLAUDE_PROJECT_DIR/scripts/cloud-session-start.sh"`, which under CCR
+# expanded to `bash "/scripts/cloud-session-start.sh"` — a path that does not
+# exist — so the whole hook silently no-oped (no secret injection, no codex
+# auth, no plugin install). settings.json now passes `${CLAUDE_PROJECT_DIR:-.}`,
+# and here we additionally derive the root from this script's own location so
+# the body is correct no matter the caller's cwd.
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" 2>/dev/null && pwd)"
+ROOT="${CLAUDE_PROJECT_DIR:-$(cd "${SCRIPT_DIR}/.." 2>/dev/null && pwd)}"
+ROOT="${ROOT:-.}"
 
 # Pre-warm Go modules so the first build/test is fast. Cheap locally; useful on a fresh
 # cloud VM. Non-fatal.
