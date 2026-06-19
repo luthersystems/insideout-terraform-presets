@@ -212,7 +212,10 @@ run "vector_search_private_opt_in_without_network_stays_public" {
 # peering. When a network is wired AND enable_private_endpoint is set but no
 # service_networking_connection is supplied, the fail-loud precondition must
 # reject the plan rather than let a live apply hang ~30-90min into the
-# deployed-index step.
+# deployed-index step. The SATISFIED (positive) path is covered by the two
+# private runs above (vector_search_private_opt_in, vector_search_private_bare_
+# network_name): both supply service_networking_connection and plan successfully,
+# so this run isolates the single missing input the precondition guards.
 run "private_endpoint_without_service_networking_fails" {
   command = plan
 
