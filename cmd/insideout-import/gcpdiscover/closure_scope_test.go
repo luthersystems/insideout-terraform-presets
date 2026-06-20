@@ -127,6 +127,45 @@ func TestDiscoverTypes_ParentScopeNarrowsToSelectedParents(t *testing.T) {
 	}
 }
 
+// TestDiscoverTypes_ParentScopeExactFiltersSubstringCollisions proves the
+// client-side exact filter (filterToSelectedParents) defends against the
+// substring nature of the CAI `name:` operator: a `name:io-uploads` query can
+// still return "io-uploads-backup" / "my-io-uploads" of the same asset type,
+// and because the scoped query drops the labels.project clause those rows are
+// not otherwise excluded. Only the exactly-named parent must survive into the
+// closure — otherwise unselected parents leak and fan out child discovery.
+// Regression guard for the #777 codex-review finding.
+func TestDiscoverTypes_ParentScopeExactFiltersSubstringCollisions(t *testing.T) {
+	t.Parallel()
+	fake := &fakeAssetSearcher{
+		// CAI `name:io-uploads` is a substring match, so the server returns
+		// the selected bucket AND its substring neighbors.
+		results: []gcpAssetResult{
+			{Name: "//storage.googleapis.com/buckets/io-uploads-backup", AssetType: storageBucketAssetType, Location: "us"},
+			{Name: "//storage.googleapis.com/buckets/io-uploads", AssetType: storageBucketAssetType, Location: "us"},
+			{Name: "//storage.googleapis.com/buckets/my-io-uploads", AssetType: storageBucketAssetType, Location: "us"},
+		},
+	}
+	g := NewGCPDiscoverer(fake, "real-proj", GCPDiscovererOpts{})
+
+	got, err := g.DiscoverTypes(context.Background(), []string{"google_storage_bucket"}, DiscoverArgs{
+		Project: "io-foo",
+		Regions: []string{"us"},
+		ParentScope: NewParentScope(map[string][]ScopedParent{
+			storageBucketAssetType: {{Name: "io-uploads", Location: "us"}},
+		}),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("discovered %d resources, want exactly 1 (substring neighbors must be filtered out): %v", len(got), got)
+	}
+	if got[0].Identity.NameHint != "io-uploads" {
+		t.Errorf("discovered = %v, want exactly the exact-named bucket io-uploads (not a substring neighbor)", got)
+	}
+}
+
 // TestDiscoverTypes_ParentScopeMultipleParentsOredByName proves a closure
 // with two selected buckets ORs both names into one `name:(...)` clause —
 // each parent's children are enumerated, neither account-wide.

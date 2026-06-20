@@ -1022,9 +1022,39 @@ func (g *GCPDiscoverer) searchScopedAssetTypes(ctx context.Context, scope string
 		if err != nil {
 			return nil, fmt.Errorf("cloud asset SearchAllResources (selection-closure scope, %s): %w", assetType, err)
 		}
-		out = append(out, rs...)
+		// The CAI `name:<n>` clause is a SUBSTRING/token match, not an exact
+		// match — selecting a parent named "foo" can also return "foo-backup"
+		// or "my-foo" of the same asset type. Because the scoped query drops
+		// the labels.project clause, those unselected rows are not otherwise
+		// filtered, so they would leak into DiscoverClosure and fan out
+		// non-CAI child discovery from parents the operator never selected.
+		// Exact-filter to the selected parent short names before appending,
+		// mirroring the AWS path's scope-by-exact-identifier guarantee. #777
+		// (codex review).
+		out = append(out, filterToSelectedParents(rs, names)...)
 	}
 	return out, nil
+}
+
+// filterToSelectedParents keeps only the asset results whose short resource
+// name exactly equals one of the selected parent names. It defends against
+// the substring nature of the Cloud Asset `name:` query operator: the scoped
+// SearchAllResources call narrows the read but can still return name-substring
+// neighbors (e.g. "foo-backup" for a selected "foo"), and the scoped path
+// has dropped the project-label filter that would otherwise exclude them
+// (#777).
+func filterToSelectedParents(rs []gcpAssetResult, names []string) []gcpAssetResult {
+	want := make(map[string]struct{}, len(names))
+	for _, n := range names {
+		want[n] = struct{}{}
+	}
+	filtered := make([]gcpAssetResult, 0, len(rs))
+	for _, r := range rs {
+		if _, ok := want[shortName(r.Name)]; ok {
+			filtered = append(filtered, r)
+		}
+	}
+	return filtered
 }
 
 // buildScopedSearchQuery composes a SearchAllResources query that narrows
