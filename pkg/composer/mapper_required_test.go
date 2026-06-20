@@ -152,6 +152,8 @@ func kitchenSinkComponents() *Components {
 		GCPSecretManager:    &t,
 		GCPVertexAI:         &t,
 		GCPAgentEngine:      &t,
+		GCPDocumentAI:       &t,
+		GCPModelArmor:       &t,
 		GCPPubSub:           &t,
 		GCPCloudLogging:     &t,
 		GCPCloudMonitoring:  &t,

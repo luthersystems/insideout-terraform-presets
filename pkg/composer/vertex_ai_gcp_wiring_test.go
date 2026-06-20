@@ -189,6 +189,18 @@ func TestDefaultWiring_GCPVertexAI_NetworkAndGCS(t *testing.T) {
 	assert.Equal(t, WireRef(KeyGCPVPC, "vpc_id"), wi.RawHCL["network"],
 		"network must reference gcp/vpc.vpc_id; the preset converts the project-ID path to the project-NUMBER path the API requires")
 
+	// #774 producer<->consumer linkage: the private-endpoint peering connection
+	// is wired from gcp/vpc.service_networking_connection_id into the preset's
+	// service_networking_connection input. Pinning the exact WireRef here closes
+	// the gap where the two halves (gcp/vpc produces the id; gcp/vertex_ai's
+	// precondition consumes it) were only ever tested against a hand-typed string
+	// literal on the consumer side, never against each other (qa-professor B2).
+	require.Contains(t, wi.RawHCL, "service_networking_connection",
+		"VPC selected -> the #774 PSC peering connection must be wired so a private index endpoint orders after the peering")
+	assert.Equal(t, WireRef(KeyGCPVPC, "service_networking_connection_id"), wi.RawHCL["service_networking_connection"],
+		"service_networking_connection must reference gcp/vpc.service_networking_connection_id (the producer output the vertex_ai precondition depends on)")
+	assert.Contains(t, wi.Names, "service_networking_connection")
+
 	require.Contains(t, wi.RawHCL, "contents_delta_uri",
 		"GCS selected -> the index must be seeded from the bucket")
 	// Wired to a dedicated prefix under the bucket, NOT the bucket root —
@@ -212,6 +224,8 @@ func TestDefaultWiring_GCPVertexAI_InertStandalone(t *testing.T) {
 
 	assert.NotContains(t, wi.RawHCL, "network",
 		"no VPC selected -> no network wiring (endpoint is public)")
+	assert.NotContains(t, wi.RawHCL, "service_networking_connection",
+		"no VPC selected -> no #774 PSC peering wiring (the connection id has no producer)")
 	assert.NotContains(t, wi.RawHCL, "contents_delta_uri",
 		"no GCS selected -> the index must be created empty (no contents_delta_uri wiring)")
 }

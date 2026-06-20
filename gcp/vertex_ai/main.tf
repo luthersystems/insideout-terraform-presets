@@ -183,11 +183,13 @@ resource "google_vertex_ai_index_endpoint" "this" {
   # projects/<NUMBER>/global/networks/<name>, rebuilt from the wired vpc_id
   # (which carries the project ID) via data.google_project.this.number.
   #
-  # NOTE: the private path additionally requires a servicenetworking PSC
-  # peering range on this network (google_service_networking_connection + a
-  # VPC_PEERING global address) that gcp/vpc does not yet provision (#774).
-  # Until that lands, an opt-in private apply needs the peering created
-  # out-of-band. The default (public) path is unaffected.
+  # The private path additionally requires a servicenetworking PSC peering
+  # range on this network (google_service_networking_connection + a VPC_PEERING
+  # global address). gcp/vpc now provisions this when its
+  # enable_service_networking flag is set (#774), and the composer wires the
+  # connection id into var.service_networking_connection so the peering is
+  # created before this endpoint applies. The default (public) path is
+  # unaffected and needs none of it.
   network = local.network_canonical
 
   # Public unless the private path is selected.
@@ -199,6 +201,20 @@ resource "google_vertex_ai_index_endpoint" "this" {
     },
     var.labels
   )
+
+  lifecycle {
+    # Fail-loud: a private (VPC-peered) endpoint cannot serve until the
+    # servicenetworking PSC peering range exists on the network, or the apply
+    # fails ~30-90min into the deployed-index step. Referencing
+    # var.service_networking_connection here both surfaces the missing peering
+    # at plan time AND creates the dependency edge (the composer wires it from
+    # gcp/vpc.service_networking_connection_id) so Terraform orders the peering
+    # before this endpoint. Public path is exempt (it needs no peering). #774.
+    precondition {
+      condition     = local.vector_search_private ? var.service_networking_connection != null : true
+      error_message = "A private Vertex AI index endpoint (enable_private_endpoint = true with a wired network) requires a servicenetworking PSC peering range. Set gcp/vpc's enable_service_networking = true so service_networking_connection is wired, or provision the peering out-of-band (#774/#600)."
+    }
+  }
 }
 
 # Binds the index to the endpoint. The deploy is the long pole: Vertex spins up

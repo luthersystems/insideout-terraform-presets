@@ -143,9 +143,15 @@ variable "network" {
 }
 
 variable "enable_private_endpoint" {
-  description = "When true AND a network is wired, the index endpoint is private (VPC-peered) instead of public. Default false = public endpoint, which works live today. The private path requires a servicenetworking PSC peering range on the network that gcp/vpc does not yet provision (follow-up #774); enabling it before #774 lands means the peering must exist out-of-band or a live apply fails ~30-90min into the deployed-index step."
+  description = "When true AND a network is wired, the index endpoint is private (VPC-peered) instead of public. Default false = public endpoint, which works live today. The private path requires a servicenetworking PSC peering range on the network, now provisioned by gcp/vpc (enable_service_networking = true, #774) and wired in via service_networking_connection; without it a live apply fails ~30-90min into the deployed-index step."
   type        = bool
   default     = false
+}
+
+variable "service_networking_connection" {
+  description = "ID of the servicenetworking PSC peering connection the private index endpoint depends on (#774). Wired by the composer from gcp/vpc.service_networking_connection_id when both are selected; callers who manage the peering out-of-band pass their own connection id. Used only on the private-endpoint path: it orders the endpoint after the peering range exists and fails loud at plan time if a private endpoint is requested without it. Null on the public path (the default) and standalone previews."
+  type        = string
+  default     = null
 }
 
 variable "deployed_index_min_replicas" {

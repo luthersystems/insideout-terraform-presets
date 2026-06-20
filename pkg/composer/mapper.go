@@ -1207,6 +1207,38 @@ func (m DefaultMapper) BuildModuleValues(
 			}
 		}
 
+	case KeyGCPDocumentAI:
+		// Document AI (#765). Translate the stack region's continent into the
+		// DocAI multi-region location (us|eu) — DocAI does NOT accept arbitrary
+		// regions like "us-central1", so region is never passed through. A
+		// caller-supplied cfg.Location overrides the derivation.
+		loc := "us"
+		if strings.HasPrefix(reg, "europe-") || strings.HasPrefix(reg, "eu-") {
+			loc = "eu"
+		}
+		if cfg != nil && cfg.GCPDocumentAI != nil {
+			if strings.TrimSpace(cfg.GCPDocumentAI.Location) != "" {
+				loc = strings.TrimSpace(cfg.GCPDocumentAI.Location)
+			}
+			if strings.TrimSpace(cfg.GCPDocumentAI.ProcessorType) != "" {
+				vals["processor_type"] = strings.TrimSpace(cfg.GCPDocumentAI.ProcessorType)
+			}
+		}
+		vals["location"] = loc
+
+	case KeyGCPModelArmor:
+		// Model Armor (#766). Partial-config: emit only fields the caller
+		// populated so the preset's own defaults win when unset. The
+		// project-singleton floor setting is opt-in (default off in the preset).
+		if cfg != nil && cfg.GCPModelArmor != nil {
+			if strings.TrimSpace(cfg.GCPModelArmor.FilterConfidenceLevel) != "" {
+				vals["filter_confidence_level"] = strings.TrimSpace(cfg.GCPModelArmor.FilterConfidenceLevel)
+			}
+			if cfg.GCPModelArmor.ManageFloorsetting != nil {
+				vals["manage_floorsetting"] = *cfg.GCPModelArmor.ManageFloorsetting
+			}
+		}
+
 	case KeyGCPPubSub:
 		vals["topic_name"] = "events"
 		if cfg != nil && cfg.GCPPubSub != nil {

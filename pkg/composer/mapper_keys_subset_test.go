@@ -300,6 +300,14 @@ func kitchenSinkConfig() *Config {
 		ModelGardenModel      string `json:"modelGardenModel,omitempty"`
 		ModelGardenAcceptEULA *bool  `json:"modelGardenAcceptEula,omitempty"`
 	}{EnableVectorSearch: &t, IndexDimensions: 768, EnableServing: &t, ModelGardenModel: "publishers/google/models/gemma3@gemma-3-1b-it", ModelGardenAcceptEULA: &t}
+	cfg.GCPDocumentAI = &struct {
+		ProcessorType string `json:"processorType,omitempty"`
+		Location      string `json:"location,omitempty"`
+	}{ProcessorType: "FORM_PARSER_PROCESSOR", Location: "eu"}
+	cfg.GCPModelArmor = &struct {
+		FilterConfidenceLevel string `json:"filterConfidenceLevel,omitempty"`
+		ManageFloorsetting    *bool  `json:"manageFloorsetting,omitempty"`
+	}{FilterConfidenceLevel: "HIGH", ManageFloorsetting: &t}
 	cfg.GCPPubSub = &struct {
 		MessageRetentionDuration string `json:"messageRetentionDuration,omitempty"`
 	}{MessageRetentionDuration: "604800s"}

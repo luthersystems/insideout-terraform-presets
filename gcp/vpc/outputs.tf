@@ -59,3 +59,14 @@ output "connector_id" {
   value = var.enable_serverless_connector ? try(google_vpc_access_connector.serverless[0].id, null) : null
 }
 
+output "service_networking_connection_id" {
+  description = "ID of the Private Services Access servicenetworking connection (#774), or null when enable_service_networking is false. Wired into gcp/vertex_ai so a private index endpoint orders after the PSC peering range exists."
+  # Layered ternary + try(): see router_name above (issue #178).
+  value = var.enable_service_networking ? try(google_service_networking_connection.private_vpc_connection[0].id, null) : null
+}
+
+output "service_networking_peering_range" {
+  description = "Name of the reserved VPC_PEERING range backing Private Services Access (#774), or null when disabled."
+  value       = var.enable_service_networking ? try(google_compute_global_address.private_service_access[0].name, null) : null
+}
+

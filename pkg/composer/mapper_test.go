@@ -1253,3 +1253,121 @@ func TestBuildModuleValues_AWSEC2_GPU(t *testing.T) {
 		assert.False(t, hasKey, "nil GPUEnabled must not set gpu_enabled")
 	})
 }
+
+// TestBuildModuleValues_GCPDocumentAI_LocationTranslation pins the #765 mapper
+// logic (qa-professor B1): the DocAI multi-region location (us|eu) is derived
+// from the stack region's continent — DocAI rejects arbitrary regions like
+// "us-central1" — a caller-supplied Location overrides the derivation, and
+// ProcessorType flows through only when set. This is the one piece of
+// non-trivial transformation the DocAI mapper case adds; mapper_keys_subset_test
+// only proves the emitted keys are declared variables, never the values, so the
+// eu-/europe- branch and the override precedence were previously untested.
+func TestBuildModuleValues_GCPDocumentAI_LocationTranslation(t *testing.T) {
+	m := DefaultMapper{}
+
+	docAICfg := func(processorType, location string) *Config {
+		c := &Config{}
+		c.GCPDocumentAI = &struct {
+			ProcessorType string `json:"processorType,omitempty"`
+			Location      string `json:"location,omitempty"`
+		}{ProcessorType: processorType, Location: location}
+		return c
+	}
+
+	t.Run("europe- region derives eu", func(t *testing.T) {
+		vals, err := m.BuildModuleValues(KeyGCPDocumentAI, nil, nil, "demo", "europe-west1")
+		require.NoError(t, err)
+		assert.Equal(t, "eu", vals["location"])
+	})
+
+	t.Run("eu- region prefix derives eu", func(t *testing.T) {
+		// The mapper defensively also matches an "eu-" prefix (not a real GCP
+		// region, but guards a caller passing shorthand).
+		vals, err := m.BuildModuleValues(KeyGCPDocumentAI, nil, nil, "demo", "eu-west1")
+		require.NoError(t, err)
+		assert.Equal(t, "eu", vals["location"])
+	})
+
+	t.Run("us region derives us", func(t *testing.T) {
+		vals, err := m.BuildModuleValues(KeyGCPDocumentAI, nil, nil, "demo", "us-central1")
+		require.NoError(t, err)
+		assert.Equal(t, "us", vals["location"])
+	})
+
+	t.Run("non-eu/us region falls back to us", func(t *testing.T) {
+		vals, err := m.BuildModuleValues(KeyGCPDocumentAI, nil, nil, "demo", "asia-east1")
+		require.NoError(t, err)
+		assert.Equal(t, "us", vals["location"])
+	})
+
+	t.Run("explicit Location overrides a europe region", func(t *testing.T) {
+		vals, err := m.BuildModuleValues(KeyGCPDocumentAI, nil, docAICfg("", "us"), "demo", "europe-west1")
+		require.NoError(t, err)
+		assert.Equal(t, "us", vals["location"], "caller Location must win over the region-derived continent")
+	})
+
+	t.Run("explicit Location overrides a us region", func(t *testing.T) {
+		vals, err := m.BuildModuleValues(KeyGCPDocumentAI, nil, docAICfg("", "eu"), "demo", "us-central1")
+		require.NoError(t, err)
+		assert.Equal(t, "eu", vals["location"])
+	})
+
+	t.Run("ProcessorType flows through; absent when unset", func(t *testing.T) {
+		vals, err := m.BuildModuleValues(KeyGCPDocumentAI, nil, docAICfg("FORM_PARSER_PROCESSOR", ""), "demo", "us-central1")
+		require.NoError(t, err)
+		assert.Equal(t, "FORM_PARSER_PROCESSOR", vals["processor_type"])
+
+		vals2, err := m.BuildModuleValues(KeyGCPDocumentAI, nil, nil, "demo", "us-central1")
+		require.NoError(t, err)
+		_, hasPT := vals2["processor_type"]
+		assert.False(t, hasPT, "processor_type must not be emitted when unset (preset default wins)")
+	})
+}
+
+// TestBuildModuleValues_GCPModelArmor_PartialConfig pins the #766 partial-config
+// contract (qa-professor S1): the mapper emits manage_floorsetting /
+// filter_confidence_level ONLY when the caller populated them, so the preset's
+// own defaults win when unset. manage_floorsetting gates a project/org SINGLETON
+// that collides if one already exists, so a mutation emitting it unconditionally
+// (default on) would be a real hazard — this test traps it.
+func TestBuildModuleValues_GCPModelArmor_PartialConfig(t *testing.T) {
+	m := DefaultMapper{}
+
+	armorCfg := func(level string, manage *bool) *Config {
+		c := &Config{}
+		c.GCPModelArmor = &struct {
+			FilterConfidenceLevel string `json:"filterConfidenceLevel,omitempty"`
+			ManageFloorsetting    *bool  `json:"manageFloorsetting,omitempty"`
+		}{FilterConfidenceLevel: level, ManageFloorsetting: manage}
+		return c
+	}
+
+	t.Run("nil config emits neither key (preset defaults win)", func(t *testing.T) {
+		vals, err := m.BuildModuleValues(KeyGCPModelArmor, nil, nil, "demo", "us-central1")
+		require.NoError(t, err)
+		_, hasFloor := vals["manage_floorsetting"]
+		assert.False(t, hasFloor, "nil ModelArmor config must NOT emit manage_floorsetting (it gates a singleton)")
+		_, hasLevel := vals["filter_confidence_level"]
+		assert.False(t, hasLevel, "nil ModelArmor config must NOT emit filter_confidence_level")
+	})
+
+	t.Run("FilterConfidenceLevel set, ManageFloorsetting nil emits only the level", func(t *testing.T) {
+		vals, err := m.BuildModuleValues(KeyGCPModelArmor, nil, armorCfg("HIGH", nil), "demo", "us-central1")
+		require.NoError(t, err)
+		assert.Equal(t, "HIGH", vals["filter_confidence_level"])
+		_, hasFloor := vals["manage_floorsetting"]
+		assert.False(t, hasFloor, "nil ManageFloorsetting must not emit the singleton gate")
+	})
+
+	t.Run("ManageFloorsetting flows through for explicit true and false", func(t *testing.T) {
+		trueVal := true
+		vals, err := m.BuildModuleValues(KeyGCPModelArmor, nil, armorCfg("", &trueVal), "demo", "us-central1")
+		require.NoError(t, err)
+		assert.Equal(t, true, vals["manage_floorsetting"])
+
+		falseVal := false
+		vals2, err := m.BuildModuleValues(KeyGCPModelArmor, nil, armorCfg("", &falseVal), "demo", "us-central1")
+		require.NoError(t, err)
+		assert.Equal(t, false, vals2["manage_floorsetting"], "explicit false must be emitted (caller opting OUT explicitly)")
+	})
+}

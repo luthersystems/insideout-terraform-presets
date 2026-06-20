@@ -80,6 +80,8 @@ var configExtractorAllowlist = map[string]string{
 	"gcp_cloud_deploy": "[no-inspector] Cloud Deploy delivery-pipeline inspector deferred (#613 explicitly marks discovery inspector + extractor as optional/follow-up); ComponentMetricsMapping has no entry yet so the panel falls back to design values until the per-component extractor lands",
 	"gcp_cloud_dns":    "[no-inspector] Cloud DNS dispatcher landed in #596 (gcp/dns.go); per-component extractor (config map for panel) deferred pending zone-detail field reads (visibility, dnssec_config, record-count summary)",
 	"gcp_agent_engine": "[no-inspector] Agent Engine (#769) creates google_vertex_ai_reasoning_engine, which is deploy-only on provider >= 7.6 (repo discovery/import schema pinned 6.10); no reasoning-engine inspector or extractor lands yet. Surfaced via name-prefix scoping until the schema pin advances and a vertexai.list-reasoning-engines dispatcher ships",
+	"gcp_document_ai":  "[no-inspector] Document AI (#765) creates google_document_ai_processor; no documentai inspector or extractor lands yet. Surfaced via name-prefix scoping until a documentai.list-processors dispatcher ships",
+	"gcp_model_armor":  "[no-inspector] Model Armor (#766) creates google_model_armor_template; the resource is newer/region-limited and absent from the repo discovery/import schema pin (6.10), so no modelarmor inspector or extractor lands yet. Surfaced via name-prefix scoping until the pin advances and a modelarmor.list-templates dispatcher ships",
 }
 
 // extractorFixtures are minimal SDK-shape fixtures that exercise each

@@ -77,6 +77,8 @@ type Components struct {
 	GCPSecretManager    *bool  `json:"gcp_secret_manager,omitempty"`
 	GCPVertexAI         *bool  `json:"gcp_vertex_ai,omitempty"`
 	GCPAgentEngine      *bool  `json:"gcp_agent_engine,omitempty"`
+	GCPDocumentAI       *bool  `json:"gcp_document_ai,omitempty"`
+	GCPModelArmor       *bool  `json:"gcp_model_armor,omitempty"`
 	GCPPubSub           *bool  `json:"gcp_pubsub,omitempty"`
 	GCPCloudLogging     *bool  `json:"gcp_cloud_logging,omitempty"`
 	GCPCloudMonitoring  *bool  `json:"gcp_cloud_monitoring,omitempty"`
@@ -442,6 +444,27 @@ type Config struct {
 		DisplayName string `json:"displayName,omitempty"`
 	} `json:"gcp_agent_engine,omitempty"`
 
+	// GCPDocumentAI carries the caller-supplied Document AI configuration
+	// (#765). ProcessorType selects the parser (OCR/form/invoice). Location is
+	// the DocAI multi-region (us|eu); when empty the mapper derives it from the
+	// stack region's continent (DocAI does not accept arbitrary regions).
+	// Partial-config: the mapper only emits a field the caller populated so the
+	// preset's own defaults win when left unset.
+	GCPDocumentAI *struct {
+		ProcessorType string `json:"processorType,omitempty"`
+		Location      string `json:"location,omitempty"`
+	} `json:"gcp_document_ai,omitempty"`
+
+	// GCPModelArmor carries the caller-supplied Model Armor configuration
+	// (#766). FilterConfidenceLevel sets the RAI filter floor; ManageFloorsetting
+	// opts into the project/org-singleton floor setting (off by default — it
+	// collides if one already exists). Partial-config: the mapper only emits a
+	// field the caller populated so the preset's own defaults win when unset.
+	GCPModelArmor *struct {
+		FilterConfidenceLevel string `json:"filterConfidenceLevel,omitempty"`
+		ManageFloorsetting    *bool  `json:"manageFloorsetting,omitempty"`
+	} `json:"gcp_model_armor,omitempty"`
+
 	GCPPubSub *struct {
 		MessageRetentionDuration string `json:"messageRetentionDuration,omitempty"`
 	} `json:"gcp_pubsub,omitempty"`
@@ -714,6 +737,8 @@ func (c *Components) Normalize() {
 		c.GCPSecretManager = nil
 		c.GCPVertexAI = nil
 		c.GCPAgentEngine = nil
+		c.GCPDocumentAI = nil
+		c.GCPModelArmor = nil
 		c.GCPPubSub = nil
 		c.GCPCloudLogging = nil
 		c.GCPCloudMonitoring = nil
@@ -826,6 +851,8 @@ func (c *Config) Normalize() {
 		c.GCPGCS = nil
 		c.GCPVertexAI = nil
 		c.GCPAgentEngine = nil
+		c.GCPDocumentAI = nil
+		c.GCPModelArmor = nil
 		c.GCPPubSub = nil
 		c.GCPCloudLogging = nil
 		c.GCPCloudRun = nil

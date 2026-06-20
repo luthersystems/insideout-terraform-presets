@@ -100,6 +100,20 @@ EXEMPT_LABELLESS_GCP=(
   google_secret_manager_secret_version
   google_storage_bucket_object
   google_service_networking_connection
+  #   google_document_ai_processor_default_version → processor = google_document_ai_processor.<X>.id
+  google_document_ai_processor_default_version
+  # google_model_armor_floorsetting — project/location SINGLETON keyed by its
+  # parent (projects/<id>/locations/<loc>); it has no name field of its own.
+  # Attribution flows through the project-scoped Model Armor API path.
+  google_model_armor_floorsetting
+  # google_model_armor_template — its canonical id attribute is `template_id`
+  # (not name/account_id/display_name, which this lint scans), and the preset
+  # sets template_id = "${var.project}-armor" for name-prefix scoping. It is
+  # also label-capable and carries labels = merge({project=var.project}, ...),
+  # but is NOT added to lint-project-label.sh's LABEL_CAPABLE_GCP because that
+  # array is drift-checked (TestUntaggableAllowlistsMatchLintScripts) against
+  # the typed registry pinned at provider 6.10, which predates Model Armor.
+  google_model_armor_template
   # google_dns_record_set — Cloud DNS record sets have semantic DNS
   # names (e.g. "www.example.com.") and cannot legally carry var.project
   # in the name field. Attribution flows through the parent managed_zone

@@ -220,6 +220,8 @@ var GCPIAMPermissions = map[ComponentKey][]string{
 	KeyGCPFirestore:        {"datastore.databases.create"},
 	KeyGCPVertexAI:         {"aiplatform.endpoints.create"},
 	KeyGCPAgentEngine:      {"aiplatform.reasoningEngines.create"},
+	KeyGCPDocumentAI:       {"documentai.processors.create"},
+	KeyGCPModelArmor:       {"modelarmor.templates.create"},
 	KeyGCPAPIGateway:       {"apigateway.gateways.create"},
 	KeyGCPBackups:          {"backupdr.managementServers.create"},
 	// Cloud DNS (#593). managedZones.create + resourceRecordSets.create

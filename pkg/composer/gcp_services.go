@@ -66,6 +66,10 @@ var GCPServices = map[ComponentKey][]GCPService{
 	// Agent Engine / Reasoning Engine is the same Vertex AI plane as datasets +
 	// vector search, so it rides on aiplatform.googleapis.com (#769).
 	KeyGCPAgentEngine: {{Name: "aiplatform.googleapis.com", Title: "Vertex AI"}},
+	// Document AI (#765): the processor API.
+	KeyGCPDocumentAI: {{Name: "documentai.googleapis.com", Title: "Document AI"}},
+	// Model Armor (#766): the safety-template API (newer, region-limited).
+	KeyGCPModelArmor: {{Name: "modelarmor.googleapis.com", Title: "Model Armor"}},
 	KeyGCPAPIGateway: {
 		{Name: "apigateway.googleapis.com", Title: "API Gateway"},
 		// API Gateway plane requires both Service Control (request
