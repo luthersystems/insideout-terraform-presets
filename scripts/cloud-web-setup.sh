@@ -64,6 +64,54 @@ install_npm_clis() {
   vercel --version
 }
 
+install_codex_auth_and_plugins() {
+  # Codex auth + Claude plugins, baked into the cached snapshot.
+  #
+  # WHY HERE and not scripts/cloud-session-start.sh: the project's SessionStart hook
+  # (.claude/settings.json) does NOT run in the Claude-Code-on-the-web / remote-execution
+  # sandbox -- only the harness's own launcher hooks do (verified: ~/.claude.json carries no
+  # trusted-project entry and the harness launcher-settings.json wires only git-identity). So
+  # the codex auth + plugin install that live in that hook never execute on a fresh session:
+  # codex 401s (no ~/.codex/auth.json) and `/codex:review` is missing (no
+  # installed_plugins.json). This setup script's filesystem output IS snapshotted, so doing it
+  # here makes the result present at the start of every new session with no hook required.
+  # All best-effort: this runs under `set -e`, so each step is guarded to never poison the cache.
+
+  # Codex ChatGPT-subscription auth (flat-rate). auth.json is a 1Password document (a
+  # `codex login` on a workstation, re-uploaded when its refresh token rotates).
+  if [ -n "${OP_SERVICE_ACCOUNT_TOKEN:-}" ] && command -v op >/dev/null 2>&1; then
+    mkdir -p "${HOME}/.codex"
+    printf 'preferred_auth_method = "chatgpt"\n' > "${HOME}/.codex/config.toml"
+    if op read "op://Reliable-Dev/codex-auth-json/auth.json" > "${HOME}/.codex/auth.json" 2>/dev/null; then
+      chmod 600 "${HOME}/.codex/auth.json"
+      log "codex: installed ChatGPT-subscription auth.json (snapshot)"
+    else
+      log "WARNING: codex auth.json fetch failed (non-fatal)"
+    fi
+  else
+    log "OP_SERVICE_ACCOUNT_TOKEN / op missing -- skipping codex auth"
+  fi
+
+  # Claude Code plugins: codex (=> /codex:review), claude-config (=> qa-professor / pr),
+  # firecrawl. Best-effort: `claude` is a harness binary that may not be on PATH during the
+  # cached setup phase. When it is, this bakes installed_plugins.json into the snapshot so the
+  # plugins load at session start; when it isn't, this is a no-op and `codex review` from the
+  # CLI (authed above) still works.
+  if command -v claude >/dev/null 2>&1; then
+    claude plugin marketplace add openai/codex-plugin-cc      >/dev/null 2>&1 || true
+    claude plugin marketplace add sam-at-luther/claude-config >/dev/null 2>&1 || true
+    for p in codex@openai-codex claude-config@claude-config firecrawl@claude-plugins-official; do
+      if claude plugin install "$p" >/dev/null 2>&1; then
+        log "plugin installed: $p"
+      else
+        log "WARNING: plugin install failed: $p (non-fatal; claude CLI may be unavailable at setup)"
+      fi
+    done
+  else
+    log "claude CLI not on PATH at setup -- skipping plugin install (codex CLI auth above still applies)"
+  fi
+}
+
 install_playwright_deps() {
   # OS libraries for Playwright's chromium (root/apt). The browser BINARY is fetched
   # per-session in the hook. Best-effort: only reliable's `make test-mock` needs it.
@@ -153,8 +201,9 @@ fi
 # and so the Go toolchain is guaranteed present (gopls). Both best-effort.
 install_playwright_deps || true
 install_gopls
+install_codex_auth_and_plugins || log "codex auth / plugin setup failed (non-fatal)"
 
 # Docker is preinstalled but its daemon won't be running in a fresh session VM. If a task
 # needs it, start it on demand: `sudo service docker start`. Not required for the standard
 # build/lint/test flow (Postgres is reached via POSTGRES_URL).
-log "setup complete: terraform, tflint, golangci-lint, gopls, go, codex, firecrawl-cli, vercel, op, gh, git-lfs, bubblewrap installed"
+log "setup complete: terraform, tflint, golangci-lint, gopls, go, codex, firecrawl-cli, vercel, op, gh, git-lfs, bubblewrap installed; codex auth + plugins baked"
