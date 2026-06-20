@@ -86,6 +86,24 @@ func New(ctx context.Context, cloud, region, gcpProjectID, awsEndpointURL string
 		cfg = applyAWSAssumeRole(cfg, awsAuth)
 		return awsAggAdapter{d: awsdiscover.NewAWSDiscovererWithConcurrency(cfg, awsdiscover.DefaultMaxConcurrency)}, func() {}, nil
 	case "gcp":
+		// GCP credential context (#777, the GCP analog of the AWS
+		// mars#198 wrong-principal fix). NewRealAssetSearcher with no
+		// option.ClientOption falls back to Application Default
+		// Credentials. In the Mars reverse-import job that ADC is the
+		// customer-scoped credential the job is launched with (the WIF /
+		// service-account identity that can read the customer's Cloud
+		// Asset Inventory), NOT the pod-default identity — so the closure
+		// sweep runs as the same principal Terraform's google provider
+		// reaches the customer project with. There is no STS-style
+		// assume-role hop to wire here (the AWS awsAuth.RoleARN path):
+		// GCP impersonation/WIF is established before the process starts,
+		// via GOOGLE_APPLICATION_CREDENTIALS / the metadata server /
+		// option.WithTokenSource at the caller, so this constructor
+		// inherits the right principal without an explicit role argument.
+		// Multi-tenant server-side callers that must carry per-request
+		// credentials pass an option.WithTokenSource(ts) (see
+		// NewRealAssetSearcher's #445 doc); the Mars job runs one
+		// customer per process, so process-default ADC is correct here.
 		searcher, err := gcpdiscover.NewRealAssetSearcher(ctx)
 		if err != nil {
 			return nil, func() {}, err
@@ -201,9 +219,46 @@ func (a gcpAggAdapter) DiscoverByID(ctx context.Context, tfType, id, region, acc
 func (a gcpAggAdapter) DiscoverClosure(ctx context.Context, req reverseimport.ClosureRequest) ([]imported.ImportedResource, error) {
 	types := unionStrings(req.ParentTypes, req.ChildTypes)
 	return a.d.DiscoverTypes(ctx, types, gcpdiscover.DiscoverArgs{
-		Project: req.Project,
-		Regions: req.Regions,
+		Project:     req.Project,
+		Regions:     req.Regions,
+		ParentScope: a.gcpParentScope(req.ParentResources),
 	})
+}
+
+// gcpParentScope builds the per-Cloud-Asset-type selected-parent scope the
+// #777 closure-scoping fix uses to restrict GCP child + parent
+// re-enumeration to the operator's selected parents — the GCP twin of
+// awsParentScope. For each selected parent whose Terraform type maps to a
+// registered Cloud Asset type it records the parent's name (its NameHint,
+// falling back to ImportID) AND its location (Identity.Location) under the
+// parent's asset type. Parent types with no registered discoverer are
+// skipped — their children fall back to the project-wide CAI sweep and the
+// engine's mergeClosureResources still filters them to the selected
+// parents, so closure semantics are unchanged. Returns nil when no usable
+// scope can be built (the caller then sweeps project-wide as before).
+//
+// Unlike the AWS path there is no identifier-shared-child fan-out: GCP
+// child types are non-CAI (they fan out from the already-scoped parent CAI
+// rows in DiscoverTypes' non-CAI phase), so scoping the parent asset type
+// is sufficient to scope its children too.
+func (a gcpAggAdapter) gcpParentScope(parents []imported.ImportedResource) gcpdiscover.ParentScope {
+	byAsset := map[string][]gcpdiscover.ScopedParent{}
+	for _, p := range parents {
+		assetType, ok := a.d.AssetTypeForTF(p.Identity.Type)
+		if !ok {
+			continue
+		}
+		name := strings.TrimSpace(p.Identity.NameHint)
+		if name == "" {
+			name = strings.TrimSpace(p.Identity.ImportID)
+		}
+		if name == "" {
+			continue
+		}
+		location := strings.TrimSpace(p.Identity.Location)
+		byAsset[assetType] = append(byAsset[assetType], gcpdiscover.ScopedParent{Name: name, Location: location})
+	}
+	return gcpdiscover.NewParentScope(byAsset)
 }
 
 func unionStrings(groups ...[]string) []string {

@@ -426,6 +426,22 @@ func NewGCPDiscoverer(searcher gcpAssetSearcher, projectID string, opts GCPDisco
 	return d
 }
 
+// AssetTypeForTF returns the Cloud Asset asset type registered for the
+// given Terraform type (e.g. "google_storage_bucket" ->
+// "storage.googleapis.com/Bucket"), and true when a discoverer is
+// registered for that TF type. Used by the selection-closure adapter
+// (cmd/insideout-import/reversedisco) to translate the engine's selected
+// parents — which carry Terraform types — into the asset-type-keyed
+// DiscoverArgs.ParentScope this package's CAI search consumes (#777). The
+// GCP analog of awsdiscover.CloudFormationTypeForTF.
+func (g *GCPDiscoverer) AssetTypeForTF(tfType string) (string, bool) {
+	d, ok := g.byType[tfType]
+	if !ok {
+		return "", false
+	}
+	return d.AssetType(), true
+}
+
 // SupportedTypes returns the registered Terraform types in lexicographic
 // order. Used by the CLI for default --resource-types and validation.
 func (g *GCPDiscoverer) SupportedTypes() []string {
@@ -837,6 +853,39 @@ func buildSearchQuery(stackProject string, locations []string, selectors []TagSe
 func (g *GCPDiscoverer) searchBuckets(ctx context.Context, scope string, args DiscoverArgs, labelsBucket, namePrefixBucket, parentBucket []Discoverer) ([]gcpAssetResult, error) {
 	var out []gcpAssetResult
 
+	// Selection-closure scoping (#777): when args.ParentScope restricts a
+	// bucket's asset types to the operator's selected parents, peel those
+	// asset types out of the bucket and search them with a per-parent
+	// `name:(...)` clause instead of the project-wide sweep. A scoped asset
+	// type with no selected parent (absent from the scope's name set) is
+	// simply NOT searched — the GCP twin of the AWS (empty, true)
+	// skip-enumeration contract. Asset types the scope doesn't touch keep
+	// sweeping exactly as before, so non-closure callers (the local CLI's
+	// full scan, top-level discovery) are byte-for-byte unchanged.
+	if len(args.ParentScope) > 0 {
+		var scopedTypes []string
+		labelsBucket, scopedTypes = splitScopedBucket(labelsBucket, args.ParentScope)
+		scoped, err := g.searchScopedAssetTypes(ctx, scope, args, scopedTypes)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, scoped...)
+
+		namePrefixBucket, scopedTypes = splitScopedBucket(namePrefixBucket, args.ParentScope)
+		scoped, err = g.searchScopedAssetTypes(ctx, scope, args, scopedTypes)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, scoped...)
+
+		parentBucket, scopedTypes = splitScopedBucket(parentBucket, args.ParentScope)
+		scoped, err = g.searchScopedAssetTypes(ctx, scope, args, scopedTypes)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, scoped...)
+	}
+
 	if len(labelsBucket) > 0 {
 		query := buildSearchQuery(args.Project, args.Regions, args.TagSelectors)
 		rs, err := g.searcher.SearchAll(ctx, scope, assetTypesOf(labelsBucket), query)
@@ -914,6 +963,122 @@ func (g *GCPDiscoverer) searchBuckets(ctx context.Context, scope string, args Di
 		out = append(out, rs...)
 	}
 	return out, nil
+}
+
+// splitScopedBucket partitions a ScopeStyle bucket into the discoverers
+// whose asset type is NOT in scope (returned as the new bucket — they keep
+// their project-wide sweep) and the de-duplicated asset types that ARE in
+// scope (returned for searchScopedAssetTypes to fetch per-parent). A
+// discoverer whose asset type is scoped contributes its asset type to the
+// scoped set and is removed from the swept bucket; the scope's name set is
+// what actually narrows the read (#777).
+//
+// Asset-type granularity matches the existing per-AssetType SearchAll
+// bucketing: two discoverers sharing one asset type (e.g.
+// compute_address + compute_global_address both map to
+// compute.googleapis.com/Address) are scoped together iff that shared
+// asset type is in scope.
+func splitScopedBucket(bucket []Discoverer, ps ParentScope) (unscoped []Discoverer, scopedAssetTypes []string) {
+	seen := map[string]struct{}{}
+	for _, d := range bucket {
+		if _, isScoped := ps[d.AssetType()]; isScoped {
+			if _, dup := seen[d.AssetType()]; !dup {
+				seen[d.AssetType()] = struct{}{}
+				scopedAssetTypes = append(scopedAssetTypes, d.AssetType())
+			}
+			continue
+		}
+		unscoped = append(unscoped, d)
+	}
+	sort.Strings(scopedAssetTypes)
+	return unscoped, scopedAssetTypes
+}
+
+// searchScopedAssetTypes issues one SearchAllResources call per scoped
+// asset type, each narrowed to the selected parents' names via a
+// `name:(...)` clause instead of the project-wide `labels.project:<stack>`
+// sweep (#777). One call per asset type (rather than one bulk call for the
+// whole scoped set) so each type's query carries only its own parents'
+// names — Cloud Asset's `name:` operator is a global substring match, so
+// unioning every scoped type's names into a single query would let a
+// keyring name accidentally match a bucket, etc.
+//
+// Returns the concatenated results. An empty scopedAssetTypes (the common
+// case — nothing scoped in this bucket) is a no-op. A scoped asset type
+// that resolves to zero parent names is skipped (defensive — NewParentScope
+// never stores an empty slice, but scopedParentNames re-checks).
+func (g *GCPDiscoverer) searchScopedAssetTypes(ctx context.Context, scope string, args DiscoverArgs, scopedAssetTypes []string) ([]gcpAssetResult, error) {
+	var out []gcpAssetResult
+	for _, assetType := range scopedAssetTypes {
+		names, ok := args.scopedParentNames(assetType)
+		if !ok || len(names) == 0 {
+			// Scoped-but-no-parent: skip enumeration entirely (the GCP
+			// (empty, true) skip contract). No SearchAll, no project-wide
+			// fallback.
+			continue
+		}
+		query := buildScopedSearchQuery(names, args.Regions, args.TagSelectors)
+		rs, err := g.searcher.SearchAll(ctx, scope, []string{assetType}, query)
+		if err != nil {
+			return nil, fmt.Errorf("cloud asset SearchAllResources (selection-closure scope, %s): %w", assetType, err)
+		}
+		out = append(out, rs...)
+	}
+	return out, nil
+}
+
+// buildScopedSearchQuery composes a SearchAllResources query that narrows
+// to the operator's selected parents by name instead of the project-wide
+// `labels.project:<stack>` sweep (#777). The selected parents were chosen
+// by identity, so a missing Project label must not exclude them — the same
+// "scope bypasses the project filter" guarantee the AWS path makes
+// (TestCloudControlDiscover_ParentScopeBypassesTagFilter).
+//
+// Names are OR-combined inside a parenthesized `name:(...)` clause; the `:`
+// operator is Cloud Asset's substring match, which matches the trailing
+// short-name segment of each parent's full resource name. Locations and
+// label selectors are AND-combined exactly as buildSearchQuery does, so a
+// multi-region closure still narrows by location.
+func buildScopedSearchQuery(names []string, locations []string, selectors []TagSelector) string {
+	var clauses []string
+	if len(names) > 0 {
+		nameClauses := make([]string, 0, len(names))
+		for _, n := range names {
+			n = strings.TrimSpace(n)
+			if n == "" {
+				continue
+			}
+			nameClauses = append(nameClauses, "name:"+n)
+		}
+		if len(nameClauses) == 1 {
+			clauses = append(clauses, nameClauses[0])
+		} else if len(nameClauses) > 1 {
+			clauses = append(clauses, "("+strings.Join(nameClauses, " OR ")+")")
+		}
+	}
+
+	nonEmpty := make([]string, 0, len(locations))
+	for _, l := range locations {
+		if l != "" {
+			nonEmpty = append(nonEmpty, l)
+		}
+	}
+	switch len(nonEmpty) {
+	case 0:
+	case 1:
+		clauses = append(clauses, "location:"+nonEmpty[0])
+	default:
+		locClauses := make([]string, 0, len(nonEmpty))
+		for _, l := range nonEmpty {
+			locClauses = append(locClauses, "location:"+l)
+		}
+		clauses = append(clauses, "("+strings.Join(locClauses, " OR ")+")")
+	}
+
+	for _, s := range selectors {
+		clauses = append(clauses, "labels."+s.Key+":"+s.Value)
+	}
+	return strings.Join(clauses, " AND ")
 }
 
 // assetTypesOf collects the Cloud Asset asset-type strings from a
