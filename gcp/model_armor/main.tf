@@ -20,11 +20,13 @@ terraform {
   required_providers {
     google = {
       source = "hashicorp/google"
-      # google_model_armor_template / _floorsetting are recent additions to the
-      # hashicorp/google provider and region-limited. >= 6.0 is the floor; the
-      # composer/caller supplies the concrete pin (CI resolves the latest 7.x,
-      # which carries both resources).
-      version = ">= 6.0"
+      # google_model_armor_template landed in hashicorp/google 6.43.0 and
+      # google_model_armor_floorsetting in 6.45.0; this module can create both,
+      # so 6.45.0 is the true floor. A looser >= 6.0 let a caller/root locked to
+      # an earlier 6.x satisfy the constraint and then fail with "Invalid
+      # resource type" before planning (Codex review). The composer/caller still
+      # supplies the concrete pin (CI resolves the latest 7.x, which carries both).
+      version = ">= 6.45.0"
     }
   }
 }

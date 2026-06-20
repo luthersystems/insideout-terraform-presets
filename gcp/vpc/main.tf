@@ -119,6 +119,24 @@ resource "google_compute_firewall" "allow_ssh_iap" {
 # public-endpoint paths need none of this). When gcp/vpc owns the peering, all
 # consumers of this network share one range instead of each provisioning their
 # own (gcp/cloudsql still provisions its own when it owns the network).
+# Enable the Service Networking API before the peering connection is created.
+# google_service_networking_connection requires servicenetworking.googleapis.com;
+# in a fresh project where it is not already enabled the first apply of the
+# private path would fail before any consumer (Vertex private endpoint, private
+# CloudSQL/Memorystore) could use the peering (Codex review). Gated on the same
+# flag so plain public VPCs never enable it, and disable_on_destroy=false keeps
+# teardown idempotent (a shared project-level API activation — see the
+# idempotency contract in CLAUDE.md). The composer's GCPServices map leaves
+# gcp_vpc on the always-required set; this conditional enablement is the precise
+# counterpart for the opt-in peering path.
+resource "google_project_service" "servicenetworking" {
+  count = var.enable_service_networking ? 1 : 0
+
+  project            = var.project_id
+  service            = "servicenetworking.googleapis.com"
+  disable_on_destroy = false
+}
+
 resource "google_compute_global_address" "private_service_access" {
   count = var.enable_service_networking ? 1 : 0
 
@@ -145,6 +163,10 @@ resource "google_service_networking_connection" "private_vpc_connection" {
   # try() guards the empty-tuple plan-time reference when the gate is off
   # (issue #178 pattern); count already prevents instantiation.
   reserved_peering_ranges = [try(google_compute_global_address.private_service_access[0].name, null)]
+
+  # Order the connection after the API it depends on so a fresh project enables
+  # servicenetworking.googleapis.com before the first connection create.
+  depends_on = [google_project_service.servicenetworking]
 }
 
 # Serverless VPC Access Connector for Cloud Run / Cloud Functions
