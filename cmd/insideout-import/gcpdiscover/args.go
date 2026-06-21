@@ -1,6 +1,9 @@
 package gcpdiscover
 
 import (
+	"sort"
+	"strings"
+
 	"github.com/luthersystems/insideout-terraform-presets/cmd/insideout-import/progress"
 	"github.com/luthersystems/insideout-terraform-presets/pkg/composer/imported"
 )
@@ -27,6 +30,39 @@ type DiscoverArgs struct {
 	Regions      []string
 	TagSelectors []TagSelector
 	Emitter      progress.Emitter
+
+	// ParentScope, when non-empty, restricts CAI enumeration to the
+	// operator's selected parents during a selection-closure run (#777,
+	// the GCP analog of awsdiscover.DiscoverArgs.ParentScope from #739/#770).
+	//
+	// It maps a parent Cloud Asset *asset type* (e.g.
+	// "storage.googleapis.com/Bucket") to the set of selected parents of
+	// that type, each carrying the name the InsideOut inspector attributes
+	// it by and the GCP location it lives in (ScopedParent). DiscoverTypes
+	// then narrows the per-bucket SearchAllResources query for any scoped
+	// asset type to a `name:(<p1> OR <p2> ...)` clause over exactly those
+	// parents instead of issuing the project-wide `labels.project:<stack>`
+	// sweep — turning O(project) Cloud Asset reads into O(selected-parents)
+	// reads (and dropping the broad project-wide read scope the sweep
+	// needs).
+	//
+	// Keyed by ASSET type, not Terraform type: DiscoverTypes already
+	// partitions discoverers into SearchAllResources buckets by AssetType,
+	// so an asset-type key lets the scope plug straight into that seam
+	// (mirroring how the AWS ParentScope keys by CloudFormation type — the
+	// type the AWS discoverers route through).
+	//
+	// CRITICAL (mirrors the AWS (empty, true) contract): a scoped type
+	// whose asset type is present in ParentScope but has ZERO selected
+	// parents is SKIPPED — its asset type is dropped from every
+	// SearchAllResources call rather than swept project-wide. The engine's
+	// mergeClosureResources filter would discard a project-wide sweep's
+	// extra rows anyway, but skipping the enumeration is the whole point of
+	// #777: no broad read, no O(project) cost.
+	//
+	// An empty/absent ParentScope preserves the legacy project-wide sweep
+	// (the local CLI's full scan and top-level discovery are unchanged).
+	ParentScope ParentScope
 
 	// OnTypeDiscovered, when non-nil, is invoked by DiscoverTypes exactly
 	// once per requested type AS THAT TYPE COMPLETES, carrying the type's
@@ -79,4 +115,108 @@ type DiscoverArgs struct {
 type TagSelector struct {
 	Key   string
 	Value string
+}
+
+// ScopedParent is one selected parent in a ParentScope: the Name the CAI
+// query filters on (the parent's short resource name, e.g. a bucket name
+// or keyring name) paired with the GCP Location it lives in. The GCP twin
+// of awsdiscover.ScopedParent (#777).
+//
+// Unlike the AWS path — which loops per region and uses Region to decide
+// which parents to fetch in each pass — the GCP CAI path issues a single
+// SearchAllResources call per ScopeStyle bucket and expresses location in
+// the query string. Location is therefore informational on GCP today (it
+// rides along so a future location-narrowed `name:` + `location:` query
+// can use it, and so the closure adapter can carry the parent's location
+// through), and the per-parent `name:` clause is what actually scopes the
+// read to the selected parents.
+type ScopedParent struct {
+	Name     string
+	Location string
+}
+
+// ParentScope maps a parent Cloud Asset asset type (e.g.
+// "storage.googleapis.com/Bucket") to the set of selected parents a
+// closure run should restrict CAI enumeration to. See
+// DiscoverArgs.ParentScope. Construct with NewParentScope.
+//
+// Keying by asset type (not Terraform type) lets the scope plug straight
+// into DiscoverTypes' existing per-AssetType SearchAllResources bucketing.
+type ParentScope map[string][]ScopedParent
+
+// NewParentScope builds a ParentScope from (parentAssetType -> ScopedParent)
+// pairs, de-duplicating parents per type by (name, location), trimming
+// whitespace, dropping empties, and sorting by (name, location). Returns
+// nil when no usable pair is supplied so callers can leave
+// DiscoverArgs.ParentScope at its zero value (which means "no scoping —
+// project-wide sweep"). Mirrors awsdiscover.NewParentScope's normalization
+// so the two clouds' scope constructors behave identically (#777).
+func NewParentScope(byAssetType map[string][]ScopedParent) ParentScope {
+	out := ParentScope{}
+	for assetType, parents := range byAssetType {
+		assetType = strings.TrimSpace(assetType)
+		if assetType == "" {
+			continue
+		}
+		type key struct{ name, location string }
+		seen := map[key]struct{}{}
+		var deduped []ScopedParent
+		for _, p := range parents {
+			name := strings.TrimSpace(p.Name)
+			if name == "" {
+				continue
+			}
+			location := strings.TrimSpace(p.Location)
+			k := key{name: name, location: location}
+			if _, ok := seen[k]; ok {
+				continue
+			}
+			seen[k] = struct{}{}
+			deduped = append(deduped, ScopedParent{Name: name, Location: location})
+		}
+		if len(deduped) == 0 {
+			continue
+		}
+		sort.Slice(deduped, func(i, j int) bool {
+			if deduped[i].Name != deduped[j].Name {
+				return deduped[i].Name < deduped[j].Name
+			}
+			return deduped[i].Location < deduped[j].Location
+		})
+		out[assetType] = deduped
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
+// scopedParentNames returns the selected parent names for assetType, plus
+// true when ParentScope restricts this asset type. When the asset type is
+// NOT in the scope it returns (nil, false) so the caller falls back to its
+// project-wide enumeration. A nil/empty ParentScope always returns
+// (nil, false).
+//
+// CRITICAL (mirrors the AWS (empty, true) contract): NewParentScope never
+// stores an empty slice for a present key — an asset type that survived
+// construction has at least one usable parent. The (empty, true) "scoped
+// but no parent, skip enumeration" case is therefore expressed by the
+// asset type's ABSENCE from the scope combined with the caller's
+// knowledge that the discoverer is a registered child whose closure
+// requested it: DiscoverTypes routes such a type into the skipped set (see
+// partitionScopedAssetTypes). scopedParentNames itself only answers "is
+// this asset type scoped, and to which names".
+func (a DiscoverArgs) scopedParentNames(assetType string) ([]string, bool) {
+	if len(a.ParentScope) == 0 {
+		return nil, false
+	}
+	parents, ok := a.ParentScope[strings.TrimSpace(assetType)]
+	if !ok || len(parents) == 0 {
+		return nil, false
+	}
+	out := make([]string, 0, len(parents))
+	for _, p := range parents {
+		out = append(out, p.Name)
+	}
+	return out, true
 }
