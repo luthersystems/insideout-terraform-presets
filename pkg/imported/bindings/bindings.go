@@ -43,6 +43,41 @@ type ComponentMetricsBinding struct {
 	DimensionKey   string
 	DimensionFrom  string
 	DefaultMetrics []string
+
+	// ConfigReadback, when non-nil, describes how a consumer reads the
+	// resource's LIVE config from an inspector list action and remaps it
+	// onto the consumer's config keys. Optional — most types have no config
+	// overlay. Moved upstream from reliable so the per-type vocabulary lives
+	// with the other binding data instead of in a downstream map
+	// (reliable#1479 "zero per-type code").
+	ConfigReadback *ConfigReadback
+}
+
+// ConfigReadback describes how to read one imported resource type's live
+// configuration from an inspector list action and remap it onto a consumer's
+// config keys. The consumer owns the actual extraction + dispatch plumbing;
+// this struct is just the per-type data that plumbing needs.
+type ConfigReadback struct {
+	// Service / Action name the inspector list call (e.g. "s3" /
+	// "list-buckets"). Opaque to presets — the consumer interprets them.
+	Service string
+	Action  string
+	// ComponentKey selects the consumer's shared live-config extractor, in
+	// the managed component-key namespace (e.g. "aws_s3", "gcp_gcs").
+	ComponentKey string
+	// EnvelopeKey is the list-result envelope holding the per-resource
+	// records (e.g. "Buckets" for AWS, "buckets" for GCP).
+	EnvelopeKey string
+	// MatchAttr is the per-record attribute matched against the resource id
+	// (e.g. "Name" / "name").
+	MatchAttr string
+	// MatchFrom is the DimensionFrom-style source for the resource id.
+	MatchFrom string
+	// KeyMap translates extractor output keys onto the consumer's config
+	// keys (e.g. {"versioning": "versioning.enabled"}). Managed and imported
+	// deliberately use different config-key namespaces, so this is a real
+	// translation, not a cosmetic rename.
+	KeyMap map[string]string
 }
 
 var (
