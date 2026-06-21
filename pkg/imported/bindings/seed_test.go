@@ -97,3 +97,30 @@ func TestSeededBindings(t *testing.T) {
 		})
 	}
 }
+
+// TestSeed_ConfigReadback pins the config-readback descriptors moved upstream
+// from reliable (#1479). S3 and GCS carry a per-bucket versioning overlay; the
+// EnvelopeKey/MatchAttr casing differs by cloud and must be preserved exactly,
+// since the downstream consumer scopes the inspector list result on them.
+func TestSeed_ConfigReadback(t *testing.T) {
+	reseed(t)
+
+	s3, ok := Binding("aws_s3_bucket")
+	require.True(t, ok)
+	require.NotNil(t, s3.ConfigReadback, "aws_s3_bucket must carry a ConfigReadback")
+	assert.Equal(t, "s3", s3.ConfigReadback.Service)
+	assert.Equal(t, "list-buckets", s3.ConfigReadback.Action)
+	assert.Equal(t, "aws_s3", s3.ConfigReadback.ComponentKey)
+	assert.Equal(t, "Buckets", s3.ConfigReadback.EnvelopeKey)
+	assert.Equal(t, "Name", s3.ConfigReadback.MatchAttr)
+	assert.Equal(t, "name", s3.ConfigReadback.MatchFrom)
+	assert.Equal(t, map[string]string{"versioning": "versioning.enabled"}, s3.ConfigReadback.KeyMap)
+
+	gcs, ok := Binding("google_storage_bucket")
+	require.True(t, ok)
+	require.NotNil(t, gcs.ConfigReadback, "google_storage_bucket must carry a ConfigReadback")
+	assert.Equal(t, "gcs", gcs.ConfigReadback.Service)
+	assert.Equal(t, "buckets", gcs.ConfigReadback.EnvelopeKey)
+	assert.Equal(t, "name", gcs.ConfigReadback.MatchAttr)
+	assert.Equal(t, "gcp_gcs", gcs.ConfigReadback.ComponentKey)
+}
