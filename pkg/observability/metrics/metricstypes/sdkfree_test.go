@@ -16,10 +16,11 @@ import (
 // blast radius: reliable's cmd/api Vercel function is at the 250 MB hard
 // limit and these SDKs are the bulk of it.
 var forbiddenSDKImportPrefixes = []string{
-	"github.com/aws/aws-sdk-go",  // v1 and v2
-	"cloud.google.com/go",        // GCP client libraries
-	"google.golang.org/api",      // GCP discovery / REST clients
-	"google.golang.org/genproto", // dragged in by the GCP clients
+	"github.com/aws/aws-sdk-go",    // SDK v1
+	"github.com/aws/aws-sdk-go-v2", // SDK v2 — this repo's only AWS SDK; the "-v2" suffix is NOT matched by the v1 prefix (a bare HasPrefix(dep, "aws-sdk-go"+"/") never fires on "aws-sdk-go-v2/...").
+	"cloud.google.com/go",          // GCP client libraries
+	"google.golang.org/api",        // GCP discovery / REST clients
+	"google.golang.org/genproto",   // dragged in by the GCP clients
 }
 
 // TestMetricsTypesSDKFree fails if any cloud SDK leaks into the leaf
@@ -27,7 +28,7 @@ var forbiddenSDKImportPrefixes = []string{
 // package under test — go is always present in CI.
 func TestMetricsTypesSDKFree(t *testing.T) {
 	t.Parallel()
-	out, err := exec.Command("go", "list", "-deps", ".").CombinedOutput()
+	out, err := exec.Command("go", "list", "-deps", ".").Output()
 	if err != nil {
 		t.Fatalf("go list -deps: %v\n%s", err, out)
 	}

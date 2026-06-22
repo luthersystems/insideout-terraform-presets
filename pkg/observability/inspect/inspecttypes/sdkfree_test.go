@@ -11,7 +11,8 @@ import (
 // can deserialize a BatchResponse without dragging in the AWS / GCP SDK
 // clients the parent inspect.Dispatcher pulls in.
 var forbiddenSDKImportPrefixes = []string{
-	"github.com/aws/aws-sdk-go",
+	"github.com/aws/aws-sdk-go",    // SDK v1
+	"github.com/aws/aws-sdk-go-v2", // SDK v2 — the "-v2" suffix is NOT matched by the v1 prefix.
 	"cloud.google.com/go",
 	"google.golang.org/api",
 	"google.golang.org/genproto",
@@ -21,7 +22,7 @@ var forbiddenSDKImportPrefixes = []string{
 // package's transitive dependencies.
 func TestInspectTypesSDKFree(t *testing.T) {
 	t.Parallel()
-	out, err := exec.Command("go", "list", "-deps", ".").CombinedOutput()
+	out, err := exec.Command("go", "list", "-deps", ".").Output()
 	if err != nil {
 		t.Fatalf("go list -deps: %v\n%s", err, out)
 	}
