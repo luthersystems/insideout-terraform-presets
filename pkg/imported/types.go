@@ -71,6 +71,12 @@ type Capabilities struct {
 // pkg/imported see one canonical name without an extra import.
 type ComponentMetricsBinding = bindings.ComponentMetricsBinding
 
+// ConfigReadback is the optional live-config readback descriptor on a
+// ComponentMetricsBinding. Re-exported as a type alias from
+// pkg/imported/bindings so callers depending on pkg/imported see one
+// canonical name without an extra import.
+type ConfigReadback = bindings.ConfigReadback
+
 // FieldMismatch describes a single drifted attribute returned by
 // Provider.CompareDrift. Snapshot is the value carried in the sealed
 // snapshot (what Terraform expects); Cloud is the value the live

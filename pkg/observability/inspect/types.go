@@ -1,102 +1,42 @@
-// Package inspect holds the session-aware AWS / GCP inspect
-// dispatcher and the wire envelope types for the
-// /api/v2/aws/inspect/batch and /api/v2/gcp/inspect/batch endpoints.
-// The package is the canonical contract between the Vercel-hosted
-// reliable handlers and the MCP server (currently
-// luthersystems/reliable/mcp-server/, future
-// luthersystems/insideout-agent-skills).
+// Package inspect holds the session-aware AWS / GCP inspect dispatcher
+// and the wire envelope types for the /api/v2/aws/inspect/batch and
+// /api/v2/gcp/inspect/batch endpoints. The package is the canonical
+// contract between the Vercel-hosted reliable handlers, the ui-core
+// /observability surface (reliable#2153), and the MCP server.
 //
-// JSON shapes are wire-stable. Changing a field name or json tag is a
-// wire-breaking change and requires coordinated rollout across the
-// reliable handler and every MCP-server callsite. Tests in
-// types_test.go pin the exact json tags and `omitempty` semantics so
-// drift surfaces at unit-test time rather than at HTTP-decode time.
+// The wire-envelope TYPES (SubRequest, SubResult, BatchRequest,
+// BatchResponse) and the MaxBatchSubs cap moved into the SDK-free leaf
+// package pkg/observability/inspect/inspecttypes (reliable#2153) so a
+// proxy consumer can (de)serialize the inspect wire shape without
+// importing the AWS / GCP SDK clients the Dispatcher below pulls in. The
+// aliases here preserve the `inspect.SubResult` spelling for every
+// existing in-tree caller — a Go type alias is identical to the aliased
+// type, so the jsonschema/json tags and every existing signature are
+// unchanged.
 //
 // The Dispatcher (singular AWS/GCP + AWSBatch/GCPBatch) lifts the
 // reliable-internal logic from internal/agentapi/{aws,gcp}_inspect{,_batch}.go
-// into this repo (#276 Item 3) and abstracts the four reliable-owned
-// concerns behind the four interfaces declared in interfaces.go:
-// ProjectResolver, CredsProvider, DriftReporter, MetricsFetcher.
-// The MCP doc-render helpers (the four tool descriptions and two
-// service tables) live in render.go.
+// into this repo and abstracts the four reliable-owned concerns behind
+// the four interfaces declared in interfaces.go: ProjectResolver,
+// CredsProvider, DriftReporter, MetricsFetcher. The MCP doc-render
+// helpers live in render.go.
 package inspect
 
-// MaxBatchSubs caps the number of sub-probes per batch request. The
-// dispatcher rejects requests with len(Subs) > MaxBatchSubs. The
-// number is wire-coupled — both the client (MCP server / reliable
-// HTTP handler) and the server (batch dispatcher) read this same
-// constant, so changing it requires coordinated rollout.
-const MaxBatchSubs = 32
+import "github.com/luthersystems/insideout-terraform-presets/pkg/observability/inspect/inspecttypes"
 
-// SubRequest is one probe within a batch. Service is a registry name
-// recognized by pkg/observability/service_actions.go's AWSServiceNames
-// or GCPServiceNames; Action is a registry-defined verb. Filters
-// carries arbitrary JSON the per-service handler interprets — left
-// empty for actions that need no filter.
-//
-// Detail / raw flags are deliberately NOT exposed: batch always
-// returns summarized results. Callers needing detail or raw output
-// should use the singular awsinspect / gcpinspect tools.
-//
-// The `jsonschema:"..."` tags are read by MCP clients via
-// github.com/google/jsonschema-go reflection to publish per-property
-// descriptions on tools/list. They are inert for encoding/json.
-type SubRequest struct {
-	Service string `json:"service" jsonschema:"Cloud service to query (e.g. 'ec2', 'rds', 's3' for AWS; 'compute', 'storage', 'cloudsql' for GCP). Use the singular awsinspect/gcpinspect tool with action='list-actions' to discover supported services."`
-	Action  string `json:"action" jsonschema:"Operation on the service (e.g. 'describe-instances', 'list-buckets', 'list-actions' for discovery, 'list-metrics' / 'get-metrics' for time-series)."`
-	Filters string `json:"filters,omitempty" jsonschema:"Optional JSON-encoded filter object passed through to the underlying API. Examples: '{\"hours\":6}' for metric windows, '{\"days\":7}' for cost queries."`
-}
+// MaxBatchSubs caps the number of sub-probes per batch request. See
+// inspecttypes.MaxBatchSubs for the canonical definition.
+const MaxBatchSubs = inspecttypes.MaxBatchSubs
 
-// SubResult is one probe's outcome. Index pins the result back to the
-// SubRequest at the same index in the original Subs slice — the
-// fan-out dispatcher may complete out of order. OK is true iff Error
-// is empty; Result is set iff OK is true; Error is set iff OK is
-// false. DurationMS captures the per-probe latency in milliseconds
-// and is always emitted (even when zero) for observability.
-type SubResult struct {
-	Index      int    `json:"index"`
-	Service    string `json:"service"`
-	Action     string `json:"action"`
-	OK         bool   `json:"ok"`
-	Result     any    `json:"result,omitempty"`
-	Error      string `json:"error,omitempty"`
-	DurationMS int64  `json:"duration_ms"`
-}
-
-// BatchRequest is the wire envelope for both
-// POST /api/v2/aws/inspect/batch and POST /api/v2/gcp/inspect/batch.
-// SessionID identifies the calling reliable session; the dispatcher
-// resolves it to credentials + project context (via reliable's
-// session DB + Oracle credential broker today, via injected
-// credential-provider interfaces once #276 Item 3 lifts the
-// dispatcher).
-//
-// A single shape covers both clouds because the request shape is
-// cloud-agnostic — the route the request lands on (`/aws/...` vs
-// `/gcp/...`) carries the cloud selection. Reliable's legacy
-// AWSInspectBatchRequest / GCPInspectBatchRequest are
-// structurally-identical types (NOT Go aliases — separate named
-// declarations with the same fields and json tags); collapsing them
-// into a single canonical BatchRequest is part of the #276 cleanup.
-type BatchRequest struct {
-	SessionID string       `json:"session_id"`
-	Subs      []SubRequest `json:"subs"`
-}
-
-// BatchResponse is the wire envelope returned by the same two
-// endpoints. OK is the HTTP-envelope success bit — true iff the
-// dispatcher itself ran to completion (HTTP 200 path). Per-sub
-// success/failure is encoded in Results[i].OK and Results[i].Error,
-// NOT aggregated into this outer OK. This matches the legacy
-// reliable dispatcher semantics
-// (reliable/internal/agentapi/{aws,gcp}_inspect_batch.go:
-// `writeJSON(w, http.StatusOK, ...{OK: true, Results: results})`):
-// a partial-failure batch (some Results[i].OK == false) still
-// returns outer OK == true.
-//
-// Results is index-aligned with the original Subs slice:
-// Results[i].Index == i.
-type BatchResponse struct {
-	OK      bool        `json:"ok"`
-	Results []SubResult `json:"results"`
-}
+// SDK-free wire-envelope types, re-exported from inspecttypes. See that
+// package for the canonical definitions and JSON-tag contract.
+type (
+	// SubRequest is one probe within a batch.
+	SubRequest = inspecttypes.SubRequest
+	// SubResult is one probe's outcome.
+	SubResult = inspecttypes.SubResult
+	// BatchRequest is the wire envelope for the inspect batch endpoints.
+	BatchRequest = inspecttypes.BatchRequest
+	// BatchResponse is the wire envelope returned by the inspect batch endpoints.
+	BatchResponse = inspecttypes.BatchResponse
+)

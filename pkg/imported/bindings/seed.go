@@ -158,6 +158,15 @@ var seededBindings = map[string]ComponentMetricsBinding{
 		DimensionKey:   "BucketName",
 		DimensionFrom:  "name",
 		DefaultMetrics: []string{"NumberOfObjects", "BucketSizeBytes"},
+		ConfigReadback: &ConfigReadback{
+			Service:      "s3",
+			Action:       "list-buckets",
+			ComponentKey: "aws_s3",
+			EnvelopeKey:  "Buckets",
+			MatchAttr:    "Name",
+			MatchFrom:    "name",
+			KeyMap:       map[string]string{"versioning": "versioning.enabled"},
+		},
 	},
 	"aws_dynamodb_table": {
 		Service:        "dynamodb",
@@ -228,6 +237,15 @@ var seededBindings = map[string]ComponentMetricsBinding{
 		DimensionKey:   "bucket_name",
 		DimensionFrom:  "name",
 		DefaultMetrics: []string{"storage.googleapis.com/storage/total_bytes", "storage.googleapis.com/storage/object_count"},
+		ConfigReadback: &ConfigReadback{
+			Service:      "gcs",
+			Action:       "list-buckets",
+			ComponentKey: "gcp_gcs",
+			EnvelopeKey:  "buckets",
+			MatchAttr:    "name",
+			MatchFrom:    "name",
+			KeyMap:       map[string]string{"versioning": "versioning.enabled"},
+		},
 	},
 	"google_pubsub_topic": {
 		Service:        "pubsub",
