@@ -578,6 +578,19 @@ var gcpServiceMetrics = map[string]GCPObs{
 	},
 }
 
+// AWSObsForService returns the AWS metric-catalog group for a service
+// key (e.g. "ec2", "s3"), or nil if the service has no catalog. It is
+// the exported, SDK-free accessor consumers should use to resolve a
+// service to its CloudWatch namespace/dimension/metric spec instead of
+// re-walking the Observability registry themselves (reliable#2153 — the
+// ui-core /observability/metrics handler consumes this). The returned
+// record owns its Metrics slice header, so callers that flip Alarmed
+// per-key won't mutate the shared catalog.
+func AWSObsForService(service string) *AWSObs { return awsObsFor(service) }
+
+// GCPObsForService is the GCP twin of AWSObsForService.
+func GCPObsForService(service string) *GCPObs { return gcpObsFor(service) }
+
 // awsObsFor copies an AWSObs entry by service name. Returns nil if the
 // service has no metric catalog. The copy is shallow over Metrics so the
 // returned record has its own slice header — callers that flip Alarmed
