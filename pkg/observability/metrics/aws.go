@@ -148,7 +148,10 @@ func Fetch(
 	startTime := endTime.Add(-time.Duration(hours) * time.Hour)
 	clampedPeriod := max(min(period, 86400), 1)
 
-	var out []ResourceMetrics
+	// Non-nil so an all-skipped loop still marshals Resources to [] not
+	// null (#255 Pattern A — the reliable metrics panel gates on array
+	// shape).
+	out := []ResourceMetrics{}
 	for _, res := range resources {
 		queries := BuildGetMetricDataQueries(groups, res, service, mf.AccountID)
 		series, err := getMetricData(ctx, cw, queries, startTime, endTime, int32(clampedPeriod)) //nolint:gosec // clamped to [1, 86400]
@@ -319,7 +322,9 @@ func getMetricData(
 
 	results := make([]MetricSeries, 0, len(out.MetricDataResults))
 	for _, r := range out.MetricDataResults {
-		series := MetricSeries{Name: aws.ToString(r.Label)}
+		// Datapoints non-nil so an empty metric window marshals to [] not
+		// null (#255 Pattern A).
+		series := MetricSeries{Name: aws.ToString(r.Label), Datapoints: []Datapoint{}}
 		for i, ts := range r.Timestamps {
 			if i >= len(r.Values) {
 				break
