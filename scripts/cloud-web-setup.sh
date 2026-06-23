@@ -17,14 +17,33 @@
 # Secrets are NOT handled here -- the only credential in the environment is a scoped
 # 1Password service-account token (OP_SERVICE_ACCOUNT_TOKEN); see docs/CLAUDE_CODE_WEB.md.
 #
-set -euo pipefail
+set -Eeuo pipefail
+
+# Persistent setup log. The cached setup phase's stdout is not easily inspectable after the
+# fact, so mirror every log line (UTC-stamped) to a file that survives into the session
+# snapshot. Inspect from any session with:  cat /var/log/cloud-web-setup.log
+# Override the path with CLOUD_WEB_SETUP_LOG; falls back to /tmp if /var/log isn't writable.
+LOG_FILE="${CLOUD_WEB_SETUP_LOG:-/var/log/cloud-web-setup.log}"
+mkdir -p "$(dirname "$LOG_FILE")" 2>/dev/null || true
+: > "$LOG_FILE" 2>/dev/null || LOG_FILE=/tmp/cloud-web-setup.log
+: > "$LOG_FILE" 2>/dev/null || true
 
 TERRAFORM_VERSION=1.7.5     # presets CI pin (hashicorp/setup-terraform)
 GOLANGCI_VERSION=v2.6.2     # reliable CI pin (golangci-lint-action)
 GO_VERSION=1.25.0           # both repos' go.mod
 ARCH="$(dpkg --print-architecture)"   # auto-detect: amd64 or arm64
 
-log() { echo "[cloud-web-setup] $*"; }
+log() {
+  local line="[cloud-web-setup] $*"
+  echo "$line"
+  # O_APPEND keeps these short lines atomic across the parallel-phase subshells.
+  printf '%s %s\n' "$(date -u +%FT%TZ)" "$line" >> "$LOG_FILE" 2>/dev/null || true
+}
+
+# Record any unhandled failure (a `set -e` abort) with its line number, so a step that dies
+# in the cached phase leaves a breadcrumb in the log instead of vanishing silently. The
+# best-effort steps are already guarded with `|| log ...` / `|| true`, so they won't trip this.
+trap 'rc=$?; log "ERROR: setup aborted at line ${LINENO} (exit ${rc})"; exit ${rc}' ERR
 
 install_terraform() {
   log "installing terraform ${TERRAFORM_VERSION}"
@@ -207,3 +226,7 @@ install_codex_auth_and_plugins || log "codex auth / plugin setup failed (non-fat
 # needs it, start it on demand: `sudo service docker start`. Not required for the standard
 # build/lint/test flow (Postgres is reached via POSTGRES_URL).
 log "setup complete: terraform, tflint, golangci-lint, gopls, go, codex, firecrawl-cli, vercel, op, gh, git-lfs, bubblewrap installed; codex auth + plugins baked"
+# Explicit completion marker. If this line is ABSENT from the log, the script aborted partway
+# (look for the "ERROR: setup aborted at line N" breadcrumb above). To check what was skipped
+# vs failed, grep the log for: 'skipping plugin install' | 'plugin install failed' | 'WARNING' | 'ERROR'
+log "OK: cloud-web-setup finished cleanly -- full log at ${LOG_FILE}"
