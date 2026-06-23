@@ -31,7 +31,7 @@ import (
 
 func inspectEC2(ctx context.Context, cfg aws.Config, action, filters string) (any, error) {
 	client := ec2.NewFromConfig(cfg)
-	tagFilters := filter.ProjectTagFilter(filter.Project(filters))
+	tagFilters := ProjectTagFilter(filter.Project(filters))
 
 	switch action {
 	case "describe-instances":
@@ -85,7 +85,7 @@ func inspectEC2(ctx context.Context, cfg aws.Config, action, filters string) (an
 
 func inspectEBS(ctx context.Context, cfg aws.Config, action, filters string) (any, error) {
 	client := ec2.NewFromConfig(cfg)
-	tagFilters := filter.ProjectTagFilter(filter.Project(filters))
+	tagFilters := ProjectTagFilter(filter.Project(filters))
 
 	switch action {
 	case "describe-volumes":

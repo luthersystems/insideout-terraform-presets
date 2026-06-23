@@ -11,8 +11,6 @@ package filter
 
 import (
 	"encoding/json"
-
-	ec2types "github.com/aws/aws-sdk-go-v2/service/ec2/types"
 )
 
 // Project extracts the "project" value from a JSON filters string.
@@ -77,20 +75,6 @@ func EnsureProject(filters, project string) string {
 	b, _ := json.Marshal(m)
 	return string(b)
 }
-
-// ProjectTagFilter returns EC2-style tag filters for the Project tag.
-// Used by EC2, VPC, and other services that share the EC2 filter API.
-func ProjectTagFilter(project string) []ec2types.Filter {
-	if project == "" {
-		return nil
-	}
-	return []ec2types.Filter{{
-		Name:   strPtr("tag:Project"),
-		Values: []string{project},
-	}}
-}
-
-func strPtr(s string) *string { return &s }
 
 // TagFormat declares how project membership is encoded on a resource.
 type TagFormat string

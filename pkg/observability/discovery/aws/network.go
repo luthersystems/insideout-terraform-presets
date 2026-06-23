@@ -61,7 +61,7 @@ func inspectVPC(ctx context.Context, cfg aws.Config, action, filters string) (an
 	case "describe-nat-gateways":
 		client := ec2.NewFromConfig(cfg)
 		input := &ec2.DescribeNatGatewaysInput{}
-		if tagFilters := filter.ProjectTagFilter(filter.Project(filters)); len(tagFilters) > 0 {
+		if tagFilters := ProjectTagFilter(filter.Project(filters)); len(tagFilters) > 0 {
 			// NAT gateway DescribeNatGatewaysInput uses Filter (singular),
 			// not Filters — peculiarity of the EC2 SDK's NAT API.
 			input.Filter = tagFilters
@@ -103,7 +103,7 @@ func inspectVPC(ctx context.Context, cfg aws.Config, action, filters string) (an
 // Mirrors the InsideOut backend's inspectVPCWithIGW (aws_inspect.go:507).
 func inspectVPCWithIGW(ctx context.Context, client vpcDescribeAPI, project string) ([]vpcWithIGW, error) {
 	vpcInput := &ec2.DescribeVpcsInput{}
-	if tagFilters := filter.ProjectTagFilter(project); len(tagFilters) > 0 {
+	if tagFilters := ProjectTagFilter(project); len(tagFilters) > 0 {
 		vpcInput.Filters = tagFilters
 	}
 	vpcOut, err := client.DescribeVpcs(ctx, vpcInput)
