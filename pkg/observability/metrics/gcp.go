@@ -325,8 +325,9 @@ func shapeGCPSeries(
 		entry, exists := resourceMetrics[resID][key]
 		if !exists {
 			entry = &MetricSeries{
-				Name:   spec.DisplayName,
-				Labels: labels, // nil for non-breakdown metrics; map otherwise.
+				Name:       spec.DisplayName,
+				Labels:     labels,        // nil for non-breakdown metrics; map otherwise.
+				Datapoints: []Datapoint{}, // non-nil so empty windows marshal to [] not null (#255 Pattern A).
 			}
 			resourceMetrics[resID][key] = entry
 		}

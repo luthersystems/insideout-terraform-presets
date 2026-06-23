@@ -2,6 +2,7 @@ package metrics
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"testing"
 	"time"
@@ -608,6 +609,40 @@ func TestFetch_ZeroResources(t *testing.T) {
 	assert.NotNil(t, result.Resources, "Resources must be non-nil empty slice for JSON wire shape")
 	assert.Empty(t, result.Resources)
 	assert.Equal(t, 0, mock.calls, "no resources → no GetMetricData calls")
+}
+
+// TestFetch_EmptyDatapointsMarshalToArray pins the #255 contract for the
+// metric path: a resource that CloudWatch returns with zero samples in the
+// window must serialize its `datapoints` as [] (not null), since the
+// reliable metrics panel gates on array shape. assert.Empty alone is
+// insufficient — it accepts both nil and [] — so we marshal and compare.
+func TestFetch_EmptyDatapointsMarshalToArray(t *testing.T) {
+	t.Parallel()
+	mock := &fakeCloudWatch{
+		output: &cloudwatch.GetMetricDataOutput{
+			MetricDataResults: []cwtypes.MetricDataResult{
+				// Label present, but no Timestamps/Values: an empty window.
+				{Label: aws.String("CPUUtilization")},
+			},
+		},
+	}
+	c := clientsWithCW(mock)
+	obs := awsSpec(t, composer.KeyAWSEC2)
+	result, err := Fetch(context.Background(), c, "ec2", oneGroup(obs),
+		[]ResourceID{{ID: "i-abc", DimensionName: "InstanceId"}},
+		MetricsFilter{Hours: 6, Period: 300})
+	require.NoError(t, err)
+
+	require.Len(t, result.Resources, 1)
+	require.Len(t, result.Resources[0].Metrics, 1)
+	dp := result.Resources[0].Metrics[0].Datapoints
+	require.NotNil(t, dp, "Datapoints must be a non-nil empty slice")
+	assert.Empty(t, dp)
+
+	// The wire-shape pin: the field marshals to [] not null.
+	b, err := json.Marshal(dp)
+	require.NoError(t, err)
+	assert.Equal(t, "[]", string(b))
 }
 
 // TestFetch_S3PeriodAndHoursOverride mirrors the InsideOut backend's
