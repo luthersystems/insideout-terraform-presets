@@ -109,6 +109,23 @@ func EmitImportedTF(cloud string, irs []imported.ImportedResource, opts EmitImpo
 	// the plain `aws.imported` alias (byte-identical to prior output).
 	awsRegions := ImportedAWSRegions(irs)
 
+	// Dedup by Terraform address. Two IRs that share an Address are the
+	// same logical resource — GenerateAddress's `_<8hex>` collision suffix
+	// is a slice of identityHash (Cloud|AccountID|ProjectID|Region|Location|
+	// Type|ImportID|ProviderIdentity), so an identical suffixed address
+	// implies an identical identity tuple. Emitting both would write two
+	// `import { to = <addr> }` blocks (and two `resource` blocks) for one
+	// address, which Terraform rejects with
+	//   Error: Duplicate import configuration for "<addr>"
+	// — the prod reverse-import failure in sess_v2_Jok8JjJhzJER, where the
+	// same aws_iam_role_policy_attachment (AdministratorAccess on
+	// platform-test-admin) reached the emitter twice after the
+	// closure/genconfig/depchase pipeline (whose resourceKey-based dedup
+	// keys on identity, not address). This is the final HCL gate, so it is
+	// the right place to guarantee the invariant regardless of upstream
+	// duplication. First occurrence wins (entries are address-sorted below,
+	// so the choice is deterministic).
+	seenAddr := make(map[string]struct{}, len(irs))
 	var entries []entry
 	for i := range irs {
 		ir := &irs[i]
@@ -127,6 +144,10 @@ func EmitImportedTF(cloud string, irs []imported.ImportedResource, opts EmitImpo
 		if addr == "" {
 			continue
 		}
+		if _, dup := seenAddr[addr]; dup {
+			continue
+		}
+		seenAddr[addr] = struct{}{}
 
 		e := entry{address: addr}
 		switch mode {
