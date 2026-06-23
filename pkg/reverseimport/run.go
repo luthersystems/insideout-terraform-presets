@@ -70,7 +70,7 @@ func Run(ctx context.Context, req job.Request, opts Options) (job.Result, error)
 	if err != nil {
 		return result, err
 	}
-	resources = closure.resources
+	resources = dedupeByAddress(closure.resources)
 	result.Diagnostics = append(result.Diagnostics, closure.diagnostics...)
 	dependenciesByAddress := closure.dependencies
 	opts.progressf("reverse-import: selection closure complete (%d resource(s))\n", len(resources))
@@ -119,7 +119,7 @@ func Run(ctx context.Context, req job.Request, opts Options) (job.Result, error)
 	// Fold genconfig's own skip manifest (with reason codes) in first, then
 	// safety-net any dropped identity the manifest missed.
 	skips.addOrphanImports(preGenconfigIdentities, gcRes.Skipped)
-	resources = gcRes.Resources
+	resources = dedupeByAddress(gcRes.Resources)
 	opts.progressf("reverse-import: terraform config generated\n")
 
 	if !opts.SkipDriftFix {
@@ -168,7 +168,7 @@ func Run(ctx context.Context, req job.Request, opts Options) (job.Result, error)
 			return result, fmt.Errorf("depchase: %w", err)
 		}
 		if dcRes != nil {
-			resources = dcRes.Resources
+			resources = dedupeByAddress(dcRes.Resources)
 			appendDepChaseDependencies(dependenciesByAddress, resources, dcRes.Edges)
 		}
 		opts.progressf("reverse-import: dependency chase complete (%d resource(s) total)\n", len(resources))
@@ -583,6 +583,40 @@ func populateArtifacts(result *job.Result, outputDir, generatedPath string, dcRe
 		}
 	}
 	return nil
+}
+
+// dedupeByAddress removes resources that repeat a Terraform address already
+// seen earlier in the slice, preserving first-occurrence order. Two resources
+// sharing an Address are the same logical resource — GenerateAddress's
+// `_<8hex>` collision suffix is a slice of identityHash (Cloud|AccountID|
+// ProjectID|Region|Location|Type|ImportID|ProviderIdentity), so an identical
+// address implies an identical identity tuple — making the drop lossless.
+//
+// This is the single source-of-truth dedupe for the reverse-import resource
+// set: it feeds BOTH imported.json (which reliable persists and counts for the
+// imported-resources UI) and EmitImportedTF (which writes /imported.tf). The
+// upstream closure/depchase dedupe keys on the identity TUPLE (resourceKey),
+// not the rendered address, so a duplicate that survives a pass with a
+// different identity projection but the same address still reaches here. Left
+// unguarded it produces two `import { to = <addr> }` blocks and the Terraform
+// failure "Duplicate import configuration for <addr>" (prod reverse-import of
+// role platform-test-admin, session sess_v2_Jok8JjJhzJER) AND a phantom
+// double-count in the management UI. composer.EmitImportedTF dedupes again as a
+// final HCL gate; this point additionally keeps the persisted/count set clean.
+func dedupeByAddress(resources []imported.ImportedResource) []imported.ImportedResource {
+	seen := make(map[string]struct{}, len(resources))
+	out := resources[:0:0]
+	for _, r := range resources {
+		addr := strings.TrimSpace(r.Identity.Address)
+		if addr != "" {
+			if _, dup := seen[addr]; dup {
+				continue
+			}
+			seen[addr] = struct{}{}
+		}
+		out = append(out, r)
+	}
+	return out
 }
 
 func appendDepChaseDependencies(dependenciesByAddress map[string][]imported.ResourceIdentity, resources []imported.ImportedResource, edges []depchase.GraphEdge) {
