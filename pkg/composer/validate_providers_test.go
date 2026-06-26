@@ -104,6 +104,12 @@ func TestFindSatisfyingVersion_AcceptsCompatibleAndRejectsImpossible(t *testing.
 	require.False(t, findSatisfyingVersion(mustParse("< 6.0,>= 6.1")))
 	// "< 5.0" AND ">= 7.0" cannot intersect.
 	require.False(t, findSatisfyingVersion(mustParse("< 5.0,>= 7.0")))
+	// Exact pin above the bounded sweep's old minor ceiling must still be found
+	// directly — aws 6.52.0 exposed this (minor 52 was outside the old <= 50
+	// sweep, producing a bogus conflict). Mirrors the real composed union:
+	// base pin = 6.52.0 plus a preset range >= 6.0.
+	require.True(t, findSatisfyingVersion(mustParse("= 6.52.0,>= 6.0")),
+		"an exact pin beyond the sweep ceiling must be tested directly")
 }
 
 // TestProviderSeedsMirrorComposer locks the providerSeeds constant against
