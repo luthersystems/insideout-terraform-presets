@@ -17,8 +17,8 @@ import (
 // together.
 func TestBaseProviderPins_ExactAndMatchMars(t *testing.T) {
 	t.Parallel()
-	// As of mars v0.123.0: aws 6.46.0, google/google-beta 6.10.0.
-	assert.Equal(t, "= 6.46.0", BaseProviderPin("aws", "aws"))
+	// As of mars v0.125.0: aws 6.52.0, google/google-beta 6.10.0.
+	assert.Equal(t, "= 6.52.0", BaseProviderPin("aws", "aws"))
 	assert.Equal(t, "= 6.10.0", BaseProviderPin("gcp", "google"))
 	assert.Equal(t, "= 6.10.0", BaseProviderPin("gcp", "google-beta"))
 }
@@ -55,7 +55,7 @@ func TestBaseProviderPins_ReturnsCopy(t *testing.T) {
 	t.Parallel()
 	got := BaseProviderPins("aws")
 	got["aws"] = "= 9.9.9"
-	assert.Equal(t, "= 6.46.0", BaseProviderPin("aws", "aws"),
+	assert.Equal(t, "= 6.52.0", BaseProviderPin("aws", "aws"),
 		"mutating the returned map must not affect the source of truth")
 }
 
@@ -66,12 +66,12 @@ func TestBaseProviderPins_ReturnsCopy(t *testing.T) {
 func TestAllBaseProviderPins(t *testing.T) {
 	t.Parallel()
 	all := AllBaseProviderPins()
-	assert.Equal(t, "= 6.46.0", all["aws"])
+	assert.Equal(t, "= 6.52.0", all["aws"])
 	assert.Equal(t, "= 6.10.0", all["google"])
 	assert.Equal(t, "= 6.10.0", all["google-beta"],
 		"google-beta must be seeded — the emitter pins it, so the validator must too")
 	assert.Len(t, all, 3, "exactly the three base providers across aws+gcp")
 	// Returned map is a fresh copy; mutating it must not affect the source.
 	all["aws"] = "= 9.9.9"
-	assert.Equal(t, "= 6.46.0", AllBaseProviderPins()["aws"])
+	assert.Equal(t, "= 6.52.0", AllBaseProviderPins()["aws"])
 }

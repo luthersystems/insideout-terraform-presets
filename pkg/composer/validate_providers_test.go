@@ -123,7 +123,7 @@ func TestProviderSeedsMirrorComposer(t *testing.T) {
 	// constraints: a value change is then a deliberate diff, and the
 	// imported-package guard (TestBaseProviderPins_ExactAndMatchMars) separately
 	// asserts these equal the mars bake.
-	require.Equal(t, "= 6.46.0", providerSeeds["aws"])
+	require.Equal(t, "= 6.52.0", providerSeeds["aws"])
 	require.Equal(t, "= 6.10.0", providerSeeds["google"])
 	// google-beta MUST be seeded: the emitter pins it (pinBaseProviders
 	// re-asserts google-beta), so a GCP preset pinning an incompatible

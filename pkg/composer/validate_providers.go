@@ -14,7 +14,7 @@ import (
 // generateProvidersTF stamps on every emitted root, regardless of what the
 // presets declare. ValidateProviderConstraints unions these into the
 // per-provider constraint set so a preset that pins (e.g.) `aws ~> 6.40`
-// surfaces as a conflict against the seed's exact `= 6.46.0` instead of
+// surfaces as a conflict against the seed's exact `= 6.52.0` instead of
 // slipping through to terraform init.
 //
 // These mirror the EXACT pins generateProvidersTF emits (#786): the composed

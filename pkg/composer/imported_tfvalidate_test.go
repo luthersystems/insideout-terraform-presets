@@ -43,7 +43,7 @@ import (
 // truth the real reverse-import emitter feeds into its providers.tf
 // (pkg/reverseimport/providers.go). Hand-pinning it (the pre-#796 `~> 5.0`)
 // let this harness validate the imported.tf codegen against a different AWS
-// provider major than production emits (`= 6.46.0`), because the shared
+// provider major than production emits (`= 6.52.0`), because the shared
 // TF_PLUGIN_CACHE_DIR resolved each constraint to a different cached major.
 // A v6-only schema change to an imported resource body would therefore pass
 // the v5-pinned harness. Deriving the pin from BaseProviderPin closes that
@@ -83,7 +83,7 @@ provider "aws" {
 // emitter ships — the canonical imported.BaseProviderPin("aws", "aws"),
 // also consumed by pkg/reverseimport/providers.go — and never against a
 // stale hand-pinned major. Pre-#796 the fixture hand-pinned `~> 5.0` while
-// production emitted `= 6.46.0`; this test fails on that skew. Unlike
+// production emitted `= 6.52.0`; this test fails on that skew. Unlike
 // TestImportedTF_TerraformValidate it needs no `terraform` binary, so it
 // runs everywhere the tfvalidate tag is built.
 func TestImportedTF_ProvidersFixtureMatchesEmitterPin(t *testing.T) {
