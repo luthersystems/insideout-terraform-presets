@@ -104,6 +104,12 @@ func TestFindSatisfyingVersion_AcceptsCompatibleAndRejectsImpossible(t *testing.
 	require.False(t, findSatisfyingVersion(mustParse("< 6.0,>= 6.1")))
 	// "< 5.0" AND ">= 7.0" cannot intersect.
 	require.False(t, findSatisfyingVersion(mustParse("< 5.0,>= 7.0")))
+	// Exact pin above the bounded sweep's old minor ceiling must still be found
+	// directly — aws 6.52.0 exposed this (minor 52 was outside the old <= 50
+	// sweep, producing a bogus conflict). Mirrors the real composed union:
+	// base pin = 6.52.0 plus a preset range >= 6.0.
+	require.True(t, findSatisfyingVersion(mustParse("= 6.52.0,>= 6.0")),
+		"an exact pin beyond the sweep ceiling must be tested directly")
 }
 
 // TestProviderSeedsMirrorComposer locks the providerSeeds constant against
@@ -123,7 +129,7 @@ func TestProviderSeedsMirrorComposer(t *testing.T) {
 	// constraints: a value change is then a deliberate diff, and the
 	// imported-package guard (TestBaseProviderPins_ExactAndMatchMars) separately
 	// asserts these equal the mars bake.
-	require.Equal(t, "= 6.46.0", providerSeeds["aws"])
+	require.Equal(t, "= 6.52.0", providerSeeds["aws"])
 	require.Equal(t, "= 6.10.0", providerSeeds["google"])
 	// google-beta MUST be seeded: the emitter pins it (pinBaseProviders
 	// re-asserts google-beta), so a GCP preset pinning an incompatible

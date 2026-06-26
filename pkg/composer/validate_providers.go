@@ -2,6 +2,7 @@ package composer
 
 import (
 	"fmt"
+	"regexp"
 	"sort"
 	"strings"
 
@@ -10,11 +11,17 @@ import (
 	"github.com/luthersystems/insideout-terraform-presets/pkg/composer/imported"
 )
 
+// exactPinRe pulls 3-segment versions out of a constraint string (matches the
+// version in `= X.Y.Z`, `>= X.Y.Z`, `<= X.Y.Z`, etc.) so findSatisfyingVersion
+// can test the actual pinned/boundary versions directly instead of relying
+// solely on the bounded candidate sweep.
+var exactPinRe = regexp.MustCompile(`=\s*(\d+\.\d+\.\d+)`)
+
 // providerSeeds represents the cloud-level required_provider entry that
 // generateProvidersTF stamps on every emitted root, regardless of what the
 // presets declare. ValidateProviderConstraints unions these into the
 // per-provider constraint set so a preset that pins (e.g.) `aws ~> 6.40`
-// surfaces as a conflict against the seed's exact `= 6.46.0` instead of
+// surfaces as a conflict against the seed's exact `= 6.52.0` instead of
 // slipping through to terraform init.
 //
 // These mirror the EXACT pins generateProvidersTF emits (#786): the composed
@@ -131,21 +138,27 @@ func findProviderConflicts(perProvider map[string]map[string][]string) []Validat
 	return issues
 }
 
-// findSatisfyingVersion sweeps a representative set of candidate versions and
-// returns true if any of them satisfy the combined constraint set. We need
-// to test enough of the version space that pessimistic three-segment
-// constraints like `~> 5.7.0` (= [5.7.0, 5.8.0)) don't slip through as
-// false negatives.
+// findSatisfyingVersion returns true if any version satisfies the combined
+// constraint set. It first tests the exact 3-segment versions named in the
+// constraints themselves (so an exact base pin like `= 6.52.0` is always
+// checked directly), then falls back to a bounded candidate sweep for
+// range-only constraints.
 //
-// Strategy: every major 0-50, every minor 0-50, with .0 and .99 patches.
-// That's 5,202 candidates — plenty to land inside any realistic
-// constraint window without being meaningfully expensive (each Check is
-// O(constraints)). Coverage assumption: providers don't ship version
-// numbers above 50.50.x, which is true for every Terraform provider in
-// existence today.
+// The direct exact-pin check exists because the sweep is bounded: it used to
+// stop at minor 50, which produced a *bogus* conflict once aws shipped 6.52.0
+// (minor 52 was outside the sweep, so the genuine `= 6.52.0` pin looked
+// unsatisfiable). Testing the named versions removes that whole class of
+// false negative; the sweep is kept (and widened to minor 99) only to cover
+// pessimistic range constraints like `~> 5.7.0` that name no exact version.
 func findSatisfyingVersion(c version.Constraints) bool {
+	// Exact/boundary versions named in the constraints, checked directly.
+	for _, m := range exactPinRe.FindAllStringSubmatch(c.String(), -1) {
+		if v, err := version.NewVersion(m[1]); err == nil && c.Check(v) {
+			return true
+		}
+	}
 	for major := 0; major <= 50; major++ {
-		for minor := 0; minor <= 50; minor++ {
+		for minor := 0; minor <= 99; minor++ {
 			for _, patch := range []int{0, 99} {
 				v, err := version.NewVersion(fmt.Sprintf("%d.%d.%d", major, minor, patch))
 				if err != nil {

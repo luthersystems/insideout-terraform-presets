@@ -23,7 +23,7 @@ import "strings"
 //
 // The versions MUST equal the luthersystems/mars provider-mirror bake
 // (mars/Dockerfile `AWS_PROVIDER_VERSION` / `GOOGLE_PROVIDER_VERSION`). As of
-// mars v0.123.0 that bake is aws 6.46.0 and google/google-beta 6.10.0. Bump
+// mars v0.125.0 that bake is aws 6.52.0 and google/google-beta 6.10.0. Bump
 // these AND the mars bake together; the cross-emitter drift guards
 // (TestBaseProviderPins_* and the per-emitter pin tests) fail if either side
 // drifts back to an open range. Note this is intentionally DISTINCT from
@@ -31,7 +31,7 @@ import "strings"
 // schemas/providers.tf and need not equal the runtime deploy pin.
 var baseProviderPins = map[string]map[string]string{
 	"aws": {
-		"aws": "= 6.46.0",
+		"aws": "= 6.52.0",
 	},
 	"gcp": {
 		"google":      "= 6.10.0",
@@ -39,7 +39,7 @@ var baseProviderPins = map[string]map[string]string{
 	},
 }
 
-// BaseProviderPin returns the exact version constraint (e.g. "= 6.46.0") this
+// BaseProviderPin returns the exact version constraint (e.g. "= 6.52.0") this
 // repo pins for a cloud's base Terraform provider, matching the
 // luthersystems/mars provider-mirror bake so terraform init hits the cache.
 // cloud is "aws" or "gcp"; provider is the required_providers key ("aws",
@@ -68,7 +68,7 @@ func BaseProviderPins(cloud string) map[string]string {
 }
 
 // AllBaseProviderPins returns a flattened provider-name → exact-constraint map
-// across every cloud (aws, gcp), e.g. {"aws": "= 6.46.0", "google": "= 6.10.0",
+// across every cloud (aws, gcp), e.g. {"aws": "= 6.52.0", "google": "= 6.10.0",
 // "google-beta": "= 6.10.0"}. The composer's pre-init provider-conflict
 // validator seeds these into its constraint union so a preset pinning a range
 // incompatible with the exact emitted pin is caught before terraform init —

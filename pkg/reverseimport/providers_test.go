@@ -71,7 +71,7 @@ func TestRenderImportedProvidersTF_ExactProviderPins(t *testing.T) {
 			t.Fatalf("renderImportedProvidersTF() error = %v", err)
 		}
 		s := string(body)
-		want := imported.BaseProviderPin("aws", "aws") // "= 6.46.0"
+		want := imported.BaseProviderPin("aws", "aws") // "= 6.52.0"
 		if !strings.Contains(s, `version = "`+want+`"`) {
 			t.Fatalf("aws provider must be exactly pinned to %q, got:\n%s", want, s)
 		}
