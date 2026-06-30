@@ -295,6 +295,9 @@ func unauthorizedChangeIssues(field, resourceType string, change *tfjson.Change,
 		if allowedFirstImportOptionalZeroDefault(resourceType, p, change.Before, change.After) {
 			continue
 		}
+		if isFirstImportBehavioralAttr(resourceType, p) {
+			continue
+		}
 		issues = append(issues, ValidationIssue{
 			Field:  field + "." + p,
 			Code:   "imported_plan_unauthorized_change",
@@ -325,6 +328,71 @@ func allowedFirstImportOptionalZeroDefault(resourceType, path string, before, af
 	}
 	afterValue, afterOK := valueAtPath(after, path)
 	return afterOK && isZeroProviderDefault(afterValue)
+}
+
+// firstImportBehavioralAttrs is a hand-curated allowlist of
+// (resourceType -> attribute-path) pairs that are DEPLOY-DIRECTIVE /
+// WRITE-ONLY / NON-ROUND-TRIPPABLE attributes. Their value in the
+// generated config is an instruction to the provider at apply time, NOT
+// a faithful read-back of remote state, so a first-import `terraform
+// plan` legitimately shows an in-place diff on them even though nothing
+// real has drifted. The first-import contract (decision #34) otherwise
+// only permits provenance tag/label repair, which would reject these
+// benign diffs and fail the whole-account import (job ends `partial`).
+//
+// This is intentionally distinct from allowedFirstImportOptionalZeroDefault,
+// which only forgives the narrow null-before -> zero-provider-default-after
+// shape. A behavioral attr may diff to a NON-zero value (e.g.
+// aws_cloudfront_function.publish defaults to true and round-trips as a
+// true->true or null->true first-plan diff), so the zero-default helper
+// cannot cover it.
+//
+// CONSERVATIVE BY DESIGN: only attributes that are unambiguously a deploy
+// directive or a provider write-only field belong here. A normal config
+// attribute that should faithfully match remote state must NEVER be added
+// — doing so would silently mask real drift on first import. Each entry
+// is justified inline; when in doubt, leave it out.
+//
+// Triggering example: issue #833 — whole-account reverse-import of account
+// 141812438321 (staging session sess_v2_fvZSf5IfhLCb, job ri-897a6c4e-kff6g)
+// failed at `terraform plan` because 4 aws_cloudfront_function resources
+// (e.g. aws_cloudfront_function.a2ae0703_ln_default_luther_api_cf_site157d)
+// produced an `imported_plan_unauthorized_change` on path "publish".
+var firstImportBehavioralAttrs = map[string]map[string]struct{}{
+	// `publish` controls whether the provider publishes the LIVE stage on
+	// apply. It defaults to true and is not a faithful read-back of remote
+	// state, so genconfig's emitted value yields a benign first-plan diff.
+	// (#833 — the exact prod-failing case.)
+	"aws_cloudfront_function": {
+		"publish": {},
+	},
+	// `publish` is a deploy directive: when true, the provider publishes a
+	// new immutable Lambda version on apply. It is an apply-time action,
+	// not round-trippable readback state. The narrow null->false shape was
+	// already forgiven by allowedFirstImportOptionalZeroDefault; this
+	// covers the remaining behavioral shapes (e.g. genconfig emitting true,
+	// or a function with a published version) for class consistency (#833).
+	"aws_lambda_function": {
+		"publish": {},
+	},
+	// `publish` is a deploy directive: when true, the provider publishes a
+	// new state-machine version on apply. Same write-only/apply-time
+	// semantics as the Lambda case (#833 sweep).
+	"aws_sfn_state_machine": {
+		"publish": {},
+	},
+}
+
+// isFirstImportBehavioralAttr reports whether path on resourceType is a
+// curated deploy-directive / write-only attribute that the first-import
+// contract permits to differ. See firstImportBehavioralAttrs.
+func isFirstImportBehavioralAttr(resourceType, path string) bool {
+	paths, ok := firstImportBehavioralAttrs[resourceType]
+	if !ok {
+		return false
+	}
+	_, ok = paths[path]
+	return ok
 }
 
 func isZeroProviderDefault(v any) bool {
