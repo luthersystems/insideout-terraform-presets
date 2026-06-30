@@ -693,16 +693,37 @@ func (c *Client) composeStackImpl(opts ComposeStackOpts) (*ComposeStackResult, e
 	// Build /imported.tf for resources observed via reverse-Terraform
 	// (issue #148). This must happen before generateProvidersTF so that
 	// importedClouds tells the provider emitter which alias to declare.
-	issues = append(issues, ValidateImportedResources(cloud, opts.Imported)...)
+	// Drop orphaned children — a child whose Identity.ParentAddress references a
+	// resource not present in the import set — BEFORE validation/emit. Such a
+	// child can never render a valid block (its parent reference points
+	// nowhere), and ValidateImportedResources would flag it
+	// imported_resource_dangling_parent, which callers escalate to a fatal that
+	// aborts the WHOLE compose (the reliable reverse-import apply 500). This is
+	// the same philosophy as dropUncomposable below: one un-emittable resource
+	// must not fail the entire stack. Canonical case (#736): the InsideOut
+	// management state bucket is excluded from import, but RGT/Cloud Control
+	// surfaces its ownership_controls/versioning/sse/public_access_block children
+	// independently, each pointing at the now-absent bucket. DropOrphanedChildren
+	// runs to a fixed point (a dropped parent cascades to grandchildren). The
+	// drop is intentionally silent — it only REMOVES a would-be-fatal issue, so
+	// it cannot break any caller; callers wanting an audit trail call
+	// DropOrphanedChildren themselves first (reliable's apply leg logs the
+	// dropped addresses).
+	importedResources := opts.Imported
+	if kept, dropped := imported.DropOrphanedChildren(opts.Imported); len(dropped) > 0 {
+		importedResources = kept
+	}
+
+	issues = append(issues, ValidateImportedResources(cloud, importedResources)...)
 	// Emit-readiness checks (required-argument completeness) run here —
 	// at compose time, on the final ready-to-emit resource set — not in
 	// the discovery manifest writer, which validates a still-enriching
 	// intermediate snapshot. See ValidateImportedEmitReadiness.
-	emitReadiness := ValidateImportedEmitReadiness(cloud, opts.Imported)
+	emitReadiness := ValidateImportedEmitReadiness(cloud, importedResources)
 	issues = append(issues, emitReadiness...)
-	issues = append(issues, ValidateImportedResourceAuthorization(cloud, opts.Imported)...)
+	issues = append(issues, ValidateImportedResourceAuthorization(cloud, importedResources)...)
 	provOpts := ProvenanceOpts{ImportProjectID: opts.ImportProjectID, ImportSessionID: opts.ImportSessionID}
-	issues = append(issues, ValidateProvenanceConflicts(cloud, opts.Imported, provOpts)...)
+	issues = append(issues, ValidateProvenanceConflicts(cloud, importedResources, provOpts)...)
 	emitOpts := EmitImportedOpts{
 		ImportProjectID: opts.ImportProjectID,
 		ImportSessionID: opts.ImportSessionID,
@@ -715,7 +736,7 @@ func (c *Client) composeStackImpl(opts ComposeStackOpts) (*ComposeStackResult, e
 	// already recorded above, so the caller still learns which resource
 	// was dropped and why; emitting it anyway would turn a one-resource
 	// gap into a stack-wide planning failure.
-	composable := dropUncomposable(opts.Imported, emitReadiness)
+	composable := dropUncomposable(importedResources, emitReadiness)
 	importedTF, importedClouds := EmitImportedTF(cloud, composable, emitOpts)
 	if len(importedTF) > 0 {
 		files["/imported.tf"] = importedTF
@@ -769,8 +790,8 @@ func (c *Client) composeStackImpl(opts ComposeStackOpts) (*ComposeStackResult, e
 	issues = append(issues, ValidateValueTypes(moduleToVals, presetPaths)...)
 	issues = append(issues, ValidateModuleWiring(blocks, presetPaths)...)
 	issues = append(issues, ValidateNoModuleCycles(blocks)...)
-	issues = append(issues, ValidateNoUnionCycles(blocks, opts.Imported)...)
-	issues = append(issues, ValidateCrossTierWiring(blocks, opts.Imported)...)
+	issues = append(issues, ValidateNoUnionCycles(blocks, importedResources)...)
+	issues = append(issues, ValidateCrossTierWiring(blocks, importedResources)...)
 	issues = append(issues, ValidateProviderConstraints(presetPaths)...)
 	issues = append(issues, ValidateSensitivePropagation(blocks, presetPaths)...)
 	issues = append(issues, ValidateComposedRoot(files)...)
