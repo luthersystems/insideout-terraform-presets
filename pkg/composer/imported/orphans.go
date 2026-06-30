@@ -11,6 +11,17 @@ import "strings"
 // dependency cycle — composer imports imported, not the reverse).
 const DanglingParentReason = "imported_resource_dangling_parent"
 
+// emitsRemovedBlock reports whether ir is the forget projection that renders a
+// Terraform `removed { from = ... lifecycle { destroy = false } }` block rather
+// than an import/resource block. Mirrors the composer's classifyEmitMode
+// `emitModeRemovedBlock` case (TierImportedMissing + ActionRemoveFromInsideOut).
+// Such a block references only the resource's own address, never its parent, so
+// it can never be a dangling-parent orphan — DropOrphanedChildren must not drop
+// it (and ValidateImportedResources must not flag it dangling).
+func emitsRemovedBlock(ir ImportedResource) bool {
+	return ir.Tier == TierImportedMissing && ir.Remediation == ActionRemoveFromInsideOut
+}
+
 // DropOrphanedChildren removes every resource whose Identity.ParentAddress
 // transitively references a resource that is not present in the kept set, and
 // returns the surviving resources plus the dropped orphans (each unchanged).
@@ -70,6 +81,17 @@ func DropOrphanedChildren(irs []ImportedResource) (kept []ImportedResource, drop
 				continue
 			}
 			if present[parent] {
+				continue
+			}
+			// Forget-mode resources are NEVER dangling orphans. A
+			// TierImportedMissing + ActionRemoveFromInsideOut resource renders a
+			// `removed { from = <addr> lifecycle { destroy = false } }` block,
+			// which references only its OWN address — never its parent. Dropping
+			// it would strip that protective block and leave the address in
+			// Terraform state exposed to deletion on the next apply/destroy
+			// (reliable #2048's fail-closed forget guard). So keep it (and keep
+			// its address present), even when its parent is absent from the set.
+			if emitsRemovedBlock(ir) {
 				continue
 			}
 			// Orphan: parent is absent (never discovered or already

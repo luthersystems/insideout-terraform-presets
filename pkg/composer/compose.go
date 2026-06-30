@@ -709,10 +709,7 @@ func (c *Client) composeStackImpl(opts ComposeStackOpts) (*ComposeStackResult, e
 	// it cannot break any caller; callers wanting an audit trail call
 	// DropOrphanedChildren themselves first (reliable's apply leg logs the
 	// dropped addresses).
-	importedResources := opts.Imported
-	if kept, dropped := imported.DropOrphanedChildren(opts.Imported); len(dropped) > 0 {
-		importedResources = kept
-	}
+	importedResources, _ := imported.DropOrphanedChildren(opts.Imported)
 
 	issues = append(issues, ValidateImportedResources(cloud, importedResources)...)
 	// Emit-readiness checks (required-argument completeness) run here —

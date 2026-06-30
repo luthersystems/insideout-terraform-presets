@@ -122,3 +122,28 @@ func TestDropOrphanedChildren_OrderPreserved(t *testing.T) {
 	assert.Equal(t, []string{"aws_z.last", "aws_a.first"}, addrsOf(kept),
 		"kept preserves input order; the orphan in the middle is removed")
 }
+
+// TestDropOrphanedChildren_KeepsForgetBlockOrphan pins the reliable #2048
+// data-loss fix: a forget projection (TierImportedMissing +
+// ActionRemoveFromInsideOut) renders a `removed {}` block that references only
+// its own address, never its parent. Even when its parent is ABSENT from the
+// set (the destroy path projects every adopted resource to forget-mode and an
+// excluded parent is common), it must NOT be dropped — dropping it strips the
+// protective removed{destroy=false} block and exposes the resource to deletion.
+func TestDropOrphanedChildren_KeepsForgetBlockOrphan(t *testing.T) {
+	in := []ImportedResource{
+		// Forget-mode orphan: parent absent, but emits removed{} → keep.
+		{Identity: ResourceIdentity{Address: "aws_s3_bucket_versioning.forget_v", ParentAddress: "aws_s3_bucket.absent"},
+			Tier: TierImportedMissing, Remediation: ActionRemoveFromInsideOut},
+		// Import-mode orphan: parent absent → still dropped.
+		{Identity: ResourceIdentity{Address: "aws_s3_bucket_versioning.import_v", ParentAddress: "aws_s3_bucket.absent"},
+			Tier: TierImportedFlat},
+	}
+	kept, dropped := DropOrphanedChildren(in)
+	if len(kept) != 1 || kept[0].Identity.Address != "aws_s3_bucket_versioning.forget_v" {
+		t.Fatalf("kept = %+v, want only the forget-mode orphan", kept)
+	}
+	if len(dropped) != 1 || dropped[0].Identity.Address != "aws_s3_bucket_versioning.import_v" {
+		t.Fatalf("dropped = %+v, want only the import-mode orphan", dropped)
+	}
+}

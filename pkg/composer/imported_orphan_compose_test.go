@@ -54,16 +54,21 @@ func TestComposeStack_DropsDanglingParentOrphans(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	// The orphan must NOT produce a (fatal) dangling-parent issue — it was
-	// dropped before validation.
+	// PRIMARY guard: the orphan must NOT produce the fatal dangling-parent issue
+	// — it was dropped before validation. (Without the drop, ValidateImportedResources
+	// emits imported_resource_dangling_parent for orphan_v and the gated caller
+	// aborts the whole compose.) This assertion fails if the fix regresses.
 	for _, is := range res.Issues {
 		assert.NotEqualf(t, CodeImportedDanglingParent, is.Code,
 			"orphan should be dropped, not flagged dangling: %+v", is)
 	}
 
-	// The orphan child must not be emitted; the valid resource (whose parent is
-	// present) must survive so the rest of the stack still composes.
+	// Secondary sanity on the emitted stack. NOTE: the present-parent child
+	// keep_v is NOT asserted present — a minimal aws_s3_bucket_versioning has no
+	// emit-ready body, so emit-readiness (dropUncomposable) drops it regardless
+	// of orphan logic; only the in-set parent bucket reliably emits. So these two
+	// are weak sanity checks, not the guard (the dangling-code assertion above is).
 	tf := string(res.Files["/imported.tf"])
-	assert.NotContains(t, tf, "orphan_v", "orphaned child (absent parent) must be dropped from imported.tf")
-	assert.Contains(t, tf, `resource "aws_s3_bucket" "keep"`, "the in-set parent bucket must still be emitted")
+	assert.NotContains(t, tf, "orphan_v", "orphaned child (absent parent) must not reach imported.tf")
+	assert.Contains(t, tf, `resource "aws_s3_bucket" "keep"`, "the in-set parent bucket must still be emitted (cascade didn't over-drop)")
 }
