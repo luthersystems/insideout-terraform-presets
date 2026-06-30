@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/luthersystems/insideout-terraform-presets/pkg/composer/imported"
+	"github.com/luthersystems/insideout-terraform-presets/pkg/composer/imported/generated"
 )
 
 // importChange builds a tfjson.ResourceChange that represents an
@@ -143,7 +144,12 @@ func TestValidateFirstImportPlan_Contract(t *testing.T) {
 			wantCodes: nil,
 		},
 		{
-			name: "aws lambda import publish true still fails",
+			// #833: `publish` is a behavioral deploy directive on
+			// aws_lambda_function (publishes a new version on apply), not
+			// round-trippable readback state. Even the non-zero false->true
+			// shape is a benign first-plan diff and must be accepted.
+			// (Previously asserted to fail; corrected by the #833 sweep.)
+			name: "aws lambda import publish true passes (behavioral attr)",
 			plan: &tfjson.Plan{ResourceChanges: []*tfjson.ResourceChange{
 				typedImportChange("aws_lambda_function", "aws_lambda_function.fn",
 					tfjson.Actions{tfjson.ActionUpdate},
@@ -152,7 +158,97 @@ func TestValidateFirstImportPlan_Contract(t *testing.T) {
 				),
 			}},
 			opts:      ValidateFirstImportPlanOpts{ExpectedImports: 1, ProvenanceLabelKeys: FirstImportProvenanceKeys("aws")},
+			wantCodes: nil,
+		},
+		{
+			// Guard: a non-behavioral optional attr (memory_size) that
+			// genuinely diverges from imported state is still real drift
+			// and must fail — the behavioral allowlist must not over-reach.
+			name: "aws lambda import non-behavioral memory_size change still fails",
+			plan: &tfjson.Plan{ResourceChanges: []*tfjson.ResourceChange{
+				typedImportChange("aws_lambda_function", "aws_lambda_function.fn",
+					tfjson.Actions{tfjson.ActionUpdate},
+					map[string]any{"memory_size": float64(128)},
+					map[string]any{"memory_size": float64(256)},
+				),
+			}},
+			opts:      ValidateFirstImportPlanOpts{ExpectedImports: 1, ProvenanceLabelKeys: FirstImportProvenanceKeys("aws")},
 			wantCodes: []string{"imported_plan_unauthorized_change"},
+		},
+		{
+			// #833 EXACT PROD REPRO. Whole-account reverse-import of account
+			// 141812438321 (staging session sess_v2_fvZSf5IfhLCb, job
+			// ri-897a6c4e-kff6g) failed at `terraform plan` because
+			// aws_cloudfront_function.a2ae0703_ln_default_luther_api_cf_site157d
+			// (and 3 siblings) produced a first-plan diff on `publish`, which
+			// the contract rejected with imported_plan_unauthorized_change.
+			// `publish` is a deploy directive (defaults true), not real drift.
+			name: "aws cloudfront_function first-import publish diff passes (#833)",
+			plan: &tfjson.Plan{ResourceChanges: []*tfjson.ResourceChange{
+				typedImportChange("aws_cloudfront_function",
+					"aws_cloudfront_function.a2ae0703_ln_default_luther_api_cf_site157d",
+					tfjson.Actions{tfjson.ActionUpdate},
+					map[string]any{"publish": false, "code": "function handler(){}"},
+					map[string]any{"publish": true, "code": "function handler(){}"},
+				),
+			}},
+			opts:      ValidateFirstImportPlanOpts{ExpectedImports: 1, ProvenanceLabelKeys: FirstImportProvenanceKeys("aws")},
+			wantCodes: nil,
+		},
+		{
+			// #833 sweep: aws_sfn_state_machine.publish is the same class of
+			// deploy directive (publishes a new version on apply).
+			name: "aws sfn_state_machine first-import publish diff passes (#833 sweep)",
+			plan: &tfjson.Plan{ResourceChanges: []*tfjson.ResourceChange{
+				typedImportChange("aws_sfn_state_machine", "aws_sfn_state_machine.sm",
+					tfjson.Actions{tfjson.ActionUpdate},
+					map[string]any{"publish": false},
+					map[string]any{"publish": true},
+				),
+			}},
+			opts:      ValidateFirstImportPlanOpts{ExpectedImports: 1, ProvenanceLabelKeys: FirstImportProvenanceKeys("aws")},
+			wantCodes: nil,
+		},
+		{
+			// Guard: the behavioral allowlist is per-type. `publish` on a
+			// type NOT in firstImportBehavioralAttrs must still flag, so the
+			// allowlist can never silently widen to every `publish` field.
+			name: "publish diff on an unlisted type still fails",
+			plan: &tfjson.Plan{ResourceChanges: []*tfjson.ResourceChange{
+				typedImportChange("aws_s3_bucket", "aws_s3_bucket.b",
+					tfjson.Actions{tfjson.ActionUpdate},
+					map[string]any{"publish": false},
+					map[string]any{"publish": true},
+				),
+			}},
+			opts:      ValidateFirstImportPlanOpts{ExpectedImports: 1, ProvenanceLabelKeys: FirstImportProvenanceKeys("aws")},
+			wantCodes: []string{"imported_plan_unauthorized_change"},
+		},
+		{
+			// #833 multi-resource shape: the exact 4-cloudfront-function
+			// account slice (all `publish` diffs) is accepted as a clean
+			// import-only plan — no partial drop.
+			name: "aws four cloudfront_function publish diffs all pass (#833 account slice)",
+			plan: &tfjson.Plan{ResourceChanges: []*tfjson.ResourceChange{
+				typedImportChange("aws_cloudfront_function",
+					"aws_cloudfront_function.a2ae0703_ln_default_luther_api_cf_site157d",
+					tfjson.Actions{tfjson.ActionUpdate},
+					map[string]any{"publish": false}, map[string]any{"publish": true}),
+				typedImportChange("aws_cloudfront_function",
+					"aws_cloudfront_function.a2ae0703_ln_default_luther_api_cf_site157d_d3681487",
+					tfjson.Actions{tfjson.ActionUpdate},
+					map[string]any{"publish": false}, map[string]any{"publish": true}),
+				typedImportChange("aws_cloudfront_function",
+					"aws_cloudfront_function.fcc86a23_ln_default_luther_api_cf_site157d",
+					tfjson.Actions{tfjson.ActionUpdate},
+					map[string]any{"publish": false}, map[string]any{"publish": true}),
+				typedImportChange("aws_cloudfront_function",
+					"aws_cloudfront_function.fcc86a23_ln_default_luther_api_cf_site157d_94986f5a",
+					tfjson.Actions{tfjson.ActionUpdate},
+					map[string]any{"publish": false}, map[string]any{"publish": true}),
+			}},
+			opts:      ValidateFirstImportPlanOpts{ExpectedImports: 4, ProvenanceLabelKeys: FirstImportProvenanceKeys("aws")},
+			wantCodes: nil,
 		},
 		{
 			name: "required field null to zero still fails",
@@ -638,4 +734,27 @@ func TestDiffPaths_LeafLevel(t *testing.T) {
 	// Scalar change at top-level.
 	got = diffPaths("STANDARD", "NEARLINE", "")
 	assert.Equal(t, []string{"<root>"}, got)
+}
+
+// TestFirstImportBehavioralAttrsAreRealOptionalSchemaFields is a
+// class-level poka-yoke (#833): every (resourceType, path) the
+// first-import contract forgives as "behavioral" must name a real,
+// configurable (Optional or Required) attribute in the generated provider
+// schema. This fails on a typo'd type/path and — more importantly —
+// refuses to let anyone allowlist a Computed-only field (which is never a
+// deploy directive the genconfig writes) or a non-existent attribute, both
+// of which would mask the wrong thing rather than fix a benign first-plan
+// diff. It keeps the allowlist honest as new entries are added.
+func TestFirstImportBehavioralAttrsAreRealOptionalSchemaFields(t *testing.T) {
+	t.Parallel()
+	for resourceType, paths := range firstImportBehavioralAttrs {
+		_, schema, ok := generated.Lookup(resourceType)
+		require.Truef(t, ok, "behavioral allowlist names unknown resource type %q", resourceType)
+		for path := range paths {
+			fs, ok := schema[path]
+			require.Truef(t, ok, "%s: behavioral path %q is not in the generated schema", resourceType, path)
+			assert.Truef(t, fs.Configurable(),
+				"%s.%s: behavioral allowlist entries must be configurable (Optional/Required); a Computed-only field is never a deploy directive", resourceType, path)
+		}
+	}
 }

@@ -31,6 +31,21 @@ The authoritative validator is **`pkg/composer/plan_acceptance.go:ValidateFirstI
 - `create` / `destroy` / `replace` on any resource is rejected;
 - it checks `importCount == ExpectedImports` (a count of **imports**, not changes).
 
+Two narrow, schema-guarded exceptions also pass without flagging, because
+the diff is not real drift:
+
+- **optional zero-default** — an `Optional` attribute going from `null`
+  (before) to its zero provider default (e.g. `force_destroy: false`)
+  (`allowedFirstImportOptionalZeroDefault`);
+- **behavioral / deploy-directive attrs** — a hand-curated per-type
+  allowlist (`firstImportBehavioralAttrs`) of write-only / non-round-trippable
+  attributes whose generated value is an apply-time instruction rather than a
+  faithful read-back of remote state. Current entries: `publish` on
+  `aws_cloudfront_function`, `aws_lambda_function`, and `aws_sfn_state_machine`
+  (issue #833). The allowlist is conservative by design and CI-guarded
+  (`TestFirstImportBehavioralAttrsAreRealOptionalSchemaFields`) so it can only
+  name real, configurable schema fields.
+
 ### Invariant: `change_count <= import_count`, NOT `==`
 
 Many AWS resource types **have no `tags` attribute at all** (e.g.
