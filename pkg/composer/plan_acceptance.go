@@ -358,6 +358,18 @@ func allowedFirstImportOptionalZeroDefault(resourceType, path string, before, af
 // failed at `terraform plan` because 4 aws_cloudfront_function resources
 // (e.g. aws_cloudfront_function.a2ae0703_ln_default_luther_api_cf_site157d)
 // produced an `imported_plan_unauthorized_change` on path "publish".
+//
+// CONSIDERED AND DELIBERATELY EXCLUDED (do not add without evidence of a real
+// first-import partial-failure, to avoid masking drift):
+//   - aws_db_instance / aws_rds_cluster `apply_immediately`, `skip_final_snapshot`:
+//     Optional workflow switches, but the policy layer tracks them as faithful
+//     drift (DriftSemanticExact) and the common null->false shape is already
+//     forgiven by allowedFirstImportOptionalZeroDefault. Only revisit if genconfig
+//     starts emitting a non-zero value (e.g. skip_final_snapshot=true) that
+//     partial-fails an RDS slice the way #833 did for CloudFront.
+//   - aws_lambda_function `source_code_hash` (Optional+Computed): genuinely
+//     non-round-trippable, BUT it is real redeploy signal — a first-plan diff
+//     there means the deployed package differs, which we must NOT hide.
 var firstImportBehavioralAttrs = map[string]map[string]struct{}{
 	// `publish` controls whether the provider publishes the LIVE stage on
 	// apply. It defaults to true and is not a faithful read-back of remote
