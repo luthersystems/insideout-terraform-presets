@@ -1,0 +1,1039 @@
+[
+  {
+    "attrs": {
+      "access_logs": [
+        {
+          "bucket": {
+            "literal": ""
+          },
+          "enabled": {
+            "literal": false
+          },
+          "prefix": {
+            "null": true
+          }
+        }
+      ],
+      "client_keep_alive": {
+        "literal": 3600
+      },
+      "connection_logs": [
+        {
+          "bucket": {
+            "literal": ""
+          },
+          "enabled": {
+            "literal": false
+          },
+          "prefix": {
+            "null": true
+          }
+        }
+      ],
+      "customer_owned_ipv4_pool": {
+        "null": true
+      },
+      "desync_mitigation_mode": {
+        "literal": "defensive"
+      },
+      "dns_record_client_routing_policy": {
+        "null": true
+      },
+      "drop_invalid_header_fields": {
+        "literal": false
+      },
+      "enable_cross_zone_load_balancing": {
+        "literal": true
+      },
+      "enable_deletion_protection": {
+        "literal": false
+      },
+      "enable_http2": {
+        "literal": true
+      },
+      "enable_tls_version_and_cipher_suite_headers": {
+        "literal": false
+      },
+      "enable_waf_fail_open": {
+        "literal": false
+      },
+      "enable_xff_client_port": {
+        "literal": false
+      },
+      "enable_zonal_shift": {
+        "literal": false
+      },
+      "health_check_logs": [
+        {
+          "bucket": {
+            "literal": ""
+          },
+          "enabled": {
+            "literal": false
+          },
+          "prefix": {
+            "null": true
+          }
+        }
+      ],
+      "idle_timeout": {
+        "literal": 60
+      },
+      "internal": {
+        "literal": false
+      },
+      "ip_address_type": {
+        "literal": "ipv4"
+      },
+      "ipam_pools": [],
+      "load_balancer_type": {
+        "literal": "application"
+      },
+      "minimum_load_balancer_capacity": [],
+      "name": {
+        "literal": "io-f-v6e-hzw-zt-alb"
+      },
+      "preserve_host_header": {
+        "literal": false
+      },
+      "region": {
+        "literal": "us-east-1"
+      },
+      "security_groups": [
+        {
+          "literal": "sg-05b33367d0263c42d"
+        }
+      ],
+      "subnet_mapping": [
+        {
+          "allocation_id": {
+            "literal": ""
+          },
+          "ipv6_address": {
+            "literal": ""
+          },
+          "outpost_id": {
+            "literal": ""
+          },
+          "private_ipv4_address": {
+            "literal": ""
+          },
+          "subnet_id": {
+            "literal": "subnet-08b4ceeaf7cbeccdb"
+          }
+        },
+        {
+          "allocation_id": {
+            "literal": ""
+          },
+          "ipv6_address": {
+            "literal": ""
+          },
+          "outpost_id": {
+            "literal": ""
+          },
+          "private_ipv4_address": {
+            "literal": ""
+          },
+          "subnet_id": {
+            "literal": "subnet-0a9e275a33c1d279f"
+          }
+        }
+      ],
+      "subnets": [
+        {
+          "literal": "subnet-08b4ceeaf7cbeccdb"
+        },
+        {
+          "literal": "subnet-0a9e275a33c1d279f"
+        }
+      ],
+      "tags": {
+        "Component": {
+          "literal": "insideout"
+        },
+        "Environment": {
+          "literal": "prod"
+        },
+        "ID": {
+          "literal": "alb0"
+        },
+        "Name": {
+          "literal": "io-f-v6e-hzw-zt-prod-luthersystems-insideout-alb-alb0"
+        },
+        "Organization": {
+          "literal": "luthersystems"
+        },
+        "Project": {
+          "literal": "io-f-v6e-hzw-zt"
+        },
+        "Resource": {
+          "literal": "alb"
+        },
+        "Subcomponent": {
+          "literal": "alb"
+        }
+      },
+      "tags_all": {
+        "Component": {
+          "literal": "insideout"
+        },
+        "Environment": {
+          "literal": "prod"
+        },
+        "ID": {
+          "literal": "alb0"
+        },
+        "Name": {
+          "literal": "io-f-v6e-hzw-zt-prod-luthersystems-insideout-alb-alb0"
+        },
+        "Organization": {
+          "literal": "luthersystems"
+        },
+        "Project": {
+          "literal": "io-f-v6e-hzw-zt"
+        },
+        "Resource": {
+          "literal": "alb"
+        },
+        "Subcomponent": {
+          "literal": "alb"
+        }
+      },
+      "xff_header_processing_mode": {
+        "literal": "append"
+      }
+    },
+    "identity": {
+      "account_id": "141812438321",
+      "address": "aws_lb.io_f_v6e_hzw_zt_alb",
+      "cloud": "aws",
+      "enrichment_status": "full",
+      "import_id": "arn:aws:elasticloadbalancing:us-east-1:141812438321:loadbalancer/app/io-f-v6e-hzw-zt-alb/bcda3f52ff22fa50",
+      "name_hint": "io-f-v6e-hzw-zt-alb",
+      "native_ids": {
+        "arn": "arn:aws:elasticloadbalancing:us-east-1:141812438321:loadbalancer/app/io-f-v6e-hzw-zt-alb/bcda3f52ff22fa50",
+        "name": "io-f-v6e-hzw-zt-alb"
+      },
+      "provider_config": "aws.imported",
+      "provider_source": "registry.terraform.io/hashicorp/aws",
+      "provider_version": "5.40.0",
+      "region": "us-east-1",
+      "tags": {
+        "Component": "insideout",
+        "Environment": "prod",
+        "ID": "alb0",
+        "Name": "io-f-v6e-hzw-zt-prod-luthersystems-insideout-alb-alb0",
+        "Organization": "luthersystems",
+        "Project": "io-f-v6e-hzw-zt",
+        "Resource": "alb",
+        "Subcomponent": "alb"
+      },
+      "type": "aws_lb"
+    },
+    "source": "importer",
+    "tier": "ImportedFlat"
+  },
+  {
+    "attrs": {
+      "attachment": [
+        {
+          "device_index": {
+            "literal": 0
+          },
+          "instance": {
+            "literal": "i-0f489bc60a257a4f3"
+          },
+          "network_card_index": {
+            "literal": 0
+          }
+        }
+      ],
+      "description": {
+        "null": true
+      },
+      "ena_srd_specification": [],
+      "ipv4_prefixes": [],
+      "ipv6_address_list": [],
+      "ipv6_addresses": [],
+      "ipv6_prefixes": [],
+      "private_ip": {
+        "literal": "10.1.134.121"
+      },
+      "private_ip_list": [
+        {
+          "literal": "10.1.134.121"
+        }
+      ],
+      "private_ips": [
+        {
+          "literal": "10.1.134.121"
+        }
+      ],
+      "region": {
+        "literal": "us-east-1"
+      },
+      "security_groups": [
+        {
+          "literal": "sg-07ab0fd93782eb359"
+        }
+      ],
+      "source_dest_check": {
+        "literal": true
+      },
+      "subnet_id": {
+        "expr": "aws_subnet.subnet_0e866663c4c5ad4d9.id"
+      },
+      "tags": {},
+      "tags_all": {}
+    },
+    "identity": {
+      "account_id": "141812438321",
+      "address": "aws_network_interface.eni_0071933677a6be65f",
+      "cloud": "aws",
+      "enrichment_status": "full",
+      "import_id": "eni-0071933677a6be65f",
+      "name_hint": "eni-0071933677a6be65f",
+      "native_ids": {
+        "name": "eni-0071933677a6be65f"
+      },
+      "provider_config": "aws.imported",
+      "provider_source": "registry.terraform.io/hashicorp/aws",
+      "provider_version": "5.40.0",
+      "region": "us-east-1",
+      "type": "aws_network_interface"
+    },
+    "source": "importer",
+    "tier": "ImportedFlat"
+  },
+  {
+    "attrs": {
+      "attachment": [
+        {
+          "device_index": {
+            "literal": 1
+          },
+          "instance": {
+            "literal": ""
+          },
+          "network_card_index": {
+            "literal": 0
+          }
+        }
+      ],
+      "description": {
+        "literal": "ELB app/io-f-v6e-hzw-zt-alb/bcda3f52ff22fa50"
+      },
+      "ena_srd_specification": [],
+      "ipv4_prefixes": [],
+      "ipv6_address_list": [],
+      "ipv6_addresses": [],
+      "ipv6_prefixes": [],
+      "private_ip": {
+        "literal": "10.1.128.22"
+      },
+      "private_ip_list": [
+        {
+          "literal": "10.1.128.22"
+        }
+      ],
+      "private_ips": [
+        {
+          "literal": "10.1.128.22"
+        }
+      ],
+      "region": {
+        "literal": "us-east-1"
+      },
+      "security_groups": [
+        {
+          "literal": "sg-05b33367d0263c42d"
+        }
+      ],
+      "source_dest_check": {
+        "literal": true
+      },
+      "subnet_id": {
+        "expr": "aws_subnet.subnet_08b4ceeaf7cbeccdb.id"
+      },
+      "tags": {},
+      "tags_all": {}
+    },
+    "identity": {
+      "account_id": "141812438321",
+      "address": "aws_network_interface.eni_0d62bb4aa2988e052",
+      "cloud": "aws",
+      "enrichment_status": "full",
+      "import_id": "eni-0d62bb4aa2988e052",
+      "name_hint": "eni-0d62bb4aa2988e052",
+      "native_ids": {
+        "name": "eni-0d62bb4aa2988e052"
+      },
+      "provider_config": "aws.imported",
+      "provider_source": "registry.terraform.io/hashicorp/aws",
+      "provider_version": "5.40.0",
+      "region": "us-east-1",
+      "type": "aws_network_interface"
+    },
+    "source": "importer",
+    "tier": "ImportedFlat"
+  },
+  {
+    "attrs": {
+      "bucket": {
+        "literal": "luther-55f50492-default-tfstate-s3-tbzt"
+      },
+      "bucket_namespace": {
+        "literal": "global"
+      },
+      "cors_rule": [],
+      "force_destroy": {
+        "literal": false
+      },
+      "grant": [
+        {
+          "id": {
+            "literal": "781ed559823c531af356257a8d8aab76cfb63f121d76a91261a95eef5663e2ae"
+          },
+          "permissions": [
+            {
+              "literal": "FULL_CONTROL"
+            }
+          ],
+          "type": {
+            "literal": "CanonicalUser"
+          },
+          "uri": {
+            "literal": ""
+          }
+        }
+      ],
+      "lifecycle_rule": [],
+      "logging": [],
+      "object_lock_configuration": [],
+      "object_lock_enabled": {
+        "literal": false
+      },
+      "region": {
+        "literal": "us-east-1"
+      },
+      "replication_configuration": [],
+      "server_side_encryption_configuration": [
+        {
+          "rule": [
+            {
+              "apply_server_side_encryption_by_default": [
+                {
+                  "kms_master_key_id": {
+                    "literal": "arn:aws:kms:us-east-1:141812438321:key/9b00e98c-0de7-480e-bd81-ed2e84a5f1b9"
+                  },
+                  "sse_algorithm": {
+                    "literal": "aws:kms"
+                  }
+                }
+              ],
+              "bucket_key_enabled": {
+                "literal": false
+              }
+            }
+          ]
+        }
+      ],
+      "tags": {
+        "Component": {
+          "literal": "tfstate"
+        },
+        "Environment": {
+          "literal": "default"
+        },
+        "ID": {
+          "literal": "tbzt"
+        },
+        "Name": {
+          "literal": "luther-55f50492-default-tfstate-s3-tbzt"
+        },
+        "Project": {
+          "literal": "55f50492"
+        },
+        "Resource": {
+          "literal": "s3"
+        }
+      },
+      "tags_all": {
+        "Component": {
+          "literal": "tfstate"
+        },
+        "Environment": {
+          "literal": "default"
+        },
+        "ID": {
+          "literal": "tbzt"
+        },
+        "Name": {
+          "literal": "luther-55f50492-default-tfstate-s3-tbzt"
+        },
+        "Project": {
+          "literal": "55f50492"
+        },
+        "Resource": {
+          "literal": "s3"
+        }
+      },
+      "versioning": [
+        {
+          "enabled": {
+            "literal": true
+          },
+          "mfa_delete": {
+            "literal": false
+          }
+        }
+      ],
+      "website": []
+    },
+    "identity": {
+      "account_id": "141812438321",
+      "address": "aws_s3_bucket.luther_55f50492_default_tfstate_s3_tbzt",
+      "cloud": "aws",
+      "enrichment_status": "full",
+      "import_id": "luther-55f50492-default-tfstate-s3-tbzt",
+      "name_hint": "luther-55f50492-default-tfstate-s3-tbzt",
+      "native_ids": {
+        "arn": "arn:aws:s3:::luther-55f50492-default-tfstate-s3-tbzt",
+        "name": "luther-55f50492-default-tfstate-s3-tbzt",
+        "region": "us-east-1"
+      },
+      "provider_config": "aws.imported",
+      "provider_source": "registry.terraform.io/hashicorp/aws",
+      "provider_version": "5.40.0",
+      "region": "us-east-1",
+      "tags": {
+        "Component": "tfstate",
+        "Environment": "default",
+        "ID": "tbzt",
+        "Name": "luther-55f50492-default-tfstate-s3-tbzt",
+        "Project": "55f50492",
+        "Resource": "s3"
+      },
+      "type": "aws_s3_bucket"
+    },
+    "source": "importer",
+    "tier": "ImportedFlat"
+  },
+  {
+    "attrs": {
+      "assign_ipv6_address_on_creation": {
+        "literal": false
+      },
+      "availability_zone": {
+        "literal": "us-east-1a"
+      },
+      "cidr_block": {
+        "literal": "10.1.128.0/20"
+      },
+      "customer_owned_ipv4_pool": {
+        "null": true
+      },
+      "enable_dns64": {
+        "literal": false
+      },
+      "enable_resource_name_dns_a_record_on_launch": {
+        "literal": false
+      },
+      "enable_resource_name_dns_aaaa_record_on_launch": {
+        "literal": false
+      },
+      "ipv4_ipam_pool_id": {
+        "null": true
+      },
+      "ipv4_netmask_length": {
+        "null": true
+      },
+      "ipv6_ipam_pool_id": {
+        "null": true
+      },
+      "ipv6_native": {
+        "literal": false
+      },
+      "ipv6_netmask_length": {
+        "null": true
+      },
+      "map_public_ip_on_launch": {
+        "literal": true
+      },
+      "outpost_arn": {
+        "null": true
+      },
+      "private_dns_hostname_type_on_launch": {
+        "literal": "ip-name"
+      },
+      "region": {
+        "literal": "us-east-1"
+      },
+      "tags": {
+        "Component": {
+          "literal": "insideout"
+        },
+        "Environment": {
+          "literal": "prod"
+        },
+        "ID": {
+          "literal": "vpc0"
+        },
+        "Name": {
+          "literal": "io-f-v6e-hzw-zt-prod-luthersystems-insideout-vpc-vpc0"
+        },
+        "Organization": {
+          "literal": "luthersystems"
+        },
+        "Project": {
+          "literal": "io-f-v6e-hzw-zt"
+        },
+        "Resource": {
+          "literal": "vpc"
+        },
+        "Subcomponent": {
+          "literal": "vpc"
+        },
+        "kubernetes.io/role/elb": {
+          "literal": "1"
+        }
+      },
+      "tags_all": {
+        "Component": {
+          "literal": "insideout"
+        },
+        "Environment": {
+          "literal": "prod"
+        },
+        "ID": {
+          "literal": "vpc0"
+        },
+        "Name": {
+          "literal": "io-f-v6e-hzw-zt-prod-luthersystems-insideout-vpc-vpc0"
+        },
+        "Organization": {
+          "literal": "luthersystems"
+        },
+        "Project": {
+          "literal": "io-f-v6e-hzw-zt"
+        },
+        "Resource": {
+          "literal": "vpc"
+        },
+        "Subcomponent": {
+          "literal": "vpc"
+        },
+        "kubernetes.io/role/elb": {
+          "literal": "1"
+        }
+      },
+      "vpc_id": {
+        "expr": "aws_vpc.vpc_0328efde06fc443f8.id"
+      }
+    },
+    "identity": {
+      "account_id": "141812438321",
+      "address": "aws_subnet.subnet_08b4ceeaf7cbeccdb",
+      "cloud": "aws",
+      "enrichment_status": "full",
+      "import_id": "subnet-08b4ceeaf7cbeccdb",
+      "name_hint": "subnet-08b4ceeaf7cbeccdb",
+      "native_ids": {
+        "name": "subnet-08b4ceeaf7cbeccdb",
+        "vpc_id": "vpc-0328efde06fc443f8"
+      },
+      "parent_address": "aws_vpc.vpc_0328efde06fc443f8",
+      "provider_config": "aws.imported",
+      "provider_source": "registry.terraform.io/hashicorp/aws",
+      "provider_version": "5.40.0",
+      "region": "us-east-1",
+      "tags": {
+        "Component": "insideout",
+        "Environment": "prod",
+        "ID": "vpc0",
+        "Name": "io-f-v6e-hzw-zt-prod-luthersystems-insideout-vpc-vpc0",
+        "Organization": "luthersystems",
+        "Project": "io-f-v6e-hzw-zt",
+        "Resource": "vpc",
+        "Subcomponent": "vpc",
+        "kubernetes.io/role/elb": "1"
+      },
+      "type": "aws_subnet"
+    },
+    "source": "importer",
+    "tier": "ImportedFlat"
+  },
+  {
+    "attrs": {
+      "assign_ipv6_address_on_creation": {
+        "literal": false
+      },
+      "availability_zone": {
+        "literal": "us-east-1a"
+      },
+      "cidr_block": {
+        "literal": "10.1.128.0/20"
+      },
+      "customer_owned_ipv4_pool": {
+        "null": true
+      },
+      "enable_dns64": {
+        "literal": false
+      },
+      "enable_resource_name_dns_a_record_on_launch": {
+        "literal": false
+      },
+      "enable_resource_name_dns_aaaa_record_on_launch": {
+        "literal": false
+      },
+      "ipv4_ipam_pool_id": {
+        "null": true
+      },
+      "ipv4_netmask_length": {
+        "null": true
+      },
+      "ipv6_ipam_pool_id": {
+        "null": true
+      },
+      "ipv6_native": {
+        "literal": false
+      },
+      "ipv6_netmask_length": {
+        "null": true
+      },
+      "map_public_ip_on_launch": {
+        "literal": true
+      },
+      "outpost_arn": {
+        "null": true
+      },
+      "private_dns_hostname_type_on_launch": {
+        "literal": "ip-name"
+      },
+      "region": {
+        "literal": "us-east-1"
+      },
+      "tags": {
+        "Component": {
+          "literal": "insideout"
+        },
+        "Environment": {
+          "literal": "prod"
+        },
+        "ID": {
+          "literal": "vpc0"
+        },
+        "Name": {
+          "literal": "io-f0ttnkgjdvee-prod-luthersystems-insideout-vpc-vpc0"
+        },
+        "Organization": {
+          "literal": "luthersystems"
+        },
+        "Project": {
+          "literal": "io-f0ttnkgjdvee"
+        },
+        "Resource": {
+          "literal": "vpc"
+        },
+        "Subcomponent": {
+          "literal": "vpc"
+        },
+        "kubernetes.io/role/elb": {
+          "literal": "1"
+        }
+      },
+      "tags_all": {
+        "Component": {
+          "literal": "insideout"
+        },
+        "Environment": {
+          "literal": "prod"
+        },
+        "ID": {
+          "literal": "vpc0"
+        },
+        "Name": {
+          "literal": "io-f0ttnkgjdvee-prod-luthersystems-insideout-vpc-vpc0"
+        },
+        "Organization": {
+          "literal": "luthersystems"
+        },
+        "Project": {
+          "literal": "io-f0ttnkgjdvee"
+        },
+        "Resource": {
+          "literal": "vpc"
+        },
+        "Subcomponent": {
+          "literal": "vpc"
+        },
+        "kubernetes.io/role/elb": {
+          "literal": "1"
+        }
+      },
+      "vpc_id": {
+        "expr": "aws_vpc.vpc_0b5b7a95d51782af5.id"
+      }
+    },
+    "identity": {
+      "account_id": "141812438321",
+      "address": "aws_subnet.subnet_0e866663c4c5ad4d9",
+      "cloud": "aws",
+      "enrichment_status": "full",
+      "import_id": "subnet-0e866663c4c5ad4d9",
+      "name_hint": "subnet-0e866663c4c5ad4d9",
+      "native_ids": {
+        "name": "subnet-0e866663c4c5ad4d9",
+        "vpc_id": "vpc-0b5b7a95d51782af5"
+      },
+      "parent_address": "aws_vpc.vpc_0b5b7a95d51782af5",
+      "provider_config": "aws.imported",
+      "provider_source": "registry.terraform.io/hashicorp/aws",
+      "provider_version": "5.40.0",
+      "region": "us-east-1",
+      "tags": {
+        "Component": "insideout",
+        "Environment": "prod",
+        "ID": "vpc0",
+        "Name": "io-f0ttnkgjdvee-prod-luthersystems-insideout-vpc-vpc0",
+        "Organization": "luthersystems",
+        "Project": "io-f0ttnkgjdvee",
+        "Resource": "vpc",
+        "Subcomponent": "vpc",
+        "kubernetes.io/role/elb": "1"
+      },
+      "type": "aws_subnet"
+    },
+    "source": "importer",
+    "tier": "ImportedFlat"
+  },
+  {
+    "attrs": {
+      "assign_generated_ipv6_cidr_block": {
+        "literal": false
+      },
+      "cidr_block": {
+        "literal": "10.1.0.0/16"
+      },
+      "enable_dns_hostnames": {
+        "literal": true
+      },
+      "enable_dns_support": {
+        "literal": true
+      },
+      "enable_network_address_usage_metrics": {
+        "literal": false
+      },
+      "instance_tenancy": {
+        "literal": "default"
+      },
+      "ipv4_ipam_pool_id": {
+        "null": true
+      },
+      "ipv4_netmask_length": {
+        "null": true
+      },
+      "ipv6_ipam_pool_id": {
+        "null": true
+      },
+      "region": {
+        "literal": "us-east-1"
+      },
+      "tags": {
+        "Component": {
+          "literal": "insideout"
+        },
+        "Environment": {
+          "literal": "prod"
+        },
+        "ID": {
+          "literal": "vpc0"
+        },
+        "Name": {
+          "literal": "io-f-v6e-hzw-zt-prod-luthersystems-insideout-vpc-vpc0"
+        },
+        "Organization": {
+          "literal": "luthersystems"
+        },
+        "Project": {
+          "literal": "io-f-v6e-hzw-zt"
+        },
+        "Resource": {
+          "literal": "vpc"
+        },
+        "Subcomponent": {
+          "literal": "vpc"
+        }
+      },
+      "tags_all": {
+        "Component": {
+          "literal": "insideout"
+        },
+        "Environment": {
+          "literal": "prod"
+        },
+        "ID": {
+          "literal": "vpc0"
+        },
+        "Name": {
+          "literal": "io-f-v6e-hzw-zt-prod-luthersystems-insideout-vpc-vpc0"
+        },
+        "Organization": {
+          "literal": "luthersystems"
+        },
+        "Project": {
+          "literal": "io-f-v6e-hzw-zt"
+        },
+        "Resource": {
+          "literal": "vpc"
+        },
+        "Subcomponent": {
+          "literal": "vpc"
+        }
+      }
+    },
+    "identity": {
+      "account_id": "141812438321",
+      "address": "aws_vpc.vpc_0328efde06fc443f8",
+      "cloud": "aws",
+      "enrichment_status": "full",
+      "import_id": "vpc-0328efde06fc443f8",
+      "name_hint": "vpc-0328efde06fc443f8",
+      "native_ids": {
+        "name": "vpc-0328efde06fc443f8"
+      },
+      "provider_config": "aws.imported",
+      "provider_source": "registry.terraform.io/hashicorp/aws",
+      "provider_version": "5.40.0",
+      "region": "us-east-1",
+      "tags": {
+        "Component": "insideout",
+        "Environment": "prod",
+        "ID": "vpc0",
+        "Name": "io-f-v6e-hzw-zt-prod-luthersystems-insideout-vpc-vpc0",
+        "Organization": "luthersystems",
+        "Project": "io-f-v6e-hzw-zt",
+        "Resource": "vpc",
+        "Subcomponent": "vpc"
+      },
+      "type": "aws_vpc"
+    },
+    "source": "importer",
+    "tier": "ImportedFlat"
+  },
+  {
+    "attrs": {
+      "assign_generated_ipv6_cidr_block": {
+        "literal": false
+      },
+      "cidr_block": {
+        "literal": "10.1.0.0/16"
+      },
+      "enable_dns_hostnames": {
+        "literal": true
+      },
+      "enable_dns_support": {
+        "literal": true
+      },
+      "enable_network_address_usage_metrics": {
+        "literal": false
+      },
+      "instance_tenancy": {
+        "literal": "default"
+      },
+      "ipv4_ipam_pool_id": {
+        "null": true
+      },
+      "ipv4_netmask_length": {
+        "null": true
+      },
+      "ipv6_ipam_pool_id": {
+        "null": true
+      },
+      "region": {
+        "literal": "us-east-1"
+      },
+      "tags": {
+        "Component": {
+          "literal": "insideout"
+        },
+        "Environment": {
+          "literal": "prod"
+        },
+        "ID": {
+          "literal": "vpc0"
+        },
+        "Name": {
+          "literal": "io-f0ttnkgjdvee-prod-luthersystems-insideout-vpc-vpc0"
+        },
+        "Organization": {
+          "literal": "luthersystems"
+        },
+        "Project": {
+          "literal": "io-f0ttnkgjdvee"
+        },
+        "Resource": {
+          "literal": "vpc"
+        },
+        "Subcomponent": {
+          "literal": "vpc"
+        }
+      },
+      "tags_all": {
+        "Component": {
+          "literal": "insideout"
+        },
+        "Environment": {
+          "literal": "prod"
+        },
+        "ID": {
+          "literal": "vpc0"
+        },
+        "Name": {
+          "literal": "io-f0ttnkgjdvee-prod-luthersystems-insideout-vpc-vpc0"
+        },
+        "Organization": {
+          "literal": "luthersystems"
+        },
+        "Project": {
+          "literal": "io-f0ttnkgjdvee"
+        },
+        "Resource": {
+          "literal": "vpc"
+        },
+        "Subcomponent": {
+          "literal": "vpc"
+        }
+      }
+    },
+    "identity": {
+      "account_id": "141812438321",
+      "address": "aws_vpc.vpc_0b5b7a95d51782af5",
+      "cloud": "aws",
+      "enrichment_status": "full",
+      "import_id": "vpc-0b5b7a95d51782af5",
+      "name_hint": "vpc-0b5b7a95d51782af5",
+      "native_ids": {
+        "name": "vpc-0b5b7a95d51782af5"
+      },
+      "provider_config": "aws.imported",
+      "provider_source": "registry.terraform.io/hashicorp/aws",
+      "provider_version": "5.40.0",
+      "region": "us-east-1",
+      "tags": {
+        "Component": "insideout",
+        "Environment": "prod",
+        "ID": "vpc0",
+        "Name": "io-f0ttnkgjdvee-prod-luthersystems-insideout-vpc-vpc0",
+        "Organization": "luthersystems",
+        "Project": "io-f0ttnkgjdvee",
+        "Resource": "vpc",
+        "Subcomponent": "vpc"
+      },
+      "type": "aws_vpc"
+    },
+    "source": "importer",
+    "tier": "ImportedFlat"
+  }
+]

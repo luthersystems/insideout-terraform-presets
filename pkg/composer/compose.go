@@ -12,6 +12,7 @@ import (
 
 	terraformpresets "github.com/luthersystems/insideout-terraform-presets"
 	"github.com/luthersystems/insideout-terraform-presets/pkg/composer/imported"
+	"github.com/luthersystems/insideout-terraform-presets/pkg/composer/imported/normalize"
 )
 
 // insideoutManagedByValue is the value stamped into the `managed-by` tag on
@@ -735,6 +736,25 @@ func (c *Client) composeStackImpl(opts ComposeStackOpts) (*ComposeStackResult, e
 	// gap into a stack-wide planning failure.
 	composable := dropUncomposable(importedResources, emitReadiness)
 	importedTF, importedClouds := EmitImportedTF(cloud, composable, emitOpts)
+	// Normalize the emitted HCL through the shared resource-type fixups. This
+	// is the SAME pass the reverse-import pipeline runs over the FINAL
+	// imported.tf it emits (pkg/reverseimport/run.go): terraform import
+	// faithfully echoes a resource's live state, including pairs of attributes
+	// the provider marks mutually exclusive (e.g. aws_network_interface's
+	// private_ip_list alongside private_ips, aws_lb's subnet_mapping alongside
+	// subnets) and literal-zero / empty-list readbacks that fail per-field
+	// validators — all of which fail `terraform validate` before apply. Both
+	// emit paths go through EmitImportedTF, so both need the identical fix;
+	// running it here (not only in run.go) closes the composer path that
+	// ui-core/reliable use to compose stacks adopting existing resources.
+	// AWS only, mirroring run.go's gate — the fixups are AWS-specific. #708.
+	if len(importedTF) > 0 && strings.EqualFold(cloud, "aws") {
+		normalized, nerr := normalize.NormalizeImportedHCL(importedTF)
+		if nerr != nil {
+			return nil, fmt.Errorf("normalize imported.tf: %w", nerr)
+		}
+		importedTF = normalized
+	}
 	if len(importedTF) > 0 {
 		files["/imported.tf"] = importedTF
 	}

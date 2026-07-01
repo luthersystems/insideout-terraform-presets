@@ -16,6 +16,7 @@ import (
 	"github.com/luthersystems/insideout-terraform-presets/cmd/insideout-import/genconfig"
 	"github.com/luthersystems/insideout-terraform-presets/pkg/composer"
 	"github.com/luthersystems/insideout-terraform-presets/pkg/composer/imported"
+	"github.com/luthersystems/insideout-terraform-presets/pkg/composer/imported/normalize"
 	"github.com/luthersystems/insideout-terraform-presets/pkg/reverseimport/job"
 )
 
@@ -456,7 +457,7 @@ func writeImportedTerraformArtifacts(outputDir, cloud, region, gcpProjectID, aws
 	// private_ip_list + private_ips, subnet_mapping + subnets) and fail the
 	// final `terraform validate`. AWS only — the fixups are AWS-specific. #708.
 	if cloud == "aws" {
-		normalized, err := genconfig.NormalizeImportedHCL(importedTF)
+		normalized, err := normalize.NormalizeImportedHCL(importedTF)
 		if err != nil {
 			return fmt.Errorf("normalize imported.tf: %w", err)
 		}
