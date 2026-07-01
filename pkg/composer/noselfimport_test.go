@@ -27,6 +27,12 @@ import (
 //     — Phase 2 Layer 2 field-policy registry (issue #147) used by
 //     cross-tier wiring validators (issue #150) to classify
 //     wiring vs scalar attributes.
+//   - github.com/luthersystems/insideout-terraform-presets/pkg/composer/imported/normalize
+//     — the shared resource-type fixup engine the composer runs over the
+//     /imported.tf it emits, so faithful resource-adoption HCL doesn't ship
+//     mutually-exclusive provider attributes that fail `terraform validate`
+//     (issue #708 / composer path). Composer-owned infrastructure, not a
+//     downstream consumer.
 //
 // Subpackages outside the allowlist (e.g. an "internal/" helper) must fail
 // so coupling can't accidentally leak in.
@@ -40,6 +46,7 @@ func TestNoForeignLutherImportsInNonTestFiles(t *testing.T) {
 		parentPkg + "/pkg/composer/imported/generated": {},
 		parentPkg + "/pkg/composer/imported/importid":  {},
 		parentPkg + "/pkg/composer/imported/policy":    {},
+		parentPkg + "/pkg/composer/imported/normalize": {},
 	}
 
 	entries, err := os.ReadDir(".")
