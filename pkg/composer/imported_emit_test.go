@@ -320,6 +320,56 @@ func TestEmitImportedTF_SecurityGroupTypedAttrsRestoresEmptyRuleLists(t *testing
 	require.Falsef(t, diags.HasErrors(), "imported.tf must parse: %s\n%s", diags.Error(), s)
 }
 
+// TestEmitImportedTF_RouteTableDropsComputedInlineRoutes pins the fix for the
+// whole-account reverse-import apply break: aws_route_table.route is
+// Optional+Computed and was emitted as a nested-object list literal
+// (`route = [{...}]`). AWS provider v6.52.0 added the Required `odb_network_arn`
+// to the route object, so every emitted route element began failing plan with
+// `Inappropriate value for attribute "route": element 0: attribute
+// "odb_network_arn" is required`. Because route is Computed, terraform reads
+// the real routes from refreshed state, so the emitter drops inline routes —
+// a plan no-op that is immune to this provider nested-schema drift. The route
+// table itself (vpc_id, tags, import block) must still emit and parse.
+func TestEmitImportedTF_RouteTableDropsComputedInlineRoutes(t *testing.T) {
+	t.Parallel()
+	attrs, err := json.Marshal(&generated.AWSRouteTable{
+		VPCID: generated.LiteralOf("vpc-123"),
+		Tags:  map[string]*generated.Value[string]{"Name": generated.LiteralOf("rtb-main")},
+		Route: []generated.AWSRouteTableRoute{{
+			CIDRBlock: generated.LiteralOf("0.0.0.0/0"),
+			GatewayID: generated.LiteralOf("igw-0abc"),
+		}},
+	})
+	require.NoError(t, err)
+	ir := imported.ImportedResource{
+		Identity: imported.ResourceIdentity{
+			Cloud:    "aws",
+			Type:     "aws_route_table",
+			Address:  "aws_route_table.main",
+			ImportID: "rtb-02eb84aa4898e1f26",
+		},
+		Tier:  imported.TierImportedFlat,
+		Attrs: attrs,
+	}
+	out, _ := EmitImportedTF("aws", []imported.ImportedResource{ir}, EmitImportedOpts{})
+	require.NotNil(t, out)
+	s := string(out)
+
+	// The Optional+Computed inline route list must be dropped (provider-drift
+	// guard): no `route = [...]` attribute and no route sub-attribute leakage.
+	assert.NotRegexp(t, `(?m)^\s*route\s*=`, s,
+		"inline computed route list must be dropped:\n%s", s)
+	assert.NotContains(t, s, "cidr_block",
+		"dropping route must drop its nested sub-attributes too:\n%s", s)
+
+	// The route table itself still adopts: import block + configurable attrs.
+	assert.Contains(t, s, `id = "rtb-02eb84aa4898e1f26"`, "import block must survive")
+	assert.Regexp(t, `(?m)^\s*vpc_id\s*=\s*"vpc-123"`, s, "vpc_id must survive:\n%s", s)
+
+	_, diags := hclsyntax.ParseConfig(out, "imported.tf", hcl.InitialPos)
+	require.Falsef(t, diags.HasErrors(), "imported.tf must parse: %s\n%s", diags.Error(), s)
+}
+
 func TestEmitImportedTF_SecretsManagerPinsProviderDefaultDrift(t *testing.T) {
 	t.Parallel()
 	attrs, err := json.Marshal(&generated.AWSSecretsmanagerSecret{
