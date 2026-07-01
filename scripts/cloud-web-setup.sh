@@ -190,12 +190,16 @@ ensure_go() {
 # Phase 1 (sync): base packages the parallel installers depend on. git-lfs is needed by
 # reliable's go tests (LFS-tracked tokenizer model); 'git lfs install' is system-wide here.
 # bubblewrap is codex's sandbox runtime -- without it on PATH codex warns on every invocation
-# and falls back to its bundled copy. Installed in this single synchronous transaction (not the
-# parallel phase) to avoid dpkg-lock contention with install_apt_extras.
-log "installing base apt packages (incl. git-lfs, bubblewrap)"
+# and falls back to its bundled copy. rsync drives reliable's `make export-mock` /
+# `make verify-mock` (mock-ui/scripts/export-mock.sh rsyncs the shared component tree into the
+# insideout-app-mock export); without it that target dies with "rsync: command not found".
+# This setup script is committed identically in both repos, so rsync ships here too even though
+# presets has no mock-ui. Installed in this single synchronous transaction (not the parallel
+# phase) to avoid dpkg-lock contention with install_apt_extras.
+log "installing base apt packages (incl. git-lfs, bubblewrap, rsync)"
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -y
-apt-get install -y --no-install-recommends unzip jq ca-certificates curl gnupg git-lfs bubblewrap
+apt-get install -y --no-install-recommends unzip jq ca-certificates curl gnupg git-lfs bubblewrap rsync
 git lfs install --system || true
 
 # Phase 2 (parallel): non-apt installers PLUS the single apt user (install_apt_extras).
@@ -225,7 +229,7 @@ install_codex_auth_and_plugins || log "codex auth / plugin setup failed (non-fat
 # Docker is preinstalled but its daemon won't be running in a fresh session VM. If a task
 # needs it, start it on demand: `sudo service docker start`. Not required for the standard
 # build/lint/test flow (Postgres is reached via POSTGRES_URL).
-log "setup complete: terraform, tflint, golangci-lint, gopls, go, codex, firecrawl-cli, vercel, op, gh, git-lfs, bubblewrap installed; codex auth + plugins baked"
+log "setup complete: terraform, tflint, golangci-lint, gopls, go, codex, firecrawl-cli, vercel, op, gh, git-lfs, bubblewrap, rsync installed; codex auth + plugins baked"
 # Explicit completion marker. If this line is ABSENT from the log, the script aborted partway
 # (look for the "ERROR: setup aborted at line N" breadcrumb above). To check what was skipped
 # vs failed, grep the log for: 'skipping plugin install' | 'plugin install failed' | 'WARNING' | 'ERROR'
