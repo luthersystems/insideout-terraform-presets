@@ -173,6 +173,14 @@ func ValidateImportedResources(cloud string, irs []imported.ImportedResource) []
 		if _, ok := addressIndex[parent]; ok {
 			continue
 		}
+		// A forget projection renders a `removed {}` block that references only
+		// its own address, never its parent, so an absent parent is not a
+		// dangling reference for it — don't flag it. Mirrors the emitsRemovedBlock
+		// skip in imported.DropOrphanedChildren (reliable #2048: dropping/flagging
+		// a forget block would strip its protective removed{} and risk deletion).
+		if classifyEmitMode(irs[i]) == emitModeRemovedBlock {
+			continue
+		}
 		issues = append(issues, ValidationIssue{
 			Field:  importedField(irs[i], i),
 			Value:  parent,
