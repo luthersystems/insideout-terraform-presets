@@ -20,6 +20,7 @@ import (
 	"sync"
 
 	"github.com/luthersystems/insideout-terraform-presets/pkg/composer/imported"
+	"github.com/luthersystems/insideout-terraform-presets/pkg/composer/imported/normalize"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -539,7 +540,7 @@ func cleanValidateExtract(ctx context.Context, opts Options, runner terraformRun
 	// over-emission, …). See fixups.go. The reported address list drives
 	// per-resource progress logging.
 	progressf(opts.Stdout, "genconfig: %s: applying resource type fixups…\n", scope)
-	fixed, err := applyResourceTypeFixupsReport(cleaned)
+	fixed, err := normalize.ApplyResourceTypeFixupsReport(cleaned)
 	if err != nil {
 		return nil, nil, fmt.Errorf("resource-type fixups: %w", err)
 	}

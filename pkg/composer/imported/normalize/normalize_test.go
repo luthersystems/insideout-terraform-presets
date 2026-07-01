@@ -1,4 +1,4 @@
-package genconfig
+package normalize
 
 import (
 	"reflect"

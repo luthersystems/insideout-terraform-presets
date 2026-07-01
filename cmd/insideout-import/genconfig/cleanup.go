@@ -5,9 +5,10 @@ import (
 	"sort"
 
 	"github.com/hashicorp/hcl/v2"
-	"github.com/hashicorp/hcl/v2/hclsyntax"
 	"github.com/hashicorp/hcl/v2/hclwrite"
 	tfjson "github.com/hashicorp/terraform-json"
+
+	"github.com/luthersystems/insideout-terraform-presets/pkg/composer/imported/normalize"
 )
 
 // awsProviderKey and gcpProviderKey are the registry sources for the
@@ -115,80 +116,22 @@ func applySchemaToBlock(blk *hclwrite.Block, schema *tfjson.SchemaBlock) {
 	// Don't add a second lifecycle block if one already exists; merge into
 	// the existing one. terraform plan -generate-config-out doesn't emit
 	// lifecycle, so in practice this is purely defensive.
+	//
+	// The ignore_changes shape is owned by the shared normalize package so
+	// this schema-cleanup pass and the resource-type fixups emit byte-
+	// identical lifecycle blocks (they used to be two copies in this command).
 	for _, sub := range blk.Body().Blocks() {
 		if sub.Type() == "lifecycle" {
-			mergeIgnoreChanges(sub, sensitive)
+			normalize.MergeIgnoreChanges(sub, sensitive)
 			return
 		}
 	}
 	lc := blk.Body().AppendNewBlock("lifecycle", nil)
-	lc.Body().SetAttributeRaw("ignore_changes", ignoreChangesTokens(sensitive))
+	lc.Body().SetAttributeRaw("ignore_changes", normalize.IgnoreChangesTokens(sensitive))
 }
 
-// mergeIgnoreChanges unions `names` into the lifecycle block's existing
-// ignore_changes list, PRESERVING the entries already there and
-// de-duplicating. A resource that already pins some attributes (e.g.
-// `ignore_changes = [tags]` from a Sensitive-driven cleanup pass, or from an
-// earlier fixup) keeps them and gains the new ones —
-// e.g. [tags] + [egress, ingress] -> [tags, egress, ingress]. Builds the list
-// when no ignore_changes attribute is present yet. Bare-identifier (traversal)
-// form throughout, matching ignoreChangesTokens. Idempotent: re-merging the
-// same names is a no-op (so NormalizeImportedHCL re-runs are stable). If the
-// existing list is the catch-all `all`, it already covers everything and is
-// left untouched.
-func mergeIgnoreChanges(lc *hclwrite.Block, names []string) {
-	merged := existingIgnoreChangeNames(lc)
-	seen := make(map[string]struct{}, len(merged))
-	for _, n := range merged {
-		if n == "all" {
-			return // `all` already ignores every attribute
-		}
-		seen[n] = struct{}{}
-	}
-	for _, n := range names {
-		if _, ok := seen[n]; ok {
-			continue
-		}
-		seen[n] = struct{}{}
-		merged = append(merged, n)
-	}
-	lc.Body().SetAttributeRaw("ignore_changes", ignoreChangesTokens(merged))
-}
-
-// existingIgnoreChangeNames returns the bare-identifier names already present
-// in the lifecycle block's ignore_changes list (e.g. ["tags"]). Empty when the
-// attribute is absent. Only traversal (bare-identifier) entries are recognized
-// — the form this package always emits via ignoreChangesTokens; the quoted
-// terraform-<1.5 form is never produced here.
-func existingIgnoreChangeNames(lc *hclwrite.Block) []string {
-	attr := lc.Body().GetAttribute("ignore_changes")
-	if attr == nil {
-		return nil
-	}
-	var names []string
-	for _, tok := range attr.Expr().BuildTokens(nil) {
-		if tok.Type == hclsyntax.TokenIdent {
-			names = append(names, string(tok.Bytes))
-		}
-	}
-	return names
-}
-
-// ignoreChangesTokens emits the canonical `[name1, name2, ...]` form
-// (traversal references, NOT quoted strings). terraform 1.5+ deprecates
-// the quoted form with a warning at every plan; using traversal form
-// keeps generated.tf warning-free and matches what `terraform fmt`
-// would produce.
-func ignoreChangesTokens(names []string) hclwrite.Tokens {
-	tokens := hclwrite.Tokens{
-		{Type: hclsyntax.TokenOBrack, Bytes: []byte("[")},
-	}
-	for i, n := range names {
-		if i > 0 {
-			tokens = append(tokens, &hclwrite.Token{Type: hclsyntax.TokenComma, Bytes: []byte(", ")})
-		}
-		tokens = append(tokens, &hclwrite.Token{Type: hclsyntax.TokenIdent, Bytes: []byte(n)})
-	}
-	tokens = append(tokens, &hclwrite.Token{Type: hclsyntax.TokenCBrack, Bytes: []byte("]")})
-	return tokens
-}
+// mergeIgnoreChanges / existingIgnoreChangeNames / ignoreChangesTokens moved to
+// the shared pkg/composer/imported/normalize package (exported as
+// MergeIgnoreChanges / IgnoreChangesTokens) so the resource-type fixups and this
+// schema-cleanup pass share one canonical ignore_changes shape instead of two
+// drifting copies. See applySchemaToBlock above.

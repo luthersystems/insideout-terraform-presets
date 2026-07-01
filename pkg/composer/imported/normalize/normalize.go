@@ -1,4 +1,31 @@
-package genconfig
+// Package normalize is the shared engine that reconciles the
+// mutually-exclusive / invalid provider attributes that faithful
+// resource-adoption HCL carries. Both emit paths that adopt existing AWS
+// resources run it over their output:
+//
+//   - the reverse-import pipeline (pkg/reverseimport) runs it over the FINAL
+//     imported.tf the composer emits (was cmd/insideout-import/genconfig's
+//     NormalizeImportedHCL), and
+//   - the composer path (pkg/composer.composeStackImpl) runs it over the
+//     /imported.tf it writes into a composed stack that adopts existing
+//     resources.
+//
+// It lives here — a leaf package under pkg/composer/imported, importing only
+// pkg/composer/imported — so both consumers (pkg/composer and the
+// cmd/insideout-import/genconfig command) can share the one registry without
+// pkg/composer taking a dependency on a cmd/ package (issue #708 — originally
+// applied on the reverse-import path only; this package extends the same fix
+// to the composer path).
+//
+// terraform import (and `terraform plan -generate-config-out`) faithfully
+// echo back a resource's live state, including pairs of attributes the
+// provider schema marks mutually exclusive (e.g. aws_network_interface's
+// private_ip_list alongside private_ips, aws_lb's subnet_mapping alongside
+// subnets) and literal-zero / empty-list readbacks that fail the provider's
+// per-field validators. Left unresolved they fail `terraform validate` /
+// `plan` before apply. The resourceTypeFixups registry below reconciles each
+// known case; NormalizeImportedHCL is the entry point.
+package normalize
 
 import (
 	"fmt"
@@ -11,6 +38,12 @@ import (
 
 	"github.com/luthersystems/insideout-terraform-presets/pkg/composer/imported"
 )
+
+// normalizeSourceName is the synthetic filename used in HCL parse
+// diagnostics for the config this package rewrites. It is a label only —
+// no file is read — so any stable name works; "imported.tf" reflects the
+// artifact both consumers feed in.
+const normalizeSourceName = "imported.tf"
 
 // applyResourceTypeFixups runs after schema cleanup. It plugs the gaps
 // where `terraform plan -generate-config-out` produces output that the
@@ -27,7 +60,7 @@ import (
 // methods that need re-emission) is a one-line addition to the table
 // rather than a refactor.
 func applyResourceTypeFixups(raw []byte) ([]byte, error) {
-	res, err := applyResourceTypeFixupsReport(raw)
+	res, err := ApplyResourceTypeFixupsReport(raw)
 	return res.HCL, err
 }
 
@@ -45,24 +78,26 @@ func NormalizeImportedHCL(raw []byte) ([]byte, error) {
 	return applyResourceTypeFixups(raw)
 }
 
-// fixupResult is the output of applyResourceTypeFixupsReport: the rewritten
+// FixupResult is the output of ApplyResourceTypeFixupsReport: the rewritten
 // HCL plus the "TYPE.NAME" addresses a registered fixup ran against.
-type fixupResult struct {
+type FixupResult struct {
 	// HCL is the post-fixup generated config.
 	HCL []byte
 	// Applied lists the addresses a registered fixup closure ran for, for
 	// per-resource progress logging. It reflects fixups ATTEMPTED (a
-	// registered closure ran for that block) — a useful "what did genconfig
-	// touch" signal even though a given closure may be a no-op on a block.
+	// registered closure ran for that block) — a useful "what did the fixup
+	// pass touch" signal even though a given closure may be a no-op on a block.
 	Applied []string
 }
 
-// applyResourceTypeFixupsReport is applyResourceTypeFixups plus the list of
-// addresses touched, returned together in a fixupResult.
-func applyResourceTypeFixupsReport(raw []byte) (fixupResult, error) {
-	f, diags := hclwrite.ParseConfig(raw, generatedFile, hcl.Pos{Line: 1, Column: 1})
+// ApplyResourceTypeFixupsReport is applyResourceTypeFixups plus the list of
+// addresses touched, returned together in a FixupResult. Exported so the
+// genconfig command's generated.tf pass can drive per-resource progress
+// logging off the Applied list.
+func ApplyResourceTypeFixupsReport(raw []byte) (FixupResult, error) {
+	f, diags := hclwrite.ParseConfig(raw, normalizeSourceName, hcl.Pos{Line: 1, Column: 1})
 	if diags.HasErrors() {
-		return fixupResult{}, fmt.Errorf("parse for fixups: %s", diags.Error())
+		return FixupResult{}, fmt.Errorf("parse for fixups: %s", diags.Error())
 	}
 	var applied []string
 	for _, blk := range f.Body().Blocks() {
@@ -80,7 +115,7 @@ func applyResourceTypeFixupsReport(raw []byte) (fixupResult, error) {
 		fix(blk)
 		applied = append(applied, labels[0]+"."+labels[1])
 	}
-	return fixupResult{HCL: f.Bytes(), Applied: applied}, nil
+	return FixupResult{HCL: f.Bytes(), Applied: applied}, nil
 }
 
 // resourceTypeFixups maps a Terraform resource type to its post-cleanup
@@ -152,12 +187,12 @@ func fixupDefaultNetworkACLIgnoreRules(blk *hclwrite.Block) {
 	body := blk.Body()
 	for _, sub := range body.Blocks() {
 		if sub.Type() == "lifecycle" {
-			mergeIgnoreChanges(sub, defaultNACLIgnoreChanges)
+			MergeIgnoreChanges(sub, defaultNACLIgnoreChanges)
 			return
 		}
 	}
 	lc := body.AppendNewBlock("lifecycle", nil)
-	lc.Body().SetAttributeRaw("ignore_changes", ignoreChangesTokens(defaultNACLIgnoreChanges))
+	lc.Body().SetAttributeRaw("ignore_changes", IgnoreChangesTokens(defaultNACLIgnoreChanges))
 }
 
 // defaultNACLIgnoreChanges are the nested rule blocks dropped by scalar-only
@@ -218,12 +253,12 @@ func fixupLambdaSource(blk *hclwrite.Block) {
 	// consistent across Sensitive-driven and fixup-driven entries.
 	for _, sub := range body.Blocks() {
 		if sub.Type() == "lifecycle" {
-			mergeIgnoreChanges(sub, lambdaIgnoreChanges)
+			MergeIgnoreChanges(sub, lambdaIgnoreChanges)
 			return
 		}
 	}
 	lc := body.AppendNewBlock("lifecycle", nil)
-	lc.Body().SetAttributeRaw("ignore_changes", ignoreChangesTokens(lambdaIgnoreChanges))
+	lc.Body().SetAttributeRaw("ignore_changes", IgnoreChangesTokens(lambdaIgnoreChanges))
 }
 
 // fixupKeyPairPublicKey is the aws_key_pair counterpart to
@@ -242,12 +277,12 @@ func fixupKeyPairPublicKey(blk *hclwrite.Block) {
 	}
 	for _, sub := range body.Blocks() {
 		if sub.Type() == "lifecycle" {
-			mergeIgnoreChanges(sub, imported.KeyPairPublicKeyAttr)
+			MergeIgnoreChanges(sub, imported.KeyPairPublicKeyAttr)
 			return
 		}
 	}
 	lc := body.AppendNewBlock("lifecycle", nil)
-	lc.Body().SetAttributeRaw("ignore_changes", ignoreChangesTokens(imported.KeyPairPublicKeyAttr))
+	lc.Body().SetAttributeRaw("ignore_changes", IgnoreChangesTokens(imported.KeyPairPublicKeyAttr))
 }
 
 // fixupKMSRotationPeriodZero drops aws_kms_key.rotation_period_in_days
@@ -1172,4 +1207,99 @@ func isAttrLiteralFalse(body *hclwrite.Body, name string) bool {
 		sb.Write(t.Bytes)
 	}
 	return strings.TrimSpace(sb.String()) == "false"
+}
+
+// MergeIgnoreChanges unions `names` into the lifecycle block's existing
+// ignore_changes list, PRESERVING the entries already there and
+// de-duplicating. A resource that already pins some attributes (e.g.
+// `ignore_changes = [tags]` from a Sensitive-driven cleanup pass, or from an
+// earlier fixup) keeps them and gains the new ones —
+// e.g. [tags] + [egress, ingress] -> [tags, egress, ingress]. Builds the list
+// when no ignore_changes attribute is present yet. Bare-identifier (traversal)
+// form throughout, matching IgnoreChangesTokens. Idempotent: re-merging the
+// same names is a no-op (so NormalizeImportedHCL re-runs are stable). If the
+// existing list is the catch-all `all`, it already covers everything and is
+// left untouched.
+//
+// Exported (with IgnoreChangesTokens) so the genconfig command's schema-cleanup
+// pass shares this exact ignore_changes shape rather than carrying a drifting
+// duplicate — the fixups here and cleanGenerated must emit byte-identical
+// lifecycle blocks.
+func MergeIgnoreChanges(lc *hclwrite.Block, names []string) {
+	merged := existingIgnoreChangeNames(lc)
+	seen := make(map[string]struct{}, len(merged))
+	for _, n := range merged {
+		if n == "all" {
+			return // `all` already ignores every attribute
+		}
+		seen[n] = struct{}{}
+	}
+	for _, n := range names {
+		if _, ok := seen[n]; ok {
+			continue
+		}
+		seen[n] = struct{}{}
+		merged = append(merged, n)
+	}
+	lc.Body().SetAttributeRaw("ignore_changes", IgnoreChangesTokens(merged))
+}
+
+// existingIgnoreChangeNames returns the bare-identifier names already present
+// in the lifecycle block's ignore_changes list (e.g. ["tags"]). Empty when the
+// attribute is absent. Only traversal (bare-identifier) entries are recognized
+// — the form this package always emits via IgnoreChangesTokens; the quoted
+// terraform-<1.5 form is never produced here.
+func existingIgnoreChangeNames(lc *hclwrite.Block) []string {
+	attr := lc.Body().GetAttribute("ignore_changes")
+	if attr == nil {
+		return nil
+	}
+	var names []string
+	for _, tok := range attr.Expr().BuildTokens(nil) {
+		if tok.Type == hclsyntax.TokenIdent {
+			names = append(names, string(tok.Bytes))
+		}
+	}
+	return names
+}
+
+// IgnoreChangesTokens emits the canonical `[name1, name2, ...]` form
+// (traversal references, NOT quoted strings). terraform 1.5+ deprecates
+// the quoted form with a warning at every plan; using traversal form
+// keeps generated config warning-free and matches what `terraform fmt`
+// would produce.
+func IgnoreChangesTokens(names []string) hclwrite.Tokens {
+	tokens := hclwrite.Tokens{
+		{Type: hclsyntax.TokenOBrack, Bytes: []byte("[")},
+	}
+	for i, n := range names {
+		if i > 0 {
+			tokens = append(tokens, &hclwrite.Token{Type: hclsyntax.TokenComma, Bytes: []byte(", ")})
+		}
+		tokens = append(tokens, &hclwrite.Token{Type: hclsyntax.TokenIdent, Bytes: []byte(n)})
+	}
+	tokens = append(tokens, &hclwrite.Token{Type: hclsyntax.TokenCBrack, Bytes: []byte("]")})
+	return tokens
+}
+
+// stringLitFromAttr extracts the value of a `name = "string-literal"`
+// attribute. Returns "" for any non-literal expression.
+//
+// This is a small, self-contained copy of the genconfig helper of the same
+// name (cmd/insideout-import/genconfig/orphan_imports.go). It is duplicated
+// rather than shared because the genconfig original is an imports.tf /
+// import-ID concern used across orphan/unimportable pruning; a single fixup
+// here (interface_type normalization) needs the same trivial extraction, and
+// inverting the genconfig dependency onto this leaf package for a 10-line pure
+// function would be the wrong direction.
+func stringLitFromAttr(attr *hclwrite.Attribute) string {
+	if attr == nil {
+		return ""
+	}
+	tokens := attr.Expr().BuildTokens(nil)
+	if len(tokens) != 3 {
+		return ""
+	}
+	// tokens: OQuote, QuotedLit, CQuote
+	return string(tokens[1].Bytes)
 }
