@@ -285,6 +285,7 @@ func emitImportedResourceBody(ir imported.ImportedResource) ([]byte, error) {
 		ensureLambdaPlaceholderSource(typed)
 		ensureKeyPairPlaceholder(typed)
 		ensureSecurityGroupRuleLists(typed)
+		dropRouteTableComputedRoutes(typed)
 		// Pass the registered schema so computed-only attributes are
 		// dropped. Lookup returns a nil schema for unregistered types,
 		// which makes MarshalHCLConfigurable byte-identical to MarshalHCL.
@@ -332,6 +333,32 @@ func ensureSecurityGroupIngressRuleLists(rule *generated.AWSSecurityGroupIngress
 	}
 	if rule.SecurityGroups == nil {
 		rule.SecurityGroups = []*generated.Value[string]{}
+	}
+}
+
+// dropRouteTableComputedRoutes clears the inline `route` list on an imported
+// aws_route_table before emission.
+//
+// aws_route_table.route is Optional+Computed and is emitted as a nested-object
+// list literal (`route = [{ ... }]`). Terraform type-checks each object
+// element against the provider's full nested schema, so the moment the AWS
+// provider widens that schema with a new Required sub-attribute the emitter
+// doesn't know about, every element fails plan with `Inappropriate value for
+// attribute "route": element 0: attribute "<x>" is required`. AWS provider
+// v6.52.0 did exactly this — it added the Required `odb_network_arn` (Oracle
+// Database@AWS routing) to the route object — which broke every whole-account
+// reverse-import apply that discovered a route table with inline routes.
+//
+// Because `route` is Computed, terraform reads the route table's real routes
+// from the imported resource's refreshed state, so simply not declaring them
+// is a plan no-op — and it makes the emitter immune to this class of provider
+// nested-schema drift (the same failure mode ensureSecurityGroupRuleLists
+// hand-patches for aws_security_group's ingress/egress objects). We drop the
+// inline routes rather than re-declaring them; adopting a route table does not
+// require re-stating routes terraform can already read.
+func dropRouteTableComputedRoutes(typed any) {
+	if rt, ok := typed.(*generated.AWSRouteTable); ok {
+		rt.Route = nil
 	}
 }
 
