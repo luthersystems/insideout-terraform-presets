@@ -20,6 +20,7 @@ type AWSKinesisStream struct {
 	ShardLevelMetrics       []*Value[string]                    `tf:"shard_level_metrics" json:"shard_level_metrics,omitempty"`
 	Tags                    map[string]*Value[string]           `tf:"tags" json:"tags,omitempty"`
 	TagsAll                 map[string]*Value[string]           `tf:"tags_all" json:"tags_all,omitempty"`
+	WarmThroughputMibPs     *Value[float64]                     `tf:"warm_throughput_mib_ps" json:"warm_throughput_mib_ps,omitempty"`
 	StreamModeDetails       []AWSKinesisStreamStreamModeDetails `tf:"stream_mode_details,blocks" json:"stream_mode_details,omitempty"`
 	Timeouts                *AWSKinesisStreamTimeouts           `tf:"timeouts,block" json:"timeouts,omitempty"`
 }
@@ -52,6 +53,7 @@ var AWSKinesisStreamSchema = map[string]FieldSchema{
 	"shard_level_metrics":       {Optional: true, Replacement: ReplacementUnknown},
 	"tags":                      {Optional: true, Replacement: ReplacementUnknown},
 	"tags_all":                  {Optional: true, Computed: true, Replacement: ReplacementUnknown},
+	"warm_throughput_mib_ps":    {Optional: true, Replacement: ReplacementUnknown},
 	"stream_mode_details":       {Optional: true, Replacement: ReplacementUnknown},
 	"timeouts":                  {Optional: true, Replacement: ReplacementUnknown},
 }
