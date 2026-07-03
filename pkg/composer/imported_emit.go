@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"reflect"
 	"sort"
 	"strings"
 	"time"
@@ -284,12 +285,11 @@ func emitImportedResourceBody(ir imported.ImportedResource) ([]byte, error) {
 		}
 		ensureLambdaPlaceholderSource(typed)
 		ensureKeyPairPlaceholder(typed)
-		ensureSecurityGroupRuleLists(typed)
-		dropRouteTableComputedRoutes(typed)
 		// Pass the registered schema so computed-only attributes are
 		// dropped. Lookup returns a nil schema for unregistered types,
 		// which makes MarshalHCLConfigurable byte-identical to MarshalHCL.
 		_, schema, _ := generated.Lookup(ir.Identity.Type)
+		dropUneditedComputedNestedObjectAttrs(typed, schema, ir.FieldEdits)
 		body, err := generated.MarshalHCLConfigurable(typed, schema)
 		if err != nil {
 			return nil, fmt.Errorf("marshal typed body for %q: %w", ir.Identity.Type, err)
@@ -299,67 +299,98 @@ func emitImportedResourceBody(ir imported.ImportedResource) ([]byte, error) {
 	return emitOpaqueAttrsBody(ir)
 }
 
-func ensureSecurityGroupRuleLists(typed any) {
-	sg, ok := typed.(*generated.AWSSecurityGroup)
-	if !ok {
+// dropUneditedComputedNestedObjectAttrs nils every Optional+Computed
+// nested-object ATTRIBUTE (a `tf:"name"`-tagged field whose element is a
+// nested struct, emitted as an object literal `name = [{...}]` / `name =
+// {...}`) on an imported resource's typed model before emission — unless the
+// resource carries a FieldEdit targeting that attribute.
+//
+// Why (the odb_network_arn class): terraform type-checks each object-literal
+// element against the provider's FULL nested schema, so the moment a provider
+// release widens the nested object with a new Required sub-attribute the
+// generated model doesn't know about, every emitted element fails plan with
+// `Inappropriate value for attribute "<attr>": element 0: attribute "<x>" is
+// required`. AWS provider v6.52.0 did exactly this to aws_route_table.route
+// (added the Required `odb_network_arn`), breaking every whole-account
+// reverse-import apply that discovered a route table with inline routes. A
+// live schema scan (cmd/driftscan) found 10 more attrs one provider bump away
+// from the same failure: aws_security_group / aws_network_acl ingress+egress,
+// aws_bedrockagent_agent memory/prompt_override configuration,
+// aws_bedrockagent_agent_alias routing_configuration,
+// aws_opensearchserverless_collection encryption_config, and aws_s3vectors_*
+// encryption_configuration.
+//
+// Because these attributes are Computed, terraform reads their real values
+// from the imported resource's refreshed state — omitting them from the
+// generated config is a plan no-op, and it immunizes the emitter against the
+// whole drift class instead of hand-patching one resource at a time (this
+// generalizes and retires the earlier ensureSecurityGroupRuleLists and
+// dropRouteTableComputedRoutes point fixes).
+//
+// Edits are preserved: if ir.FieldEdits contains a path rooted at the
+// attribute (exact, dotted, or indexed — "ingress", "ingress[0].from_port"),
+// the literal is kept so the operator's change still materializes in HCL.
+// Optional-only (non-Computed) nested attrs are never dropped — they are real
+// configuration with no state to fall back on.
+func dropUneditedComputedNestedObjectAttrs(typed any, schema map[string]generated.FieldSchema, edits map[string]imported.FieldEdit) {
+	if typed == nil || schema == nil {
 		return
 	}
-	for i := range sg.Egress {
-		ensureSecurityGroupEgressRuleLists(&sg.Egress[i])
+	v := reflect.ValueOf(typed)
+	if v.Kind() == reflect.Pointer {
+		v = v.Elem()
 	}
-	for i := range sg.Ingress {
-		ensureSecurityGroupIngressRuleLists(&sg.Ingress[i])
+	if v.Kind() != reflect.Struct {
+		return
 	}
-}
-
-func ensureSecurityGroupEgressRuleLists(rule *generated.AWSSecurityGroupEgress) {
-	if rule.IPV6CIDRBlocks == nil {
-		rule.IPV6CIDRBlocks = []*generated.Value[string]{}
-	}
-	if rule.PrefixListIDS == nil {
-		rule.PrefixListIDS = []*generated.Value[string]{}
-	}
-	if rule.SecurityGroups == nil {
-		rule.SecurityGroups = []*generated.Value[string]{}
-	}
-}
-
-func ensureSecurityGroupIngressRuleLists(rule *generated.AWSSecurityGroupIngress) {
-	if rule.IPV6CIDRBlocks == nil {
-		rule.IPV6CIDRBlocks = []*generated.Value[string]{}
-	}
-	if rule.PrefixListIDS == nil {
-		rule.PrefixListIDS = []*generated.Value[string]{}
-	}
-	if rule.SecurityGroups == nil {
-		rule.SecurityGroups = []*generated.Value[string]{}
+	t := v.Type()
+	for i := 0; i < t.NumField(); i++ {
+		fld := t.Field(i)
+		parts := strings.Split(fld.Tag.Get("tf"), ",")
+		tag := parts[0]
+		if tag == "" || len(parts) > 1 {
+			continue // untagged, or a block/blocks field (validated per-attribute)
+		}
+		fs, ok := schema[tag]
+		if !ok || !fs.Optional || !fs.Computed {
+			continue // only Optional+Computed attrs are safe plan no-ops to omit
+		}
+		if !isNestedObjectAttrField(fld.Type) {
+			continue // scalar Value[T] / lists / maps of scalars are not the class
+		}
+		if fieldEditTargets(edits, tag) {
+			continue // operator edited it — the literal must materialize
+		}
+		v.Field(i).SetZero()
 	}
 }
 
-// dropRouteTableComputedRoutes clears the inline `route` list on an imported
-// aws_route_table before emission.
-//
-// aws_route_table.route is Optional+Computed and is emitted as a nested-object
-// list literal (`route = [{ ... }]`). Terraform type-checks each object
-// element against the provider's full nested schema, so the moment the AWS
-// provider widens that schema with a new Required sub-attribute the emitter
-// doesn't know about, every element fails plan with `Inappropriate value for
-// attribute "route": element 0: attribute "<x>" is required`. AWS provider
-// v6.52.0 did exactly this — it added the Required `odb_network_arn` (Oracle
-// Database@AWS routing) to the route object — which broke every whole-account
-// reverse-import apply that discovered a route table with inline routes.
-//
-// Because `route` is Computed, terraform reads the route table's real routes
-// from the imported resource's refreshed state, so simply not declaring them
-// is a plan no-op — and it makes the emitter immune to this class of provider
-// nested-schema drift (the same failure mode ensureSecurityGroupRuleLists
-// hand-patches for aws_security_group's ingress/egress objects). We drop the
-// inline routes rather than re-declaring them; adopting a route table does not
-// require re-stating routes terraform can already read.
-func dropRouteTableComputedRoutes(typed any) {
-	if rt, ok := typed.(*generated.AWSRouteTable); ok {
-		rt.Route = nil
+// isNestedObjectAttrField reports whether an attr-tagged field's element is a
+// nested-object struct (emitted as an object literal) rather than a scalar
+// Value[T] carrier. Pointer/slice layers are unwrapped to the element type.
+func isNestedObjectAttrField(t reflect.Type) bool {
+	for t.Kind() == reflect.Pointer || t.Kind() == reflect.Slice {
+		t = t.Elem()
 	}
+	if t.Kind() != reflect.Struct {
+		return false
+	}
+	_, isValueCarrier := t.FieldByName("Literal")
+	return !isValueCarrier
+}
+
+// fieldEditTargets reports whether any FieldEdit path is rooted at attr:
+// exact ("ingress"), dotted ("ingress.0.from_port"), or indexed
+// ("ingress[0].from_port").
+func fieldEditTargets(edits map[string]imported.FieldEdit, attr string) bool {
+	for path := range edits {
+		if path == attr ||
+			strings.HasPrefix(path, attr+".") ||
+			strings.HasPrefix(path, attr+"[") {
+			return true
+		}
+	}
+	return false
 }
 
 // stripResourceIDAttr removes the top-level `id` key from a typed-Attrs

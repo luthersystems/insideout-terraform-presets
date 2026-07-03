@@ -284,7 +284,7 @@ func TestEmitImportedTF_LambdaTypedAttrsInjectsPlaceholderFilename(t *testing.T)
 	assert.Contains(t, s, "ignore_changes", "placeholder filename must still be pinned under ignore_changes")
 }
 
-func TestEmitImportedTF_SecurityGroupTypedAttrsRestoresEmptyRuleLists(t *testing.T) {
+func TestEmitImportedTF_SecurityGroupDropsUneditedComputedRules(t *testing.T) {
 	t.Parallel()
 	attrs, err := json.Marshal(&generated.AWSSecurityGroup{
 		Name:  generated.LiteralOf("web"),
@@ -312,10 +312,61 @@ func TestEmitImportedTF_SecurityGroupTypedAttrsRestoresEmptyRuleLists(t *testing
 	out, _ := EmitImportedTF("aws", []imported.ImportedResource{ir}, EmitImportedOpts{})
 	require.NotNil(t, out)
 	s := string(out)
-	for _, want := range []string{"ipv6_cidr_blocks", "prefix_list_ids", "security_groups"} {
-		assert.Regexpf(t, regexp.MustCompile(`(?m)^\s*`+want+`\s*=\s*\[\]`), s,
-			"security group rule must restore required empty list %s:\n%s", want, s)
+	// ingress/egress are Optional+Computed nested-object attrs: unedited, they
+	// are dropped entirely (dropUneditedComputedNestedObjectAttrs) — terraform
+	// reads the real rules from the imported state, and omitting the literal
+	// immunizes against provider nested-schema drift (the odb_network_arn
+	// class). The old behavior padded required empty sub-lists instead; that
+	// point fix is superseded.
+	assert.NotRegexp(t, `(?m)^\s*ingress\s*=`, s,
+		"unedited computed ingress literal must be dropped:\n%s", s)
+	assert.NotContains(t, s, "cidr_blocks",
+		"dropping ingress must drop its nested sub-attributes too:\n%s", s)
+	assert.Regexp(t, `(?m)^\s*vpc_id\s*=\s*"vpc-123"`, s, "vpc_id must survive:\n%s", s)
+	_, diags := hclsyntax.ParseConfig(out, "imported.tf", hcl.InitialPos)
+	require.Falsef(t, diags.HasErrors(), "imported.tf must parse: %s\n%s", diags.Error(), s)
+}
+
+// TestEmitImportedTF_EditedComputedNestedAttrSurvives pins the edit-preserving
+// carve-out of dropUneditedComputedNestedObjectAttrs: when the operator has a
+// FieldEdit rooted at a computed nested-object attribute, the literal must
+// still materialize in HCL so the edit reaches terraform.
+func TestEmitImportedTF_EditedComputedNestedAttrSurvives(t *testing.T) {
+	t.Parallel()
+	attrs, err := json.Marshal(&generated.AWSSecurityGroup{
+		Name:  generated.LiteralOf("web"),
+		VPCID: generated.LiteralOf("vpc-123"),
+		Ingress: []generated.AWSSecurityGroupIngress{{
+			CIDRBlocks:     []*generated.Value[string]{generated.LiteralOf("10.0.0.0/8")},
+			FromPort:       generated.LiteralOf[float64](443),
+			Protocol:       generated.LiteralOf("tcp"),
+			Self:           generated.LiteralOf(false),
+			ToPort:         generated.LiteralOf[float64](443),
+			IPV6CIDRBlocks: []*generated.Value[string]{},
+			PrefixListIDS:  []*generated.Value[string]{},
+			SecurityGroups: []*generated.Value[string]{},
+		}},
+	})
+	require.NoError(t, err)
+	ir := imported.ImportedResource{
+		Identity: imported.ResourceIdentity{
+			Cloud:    "aws",
+			Type:     "aws_security_group",
+			Address:  "aws_security_group.web",
+			ImportID: "sg-123",
+		},
+		Tier:  imported.TierImportedFlat,
+		Attrs: attrs,
+		FieldEdits: map[string]imported.FieldEdit{
+			"ingress[0].from_port": {NewValue: "443"},
+		},
 	}
+	out, _ := EmitImportedTF("aws", []imported.ImportedResource{ir}, EmitImportedOpts{})
+	require.NotNil(t, out)
+	s := string(out)
+	assert.Regexp(t, `(?m)^\s*ingress\s*=`, s,
+		"edited ingress literal must survive the computed-nested drop:\n%s", s)
+	assert.Contains(t, s, "10.0.0.0/8", "edited rule content must materialize:\n%s", s)
 	_, diags := hclsyntax.ParseConfig(out, "imported.tf", hcl.InitialPos)
 	require.Falsef(t, diags.HasErrors(), "imported.tf must parse: %s\n%s", diags.Error(), s)
 }
