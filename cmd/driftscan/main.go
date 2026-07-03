@@ -6,19 +6,67 @@
 // struct fails plan the moment the provider adds it.
 //
 // Usage: go run ./cmd/driftscan -schema aws-6.52.0-schema.json
+//
+// Exit codes: 0 always, unless -fail-on-bugs is set and at least one
+// non-allowlisted BUG(missing-required) was found, in which case exit 1.
 package main
 
 import (
+	"bufio"
 	"encoding/json"
 	"flag"
 	"fmt"
 	"os"
 	"reflect"
+	"regexp"
 	"sort"
 	"strings"
 
 	"github.com/luthersystems/insideout-terraform-presets/pkg/composer/imported/generated"
 )
+
+// issueRef matches a GitHub issue citation (e.g. "#845") anywhere on an
+// allowlist line. Every allowlist entry MUST cite the issue tracking the
+// stale model so the list can only shrink (allowlist-can-only-shrink
+// convention — a deferral without a ref rots silently).
+var issueRef = regexp.MustCompile(`#\d+`)
+
+// loadAllowlist parses tests/driftscan-allowlist.txt. Each active line is
+//
+//	<tfType>.<attr>:<sub-attr>   # refs #<issue>
+//
+// e.g. `aws_route_table.route:odb_network_arn  # refs #845`. Blank lines and
+// full-line `#` comments are ignored. A citation-free entry is a hard error.
+func loadAllowlist(path string) (map[string]bool, error) {
+	allow := map[string]bool{}
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	sc := bufio.NewScanner(f)
+	ln := 0
+	for sc.Scan() {
+		ln++
+		line := sc.Text()
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" || strings.HasPrefix(trimmed, "#") {
+			continue
+		}
+		key := trimmed
+		if i := strings.Index(trimmed, "#"); i >= 0 {
+			key = strings.TrimSpace(trimmed[:i])
+		}
+		if !issueRef.MatchString(line) {
+			return nil, fmt.Errorf("%s:%d: allowlist entry %q missing an issue citation (e.g. `# refs #845`)", path, ln, key)
+		}
+		if key == "" {
+			return nil, fmt.Errorf("%s:%d: allowlist entry has a citation but no <tfType>.<attr>:<sub-attr> key", path, ln)
+		}
+		allow[key] = true
+	}
+	return allow, sc.Err()
+}
 
 type providerSchemaDoc struct {
 	ProviderSchemas map[string]struct {
@@ -98,7 +146,21 @@ func structTFTags(t reflect.Type) map[string]bool {
 
 func main() {
 	schemaPath := flag.String("schema", "", "path to terraform providers schema -json output")
+	failOnBugs := flag.Bool("fail-on-bugs", false, "exit 1 if any non-allowlisted missing-required BUG is found")
+	quiet := flag.Bool("quiet", false, "suppress fragile-literal lines (BUG/ALLOWED/NOTE + summary still print)")
+	allowPath := flag.String("allow", "", "path to allowlist of known-stale missing-required entries (<tfType>.<attr>:<sub-attr>)")
 	flag.Parse()
+
+	allow := map[string]bool{}
+	if *allowPath != "" {
+		var err error
+		allow, err = loadAllowlist(*allowPath)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(2)
+		}
+	}
+
 	raw, err := os.ReadFile(*schemaPath)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
@@ -118,6 +180,7 @@ func main() {
 
 	bugs := 0
 	fragile := 0
+	allowed := 0
 	for _, tfType := range generated.RegisteredTypes() {
 		if !strings.HasPrefix(tfType, "aws_") {
 			continue
@@ -179,7 +242,7 @@ func main() {
 				continue // computed-only: MarshalHCLConfigurable already drops it — never emitted
 			}
 			ours := structTFTags(ft)
-			var missing []string
+			var missing, allowlisted []string
 			for _, n := range subNames {
 				if provSubs != nil {
 					// framework nested attr: only Required sub-attrs break literals
@@ -188,20 +251,38 @@ func main() {
 					}
 				}
 				// SDKv2 object type: every sub-attr name is required in a literal
-				if !ours[n] {
-					missing = append(missing, n)
+				if ours[n] {
+					continue
+				}
+				// Known-stale, issue-tracked misses are allowlisted so the gate
+				// can go green before the model regen lands (see #845). Key:
+				// <tfType>.<attr>:<sub-attr>.
+				if allow[fmt.Sprintf("%s.%s:%s", tfType, tag, n)] {
+					allowlisted = append(allowlisted, n)
+					continue
+				}
+				missing = append(missing, n)
+			}
+			switch {
+			case len(missing) > 0:
+				bugs++
+				fmt.Printf("%-22s %-45s attr=%-30s optional=%v computed=%v missing=%v\n",
+					"BUG(missing-required)", tfType, tag, fs.Optional, fs.Computed, missing)
+			case len(allowlisted) > 0:
+				allowed++
+				fmt.Printf("%-22s %-45s attr=%-30s optional=%v computed=%v allowed=%v\n",
+					"ALLOWED(stale-model)", tfType, tag, fs.Optional, fs.Computed, allowlisted)
+			default:
+				fragile++
+				if !*quiet {
+					fmt.Printf("%-22s %-45s attr=%-30s optional=%v computed=%v missing=[]\n",
+						"fragile-literal", tfType, tag, fs.Optional, fs.Computed)
 				}
 			}
-			cls := "fragile-literal"
-			if len(missing) > 0 {
-				cls = "BUG(missing-required)"
-				bugs++
-			} else {
-				fragile++
-			}
-			fmt.Printf("%-22s %-45s attr=%-30s optional=%v computed=%v missing=%v\n",
-				cls, tfType, tag, fs.Optional, fs.Computed, missing)
 		}
 	}
-	fmt.Printf("\nSUMMARY: %d missing-required BUGS, %d fragile object-literal attrs\n", bugs, fragile)
+	fmt.Printf("\nSUMMARY: %d missing-required BUGS, %d allowed(stale-model), %d fragile object-literal attrs\n", bugs, allowed, fragile)
+	if *failOnBugs && bugs > 0 {
+		os.Exit(1)
+	}
 }
