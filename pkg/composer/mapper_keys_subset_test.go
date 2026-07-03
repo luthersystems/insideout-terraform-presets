@@ -14,12 +14,25 @@ package composer
 // without updating the mapper will fail this test.
 
 import (
+	"os"
+	"reflect"
 	"regexp"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+// readMapperSource returns the DefaultMapper source text for the
+// allowlist-honesty grep in TestMapperReadConfigSubStructsInAllowlistAreTrulyUnread.
+func readMapperSource() (string, error) {
+	b, err := os.ReadFile("mapper.go")
+	if err != nil {
+		return "", err
+	}
+	return string(b), nil
+}
 
 // kitchenSinkConfig populates every cfg sub-struct the mapper reads with
 // values that exercise each mapper branch. Used to drive a single mapper
@@ -345,7 +358,224 @@ func kitchenSinkConfig() *Config {
 		ForceDestroy     *bool    `json:"forceDestroy,omitempty"`
 	}{DNSName: "example.com.", CreateZone: &t, ZoneShortName: "primary", ZoneName: "example-com", NetworkSelfLinks: []string{"projects/p/global/networks/n"}, ForceDestroy: &t}
 
+	// AWSAppRunner (#598) — named type. Every field is emitted by the mapper
+	// via the partial-config pattern (mapper.go case KeyAWSAppRunner), so a
+	// full population exercises every conditional emitted tfvar key
+	// (service_name … enable_www_subdomain) through the subset gate.
+	port := 8080
+	cfg.AWSAppRunner = &AWSAppRunnerConfig{
+		ServiceName:            "kitchen-sink-svc",
+		ImageRepositoryURL:     "123456789012.dkr.ecr.us-east-1.amazonaws.com/app:latest",
+		ImageRepositoryType:    "ECR",
+		Port:                   &port,
+		EnvVars:                map[string]string{"FOO": "bar"},
+		CPU:                    "1024",
+		Memory:                 "2048",
+		MinSize:                &one,
+		MaxSize:                &ten,
+		MaxConcurrency:         &ten,
+		IsPubliclyAccessible:   &t,
+		AutoDeploymentsEnabled: &t,
+		HealthCheckProtocol:    "HTTP",
+		HealthCheckPath:        "/health",
+		EnableVPCConnector:     &t,
+		VPCID:                  "vpc-aaa",
+		SubnetIDs:              []string{"subnet-aaa"},
+		CustomDomainName:       "app.example.com",
+		EnableWWWSubdomain:     &t,
+	}
+	// AWSCodeBuild (#619) — named type. Full population exercises every
+	// conditional emitted tfvar key (codebuild_project_name … security_group_ids).
+	cfg.AWSCodeBuild = &AWSCodeBuildConfig{
+		ProjectName:       "kitchen-sink-build",
+		BuildImage:        "aws/codebuild/amazonlinux2-x86_64-standard:5.0",
+		ComputeType:       "BUILD_GENERAL1_SMALL",
+		SourceType:        "GITHUB",
+		SourceLocation:    "https://github.com/example/repo.git",
+		Buildspec:         "buildspec.yml",
+		ArtifactsType:     "NO_ARTIFACTS",
+		ArtifactsLocation: "",
+		EnableS3Logs:      &t,
+		VPCID:             "vpc-aaa",
+		SubnetIDs:         []string{"subnet-aaa"},
+		SecurityGroupIDs:  []string{"sg-aaa"},
+	}
+	// AWSBackups — inline anonymous struct. The mapper reads it only to size
+	// the always-emitted default_rule; populating keeps the kitchen-sink
+	// complete (see the reflection completeness guard) and exercises the
+	// retention/frequency derivation.
+	cfg.AWSBackups = &struct {
+		EC2 *struct {
+			FrequencyHours int    `json:"frequencyHours,omitempty"`
+			RetentionDays  int    `json:"retentionDays,omitempty"`
+			Region         string `json:"region,omitempty"`
+		} `json:"aws_ec2,omitempty"`
+		RDS *struct {
+			FrequencyHours int    `json:"frequencyHours,omitempty"`
+			RetentionDays  int    `json:"retentionDays,omitempty"`
+			Region         string `json:"region,omitempty"`
+		} `json:"aws_rds,omitempty"`
+		ElastiCache *struct {
+			FrequencyHours int    `json:"frequencyHours,omitempty"`
+			RetentionDays  int    `json:"retentionDays,omitempty"`
+			Region         string `json:"region,omitempty"`
+		} `json:"aws_elasticache,omitempty"`
+		DynamoDB *struct {
+			FrequencyHours int    `json:"frequencyHours,omitempty"`
+			RetentionDays  int    `json:"retentionDays,omitempty"`
+			Region         string `json:"region,omitempty"`
+		} `json:"aws_dynamodb,omitempty"`
+		S3 *struct {
+			FrequencyHours int    `json:"frequencyHours,omitempty"`
+			RetentionDays  int    `json:"retentionDays,omitempty"`
+			Region         string `json:"region,omitempty"`
+		} `json:"aws_s3,omitempty"`
+	}{
+		EC2: &struct {
+			FrequencyHours int    `json:"frequencyHours,omitempty"`
+			RetentionDays  int    `json:"retentionDays,omitempty"`
+			Region         string `json:"region,omitempty"`
+		}{FrequencyHours: 24, RetentionDays: 30, Region: "us-east-1"},
+	}
+
+	// GCPAgentEngine (#769) — inline anonymous struct. Emits display_name.
+	cfg.GCPAgentEngine = &struct {
+		DisplayName string `json:"displayName,omitempty"`
+	}{DisplayName: "kitchen-sink-agent"}
+	// GCPCloudDeploy (#613) — named type. Full population exercises
+	// service_account_short_name / pipeline_short_name / targets.
+	saName := "clouddeploy-runner"
+	pipeName := "delivery"
+	cfg.GCPCloudDeploy = &GCPCloudDeployConfig{
+		ServiceAccountShortName: &saName,
+		PipelineShortName:       &pipeName,
+		Targets: []GCPCloudDeployTarget{
+			{Name: "staging", Runtime: "run", RuntimeTarget: "staging-run", RequireApproval: &t},
+			{Name: "prod", Runtime: "run", RuntimeTarget: "prod-run"},
+		},
+	}
+	// GCPGitHubActions (#597) — named type. Full population exercises the
+	// conditional keys allowed_branches / allowed_tags / allowed_pull_request /
+	// deploy_roles beyond the always-emitted github_repository.
+	cfg.GCPGitHubActions = &GCPGitHubActionsConfig{
+		GitHubRepository:   "example/repo",
+		AllowedBranches:    []string{"main"},
+		AllowedTags:        []string{"v*"},
+		AllowedPullRequest: &t,
+		DeployRoles:        []string{"roles/run.developer"},
+	}
+	// GCPBackups — inline anonymous struct. Emits snapshot_retention_days.
+	cfg.GCPBackups = &struct {
+		Compute *struct {
+			FrequencyHours int `json:"frequencyHours,omitempty"`
+			RetentionDays  int `json:"retentionDays,omitempty"`
+		} `json:"gcp_compute,omitempty"`
+		CloudSQL *struct {
+			Enabled       *bool `json:"enabled,omitempty"`
+			RetentionDays int   `json:"retentionDays,omitempty"`
+		} `json:"gcp_cloudsql,omitempty"`
+		GCS *struct {
+			Enabled *bool `json:"enabled,omitempty"`
+		} `json:"gcp_gcs,omitempty"`
+	}{
+		Compute: &struct {
+			FrequencyHours int `json:"frequencyHours,omitempty"`
+			RetentionDays  int `json:"retentionDays,omitempty"`
+		}{FrequencyHours: 24, RetentionDays: 14},
+		CloudSQL: &struct {
+			Enabled       *bool `json:"enabled,omitempty"`
+			RetentionDays int   `json:"retentionDays,omitempty"`
+		}{Enabled: &t, RetentionDays: 7},
+		GCS: &struct {
+			Enabled *bool `json:"enabled,omitempty"`
+		}{Enabled: &t},
+	}
+
 	return cfg
+}
+
+// kitchenSinkConfigCoverageAllowlist records top-level Config *struct
+// sub-fields (by json tag) that kitchenSinkConfig() intentionally leaves
+// nil — i.e. a config sub-block the DefaultMapper does NOT read to emit
+// any tfvar KEY, so populating it would not add subset-gate coverage.
+// Shrink-only: every entry needs a justification, and
+// TestMapperReadConfigSubStructsInAllowlistAreTrulyUnread keeps it honest.
+// Empty today — every mapper-read sub-struct is populated.
+var kitchenSinkConfigCoverageAllowlist = map[string]string{}
+
+// TestKitchenSinkConfigCoversAllConfigSubStructs is the meta-gate that
+// keeps TestMapperKeysSubsetOfModuleVariables honest. The subset gate can
+// only catch a mapper-emits-undeclared-key bug for a component if the
+// kitchen-sink Config actually populates that component's config
+// sub-block — otherwise the `if cfg.X != nil` mapper branch never fires
+// and the emitted keys are never checked (this is exactly how the historic
+// `boot_disk_size_gb`/`disk_size_gb` and #253 `secret_id` bugs slipped the
+// gate: their cfg sub-structs were unset). This reflection guard fails the
+// moment a new `aws_*`/`gcp_*` *struct field lands on Config without a
+// matching kitchenSinkConfig() population, forcing the author to extend the
+// fixture (or justify an allowlist entry) so the whole #131 class stays
+// mistake-proofed. Triggering example: aws_apprunner / aws_codebuild /
+// gcp_agent_engine / gcp_cloud_deploy / gcp_github_actions / gcp_backups
+// were all silently unexercised before this guard landed.
+func TestKitchenSinkConfigCoversAllConfigSubStructs(t *testing.T) {
+	cfg := kitchenSinkConfig()
+	cfgVal := reflect.ValueOf(cfg).Elem()
+	cfgType := cfgVal.Type()
+
+	visited := 0
+	for i := 0; i < cfgType.NumField(); i++ {
+		ft := cfgType.Field(i)
+		// Only top-level pointer-to-struct sub-blocks — the per-component
+		// config the mapper reads. Scalars (region, cloud, estimates) and
+		// value structs are out of scope.
+		if ft.Type.Kind() != reflect.Pointer || ft.Type.Elem().Kind() != reflect.Struct {
+			continue
+		}
+		tag := jsonTagName(ft.Tag.Get("json"))
+		if !strings.HasPrefix(tag, "aws_") && !strings.HasPrefix(tag, "gcp_") {
+			continue
+		}
+		visited++
+		if reason, exempt := kitchenSinkConfigCoverageAllowlist[tag]; exempt {
+			t.Logf("allowlisted (mapper reads no key from it): %s (%s)", tag, reason)
+			continue
+		}
+		assert.Falsef(t, cfgVal.Field(i).IsNil(),
+			"kitchenSinkConfig() leaves Config.%s (json %q) nil, so the mapper's `if cfg.%s != nil` branch never fires under TestMapperKeysSubsetOfModuleVariables — any tfvar key that branch emits is UNCHECKED against the preset's variables.tf (the #131 fail-open class). Populate it in kitchenSinkConfig(), or, if the mapper reads no KEY from it, add %q to kitchenSinkConfigCoverageAllowlist with a justification.",
+			ft.Name, tag, ft.Name, tag)
+	}
+	// Self-validation: a Config refactor that renamed/flattened every
+	// sub-block would otherwise pass this guard vacuously. 40 is a soft
+	// floor — AWS + GCP per-component config sub-blocks exceed it today.
+	require.GreaterOrEqual(t, visited, 40,
+		"coverage guard exercised %d Config sub-structs — expected ≥40; Config layout may have changed", visited)
+}
+
+// TestMapperReadConfigSubStructsInAllowlistAreTrulyUnread guards the
+// allowlist above from silently masking real coverage gaps: an entry is
+// only legitimate if the DefaultMapper source genuinely never dereferences
+// that Config field. We approximate "reads it" by grepping the mapper for
+// the Go field name; a hit means the sub-struct IS read and must be
+// populated, not allowlisted.
+func TestMapperReadConfigSubStructsInAllowlistAreTrulyUnread(t *testing.T) {
+	if len(kitchenSinkConfigCoverageAllowlist) == 0 {
+		return
+	}
+	src, err := readMapperSource()
+	require.NoError(t, err)
+	cfgType := reflect.TypeOf(Config{})
+	tagToField := map[string]string{}
+	for i := 0; i < cfgType.NumField(); i++ {
+		ft := cfgType.Field(i)
+		tagToField[jsonTagName(ft.Tag.Get("json"))] = ft.Name
+	}
+	for tag := range kitchenSinkConfigCoverageAllowlist {
+		field, ok := tagToField[tag]
+		require.Truef(t, ok, "allowlist tag %q is not a Config field — drop the stale entry", tag)
+		assert.NotContainsf(t, src, "cfg."+field+".",
+			"kitchenSinkConfigCoverageAllowlist[%q] claims the mapper reads no key from Config.%s, but mapper.go dereferences cfg.%s — populate it in kitchenSinkConfig() instead of allowlisting.",
+			tag, field, field)
+	}
 }
 
 func TestMapperKeysSubsetOfModuleVariables(t *testing.T) {
