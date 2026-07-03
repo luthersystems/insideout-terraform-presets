@@ -48,14 +48,20 @@ func FindUnresolved(raw []byte, resources []imported.ImportedResource) ([]string
 // nested ARN hits, and class-B curated non-ARN identifier hits, unified into
 // one keyspace so the Run loop's cycle detection / ignore filtering treats
 // them identically. consumers maps each literal to its sorted consumer
-// addresses (for #297 graph edges). nested / nonARN carry the per-literal
-// location + classification metadata so Run can emit the precise
-// class-A / class-B warnings (presets#834).
+// addresses (for #297 graph edges) — every distinct (literal → consumer) pair
+// across BOTH passes, so no consumer edge is lost when a literal is referenced
+// by multiple resources or appears both top-level and nested (F4). nested /
+// nonARN carry the per-literal location + classification metadata so Run can
+// emit the precise class-A / class-B warnings (presets#834). topLevel is the
+// set of literals the historical top-level ARN pass found — Run consults it to
+// decide a hit's origin class (a literal that is ALSO top-level keeps top-level
+// chase semantics rather than the terminal-by-design nested/nonARN semantics).
 type scanResult struct {
 	unresolved []string
 	consumers  map[string][]string
 	nested     map[string]nestedHit
 	nonARN     map[string]nonARNHit
+	topLevel   map[string]struct{}
 }
 
 // scanGenerated is the shared parser pass behind the public FindUnresolved
@@ -82,6 +88,11 @@ func scanGenerated(raw []byte, resources []imported.ImportedResource) (scanResul
 		set[addr] = struct{}{}
 	}
 
+	// topLevel is the set of literals the historical top-level pass finds. Built
+	// independently (not a post-hoc copy of `seen`, which the nested merge below
+	// mutates) so it stays a pure top-level snapshot the Run loop can consult for
+	// origin-class tagging.
+	topLevel := make(map[string]struct{})
 	for _, blk := range f.Body().Blocks() {
 		if blk.Type() != "resource" {
 			continue
@@ -92,30 +103,25 @@ func scanGenerated(raw []byte, resources []imported.ImportedResource) (scanResul
 		addr := blk.Labels()[0] + "." + blk.Labels()[1]
 		hits := collectFromBodyWithHits(blk.Body(), resolved)
 		for _, lit := range hits {
+			topLevel[lit] = struct{}{}
 			addConsumer(lit, addr)
 		}
 	}
 
-	// Snapshot the top-level ARN set so the nested walk can subtract it: a
-	// literal already surfaced at top level is chased once, without a
-	// redundant class-A warning.
-	topLevel := make(map[string]struct{}, len(seen))
-	for k := range seen {
-		topLevel[k] = struct{}{}
-	}
-
 	// presets#834 classes A + B: nested ARN literals and curated non-ARN
 	// identifier references. Merge their literals into the same unresolved
-	// keyspace + consumer map so the Run loop chases them like any other hit.
-	nested, nonARN, err := scanNestedAndNonARN(raw, resolved, topLevel)
+	// keyspace and fold EVERY (literal → consumer) pair the nested walk found
+	// into the consumer map — not just each literal's representative winner —
+	// so multi-consumer and dual-occurrence (top-level + nested) edges survive
+	// (F4).
+	nested, nonARN, nestedConsumers, err := scanNestedAndNonARN(raw, resolved)
 	if err != nil {
 		return scanResult{}, err
 	}
-	for arn, h := range nested {
-		addConsumer(arn, h.addr)
-	}
-	for id, h := range nonARN {
-		addConsumer(id, h.addr)
+	for lit, addrs := range nestedConsumers {
+		for addr := range addrs {
+			addConsumer(lit, addr)
+		}
 	}
 
 	out := make([]string, 0, len(seen))
@@ -135,7 +141,7 @@ func scanGenerated(raw []byte, resources []imported.ImportedResource) (scanResul
 		sort.Strings(addrs)
 		flat[arn] = addrs
 	}
-	return scanResult{unresolved: out, consumers: flat, nested: nested, nonARN: nonARN}, nil
+	return scanResult{unresolved: out, consumers: flat, nested: nested, nonARN: nonARN, topLevel: topLevel}, nil
 }
 
 // collectFromBodyWithHits scans every top-level attribute on a body

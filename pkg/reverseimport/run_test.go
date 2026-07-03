@@ -723,6 +723,68 @@ func fakeDepChase(_ context.Context, _ depchase.Options, resources []imported.Im
 	return &depchase.Result{Resources: resources}, nil
 }
 
+// stubByIDDiscoverer satisfies the Discoverer surface so the depchase phase is
+// entered (opts.Discoverer != nil). The fake runDepChase never calls it.
+type stubByIDDiscoverer struct{}
+
+func (stubByIDDiscoverer) DiscoverByID(context.Context, string, string, string, string) (imported.ImportedResource, error) {
+	return imported.ImportedResource{}, nil
+}
+
+// TestRunFoldsDepChaseWarningsOnChaseError pins F5: when the chase phase returns
+// an error (e.g. ErrCyclicDependency), the depchase warnings recorded on the
+// (still-populated) Result must be folded into result.Diagnostics BEFORE the
+// error return — they are the operator's only breadcrumb to the unconverged
+// references and were previously dropped on the error path.
+func TestRunFoldsDepChaseWarningsOnChaseError(t *testing.T) {
+	dir := t.TempDir()
+	req := job.Request{
+		Version: job.Version,
+		Resources: []job.ResourceSpec{{
+			Identity: imported.ResourceIdentity{
+				Cloud:    "aws",
+				Type:     "aws_sqs_queue",
+				Address:  "aws_sqs_queue.orders",
+				ImportID: "https://sqs.us-east-1.amazonaws.com/123/orders",
+				Region:   "us-east-1",
+			},
+			Tier:   imported.TierImportedFlat,
+			Source: imported.SourceImporter,
+		}},
+	}
+
+	const warning = "nested_ref_literal: reference literal inside nested attribute environment.variables.KEY of aws_lambda_function.h; target arn:aws:iam::123:role/x — nested literal retained"
+	chaseErrDepChase := func(_ context.Context, _ depchase.Options, resources []imported.ImportedResource) (*depchase.Result, error) {
+		return &depchase.Result{Resources: resources, Warnings: []string{warning}}, depchase.ErrCyclicDependency
+	}
+
+	result, err := Run(context.Background(), req, Options{
+		OutputDir:  dir,
+		Discoverer: stubByIDDiscoverer{},
+		deps: deps{
+			runGenconfig: fakeGenconfig,
+			runDriftfix:  fakeDriftfix,
+			runDepChase:  chaseErrDepChase,
+			tf:           fakeTerraformRunner{},
+		},
+	})
+	if err == nil {
+		t.Fatal("expected a depchase error to propagate")
+	}
+	if !errors.Is(err, depchase.ErrCyclicDependency) {
+		t.Fatalf("err=%v, want ErrCyclicDependency", err)
+	}
+	found := false
+	for _, d := range result.Diagnostics {
+		if d.Code == "depchase_warning" && d.Message == warning {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("depchase warning not folded into diagnostics on the error path; got %#v", result.Diagnostics)
+	}
+}
+
 type fakeTerraformRunner struct {
 	importCount int
 }
