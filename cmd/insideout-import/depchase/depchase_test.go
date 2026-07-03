@@ -400,6 +400,149 @@ resource "aws_lambda_function" "h" {
 	}
 }
 
+// TestRun_NestedARNsSurfacedAndChased pins presets#834 class A end-to-end
+// through the chase loop (Tier 2): ARN literals the historical top-level pass
+// would have SILENTLY skipped — one nested inside an object-in-a-block, one
+// inside a list — are now surfaced with a precise nested_ref_literal warning
+// AND fed into the same discover → un-importable-gate → add path as top-level
+// hits. The customer-managed KMS key is adoptable and emitted; the
+// service-linked IAM role is gated pre-add with its precise reason. Neither
+// nested literal is rewritten (the literal is retained), but the adoptable
+// target enters the import set, improving graph fidelity.
+func TestRun_NestedARNsSurfacedAndChased(t *testing.T) {
+	t.Parallel()
+	kmsARN := "arn:aws:kms:us-east-1:123456789012:key/aaaa1111-bbbb-2222-cccc-333333333333"
+	slrARN := "arn:aws:iam::123456789012:role/aws-service-role/x.amazonaws.com/AWSServiceRoleForX"
+	gen0 := `
+resource "aws_lambda_function" "h" {
+  function_name   = "io-foo-handler"
+  execution_roles = ["` + slrARN + `"]
+  environment {
+    variables = {
+      SIGNING_KEY = "` + kmsARN + `"
+    }
+  }
+}`
+	dir := writeGen(t, gen0)
+	lambda := newRes("aws_lambda_function.h", "io-foo-handler",
+		"arn:aws:lambda:us-east-1:123456789012:function:io-foo-handler", "aws_lambda_function")
+
+	// Customer-managed KMS key: no key_manager marker → UnimportableReason
+	// returns "" → adoptable and emitted.
+	adoptableKey := newRes("aws_kms_key.signing", kmsARN, kmsARN, "aws_kms_key")
+	// Service-linked IAM role: ARN carries role/aws-service-role/ →
+	// UnimportableReason → ReasonServiceLinkedIAMRole; gated pre-add.
+	slrRole := imported.ImportedResource{Identity: imported.ResourceIdentity{
+		Address:   "aws_iam_role.slr",
+		Type:      "aws_iam_role",
+		ImportID:  slrARN,
+		NativeIDs: map[string]string{"arn": slrARN},
+	}}
+
+	disc := &fakeDiscoverer{byID: map[string]imported.ImportedResource{
+		"aws_kms_key|" + kmsARN:  adoptableKey,
+		"aws_iam_role|" + slrARN: slrRole,
+	}}
+	// One regenerate after the single KMS add; the KMS ARN then enters the
+	// resolved set (via res.Resources), so the nested literal no longer
+	// surfaces and the loop converges.
+	p := &scriptedPipeline{t: t, workdir: dir, generatedTF: []string{gen0}}
+
+	got, err := Run(context.Background(), Options{
+		Workdir: dir, Region: "us-east-1", AccountID: "123456789012",
+		Discoverer: disc, Pipeline: p.fns(),
+	}, []imported.ImportedResource{lambda})
+	if err != nil {
+		t.Fatalf("err=%v", err)
+	}
+	// The adoptable nested KMS key must be pulled into the import set.
+	if len(got.Added) != 1 || got.Added[0].Identity.Type != "aws_kms_key" {
+		t.Fatalf("Added=%+v, want exactly one aws_kms_key (the adoptable nested ref)", got.Added)
+	}
+	// The nested KMS key must have been discovered in the ARN's OWN region.
+	if r := disc.regionByID[kmsARN]; r != "us-east-1" {
+		t.Errorf("nested KMS discovered in region %q, want us-east-1 (ARN region)", r)
+	}
+	joined := strings.Join(got.Warnings, "\n")
+	// Both nested literals must be non-silent: a precise class-A warning each.
+	if strings.Count(joined, "nested_ref_literal") != 2 {
+		t.Errorf("want 2 nested_ref_literal warnings (KMS + SLR), got:\n%s", joined)
+	}
+	for _, want := range []string{
+		"nested attribute environment.variables.SIGNING_KEY",
+		"execution_roles[0]",
+		kmsARN, slrARN,
+	} {
+		if !strings.Contains(joined, want) {
+			t.Errorf("warnings missing %q; got:\n%s", want, joined)
+		}
+	}
+	// The service-linked role must be gated with its precise un-importable
+	// reason — NOT emitted, NOT an opaque genconfig-omission.
+	if !strings.Contains(joined, imported.ReasonServiceLinkedIAMRole) {
+		t.Errorf("warnings missing service-linked-role reason; got:\n%s", joined)
+	}
+	if strings.Contains(joined, "generated config omitted it") {
+		t.Errorf("gated SLR should not surface the opaque omission warning; got:\n%s", joined)
+	}
+	// Graph edge: the lambda consumer → the adopted KMS key.
+	if len(got.Edges) != 1 || got.Edges[0].From != "aws_lambda_function.h" || got.Edges[0].To != "aws_kms_key.signing" {
+		t.Errorf("Edges=%+v, want one (aws_lambda_function.h → aws_kms_key.signing)", got.Edges)
+	}
+}
+
+// TestRun_NonARNKMSKeyIDSurfacedAndChased pins presets#834 class B end-to-end:
+// a bare KMS KeyId UUID in a curated attribute (kms_master_key_id) — which
+// isARNLiteral never considered, so it was silent — is surfaced with a
+// non_arn_ref_literal warning and chased by the bare identifier (the KMS Cloud
+// Control DiscoverByID accepts a KeyId). The discovered customer-managed key is
+// adopted into the import set.
+func TestRun_NonARNKMSKeyIDSurfacedAndChased(t *testing.T) {
+	t.Parallel()
+	keyUUID := "1234abcd-12ab-34cd-56ef-1234567890ab"
+	gen0 := `
+resource "aws_sqs_queue" "q" {
+  name              = "io-foo-q"
+  kms_master_key_id = "` + keyUUID + `"
+}`
+	dir := writeGen(t, gen0)
+	queue := newRes("aws_sqs_queue.q", "io-foo-q",
+		"arn:aws:sqs:us-east-1:123:io-foo-q", "aws_sqs_queue")
+	key := newRes("aws_kms_key.by_id", keyUUID,
+		"arn:aws:kms:us-east-1:123:key/"+keyUUID, "aws_kms_key")
+
+	disc := &fakeDiscoverer{byID: map[string]imported.ImportedResource{
+		"aws_kms_key|" + keyUUID: key,
+	}}
+	// After the key is added, its ARN + ImportID(uuid) enter the resolved set,
+	// so the bare-id literal no longer surfaces; converge after one regenerate.
+	p := &scriptedPipeline{t: t, workdir: dir, generatedTF: []string{gen0}}
+
+	got, err := Run(context.Background(), Options{
+		Workdir: dir, Region: "us-east-1", AccountID: "123",
+		Discoverer: disc, Pipeline: p.fns(),
+	}, []imported.ImportedResource{queue})
+	if err != nil {
+		t.Fatalf("err=%v", err)
+	}
+	if len(got.Added) != 1 || got.Added[0].Identity.Type != "aws_kms_key" {
+		t.Fatalf("Added=%+v, want exactly one aws_kms_key chased by bare KeyId", got.Added)
+	}
+	// The discoverer must have been called with the bare UUID as the id.
+	if len(disc.calls) == 0 || disc.calls[0] != "aws_kms_key|"+keyUUID {
+		t.Errorf("DiscoverByID calls=%v, want first call aws_kms_key|%s", disc.calls, keyUUID)
+	}
+	joined := strings.Join(got.Warnings, "\n")
+	if !strings.Contains(joined, "non_arn_ref_literal") {
+		t.Errorf("want a non_arn_ref_literal warning; got:\n%s", joined)
+	}
+	for _, want := range []string{"kms_master_key_id", keyUUID, "aws_kms_key"} {
+		if !strings.Contains(joined, want) {
+			t.Errorf("warnings missing %q; got:\n%s", want, joined)
+		}
+	}
+}
+
 // TestRun_DepOfDepConvergesAfterTwoIterations pins the chained-dep
 // case: Lambda → IAM role → IAM policy. Three resources end up in
 // the set; the loop converges in 2 iterations.

@@ -210,10 +210,12 @@ func Run(ctx context.Context, opts Options, resources []imported.ImportedResourc
 		if err != nil {
 			return nil, fmt.Errorf("depchase: read generated.tf: %w", err)
 		}
-		unresolved, consumersByARN, err := findUnresolvedWithConsumers(raw, res.Resources)
+		scan, err := scanGenerated(raw, res.Resources)
 		if err != nil {
 			return nil, err
 		}
+		unresolved := scan.unresolved
+		consumersByARN := scan.consumers
 		unresolved = filterIgnoredARNs(unresolved, ignoredARNs)
 		if len(unresolved) == 0 {
 			res.GeneratedPath = generatedPath
@@ -249,6 +251,33 @@ func Run(ctx context.Context, opts Options, resources []imported.ImportedResourc
 
 		var newSeeds []seed
 		for _, arn := range unresolved {
+			// presets#834 class A — an ARN literal the historical top-level
+			// pass would have MISSED (nested inside a block or a
+			// list/object expression) is now surfaced. Emit the precise
+			// detection warning up front so class A is never silent,
+			// regardless of whether the chase below succeeds, fails, or hits
+			// an unsupported type. The literal itself is not rewritten (the
+			// genconfig crossref pass is also top-level-only), but the target
+			// is chased and — when adoptable — emitted, improving graph
+			// fidelity.
+			if nh, ok := scan.nested[arn]; ok {
+				addWarning(res, seenWarning,
+					fmt.Sprintf("nested_ref_literal: reference literal inside nested attribute %s of %s; target %s — surfaced by the nested-body walk (previously silent); chasing target, nested literal retained",
+						nh.path, nh.addr, arn))
+			}
+			// presets#834 class B — a curated, non-ARN identifier reference
+			// (a KMS KeyId UUID in kms_key_id / kms_master_key_id). isARNLiteral
+			// never considered it, so it was silent. The KMS Cloud Control
+			// DiscoverByID accepts a bare KeyId, so we chase it with a
+			// pre-resolved Ref (no ARN to ParseRef); a bare UUID carries no
+			// region, so the target is looked up in the run's primary region.
+			if nq, ok := scan.nonARN[arn]; ok {
+				addWarning(res, seenWarning,
+					fmt.Sprintf("non_arn_ref_literal: non-ARN identifier in curated attribute %s of %s; value %q resolves to %s — surfaced by the curated-attr walk (previously silent); chasing by bare identifier",
+						nq.attr, nq.addr, arn, nq.tfType))
+				newSeeds = append(newSeeds, seed{arn: arn, ref: Ref{TFType: nq.tfType, ImportID: nq.id, Region: opts.Region}})
+				continue
+			}
 			ref, err := ParseRef(arn)
 			if err != nil {
 				if errors.Is(err, ErrUnsupportedType) {

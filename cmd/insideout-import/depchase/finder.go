@@ -35,26 +35,53 @@ const generatedFile = "generated.tf"
 // ImportID. A literal that matches any of those is considered
 // in-batch and therefore not unresolved.
 func FindUnresolved(raw []byte, resources []imported.ImportedResource) ([]string, error) {
-	out, _, err := findUnresolvedWithConsumers(raw, resources)
-	return out, err
+	scan, err := scanGenerated(raw, resources)
+	if err != nil {
+		return nil, err
+	}
+	return scan.unresolved, nil
 }
 
-// findUnresolvedWithConsumers is the testable form of FindUnresolved
-// that additionally returns a map from each unresolved ARN literal to
-// the deterministic set of Terraform-address consumer blocks that
-// referenced it. The Run loop uses the consumer map to record
-// (consumer → discovered) graph edges (#297). Two distinct callers
-// (the public FindUnresolved and the Run loop) share the parser pass
-// rather than walking generated.tf twice per iteration.
-func findUnresolvedWithConsumers(raw []byte, resources []imported.ImportedResource) ([]string, map[string][]string, error) {
+// scanResult bundles everything one generated.tf pass surfaces for the
+// chase loop. unresolved is the deterministic-sorted, deduplicated set of
+// reference literals to chase — top-level ARN hits (historical), class-A
+// nested ARN hits, and class-B curated non-ARN identifier hits, unified into
+// one keyspace so the Run loop's cycle detection / ignore filtering treats
+// them identically. consumers maps each literal to its sorted consumer
+// addresses (for #297 graph edges). nested / nonARN carry the per-literal
+// location + classification metadata so Run can emit the precise
+// class-A / class-B warnings (presets#834).
+type scanResult struct {
+	unresolved []string
+	consumers  map[string][]string
+	nested     map[string]nestedHit
+	nonARN     map[string]nonARNHit
+}
+
+// scanGenerated is the shared parser pass behind the public FindUnresolved
+// and the Run loop. It runs the historical top-level ARN pass (hclwrite) plus
+// the presets#834 nested/non-ARN walk (hclsyntax), unifies their hits into one
+// unresolved set, and records the consumer addresses the Run loop turns into
+// (consumer → discovered) graph edges (#297).
+func scanGenerated(raw []byte, resources []imported.ImportedResource) (scanResult, error) {
 	resolved := buildResolvedSet(resources)
 	f, diags := hclwrite.ParseConfig(raw, generatedFile, hcl.Pos{Line: 1, Column: 1})
 	if diags.HasErrors() {
-		return nil, nil, fmt.Errorf("depchase: parse generated.tf: %s", diags.Error())
+		return scanResult{}, fmt.Errorf("depchase: parse generated.tf: %s", diags.Error())
 	}
 
 	seen := make(map[string]struct{})
-	consumers := make(map[string]map[string]struct{}) // arn → set of addresses
+	consumers := make(map[string]map[string]struct{}) // literal → set of addresses
+	addConsumer := func(lit, addr string) {
+		seen[lit] = struct{}{}
+		set, ok := consumers[lit]
+		if !ok {
+			set = make(map[string]struct{})
+			consumers[lit] = set
+		}
+		set[addr] = struct{}{}
+	}
+
 	for _, blk := range f.Body().Blocks() {
 		if blk.Type() != "resource" {
 			continue
@@ -65,14 +92,30 @@ func findUnresolvedWithConsumers(raw []byte, resources []imported.ImportedResour
 		addr := blk.Labels()[0] + "." + blk.Labels()[1]
 		hits := collectFromBodyWithHits(blk.Body(), resolved)
 		for _, lit := range hits {
-			seen[lit] = struct{}{}
-			set, ok := consumers[lit]
-			if !ok {
-				set = make(map[string]struct{})
-				consumers[lit] = set
-			}
-			set[addr] = struct{}{}
+			addConsumer(lit, addr)
 		}
+	}
+
+	// Snapshot the top-level ARN set so the nested walk can subtract it: a
+	// literal already surfaced at top level is chased once, without a
+	// redundant class-A warning.
+	topLevel := make(map[string]struct{}, len(seen))
+	for k := range seen {
+		topLevel[k] = struct{}{}
+	}
+
+	// presets#834 classes A + B: nested ARN literals and curated non-ARN
+	// identifier references. Merge their literals into the same unresolved
+	// keyspace + consumer map so the Run loop chases them like any other hit.
+	nested, nonARN, err := scanNestedAndNonARN(raw, resolved, topLevel)
+	if err != nil {
+		return scanResult{}, err
+	}
+	for arn, h := range nested {
+		addConsumer(arn, h.addr)
+	}
+	for id, h := range nonARN {
+		addConsumer(id, h.addr)
 	}
 
 	out := make([]string, 0, len(seen))
@@ -92,17 +135,18 @@ func findUnresolvedWithConsumers(raw []byte, resources []imported.ImportedResour
 		sort.Strings(addrs)
 		flat[arn] = addrs
 	}
-	return out, flat, nil
+	return scanResult{unresolved: out, consumers: flat, nested: nested, nonARN: nonARN}, nil
 }
 
 // collectFromBodyWithHits scans every top-level attribute on a body
 // for ARN literals not in the resolved set, returning the
-// deduplicated-within-this-body list of hits. Nested blocks (e.g.
-// `environment { variables = {...} }`) are NOT walked: HCL maps and
-// lists of objects rarely contain bare ARN literals at the leaf, and
-// walking them would explode the surface this conservative pass needs
-// to maintain. If a real-world stack lands ARN refs in nested
-// attributes the behavior can be widened in a follow-up.
+// deduplicated-within-this-body list of hits. This is the HISTORICAL
+// top-level-only pass; nested blocks and collection expressions
+// (`environment { variables = {...} }`, `layers = ["arn:…"]`) are
+// walked separately by scanNestedAndNonARN (finder_nested.go, class A of
+// presets#834), which surfaces them as nested hits with a precise
+// warning. The two passes share the same conservative "pure string
+// literal only" contract (stringLiteralValue ↔ pureStringLiteral).
 func collectFromBodyWithHits(body *hclwrite.Body, resolved map[string]struct{}) []string {
 	var hits []string
 	seen := make(map[string]struct{})

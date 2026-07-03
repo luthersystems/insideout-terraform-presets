@@ -105,14 +105,15 @@ resource "aws_lambda_function" "c" {
 
 func TestFindUnresolved_IgnoresNonLiteralExpressions(t *testing.T) {
 	t.Parallel()
-	// Interpolations, list values, and references to other resources
-	// should not be treated as unresolved literals — the conservative
-	// finder leaves them alone for genconfig's crossref pass.
+	// Interpolations, traversals, and ARNs embedded inside larger template
+	// text must NOT be treated as reference literals — the conservative
+	// finder leaves them alone for genconfig's crossref pass. (The class-A
+	// nested-list case — `layers = ["arn:…"]` — IS now surfaced by design;
+	// see TestFindUnresolved_SurfacesNestedListAndObjectARNs.)
 	raw := []byte(`
 resource "aws_lambda_function" "a" {
   role           = aws_iam_role.handler.arn
   source_account = "123"
-  layers         = ["arn:aws:lambda:us-east-1:123:layer:x:1"]
   description    = "see arn:aws:iam::123:role/embedded inside text"
 }
 `)
@@ -121,7 +122,90 @@ resource "aws_lambda_function" "a" {
 		t.Fatal(err)
 	}
 	if len(got) != 0 {
-		t.Errorf("got %v, want empty (no top-level pure-literal ARN attrs)", got)
+		t.Errorf("got %v, want empty (traversal / non-arn / embedded-in-text)", got)
+	}
+}
+
+// TestFindUnresolved_SurfacesNestedListAndObjectARNs pins presets#834 class A:
+// an ARN literal nested inside a list element or an object attribute value —
+// which the historical top-level-only pass silently skipped — is now surfaced
+// by the nested-body walk. The lambda-layer ARN sits in a list; the KMS ARN
+// sits in an object value inside a nested block.
+func TestFindUnresolved_SurfacesNestedListAndObjectARNs(t *testing.T) {
+	t.Parallel()
+	raw := []byte(`
+resource "aws_lambda_function" "a" {
+  layers = ["arn:aws:lambda:us-east-1:123:layer:x:1"]
+  environment {
+    variables = {
+      SIGNING_KEY = "arn:aws:kms:us-east-1:123:key/uuid-1"
+    }
+  }
+}
+`)
+	got, err := FindUnresolved(raw, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{
+		"arn:aws:kms:us-east-1:123:key/uuid-1",
+		"arn:aws:lambda:us-east-1:123:layer:x:1",
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("got %v, want %v (nested list + object-in-block ARNs)", got, want)
+	}
+}
+
+// TestFindUnresolved_NestedARNResolvedWhenTargetInBatch pins that a nested ARN
+// pointing at an in-batch resource is NOT surfaced — the resolved-set check
+// applies to nested hits exactly as it does to top-level ones.
+func TestFindUnresolved_NestedARNResolvedWhenTargetInBatch(t *testing.T) {
+	t.Parallel()
+	raw := []byte(`
+resource "aws_lambda_function" "a" {
+  layers = ["arn:aws:lambda:us-east-1:123:layer:shared:1"]
+}
+`)
+	in := []imported.ImportedResource{
+		resource("aws_lambda_layer_version.shared", "arn:aws:lambda:us-east-1:123:layer:shared:1",
+			map[string]string{"arn": "arn:aws:lambda:us-east-1:123:layer:shared:1"}),
+	}
+	got, err := FindUnresolved(raw, in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 0 {
+		t.Errorf("got %v, want empty (nested ARN target is in the batch)", got)
+	}
+}
+
+// TestFindUnresolved_SurfacesCuratedNonARNIdentifier pins presets#834 class B:
+// a bare KMS KeyId UUID in a curated attribute (kms_key_id / kms_master_key_id)
+// is surfaced, while the SAME UUID shape in a non-curated attribute is not
+// (guards against generic bare-name matching / false positives).
+func TestFindUnresolved_SurfacesCuratedNonARNIdentifier(t *testing.T) {
+	t.Parallel()
+	raw := []byte(`
+resource "aws_sqs_queue" "q" {
+  kms_master_key_id = "1234abcd-12ab-34cd-56ef-1234567890ab"
+}
+resource "aws_ebs_volume" "v" {
+  kms_key_id = "abcd0000-11ab-22cd-33ef-abcdef012345"
+}
+resource "aws_instance" "i" {
+  some_other_id = "ffffffff-ffff-ffff-ffff-ffffffffffff"
+}
+`)
+	got, err := FindUnresolved(raw, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{
+		"1234abcd-12ab-34cd-56ef-1234567890ab",
+		"abcd0000-11ab-22cd-33ef-abcdef012345",
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("got %v, want %v (only curated kms_* attrs; some_other_id UUID must NOT match)", got, want)
 	}
 }
 
