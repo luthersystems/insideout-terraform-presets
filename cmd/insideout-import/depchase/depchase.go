@@ -305,6 +305,27 @@ func Run(ctx context.Context, opts Options, resources []imported.ImportedResourc
 				}
 				continue
 			}
+			// Un-importability gate (presets#834). A ref can point at a
+			// resource that DiscoverByID finds but that is inherently
+			// un-adoptable into customer Terraform state — an AWS-managed KMS
+			// key (KeyManager=AWS), a service-linked IAM role
+			// (role/aws-service-role/…), a service-managed ENI, an
+			// already-InsideOut-imported resource, etc. Adding it would only
+			// have RunGenconfig drop it again (no generated body / provider
+			// import failure), surfacing the opaque "discovered … but generated
+			// config omitted it" warning and burning a full regenerate cycle.
+			// Consult the SAME classifier discovery and the genconfig prune use
+			// (imported.UnimportableReason, #709) so all three agree, leave the
+			// literal knowingly, and emit a precise reason instead. The observed
+			// aws_kms_key / aws_iam_role literals from the account-141812438321
+			// import (#834) are exactly this class.
+			if reason := imported.UnimportableReason(ir); reason != "" {
+				addWarning(res, seenWarning,
+					fmt.Sprintf("ARN %q (%s) references an un-importable resource (%s: %s); leaving the literal reference — the target cannot be adopted into Terraform state, so the literal is the correct terminal state",
+						s.arn, s.ref.TFType, reason, imported.ReasonDescription(reason)))
+				ignoredARNs[s.arn] = struct{}{}
+				continue
+			}
 			added = append(added, ir)
 			discoveries = append(discoveries, discoveredResource{seed: s, resource: ir})
 		}

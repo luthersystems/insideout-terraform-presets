@@ -316,6 +316,90 @@ resource "aws_lambda_function" "h" {
 	}
 }
 
+// TestRun_UnimportableRefLeavesLiteralWithPreciseReason pins the
+// presets#834 fix: a discovered dependency reference whose target is
+// inherently un-adoptable into customer Terraform state (an AWS-managed KMS
+// key, KeyManager=AWS; a service-linked IAM role, role/aws-service-role/…) is
+// gated by imported.UnimportableReason BEFORE the add, so the loop leaves the
+// literal knowingly, emits a precise reason-citing warning, and never burns a
+// RunGenconfig regenerate cycle to have genconfig drop it back out as an opaque
+// "generated config omitted it" orphan. This reproduces the two observed
+// reference types from the account-141812438321 whole-account import (#834).
+func TestRun_UnimportableRefLeavesLiteralWithPreciseReason(t *testing.T) {
+	t.Parallel()
+	kmsARN := "arn:aws:kms:us-east-1:123456789012:key/1234abcd-12ab-34cd-56ef-1234567890ab"
+	slrARN := "arn:aws:iam::123456789012:role/aws-service-role/elasticbeanstalk.amazonaws.com/AWSServiceRoleForElasticBeanstalk"
+	gen0 := `
+resource "aws_lambda_function" "h" {
+  function_name = "io-foo-handler"
+  kms_key_arn   = "` + kmsARN + `"
+  role          = "` + slrARN + `"
+}`
+	dir := writeGen(t, gen0)
+	lambda := newRes("aws_lambda_function.h", "io-foo-handler",
+		"arn:aws:lambda:us-east-1:123456789012:function:io-foo-handler", "aws_lambda_function")
+
+	// AWS-managed KMS key: DiscoverByID finds it and PostDiscover stamps
+	// key_manager=AWS, so imported.UnimportableReason → ReasonAWSManagedKMSKey.
+	awsManagedKey := imported.ImportedResource{Identity: imported.ResourceIdentity{
+		Address:   "aws_kms_key.managed",
+		Type:      "aws_kms_key",
+		ImportID:  kmsARN,
+		NativeIDs: map[string]string{"arn": kmsARN, "key_manager": "AWS"},
+	}}
+	// Service-linked IAM role: ARN carries role/aws-service-role/, so
+	// imported.UnimportableReason → ReasonServiceLinkedIAMRole.
+	slrRole := imported.ImportedResource{Identity: imported.ResourceIdentity{
+		Address:   "aws_iam_role.slr",
+		Type:      "aws_iam_role",
+		ImportID:  slrARN,
+		NativeIDs: map[string]string{"arn": slrARN},
+	}}
+
+	disc := &fakeDiscoverer{byID: map[string]imported.ImportedResource{
+		"aws_kms_key|" + kmsARN:  awsManagedKey,
+		"aws_iam_role|" + slrARN: slrRole,
+	}}
+	// No generatedTF bodies: both refs are gated pre-add, so RunGenconfig /
+	// RunDriftfix must never be called.
+	p := &scriptedPipeline{t: t, workdir: dir}
+
+	got, err := Run(context.Background(), Options{
+		Workdir: dir, Discoverer: disc, Pipeline: p.fns(),
+	}, []imported.ImportedResource{lambda})
+	if err != nil {
+		t.Fatalf("err=%v", err)
+	}
+	if len(got.Added) != 0 {
+		t.Errorf("Added=%+v, want none (both refs un-importable)", got.Added)
+	}
+	if len(got.Edges) != 0 {
+		t.Errorf("Edges=%+v, want none", got.Edges)
+	}
+	if p.gcCalls != 0 || p.dfCalls != 0 {
+		t.Errorf("pipeline calls gc=%d df=%d, want 0/0 (gated before regenerate)", p.gcCalls, p.dfCalls)
+	}
+	if len(got.Warnings) != 2 {
+		t.Fatalf("Warnings=%v, want exactly 2 (one per un-importable ref)", got.Warnings)
+	}
+	joined := strings.Join(got.Warnings, "\n")
+	for _, want := range []string{
+		imported.ReasonAWSManagedKMSKey,
+		imported.ReasonServiceLinkedIAMRole,
+		"un-importable",
+		"leaving the literal reference",
+	} {
+		if !strings.Contains(joined, want) {
+			t.Errorf("warnings missing %q; got:\n%s", want, joined)
+		}
+	}
+	// The precise reason must REPLACE the misleading genconfig-omission message
+	// for these gated refs — that message reads like a bug, this is intended.
+	if strings.Contains(joined, "generated config omitted it") {
+		t.Errorf("gated refs should not surface the misleading omission warning; got:\n%s", joined)
+	}
+}
+
 // TestRun_DepOfDepConvergesAfterTwoIterations pins the chained-dep
 // case: Lambda → IAM role → IAM policy. Three resources end up in
 // the set; the loop converges in 2 iterations.

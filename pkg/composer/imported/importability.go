@@ -88,6 +88,19 @@ const (
 	// managed by InsideOut. The marker key is the signal; a project/account tag
 	// alone is not enough.
 	ReasonInsideOutImported = "insideout_imported"
+
+	// ReasonServiceLinkedIAMRole marks an aws_iam_role whose ARN carries the
+	// reserved `role/aws-service-role/` path segment — an AWS service-linked
+	// role (AWSServiceRoleFor…). Service-linked roles are created and deleted
+	// by the owning AWS service, not the customer; the IAM API rejects an
+	// out-of-band create/delete, so they cannot be adopted into customer
+	// Terraform state. The bulk list discoverer already excludes them
+	// (listIAMRoleNamesNonSLR), but the dep-chase DiscoverByID path can still
+	// reach one via a cross-resource ARN reference (e.g. a role= literal
+	// pointing at a service-linked role); this reason lets that path leave the
+	// literal knowingly instead of dropping it as an opaque no_generated_config
+	// orphan (presets#834).
+	ReasonServiceLinkedIAMRole = "service_linked_iam_role"
 )
 
 // awsManagedKMSAliasPrefix is the reserved alias prefix the AWS provider
@@ -105,6 +118,13 @@ const (
 // manages on the customer's behalf (vs "CUSTOMER" for customer-managed
 // keys). An AWS-managed key cannot be imported into Terraform state.
 const awsManagedKMSKeyManager = "AWS"
+
+// serviceLinkedIAMRoleARNSegment is the reserved ARN path segment AWS stamps
+// on every service-linked role (the role's Path is "/aws-service-role/…",
+// which renders as "role/aws-service-role/…" in the role ARN). A role whose
+// ARN carries it is created and owned by an AWS service and cannot be adopted
+// into customer Terraform state.
+const serviceLinkedIAMRoleARNSegment = ":role/aws-service-role/"
 
 // importableENIInterfaceTypes is the set of interface_type values an
 // aws_network_interface can legitimately carry for a customer-managed,
@@ -138,6 +158,16 @@ func IsAWSManagedKMSAliasName(name string) bool {
 // backstop.
 func IsAWSManagedKMSKeyManager(keyManager string) bool {
 	return keyManager == awsManagedKMSKeyManager
+}
+
+// IsServiceLinkedIAMRoleARN reports whether an aws_iam_role ARN denotes an AWS
+// service-linked role (reserved `role/aws-service-role/` path segment), which
+// the customer cannot import or manage. The empty string (ARN not surfaced by
+// the discoverer) is treated as importable so an absent discriminator never
+// drops a customer-managed role — the genconfig prune (#708) remains the
+// backstop, matching the KMS-key / ENI posture.
+func IsServiceLinkedIAMRoleARN(arn string) bool {
+	return strings.Contains(arn, serviceLinkedIAMRoleARNSegment)
 }
 
 // IsServiceManaged reports whether an identity carries a service-managed
@@ -205,6 +235,10 @@ func UnimportableReason(ir ImportedResource) string {
 	}
 
 	switch ir.Identity.Type {
+	case "aws_iam_role":
+		if IsServiceLinkedIAMRoleARN(iamRoleARN(ir.Identity)) {
+			return ReasonServiceLinkedIAMRole
+		}
 	case "aws_kms_alias":
 		if IsAWSManagedKMSAliasName(kmsAliasName(ir.Identity)) {
 			return ReasonAWSManagedKMSAlias
@@ -243,9 +277,18 @@ func ReasonDescription(reason string) string {
 		return "Ephemeral CloudWatch log stream (auto-created and rotated by its log group) — not declarative infrastructure; manage the log group instead."
 	case ReasonInsideOutImported:
 		return "Already managed by InsideOut — cannot be selected for a new import."
+	case ReasonServiceLinkedIAMRole:
+		return "AWS service-linked IAM role (role/aws-service-role/* path) — created and deleted by the owning AWS service; cannot be imported into Terraform."
 	default:
 		return ""
 	}
+}
+
+// iamRoleARN resolves an IAM role's ARN from NativeIDs["arn"] (populated by the
+// iam_role discoverer's arnUnderKey("Arn") extractor). Empty when the
+// discoverer did not surface it — treated as importable upstream.
+func iamRoleARN(id ResourceIdentity) string {
+	return id.NativeIDs["arn"]
 }
 
 // kmsAliasName resolves the alias name from the identity surface the KMS-alias
