@@ -21,6 +21,7 @@ type fakeDiscoverer struct {
 	byID         map[string]imported.ImportedResource
 	notFound     map[string]bool // key = tfType|id
 	notSupported map[string]bool
+	hardErr      map[string]bool // key = tfType|id → a NON-sentinel (fatal-class) error
 	calls        []string
 	regionByID   map[string]string // id → region passed to DiscoverByID
 }
@@ -37,6 +38,12 @@ func (f *fakeDiscoverer) DiscoverByID(_ context.Context, tfType, id, region, _ s
 	// exercised — a regression to `err == awsdiscover.ErrNotFound`
 	// would still pass against bare-sentinel returns and silently
 	// break under real wrapped errors.
+	if f.hardErr[key] {
+		// A non-sentinel error: neither ErrNotFound nor ErrNotSupported, so the
+		// loop's error switch hits its default branch (fatal for top-level
+		// seeds, warn-and-continue for nested/nonARN seeds — F1).
+		return imported.ImportedResource{}, fmt.Errorf("fake: %s %q transient discovery failure", tfType, id)
+	}
 	if f.notSupported[key] {
 		return imported.ImportedResource{}, fmt.Errorf("fake: %s %q rejected: %w", tfType, id, awsdiscover.ErrNotSupported)
 	}
@@ -400,6 +407,149 @@ resource "aws_lambda_function" "h" {
 	}
 }
 
+// TestRun_NestedARNsSurfacedAndChased pins presets#834 class A end-to-end
+// through the chase loop (Tier 2): ARN literals the historical top-level pass
+// would have SILENTLY skipped — one nested inside an object-in-a-block, one
+// inside a list — are now surfaced with a precise nested_ref_literal warning
+// AND fed into the same discover → un-importable-gate → add path as top-level
+// hits. The customer-managed KMS key is adoptable and emitted; the
+// service-linked IAM role is gated pre-add with its precise reason. Neither
+// nested literal is rewritten (the literal is retained), but the adoptable
+// target enters the import set, improving graph fidelity.
+func TestRun_NestedARNsSurfacedAndChased(t *testing.T) {
+	t.Parallel()
+	kmsARN := "arn:aws:kms:us-east-1:123456789012:key/aaaa1111-bbbb-2222-cccc-333333333333"
+	slrARN := "arn:aws:iam::123456789012:role/aws-service-role/x.amazonaws.com/AWSServiceRoleForX"
+	gen0 := `
+resource "aws_lambda_function" "h" {
+  function_name   = "io-foo-handler"
+  execution_roles = ["` + slrARN + `"]
+  environment {
+    variables = {
+      SIGNING_KEY = "` + kmsARN + `"
+    }
+  }
+}`
+	dir := writeGen(t, gen0)
+	lambda := newRes("aws_lambda_function.h", "io-foo-handler",
+		"arn:aws:lambda:us-east-1:123456789012:function:io-foo-handler", "aws_lambda_function")
+
+	// Customer-managed KMS key: no key_manager marker → UnimportableReason
+	// returns "" → adoptable and emitted.
+	adoptableKey := newRes("aws_kms_key.signing", kmsARN, kmsARN, "aws_kms_key")
+	// Service-linked IAM role: ARN carries role/aws-service-role/ →
+	// UnimportableReason → ReasonServiceLinkedIAMRole; gated pre-add.
+	slrRole := imported.ImportedResource{Identity: imported.ResourceIdentity{
+		Address:   "aws_iam_role.slr",
+		Type:      "aws_iam_role",
+		ImportID:  slrARN,
+		NativeIDs: map[string]string{"arn": slrARN},
+	}}
+
+	disc := &fakeDiscoverer{byID: map[string]imported.ImportedResource{
+		"aws_kms_key|" + kmsARN:  adoptableKey,
+		"aws_iam_role|" + slrARN: slrRole,
+	}}
+	// One regenerate after the single KMS add; the KMS ARN then enters the
+	// resolved set (via res.Resources), so the nested literal no longer
+	// surfaces and the loop converges.
+	p := &scriptedPipeline{t: t, workdir: dir, generatedTF: []string{gen0}}
+
+	got, err := Run(context.Background(), Options{
+		Workdir: dir, Region: "us-east-1", AccountID: "123456789012",
+		Discoverer: disc, Pipeline: p.fns(),
+	}, []imported.ImportedResource{lambda})
+	if err != nil {
+		t.Fatalf("err=%v", err)
+	}
+	// The adoptable nested KMS key must be pulled into the import set.
+	if len(got.Added) != 1 || got.Added[0].Identity.Type != "aws_kms_key" {
+		t.Fatalf("Added=%+v, want exactly one aws_kms_key (the adoptable nested ref)", got.Added)
+	}
+	// The nested KMS key must have been discovered in the ARN's OWN region.
+	if r := disc.regionByID[kmsARN]; r != "us-east-1" {
+		t.Errorf("nested KMS discovered in region %q, want us-east-1 (ARN region)", r)
+	}
+	joined := strings.Join(got.Warnings, "\n")
+	// Both nested literals must be non-silent: a precise class-A warning each.
+	if strings.Count(joined, "nested_ref_literal") != 2 {
+		t.Errorf("want 2 nested_ref_literal warnings (KMS + SLR), got:\n%s", joined)
+	}
+	for _, want := range []string{
+		"nested attribute environment.variables.SIGNING_KEY",
+		"execution_roles[0]",
+		kmsARN, slrARN,
+	} {
+		if !strings.Contains(joined, want) {
+			t.Errorf("warnings missing %q; got:\n%s", want, joined)
+		}
+	}
+	// The service-linked role must be gated with its precise un-importable
+	// reason — NOT emitted, NOT an opaque genconfig-omission.
+	if !strings.Contains(joined, imported.ReasonServiceLinkedIAMRole) {
+		t.Errorf("warnings missing service-linked-role reason; got:\n%s", joined)
+	}
+	if strings.Contains(joined, "generated config omitted it") {
+		t.Errorf("gated SLR should not surface the opaque omission warning; got:\n%s", joined)
+	}
+	// Graph edge: the lambda consumer → the adopted KMS key.
+	if len(got.Edges) != 1 || got.Edges[0].From != "aws_lambda_function.h" || got.Edges[0].To != "aws_kms_key.signing" {
+		t.Errorf("Edges=%+v, want one (aws_lambda_function.h → aws_kms_key.signing)", got.Edges)
+	}
+}
+
+// TestRun_NonARNKMSKeyIDSurfacedAndChased pins presets#834 class B end-to-end:
+// a bare KMS KeyId UUID in a curated attribute (kms_master_key_id) — which
+// isARNLiteral never considered, so it was silent — is surfaced with a
+// non_arn_ref_literal warning and chased by the bare identifier (the KMS Cloud
+// Control DiscoverByID accepts a KeyId). The discovered customer-managed key is
+// adopted into the import set.
+func TestRun_NonARNKMSKeyIDSurfacedAndChased(t *testing.T) {
+	t.Parallel()
+	keyUUID := "1234abcd-12ab-34cd-56ef-1234567890ab"
+	gen0 := `
+resource "aws_sqs_queue" "q" {
+  name              = "io-foo-q"
+  kms_master_key_id = "` + keyUUID + `"
+}`
+	dir := writeGen(t, gen0)
+	queue := newRes("aws_sqs_queue.q", "io-foo-q",
+		"arn:aws:sqs:us-east-1:123:io-foo-q", "aws_sqs_queue")
+	key := newRes("aws_kms_key.by_id", keyUUID,
+		"arn:aws:kms:us-east-1:123:key/"+keyUUID, "aws_kms_key")
+
+	disc := &fakeDiscoverer{byID: map[string]imported.ImportedResource{
+		"aws_kms_key|" + keyUUID: key,
+	}}
+	// After the key is added, its ARN + ImportID(uuid) enter the resolved set,
+	// so the bare-id literal no longer surfaces; converge after one regenerate.
+	p := &scriptedPipeline{t: t, workdir: dir, generatedTF: []string{gen0}}
+
+	got, err := Run(context.Background(), Options{
+		Workdir: dir, Region: "us-east-1", AccountID: "123",
+		Discoverer: disc, Pipeline: p.fns(),
+	}, []imported.ImportedResource{queue})
+	if err != nil {
+		t.Fatalf("err=%v", err)
+	}
+	if len(got.Added) != 1 || got.Added[0].Identity.Type != "aws_kms_key" {
+		t.Fatalf("Added=%+v, want exactly one aws_kms_key chased by bare KeyId", got.Added)
+	}
+	// The discoverer must have been called with the bare UUID as the id.
+	if len(disc.calls) == 0 || disc.calls[0] != "aws_kms_key|"+keyUUID {
+		t.Errorf("DiscoverByID calls=%v, want first call aws_kms_key|%s", disc.calls, keyUUID)
+	}
+	joined := strings.Join(got.Warnings, "\n")
+	if !strings.Contains(joined, "non_arn_ref_literal") {
+		t.Errorf("want a non_arn_ref_literal warning; got:\n%s", joined)
+	}
+	for _, want := range []string{"kms_master_key_id", keyUUID, "aws_kms_key"} {
+		if !strings.Contains(joined, want) {
+			t.Errorf("warnings missing %q; got:\n%s", want, joined)
+		}
+	}
+}
+
 // TestRun_DepOfDepConvergesAfterTwoIterations pins the chained-dep
 // case: Lambda → IAM role → IAM policy. Three resources end up in
 // the set; the loop converges in 2 iterations.
@@ -673,9 +823,13 @@ resource "aws_lambda_function" "h` + suffix + `" {
 	dir := writeGen(t, gen("0"))
 
 	// Discoverer returns a synthetic role for every lookup, but the
-	// regenerated stack always has a fresh unresolved ARN.
+	// regenerated stack always has a fresh unresolved ARN. Each role gets a
+	// DISTINCT address (derived from its name): real resources never share an
+	// address, and the F8 same-address adoption dedup would otherwise collapse
+	// these synthetic roles into one and converge early.
 	role := func(arn string) imported.ImportedResource {
-		return newRes("aws_iam_role.r", "r", arn, "aws_iam_role")
+		name := arn[strings.LastIndex(arn, "/")+1:]
+		return newRes("aws_iam_role."+name, name, arn, "aws_iam_role")
 	}
 	byID := map[string]imported.ImportedResource{
 		"aws_iam_role|arn:aws:iam::123:role/role-0": role("arn:aws:iam::123:role/role-0"),
@@ -881,6 +1035,299 @@ func TestRun_NoEdgesWhenNothingAdded(t *testing.T) {
 // (From, To) uniqueness invariant is already pinned by the happy-path
 // edges assertion in TestRun_RecordsEdges, which exercises the same
 // recordEdge code path.)
+
+// TestRun_NestedHardErrorIsNonFatal pins F1: a non-sentinel (hard) discovery
+// error on a NESTED (class-A) reference — a fidelity enhancement that a
+// previous run would have silently skipped — must NOT abort the whole import.
+// It degrades to a warning and the run completes; the SAME error on a top-level
+// reference still fails the run.
+func TestRun_NestedHardErrorIsNonFatal(t *testing.T) {
+	t.Parallel()
+	nestedARN := "arn:aws:kms:us-east-1:123:key/aaaa1111-bbbb-2222-cccc-333333333333"
+	gen0 := `
+resource "aws_lambda_function" "h" {
+  function_name = "io-foo-h"
+  environment {
+    variables = {
+      SIGNING_KEY = "` + nestedARN + `"
+    }
+  }
+}`
+	dir := writeGen(t, gen0)
+	lambda := newRes("aws_lambda_function.h", "io-foo-h",
+		"arn:aws:lambda:us-east-1:123:function:io-foo-h", "aws_lambda_function")
+	disc := &fakeDiscoverer{hardErr: map[string]bool{"aws_kms_key|" + nestedARN: true}}
+	// No regenerate needed: the nested ref errors out (non-fatal) and is chased
+	// once, so the loop converges without a genconfig pass.
+	p := &scriptedPipeline{t: t, workdir: dir}
+
+	got, err := Run(context.Background(), Options{
+		Workdir: dir, Region: "us-east-1", AccountID: "123",
+		Discoverer: disc, Pipeline: p.fns(),
+	}, []imported.ImportedResource{lambda})
+	if err != nil {
+		t.Fatalf("nested hard error should be non-fatal; err=%v", err)
+	}
+	joined := strings.Join(got.Warnings, "\n")
+	if !strings.Contains(joined, "non-fatal") || !strings.Contains(joined, nestedARN) {
+		t.Errorf("want a non-fatal warning mentioning the nested ARN; got:\n%s", joined)
+	}
+	if len(disc.calls) != 1 {
+		t.Errorf("DiscoverByID calls=%v, want exactly 1 (nested ref chased once)", disc.calls)
+	}
+
+	// Same hard error on a TOP-LEVEL reference must still be fatal.
+	genTL := `
+resource "aws_lambda_function" "h" {
+  role = "arn:aws:iam::123:role/io-foo-role"
+}`
+	dirTL := writeGen(t, genTL)
+	discTL := &fakeDiscoverer{hardErr: map[string]bool{"aws_iam_role|arn:aws:iam::123:role/io-foo-role": true}}
+	pTL := &scriptedPipeline{t: t, workdir: dirTL}
+	_, errTL := Run(context.Background(), Options{
+		Workdir: dirTL, Discoverer: discTL, Pipeline: pTL.fns(),
+	}, nil)
+	if errTL == nil {
+		t.Fatal("top-level hard discovery error must remain fatal")
+	}
+	if !strings.Contains(errTL.Error(), "DiscoverByID") {
+		t.Errorf("top-level fatal err=%q, want a DiscoverByID abort", errTL)
+	}
+}
+
+// TestRun_NestedLiteralTerminalNoCycle pins F2: a nested ARN whose discovered
+// resource's NativeIDs do NOT byte-match the literal (so the literal is never
+// rewritten and stays textually present) converges cleanly — it is
+// terminal-by-design, excluded from cycle detection — instead of tripping
+// ErrCyclicDependency. DiscoverByID is called exactly once for it.
+func TestRun_NestedLiteralTerminalNoCycle(t *testing.T) {
+	t.Parallel()
+	// Version-qualified-style nested ARN; the discovered key's NativeIDs carry
+	// a DIFFERENT canonical arn, so the literal never enters the resolved set.
+	nestedARN := "arn:aws:kms:us-east-1:123:key/aaaa1111-bbbb-2222-cccc-333333333333"
+	canonicalARN := "arn:aws:kms:us-east-1:999:key/aaaa1111-bbbb-2222-cccc-333333333333"
+	gen0 := `
+resource "aws_lambda_function" "h" {
+  environment {
+    variables = {
+      SIGNING_KEY = "` + nestedARN + `"
+    }
+  }
+}`
+	dir := writeGen(t, gen0)
+	lambda := newRes("aws_lambda_function.h", "io-foo-h",
+		"arn:aws:lambda:us-east-1:123:function:io-foo-h", "aws_lambda_function")
+	// Discovered key adopts a canonical arn that does not match the literal.
+	key := newRes("aws_kms_key.signing", canonicalARN, canonicalARN, "aws_kms_key")
+	disc := &fakeDiscoverer{byID: map[string]imported.ImportedResource{
+		"aws_kms_key|" + nestedARN: key,
+	}}
+	// One regenerate after the add; the literal still sits nested (crossref is
+	// top-level-only) but is terminal-by-design so the loop must converge.
+	p := &scriptedPipeline{t: t, workdir: dir, generatedTF: []string{gen0}}
+
+	got, err := Run(context.Background(), Options{
+		Workdir: dir, Region: "us-east-1", AccountID: "123",
+		Discoverer: disc, Pipeline: p.fns(),
+	}, []imported.ImportedResource{lambda})
+	if err != nil {
+		t.Fatalf("terminal nested literal must converge, not cycle; err=%v", err)
+	}
+	if len(disc.calls) != 1 {
+		t.Errorf("DiscoverByID calls=%v, want exactly 1 (nested literal chased once)", disc.calls)
+	}
+	if len(got.Added) != 1 {
+		t.Errorf("Added=%+v, want the one adoptable key", got.Added)
+	}
+}
+
+// TestRun_ClassBUsesConsumerRegion pins F3: a class-B bare-UUID reference is
+// discovered in the CONSUMER resource's region (a KMS CMK is same-region as its
+// SSE consumer), not the run's primary region.
+func TestRun_ClassBUsesConsumerRegion(t *testing.T) {
+	t.Parallel()
+	keyUUID := "1234abcd-12ab-34cd-56ef-1234567890ab"
+	gen0 := `
+resource "aws_sqs_queue" "q" {
+  kms_master_key_id = "` + keyUUID + `"
+}`
+	dir := writeGen(t, gen0)
+	// Consumer lives in eu-west-1 while the run's primary region is us-east-1.
+	queue := imported.ImportedResource{Identity: imported.ResourceIdentity{
+		Address: "aws_sqs_queue.q", Type: "aws_sqs_queue", Region: "eu-west-1",
+	}}
+	key := newRes("aws_kms_key.by_id", keyUUID,
+		"arn:aws:kms:eu-west-1:123:key/"+keyUUID, "aws_kms_key")
+	disc := &fakeDiscoverer{byID: map[string]imported.ImportedResource{
+		"aws_kms_key|" + keyUUID: key,
+	}}
+	p := &scriptedPipeline{t: t, workdir: dir, generatedTF: []string{gen0}}
+
+	_, err := Run(context.Background(), Options{
+		Workdir: dir, Region: "us-east-1", AccountID: "123",
+		Discoverer: disc, Pipeline: p.fns(),
+	}, []imported.ImportedResource{queue})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if got := disc.regionByID[keyUUID]; got != "eu-west-1" {
+		t.Errorf("class-B key discovered in region %q, want eu-west-1 (the consumer's region, not the primary us-east-1)", got)
+	}
+}
+
+// TestRun_MultipleNestedConsumersRecordAllEdges pins F4 (case 1): two resources
+// nesting the SAME ARN both contribute a dependency edge — the single-winner
+// nested-hit map must not collapse them to one consumer.
+func TestRun_MultipleNestedConsumersRecordAllEdges(t *testing.T) {
+	t.Parallel()
+	kmsARN := "arn:aws:kms:us-east-1:123:key/aaaa1111-bbbb-2222-cccc-333333333333"
+	gen0 := `
+resource "aws_lambda_function" "a" {
+  environment {
+    variables = { SIGNING_KEY = "` + kmsARN + `" }
+  }
+}
+resource "aws_lambda_function" "b" {
+  environment {
+    variables = { SIGNING_KEY = "` + kmsARN + `" }
+  }
+}`
+	dir := writeGen(t, gen0)
+	la := newRes("aws_lambda_function.a", "a", "arn:aws:lambda:us-east-1:123:function:a", "aws_lambda_function")
+	lb := newRes("aws_lambda_function.b", "b", "arn:aws:lambda:us-east-1:123:function:b", "aws_lambda_function")
+	key := newRes("aws_kms_key.signing", kmsARN, kmsARN, "aws_kms_key")
+	disc := &fakeDiscoverer{byID: map[string]imported.ImportedResource{"aws_kms_key|" + kmsARN: key}}
+	p := &scriptedPipeline{t: t, workdir: dir, generatedTF: []string{gen0}}
+
+	got, err := Run(context.Background(), Options{
+		Workdir: dir, Region: "us-east-1", AccountID: "123",
+		Discoverer: disc, Pipeline: p.fns(),
+	}, []imported.ImportedResource{la, lb})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	wantEdges := map[string]bool{
+		"aws_lambda_function.a→aws_kms_key.signing": false,
+		"aws_lambda_function.b→aws_kms_key.signing": false,
+	}
+	for _, e := range got.Edges {
+		wantEdges[e.From+"→"+e.To] = true
+	}
+	for k, seen := range wantEdges {
+		if !seen {
+			t.Errorf("missing edge %s; got edges %+v", k, got.Edges)
+		}
+	}
+}
+
+// TestRun_DualOccurrenceKeepsNestedEdgeAndWarning pins F4 (case 2): an ARN that
+// appears TOP-LEVEL in X and NESTED in Y must still record Y's edge AND emit
+// Y's nested_ref_literal warning — the top-level occurrence must not suppress
+// the nested consumer.
+func TestRun_DualOccurrenceKeepsNestedEdgeAndWarning(t *testing.T) {
+	t.Parallel()
+	roleARN := "arn:aws:iam::123:role/shared-role"
+	gen0 := `
+resource "aws_lambda_function" "x" {
+  role = "` + roleARN + `"
+}
+resource "aws_lambda_function" "y" {
+  environment {
+    variables = { EXEC_ROLE = "` + roleARN + `" }
+  }
+}`
+	dir := writeGen(t, gen0)
+	lx := newRes("aws_lambda_function.x", "x", "arn:aws:lambda:us-east-1:123:function:x", "aws_lambda_function")
+	ly := newRes("aws_lambda_function.y", "y", "arn:aws:lambda:us-east-1:123:function:y", "aws_lambda_function")
+	role := newRes("aws_iam_role.shared_role", "shared-role", roleARN, "aws_iam_role")
+	disc := &fakeDiscoverer{byID: map[string]imported.ImportedResource{"aws_iam_role|" + roleARN: role}}
+	p := &scriptedPipeline{t: t, workdir: dir, generatedTF: []string{gen0}}
+
+	got, err := Run(context.Background(), Options{
+		Workdir: dir, Region: "us-east-1", AccountID: "123",
+		Discoverer: disc, Pipeline: p.fns(),
+	}, []imported.ImportedResource{lx, ly})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	// Y's nested edge must exist.
+	haveY := false
+	for _, e := range got.Edges {
+		if e.From == "aws_lambda_function.y" && e.To == "aws_iam_role.shared_role" {
+			haveY = true
+		}
+	}
+	if !haveY {
+		t.Errorf("missing nested consumer edge aws_lambda_function.y → aws_iam_role.shared_role; got %+v", got.Edges)
+	}
+	// Y's nested warning must be emitted (not suppressed by X's top-level use).
+	joined := strings.Join(got.Warnings, "\n")
+	if !strings.Contains(joined, "nested_ref_literal") || !strings.Contains(joined, "aws_lambda_function.y") {
+		t.Errorf("want a nested_ref_literal warning for aws_lambda_function.y; got:\n%s", joined)
+	}
+}
+
+// TestRun_SameKeyByARNAndUUIDAdoptedOnce pins F8: a key referenced by full ARN
+// (nested) in one resource and by bare UUID (class-B attr) in another resolves
+// to one Added entry, but BOTH consumer edges are recorded.
+func TestRun_SameKeyByARNAndUUIDAdoptedOnce(t *testing.T) {
+	t.Parallel()
+	keyUUID := "1234abcd-12ab-34cd-56ef-1234567890ab"
+	keyARN := "arn:aws:kms:us-east-1:123:key/" + keyUUID
+	gen0 := `
+resource "aws_lambda_function" "fn" {
+  environment {
+    variables = { SIGNING_KEY = "` + keyARN + `" }
+  }
+}
+resource "aws_sqs_queue" "q" {
+  kms_master_key_id = "` + keyUUID + `"
+}`
+	dir := writeGen(t, gen0)
+	fn := newRes("aws_lambda_function.fn", "fn", "arn:aws:lambda:us-east-1:123:function:fn", "aws_lambda_function")
+	q := newRes("aws_sqs_queue.q", "q", "arn:aws:sqs:us-east-1:123:q", "aws_sqs_queue")
+	// Both the ARN lookup and the UUID lookup resolve to the SAME key address.
+	key := newRes("aws_kms_key.shared", keyARN, keyARN, "aws_kms_key")
+	disc := &fakeDiscoverer{byID: map[string]imported.ImportedResource{
+		"aws_kms_key|" + keyARN:  key,
+		"aws_kms_key|" + keyUUID: key,
+	}}
+	p := &scriptedPipeline{t: t, workdir: dir, generatedTF: []string{gen0}}
+
+	got, err := Run(context.Background(), Options{
+		Workdir: dir, Region: "us-east-1", AccountID: "123",
+		Discoverer: disc, Pipeline: p.fns(),
+	}, []imported.ImportedResource{fn, q})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	// Exactly one adoption of the shared key.
+	kmsCount := 0
+	for _, r := range got.Added {
+		if r.Identity.Address == "aws_kms_key.shared" {
+			kmsCount++
+		}
+	}
+	if kmsCount != 1 {
+		t.Errorf("aws_kms_key.shared appears %d time(s) in Added, want exactly 1; Added=%+v", kmsCount, got.Added)
+	}
+	// Both consumer edges present.
+	haveFn, haveQ := false, false
+	for _, e := range got.Edges {
+		if e.To != "aws_kms_key.shared" {
+			continue
+		}
+		if e.From == "aws_lambda_function.fn" {
+			haveFn = true
+		}
+		if e.From == "aws_sqs_queue.q" {
+			haveQ = true
+		}
+	}
+	if !haveFn || !haveQ {
+		t.Errorf("want both consumer edges (fn + q) → aws_kms_key.shared; got %+v", got.Edges)
+	}
+}
 
 // TestRun_EdgesOmittedWhenDiscoveryFails pins that warnings (NotFound
 // or NotSupported) do not produce edges — the picker only shows

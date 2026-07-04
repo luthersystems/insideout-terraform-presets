@@ -5,7 +5,37 @@ import (
 	"testing"
 
 	"github.com/luthersystems/insideout-terraform-presets/pkg/composer/imported"
+	"github.com/luthersystems/insideout-terraform-presets/pkg/imported/dependencies"
 )
+
+func contains(ss []string, want string) bool {
+	for _, s := range ss {
+		if s == want {
+			return true
+		}
+	}
+	return false
+}
+
+// TestNonARNAttrRulesAgreeWithDependencyRegistry is a drift guard: every
+// class-B curated attr rule's tfType MUST agree with the canonical
+// cross-reference registry pkg/imported/dependencies (Lookup / FieldRefs,
+// presets#482/#667). The class-B chase seeds a discoverer with rule.tfType; if
+// this map drifted from the registry the chase would look up the wrong resource
+// type. Triggering example: kms_master_key_id → aws_kms_key must match in both.
+func TestNonARNAttrRulesAgreeWithDependencyRegistry(t *testing.T) {
+	t.Parallel()
+	for attr, rule := range nonARNAttrRules {
+		want, ok := dependencies.Lookup(attr)
+		if !ok {
+			t.Errorf("nonARNAttrRules[%q] has no entry in pkg/imported/dependencies (Lookup); every class-B attr must be a known cross-ref field", attr)
+			continue
+		}
+		if rule.tfType != want {
+			t.Errorf("nonARNAttrRules[%q].tfType=%q disagrees with dependencies.Lookup=%q", attr, rule.tfType, want)
+		}
+	}
+}
 
 func resource(addr, importID string, native map[string]string) imported.ImportedResource {
 	return imported.ImportedResource{
@@ -105,14 +135,15 @@ resource "aws_lambda_function" "c" {
 
 func TestFindUnresolved_IgnoresNonLiteralExpressions(t *testing.T) {
 	t.Parallel()
-	// Interpolations, list values, and references to other resources
-	// should not be treated as unresolved literals — the conservative
-	// finder leaves them alone for genconfig's crossref pass.
+	// Interpolations, traversals, and ARNs embedded inside larger template
+	// text must NOT be treated as reference literals — the conservative
+	// finder leaves them alone for genconfig's crossref pass. (The class-A
+	// nested-list case — `layers = ["arn:…"]` — IS now surfaced by design;
+	// see TestFindUnresolved_SurfacesNestedListAndObjectARNs.)
 	raw := []byte(`
 resource "aws_lambda_function" "a" {
   role           = aws_iam_role.handler.arn
   source_account = "123"
-  layers         = ["arn:aws:lambda:us-east-1:123:layer:x:1"]
   description    = "see arn:aws:iam::123:role/embedded inside text"
 }
 `)
@@ -121,7 +152,233 @@ resource "aws_lambda_function" "a" {
 		t.Fatal(err)
 	}
 	if len(got) != 0 {
-		t.Errorf("got %v, want empty (no top-level pure-literal ARN attrs)", got)
+		t.Errorf("got %v, want empty (traversal / non-arn / embedded-in-text)", got)
+	}
+}
+
+// TestFindUnresolved_SurfacesNestedListAndObjectARNs pins presets#834 class A:
+// an ARN literal nested inside a list element or an object attribute value —
+// which the historical top-level-only pass silently skipped — is now surfaced
+// by the nested-body walk. The lambda-layer ARN sits in a list; the KMS ARN
+// sits in an object value inside a nested block.
+func TestFindUnresolved_SurfacesNestedListAndObjectARNs(t *testing.T) {
+	t.Parallel()
+	raw := []byte(`
+resource "aws_lambda_function" "a" {
+  layers = ["arn:aws:lambda:us-east-1:123:layer:x:1"]
+  environment {
+    variables = {
+      SIGNING_KEY = "arn:aws:kms:us-east-1:123:key/uuid-1"
+    }
+  }
+}
+`)
+	got, err := FindUnresolved(raw, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{
+		"arn:aws:kms:us-east-1:123:key/uuid-1",
+		"arn:aws:lambda:us-east-1:123:layer:x:1",
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("got %v, want %v (nested list + object-in-block ARNs)", got, want)
+	}
+}
+
+// TestFindUnresolved_NestedARNResolvedWhenTargetInBatch pins that a nested ARN
+// pointing at an in-batch resource is NOT surfaced — the resolved-set check
+// applies to nested hits exactly as it does to top-level ones.
+func TestFindUnresolved_NestedARNResolvedWhenTargetInBatch(t *testing.T) {
+	t.Parallel()
+	raw := []byte(`
+resource "aws_lambda_function" "a" {
+  layers = ["arn:aws:lambda:us-east-1:123:layer:shared:1"]
+}
+`)
+	in := []imported.ImportedResource{
+		resource("aws_lambda_layer_version.shared", "arn:aws:lambda:us-east-1:123:layer:shared:1",
+			map[string]string{"arn": "arn:aws:lambda:us-east-1:123:layer:shared:1"}),
+	}
+	got, err := FindUnresolved(raw, in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 0 {
+		t.Errorf("got %v, want empty (nested ARN target is in the batch)", got)
+	}
+}
+
+// TestFindUnresolved_SurfacesCuratedNonARNIdentifier pins presets#834 class B:
+// a bare KMS KeyId UUID in a curated attribute (kms_key_id / kms_master_key_id)
+// is surfaced, while the SAME UUID shape in a non-curated attribute is not
+// (guards against generic bare-name matching / false positives).
+func TestFindUnresolved_SurfacesCuratedNonARNIdentifier(t *testing.T) {
+	t.Parallel()
+	raw := []byte(`
+resource "aws_sqs_queue" "q" {
+  kms_master_key_id = "1234abcd-12ab-34cd-56ef-1234567890ab"
+}
+resource "aws_ebs_volume" "v" {
+  kms_key_id = "abcd0000-11ab-22cd-33ef-abcdef012345"
+}
+resource "aws_instance" "i" {
+  some_other_id = "ffffffff-ffff-ffff-ffff-ffffffffffff"
+}
+`)
+	got, err := FindUnresolved(raw, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{
+		"1234abcd-12ab-34cd-56ef-1234567890ab",
+		"abcd0000-11ab-22cd-33ef-abcdef012345",
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("got %v, want %v (only curated kms_* attrs; some_other_id UUID must NOT match)", got, want)
+	}
+}
+
+// TestFindUnresolved_SurfacesClassBInObjectExpression pins F6: a curated
+// non-ARN identifier (KMS KeyId UUID) nested inside an OBJECT expression value
+// — not just a top-level/nested-block attribute — is surfaced. Before F6,
+// checkNonARN ran only on body attributes, so an object-shaped SSE config was
+// silent.
+func TestFindUnresolved_SurfacesClassBInObjectExpression(t *testing.T) {
+	t.Parallel()
+	uuid := "1234abcd-12ab-34cd-56ef-1234567890ab"
+	raw := []byte(`
+resource "aws_s3_bucket" "b" {
+  rule = {
+    x = {
+      kms_master_key_id = "` + uuid + `"
+    }
+  }
+}
+`)
+	scan, err := scanGenerated(raw, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	hit, ok := scan.nonARN[uuid]
+	if !ok {
+		t.Fatalf("object-nested kms_master_key_id UUID not surfaced; nonARN=%+v", scan.nonARN)
+	}
+	if hit.path != "rule.x.kms_master_key_id" {
+		t.Errorf("class-B object path=%q, want rule.x.kms_master_key_id", hit.path)
+	}
+	if !contains(scan.unresolved, uuid) {
+		t.Errorf("unresolved=%v, want it to include the object-nested UUID", scan.unresolved)
+	}
+}
+
+// TestObjectKey_DynamicKeyYieldsStar pins F7: a parenthesized dynamic object key
+// `(expr) = …` must collapse to the '*' path segment (matching the canonical
+// pkg/composer.objectConsKeyAsString ForceNonLiteral guard), not a fabricated
+// static name.
+func TestObjectKey_DynamicKeyYieldsStar(t *testing.T) {
+	t.Parallel()
+	arn := "arn:aws:iam::123:role/dynamic-keyed"
+	// A SINGLE-segment parenthesized key `(k) = …`: without the ForceNonLiteral
+	// guard the local objectKey would fall through to the single-segment
+	// ScopeTraversalExpr branch and fabricate the static name "k"; the guard
+	// forces the '*' fallback (matching pkg/composer.objectConsKeyAsString).
+	raw := []byte(`
+resource "aws_lambda_function" "fn" {
+  tags = {
+    (k) = "` + arn + `"
+  }
+}
+`)
+	scan, err := scanGenerated(raw, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	hit, ok := scan.nested[arn]
+	if !ok {
+		t.Fatalf("dynamic-keyed nested ARN not surfaced; nested=%+v", scan.nested)
+	}
+	if hit.path != "tags.*" {
+		t.Errorf("dynamic-key path=%q, want tags.* (ForceNonLiteral guard); a fabricated static name like tags.k means the guard is missing", hit.path)
+	}
+}
+
+// TestFindUnresolved_UppercaseKMSKeyUUID pins F9: the KMS KeyId UUID matcher is
+// case-insensitive — an uppercase-hex UUID (as the AWS console sometimes renders
+// it) is surfaced, and a non-hex look-alike is not.
+func TestFindUnresolved_UppercaseKMSKeyUUID(t *testing.T) {
+	t.Parallel()
+	upper := "ABCD0000-11AB-22CD-33EF-ABCDEF012345"
+	raw := []byte(`
+resource "aws_sqs_queue" "q" {
+  kms_master_key_id = "` + upper + `"
+}
+resource "aws_sqs_queue" "bad" {
+  kms_master_key_id = "gggg0000-11ab-22cd-33ef-abcdef012345"
+}
+`)
+	got, err := FindUnresolved(raw, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{upper}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("got %v, want %v (uppercase UUID matches, non-hex does not)", got, want)
+	}
+}
+
+// TestFindUnresolved_LabeledNestedBlockPaths pins F10: two same-type LABELED
+// nested blocks yield distinct attribute paths (labels are folded into the path
+// segment as type[label]) so their warnings are individually traceable.
+func TestFindUnresolved_LabeledNestedBlockPaths(t *testing.T) {
+	t.Parallel()
+	arnA := "arn:aws:kms:us-east-1:123:key/aaaa1111-bbbb-2222-cccc-333333333333"
+	arnB := "arn:aws:kms:us-east-1:123:key/bbbb2222-cccc-3333-dddd-444444444444"
+	raw := []byte(`
+resource "aws_s3_bucket" "b" {
+  rule "a" {
+    signing_key = "` + arnA + `"
+  }
+  rule "b" {
+    signing_key = "` + arnB + `"
+  }
+}
+`)
+	scan, err := scanGenerated(raw, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if hit := scan.nested[arnA]; hit.path != "rule[a].signing_key" {
+		t.Errorf("labeled block A path=%q, want rule[a].signing_key", hit.path)
+	}
+	if hit := scan.nested[arnB]; hit.path != "rule[b].signing_key" {
+		t.Errorf("labeled block B path=%q, want rule[b].signing_key", hit.path)
+	}
+}
+
+// TestFindUnresolved_IgnoresNestedNonLiterals pins the conservative contract at
+// depth: a nested interpolation, a nested traversal, and an ARN embedded inside
+// a larger nested string must ALL be ignored — only concrete, pure string
+// literals are surfaced.
+func TestFindUnresolved_IgnoresNestedNonLiterals(t *testing.T) {
+	t.Parallel()
+	raw := []byte(`
+resource "aws_lambda_function" "a" {
+  layers = ["${aws_lambda_layer_version.y.arn}"]
+  environment {
+    variables = {
+      TRAVERSAL = aws_iam_role.handler.arn
+      EMBEDDED  = "prefix arn:aws:iam::123:role/embedded suffix"
+    }
+  }
+}
+`)
+	got, err := FindUnresolved(raw, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 0 {
+		t.Errorf("got %v, want empty (nested interpolation / traversal / embedded-in-text all ignored)", got)
 	}
 }
 
