@@ -13,9 +13,3 @@
 # regenerates.
 #
 # Format: <tfType>.<attr>:<sub-attr>   # refs #<issue>
-
-# aws_route_table.route is emitted as an object literal but the generated
-# model predates the provider adding the Required odb_network_arn sub-attr.
-# The emit guard makes the literal path unreachable today, but the model is
-# stale until #845 regenerates it. Triggering example for the whole gate: #839.
-aws_route_table.route:odb_network_arn  # refs #845
