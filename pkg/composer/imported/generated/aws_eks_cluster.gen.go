@@ -100,13 +100,21 @@ type AWSEKSClusterKubernetesNetworkConfigElasticLoadBalancing struct {
 // AWSEKSClusterOutpostConfig is a nested-block type used by the parent resource.
 type AWSEKSClusterOutpostConfig struct {
 	ControlPlaneInstanceType *Value[string]                                    `tf:"control_plane_instance_type" json:"control_plane_instance_type,omitempty"`
+	EtcdInstanceType         *Value[string]                                    `tf:"etcd_instance_type" json:"etcd_instance_type,omitempty"`
 	OutpostArns              []*Value[string]                                  `tf:"outpost_arns" json:"outpost_arns,omitempty"`
 	ControlPlanePlacement    []AWSEKSClusterOutpostConfigControlPlanePlacement `tf:"control_plane_placement,blocks" json:"control_plane_placement,omitempty"`
+	EtcdPlacement            []AWSEKSClusterOutpostConfigEtcdPlacement         `tf:"etcd_placement,blocks" json:"etcd_placement,omitempty"`
 }
 
 // AWSEKSClusterOutpostConfigControlPlanePlacement is a nested-block type used by the parent resource.
 type AWSEKSClusterOutpostConfigControlPlanePlacement struct {
-	GroupName *Value[string] `tf:"group_name" json:"group_name,omitempty"`
+	GroupName   *Value[string] `tf:"group_name" json:"group_name,omitempty"`
+	SpreadLevel *Value[string] `tf:"spread_level" json:"spread_level,omitempty"`
+}
+
+// AWSEKSClusterOutpostConfigEtcdPlacement is a nested-block type used by the parent resource.
+type AWSEKSClusterOutpostConfigEtcdPlacement struct {
+	SpreadLevel *Value[string] `tf:"spread_level" json:"spread_level,omitempty"`
 }
 
 // AWSEKSClusterRemoteNetworkConfig is a nested-block type used by the parent resource.
@@ -150,6 +158,7 @@ type AWSEKSClusterUpgradePolicy struct {
 // AWSEKSClusterVPCConfig is a nested-block type used by the parent resource.
 type AWSEKSClusterVPCConfig struct {
 	ClusterSecurityGroupID *Value[string]   `tf:"cluster_security_group_id" json:"cluster_security_group_id,omitempty"`
+	ControlPlaneEgressMode *Value[string]   `tf:"control_plane_egress_mode" json:"control_plane_egress_mode,omitempty"`
 	EndpointPrivateAccess  *Value[bool]     `tf:"endpoint_private_access" json:"endpoint_private_access,omitempty"`
 	EndpointPublicAccess   *Value[bool]     `tf:"endpoint_public_access" json:"endpoint_public_access,omitempty"`
 	PublicAccessCidrs      []*Value[string] `tf:"public_access_cidrs" json:"public_access_cidrs,omitempty"`

@@ -7,17 +7,19 @@ import "reflect"
 // AWSCloudfrontFunction is the generated Layer 1 typed model for the
 // `aws_cloudfront_function` Terraform resource.
 type AWSCloudfrontFunction struct {
-	ARN                       *Value[string]   `tf:"arn" json:"arn,omitempty"`
-	Code                      *Value[string]   `tf:"code" json:"code,omitempty"`
-	Comment                   *Value[string]   `tf:"comment" json:"comment,omitempty"`
-	Etag                      *Value[string]   `tf:"etag" json:"etag,omitempty"`
-	ID                        *Value[string]   `tf:"id" json:"id,omitempty"`
-	KeyValueStoreAssociations []*Value[string] `tf:"key_value_store_associations" json:"key_value_store_associations,omitempty"`
-	LiveStageEtag             *Value[string]   `tf:"live_stage_etag" json:"live_stage_etag,omitempty"`
-	Name                      *Value[string]   `tf:"name" json:"name,omitempty"`
-	Publish                   *Value[bool]     `tf:"publish" json:"publish,omitempty"`
-	Runtime                   *Value[string]   `tf:"runtime" json:"runtime,omitempty"`
-	Status                    *Value[string]   `tf:"status" json:"status,omitempty"`
+	ARN                       *Value[string]            `tf:"arn" json:"arn,omitempty"`
+	Code                      *Value[string]            `tf:"code" json:"code,omitempty"`
+	Comment                   *Value[string]            `tf:"comment" json:"comment,omitempty"`
+	Etag                      *Value[string]            `tf:"etag" json:"etag,omitempty"`
+	ID                        *Value[string]            `tf:"id" json:"id,omitempty"`
+	KeyValueStoreAssociations []*Value[string]          `tf:"key_value_store_associations" json:"key_value_store_associations,omitempty"`
+	LiveStageEtag             *Value[string]            `tf:"live_stage_etag" json:"live_stage_etag,omitempty"`
+	Name                      *Value[string]            `tf:"name" json:"name,omitempty"`
+	Publish                   *Value[bool]              `tf:"publish" json:"publish,omitempty"`
+	Runtime                   *Value[string]            `tf:"runtime" json:"runtime,omitempty"`
+	Status                    *Value[string]            `tf:"status" json:"status,omitempty"`
+	Tags                      map[string]*Value[string] `tf:"tags" json:"tags,omitempty"`
+	TagsAll                   map[string]*Value[string] `tf:"tags_all" json:"tags_all,omitempty"`
 }
 
 // AWSCloudfrontFunctionSchema describes provider metadata for each attribute / nested
@@ -34,6 +36,8 @@ var AWSCloudfrontFunctionSchema = map[string]FieldSchema{
 	"publish":                      {Optional: true, Replacement: ReplacementUnknown},
 	"runtime":                      {Required: true, Replacement: ReplacementUnknown},
 	"status":                       {Computed: true, Replacement: ReplacementUnknown},
+	"tags":                         {Optional: true, Replacement: ReplacementUnknown},
+	"tags_all":                     {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 }
 
 func init() {

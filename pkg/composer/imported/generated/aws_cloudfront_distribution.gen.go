@@ -34,6 +34,7 @@ type AWSCloudfrontDistribution struct {
 	TrustedSigners                []AWSCloudfrontDistributionTrustedSigners                `tf:"trusted_signers" json:"trusted_signers,omitempty"`
 	WaitForDeployment             *Value[bool]                                             `tf:"wait_for_deployment" json:"wait_for_deployment,omitempty"`
 	WebACLID                      *Value[string]                                           `tf:"web_acl_id" json:"web_acl_id,omitempty"`
+	CacheTagConfig                []AWSCloudfrontDistributionCacheTagConfig                `tf:"cache_tag_config,blocks" json:"cache_tag_config,omitempty"`
 	ConnectionFunctionAssociation []AWSCloudfrontDistributionConnectionFunctionAssociation `tf:"connection_function_association,blocks" json:"connection_function_association,omitempty"`
 	CustomErrorResponse           []AWSCloudfrontDistributionCustomErrorResponse           `tf:"custom_error_response,blocks" json:"custom_error_response,omitempty"`
 	DefaultCacheBehavior          []AWSCloudfrontDistributionDefaultCacheBehavior          `tf:"default_cache_behavior,blocks" json:"default_cache_behavior,omitempty"`
@@ -44,6 +45,11 @@ type AWSCloudfrontDistribution struct {
 	Restrictions                  []AWSCloudfrontDistributionRestrictions                  `tf:"restrictions,blocks" json:"restrictions,omitempty"`
 	ViewerCertificate             []AWSCloudfrontDistributionViewerCertificate             `tf:"viewer_certificate,blocks" json:"viewer_certificate,omitempty"`
 	ViewerMtlsConfig              []AWSCloudfrontDistributionViewerMtlsConfig              `tf:"viewer_mtls_config,blocks" json:"viewer_mtls_config,omitempty"`
+}
+
+// AWSCloudfrontDistributionCacheTagConfig is a nested-block type used by the parent resource.
+type AWSCloudfrontDistributionCacheTagConfig struct {
+	HeaderName *Value[string] `tf:"header_name" json:"header_name,omitempty"`
 }
 
 // AWSCloudfrontDistributionConnectionFunctionAssociation is a nested-block type used by the parent resource.
@@ -203,13 +209,19 @@ type AWSCloudfrontDistributionOriginCustomHeader struct {
 
 // AWSCloudfrontDistributionOriginCustomOriginConfig is a nested-block type used by the parent resource.
 type AWSCloudfrontDistributionOriginCustomOriginConfig struct {
-	HTTPPort               *Value[float64]  `tf:"http_port" json:"http_port,omitempty"`
-	HTTPSPort              *Value[float64]  `tf:"https_port" json:"https_port,omitempty"`
-	IpAddressType          *Value[string]   `tf:"ip_address_type" json:"ip_address_type,omitempty"`
-	OriginKeepaliveTimeout *Value[int64]    `tf:"origin_keepalive_timeout" json:"origin_keepalive_timeout,omitempty"`
-	OriginProtocolPolicy   *Value[string]   `tf:"origin_protocol_policy" json:"origin_protocol_policy,omitempty"`
-	OriginReadTimeout      *Value[int64]    `tf:"origin_read_timeout" json:"origin_read_timeout,omitempty"`
-	OriginSSLProtocols     []*Value[string] `tf:"origin_ssl_protocols" json:"origin_ssl_protocols,omitempty"`
+	HTTPPort               *Value[float64]                                                     `tf:"http_port" json:"http_port,omitempty"`
+	HTTPSPort              *Value[float64]                                                     `tf:"https_port" json:"https_port,omitempty"`
+	IpAddressType          *Value[string]                                                      `tf:"ip_address_type" json:"ip_address_type,omitempty"`
+	OriginKeepaliveTimeout *Value[int64]                                                       `tf:"origin_keepalive_timeout" json:"origin_keepalive_timeout,omitempty"`
+	OriginProtocolPolicy   *Value[string]                                                      `tf:"origin_protocol_policy" json:"origin_protocol_policy,omitempty"`
+	OriginReadTimeout      *Value[int64]                                                       `tf:"origin_read_timeout" json:"origin_read_timeout,omitempty"`
+	OriginSSLProtocols     []*Value[string]                                                    `tf:"origin_ssl_protocols" json:"origin_ssl_protocols,omitempty"`
+	OriginMtlsConfig       []AWSCloudfrontDistributionOriginCustomOriginConfigOriginMtlsConfig `tf:"origin_mtls_config,blocks" json:"origin_mtls_config,omitempty"`
+}
+
+// AWSCloudfrontDistributionOriginCustomOriginConfigOriginMtlsConfig is a nested-block type used by the parent resource.
+type AWSCloudfrontDistributionOriginCustomOriginConfigOriginMtlsConfig struct {
+	ClientCertificateARN *Value[string] `tf:"client_certificate_arn" json:"client_certificate_arn,omitempty"`
 }
 
 // AWSCloudfrontDistributionOriginGroup is a nested-block type used by the parent resource.
@@ -335,6 +347,7 @@ var AWSCloudfrontDistributionSchema = map[string]FieldSchema{
 	"trusted_signers":                 {Computed: true, Replacement: ReplacementUnknown},
 	"wait_for_deployment":             {Optional: true, Replacement: ReplacementUnknown},
 	"web_acl_id":                      {Optional: true, Replacement: ReplacementUnknown},
+	"cache_tag_config":                {Optional: true, Replacement: ReplacementUnknown},
 	"connection_function_association": {Optional: true, Replacement: ReplacementUnknown},
 	"custom_error_response":           {Optional: true, Replacement: ReplacementUnknown},
 	"default_cache_behavior":          {Required: true, Replacement: ReplacementUnknown},

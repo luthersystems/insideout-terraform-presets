@@ -21,6 +21,7 @@ func TestReasonCodes_WireStable(t *testing.T) {
 	assert.Equal(t, "service_managed", ReasonServiceManaged)
 	assert.Equal(t, "ephemeral_log_stream", ReasonEphemeralLogStream)
 	assert.Equal(t, "insideout_imported", ReasonInsideOutImported)
+	assert.Equal(t, "service_linked_iam_role", ReasonServiceLinkedIAMRole)
 }
 
 func TestIsAWSManagedKMSAliasName(t *testing.T) {
@@ -73,6 +74,41 @@ func TestUnimportableReason_KMSKey(t *testing.T) {
 			Type:      "aws_kms_key",
 			NativeIDs: map[string]string{"arn": "arn:aws:kms:us-east-1:111111111111:key/1234abcd"},
 		}}
+		assert.Equal(t, "", UnimportableReason(ir))
+	})
+}
+
+func TestUnimportableReason_ServiceLinkedIAMRole(t *testing.T) {
+	t.Parallel()
+	t.Run("service-linked role (role/aws-service-role/ ARN) is un-importable", func(t *testing.T) {
+		ir := ImportedResource{Identity: ResourceIdentity{
+			Type: "aws_iam_role",
+			NativeIDs: map[string]string{
+				"arn": "arn:aws:iam::123456789012:role/aws-service-role/elasticbeanstalk.amazonaws.com/AWSServiceRoleForElasticBeanstalk",
+			},
+		}}
+		assert.Equal(t, ReasonServiceLinkedIAMRole, UnimportableReason(ir))
+	})
+	t.Run("customer role is importable", func(t *testing.T) {
+		ir := ImportedResource{Identity: ResourceIdentity{
+			Type: "aws_iam_role",
+			NativeIDs: map[string]string{
+				"arn": "arn:aws:iam::123456789012:role/io-foo-handler-role",
+			},
+		}}
+		assert.Equal(t, "", UnimportableReason(ir))
+	})
+	t.Run("customer role under a /service-role/ path (not aws-service-role) is importable", func(t *testing.T) {
+		ir := ImportedResource{Identity: ResourceIdentity{
+			Type: "aws_iam_role",
+			NativeIDs: map[string]string{
+				"arn": "arn:aws:iam::123456789012:role/service-role/my-app-role",
+			},
+		}}
+		assert.Equal(t, "", UnimportableReason(ir))
+	})
+	t.Run("absent arn is importable (discriminator not surfaced; genconfig backstop covers it)", func(t *testing.T) {
+		ir := ImportedResource{Identity: ResourceIdentity{Type: "aws_iam_role"}}
 		assert.Equal(t, "", UnimportableReason(ir))
 	})
 }
@@ -297,6 +333,9 @@ func TestReasonDescription(t *testing.T) {
 	assert.Truef(t, strings.Contains(insideOut, "InsideOut"), "InsideOut-imported description must mention InsideOut, got %q", insideOut)
 	svcManaged := ReasonDescription(ReasonServiceManaged)
 	assert.Truef(t, strings.Contains(svcManaged, "Service-managed"), "service-managed description must mention Service-managed, got %q", svcManaged)
+	slrRole := ReasonDescription(ReasonServiceLinkedIAMRole)
+	assert.Truef(t, strings.Contains(slrRole, "service-linked"), "service-linked-role description must mention service-linked, got %q", slrRole)
+	assert.NotEqual(t, slrRole, svcManaged, "the service-linked-role and generic service-managed descriptions must be distinct")
 	assert.NotEqual(t, eni, svcManaged, "the ENI and generic service-managed descriptions must be distinct")
 	assert.NotEqual(t, kms, eni, "the two descriptions must be distinct (guards against swapped case bodies)")
 	assert.NotEqual(t, kms, kmsKey, "the KMS-alias and KMS-key descriptions must be distinct")

@@ -19,6 +19,7 @@ type AWSElasticacheReplicationGroup struct {
 	ConfigurationEndpointAddress *Value[string]                                           `tf:"configuration_endpoint_address" json:"configuration_endpoint_address,omitempty"`
 	DataTieringEnabled           *Value[bool]                                             `tf:"data_tiering_enabled" json:"data_tiering_enabled,omitempty"`
 	Description                  *Value[string]                                           `tf:"description" json:"description,omitempty"`
+	Durability                   *Value[string]                                           `tf:"durability" json:"durability,omitempty"`
 	Engine                       *Value[string]                                           `tf:"engine" json:"engine,omitempty"`
 	EngineVersion                *Value[string]                                           `tf:"engine_version" json:"engine_version,omitempty"`
 	EngineVersionActual          *Value[string]                                           `tf:"engine_version_actual" json:"engine_version_actual,omitempty"`
@@ -101,6 +102,7 @@ var AWSElasticacheReplicationGroupSchema = map[string]FieldSchema{
 	"configuration_endpoint_address": {Computed: true, Replacement: ReplacementUnknown},
 	"data_tiering_enabled":           {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"description":                    {Required: true, Replacement: ReplacementUnknown},
+	"durability":                     {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"engine":                         {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"engine_version":                 {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"engine_version_actual":          {Computed: true, Replacement: ReplacementUnknown},

@@ -18,6 +18,7 @@ type AWSLb struct {
 	EnableCrossZoneLoadBalancing                         *Value[bool]                       `tf:"enable_cross_zone_load_balancing" json:"enable_cross_zone_load_balancing,omitempty"`
 	EnableDeletionProtection                             *Value[bool]                       `tf:"enable_deletion_protection" json:"enable_deletion_protection,omitempty"`
 	EnableHttp2                                          *Value[bool]                       `tf:"enable_http2" json:"enable_http2,omitempty"`
+	EnablePrefixForIPV6SourceNat                         *Value[string]                     `tf:"enable_prefix_for_ipv6_source_nat" json:"enable_prefix_for_ipv6_source_nat,omitempty"`
 	EnableTLSVersionAndCipherSuiteHeaders                *Value[bool]                       `tf:"enable_tls_version_and_cipher_suite_headers" json:"enable_tls_version_and_cipher_suite_headers,omitempty"`
 	EnableWAFFailOpen                                    *Value[bool]                       `tf:"enable_waf_fail_open" json:"enable_waf_fail_open,omitempty"`
 	EnableXffClientPort                                  *Value[bool]                       `tf:"enable_xff_client_port" json:"enable_xff_client_port,omitempty"`
@@ -110,6 +111,7 @@ var AWSLbSchema = map[string]FieldSchema{
 	"enable_cross_zone_load_balancing":            {Optional: true, Replacement: ReplacementUnknown},
 	"enable_deletion_protection":                  {Optional: true, Replacement: ReplacementUnknown},
 	"enable_http2":                                {Optional: true, Replacement: ReplacementUnknown},
+	"enable_prefix_for_ipv6_source_nat":           {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"enable_tls_version_and_cipher_suite_headers": {Optional: true, Replacement: ReplacementUnknown},
 	"enable_waf_fail_open":                        {Optional: true, Replacement: ReplacementUnknown},
 	"enable_xff_client_port":                      {Optional: true, Replacement: ReplacementUnknown},

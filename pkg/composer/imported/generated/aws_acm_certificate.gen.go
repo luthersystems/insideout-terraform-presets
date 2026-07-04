@@ -20,6 +20,8 @@ type AWSAcmCertificate struct {
 	NotBefore               *Value[string]                             `tf:"not_before" json:"not_before,omitempty"`
 	PendingRenewal          *Value[bool]                               `tf:"pending_renewal" json:"pending_renewal,omitempty"`
 	PrivateKey              *Value[string]                             `tf:"private_key" json:"private_key,omitempty"`
+	PrivateKeyWo            *Value[string]                             `tf:"private_key_wo" json:"private_key_wo,omitempty"`
+	PrivateKeyWoVersion     *Value[float64]                            `tf:"private_key_wo_version" json:"private_key_wo_version,omitempty"`
 	Region                  *Value[string]                             `tf:"region" json:"region,omitempty"`
 	RenewalEligibility      *Value[string]                             `tf:"renewal_eligibility" json:"renewal_eligibility,omitempty"`
 	RenewalSummary          []AWSAcmCertificateRenewalSummary          `tf:"renewal_summary" json:"renewal_summary,omitempty"`
@@ -77,6 +79,8 @@ var AWSAcmCertificateSchema = map[string]FieldSchema{
 	"not_before":                {Computed: true, Replacement: ReplacementUnknown},
 	"pending_renewal":           {Computed: true, Replacement: ReplacementUnknown},
 	"private_key":               {Optional: true, Sensitive: true, Replacement: ReplacementUnknown},
+	"private_key_wo":            {Optional: true, Replacement: ReplacementUnknown},
+	"private_key_wo_version":    {Optional: true, Replacement: ReplacementUnknown},
 	"region":                    {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"renewal_eligibility":       {Computed: true, Replacement: ReplacementUnknown},
 	"renewal_summary":           {Computed: true, Replacement: ReplacementUnknown},
