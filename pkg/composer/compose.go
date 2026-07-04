@@ -735,7 +735,12 @@ func (c *Client) composeStackImpl(opts ComposeStackOpts) (*ComposeStackResult, e
 	// was dropped and why; emitting it anyway would turn a one-resource
 	// gap into a stack-wide planning failure.
 	composable := dropUncomposable(importedResources, emitReadiness)
-	importedTF, importedClouds := EmitImportedTF(cloud, composable, emitOpts)
+	importedTF, importedClouds, emitIssues := EmitImportedTFWithIssues(cloud, composable, emitOpts)
+	// Surface emit-time failures (marshal / provenance-injection errors) that
+	// would otherwise silently drop a resource from /imported.tf — the
+	// "apply silently lands nothing" fail-open family (reliable #1922). See
+	// CodeImportedResourceEmitFailed.
+	issues = append(issues, emitIssues...)
 	// Normalize the emitted HCL through the shared resource-type fixups. This
 	// is the SAME pass the reverse-import pipeline runs over the FINAL
 	// imported.tf it emits (pkg/reverseimport/run.go): terraform import

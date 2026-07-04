@@ -90,9 +90,45 @@ const (
 // compatibility. EmitImportedTF mutates ir.WeakLocked in irs to record the
 // provenance decision per resource — callers that need the original slice
 // untouched should pass a copy.
+//
+// EmitImportedTF is a thin backwards-compatible wrapper over
+// EmitImportedTFWithIssues that discards the surfaced issues. Direct callers
+// (e.g. ui-core's proxy) that want the fail-open signal — a resource that
+// fails body emission or provenance injection and would otherwise vanish
+// silently from the archive — should call EmitImportedTFWithIssues instead.
 func EmitImportedTF(cloud string, irs []imported.ImportedResource, opts EmitImportedOpts) (out []byte, providersUsed map[string]bool) {
+	out, providersUsed, _ = EmitImportedTFWithIssues(cloud, irs, opts)
+	return out, providersUsed
+}
+
+// CodeImportedResourceEmitFailed is raised by EmitImportedTFWithIssues when an
+// emit-eligible imported resource fails to render — either its typed Attrs fail
+// to marshal into an HCL body (emitImportedResourceBody) or provenance
+// injection fails (injectProvenance). Historically both failures hit a bare
+// `continue` in the per-resource loop, so the resource silently vanished from
+// /imported.tf with NO signal: the subsequent `terraform apply` landed nothing
+// for it and no validator caught the gap. This is the "apply silently lands
+// nothing" fail-open family (reliable #1922).
+//
+// The compose-time pre-validators only partially cover this: ValidateImportedResources
+// catches Attrs DECODE failures (imported_resource_decode_failed), but emit-time
+// marshal errors and provenance-injection errors fall through, and direct callers
+// of EmitImportedTF get no validation at all.
+//
+// Surfacing the failure as a structured issue makes the disposition the
+// downstream caller's severity policy, not a silent drop. reliable treats
+// unknown issue codes as fatal, so this code fails closed there (the desired
+// behaviour) — an emit failure aborts the compose instead of shipping an archive
+// that is missing a resource the operator asked to import.
+const CodeImportedResourceEmitFailed = "imported_resource_emit_failed"
+
+// EmitImportedTFWithIssues is EmitImportedTF plus a slice of ValidationIssues
+// describing resources that failed to emit. See EmitImportedTF for the base
+// contract and CodeImportedResourceEmitFailed for the fail-open history the
+// issues close.
+func EmitImportedTFWithIssues(cloud string, irs []imported.ImportedResource, opts EmitImportedOpts) (out []byte, providersUsed map[string]bool, issues []ValidationIssue) {
 	if len(irs) == 0 {
-		return nil, nil
+		return nil, nil, nil
 	}
 	wantCloud := strings.ToLower(strings.TrimSpace(cloud))
 	providersUsed = map[string]bool{}
@@ -155,11 +191,23 @@ func EmitImportedTF(cloud string, irs []imported.ImportedResource, opts EmitImpo
 		case emitModeResourceImport, emitModeResourceOnly:
 			body, err := emitImportedResourceBody(*ir)
 			if err != nil {
+				issues = append(issues, ValidationIssue{
+					Field:  "imported." + addr,
+					Value:  ir.Identity.Type,
+					Code:   CodeImportedResourceEmitFailed,
+					Reason: fmt.Sprintf("emit resource body: %v", err),
+				})
 				continue
 			}
 			if opts.shouldInject() {
 				body, err = injectProvenance(body, ir, opts.ImportProjectID, opts.ImportSessionID, opts.ImportedAt)
 				if err != nil {
+					issues = append(issues, ValidationIssue{
+						Field:  "imported." + addr,
+						Value:  ir.Identity.Type,
+						Code:   CodeImportedResourceEmitFailed,
+						Reason: fmt.Sprintf("inject provenance: %v", err),
+					})
 					continue
 				}
 			}
@@ -184,7 +232,7 @@ func EmitImportedTF(cloud string, irs []imported.ImportedResource, opts EmitImpo
 	}
 
 	if len(entries) == 0 {
-		return nil, providersUsed
+		return nil, providersUsed, issues
 	}
 
 	sort.Slice(entries, func(i, j int) bool { return entries[i].address < entries[j].address })
@@ -220,9 +268,9 @@ func EmitImportedTF(cloud string, irs []imported.ImportedResource, opts EmitImpo
 	if diags.HasErrors() {
 		// Fall back to the raw concatenation if parse failed; ValidateComposedRoot
 		// will surface the parse error so the caller still sees the failure.
-		return doc.Bytes(), providersUsed
+		return doc.Bytes(), providersUsed, issues
 	}
-	return formatted.Bytes(), providersUsed
+	return formatted.Bytes(), providersUsed, issues
 }
 
 // classifyEmitMode decides what artifact(s) to emit for ir.
