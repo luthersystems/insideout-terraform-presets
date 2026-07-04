@@ -5,31 +5,34 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/hashicorp/hcl/v2"
 	"github.com/hashicorp/hcl/v2/hclsyntax"
 	"github.com/zclconf/go-cty/cty"
 )
 
-// Nested + non-ARN reference detection (presets#834, classes A/B).
+// The single dep-chase finder walk (presets#853) + nested / non-ARN reference
+// detection (presets#834, classes A/B).
 //
-// The historical finder (finder.go:collectFromBodyWithHits) scanned ONLY
-// top-level, pure-double-quoted attribute values that were ARN-shaped. Two
-// whole classes of cross-resource reference literal slipped through SILENTLY —
-// no warning, no chase, quiet fidelity loss:
+// bodyWalker performs ONE recursive hclsyntax walk of each resource body. The
+// depth==0 direct attributes are the degenerate top-level case that used to be
+// a separate hclwrite pass; nested blocks and collection-expression trees carry
+// the two classes of cross-resource reference literal that once slipped through
+// SILENTLY — no warning, no chase, quiet fidelity loss:
 //
+//	top-level — a pure-double-quoted ARN literal that is a direct attribute of
+//	          the resource body (`role = "arn:…"`). Rewritten in place by
+//	          genconfig's crossref pass, so it keeps fatal-on-discovery-error
+//	          semantics; the Run loop tags it via scanResult.topLevel.
 //	class A — an ARN literal nested inside a block (`environment { … }`) or a
 //	          collection expression (`layers = ["arn:…"]`, `x = { k = "arn:…" }`).
 //	class B — a bare, non-ARN identifier reference (a KMS KeyId UUID in
 //	          `kms_key_id` / `kms_master_key_id`) that isARNLiteral never even
 //	          considers.
 //
-// scanNestedAndNonARN walks each resource body recursively (nested blocks +
-// tuple/object expression trees) with the hclsyntax typed AST and surfaces both
-// classes so the chase loop can WARN on them (Tier 1) and, where the discoverer
-// accepts the identifier, CHASE the target (Tier 2). It deliberately reuses the
-// same conservative "pure string literal only" contract as the top-level pass
-// (pureStringLiteral below mirrors stringLiteralValue) so interpolations,
-// traversals, and ARNs embedded inside larger template text stay ignored.
+// The walk surfaces all three so the chase loop can WARN on the class-A/B hits
+// (Tier 1) and, where the discoverer accepts the identifier, CHASE the target
+// (Tier 2). A single conservative "pure string literal only" extractor
+// (pureStringLiteral) gates every position, so interpolations, traversals, and
+// ARNs embedded inside larger template text stay ignored at every depth.
 
 // uuidRe matches a canonical UUID — the shape a bare AWS KMS KeyId takes in
 // `kms_key_id` / `kms_master_key_id` when the customer wrote the key id rather
@@ -94,49 +97,20 @@ type nonARNHit struct {
 	tfType string // resolved Terraform type (e.g. aws_kms_key)
 }
 
-// scanNestedAndNonARN walks every resource body's nested blocks and
-// collection-expression trees, returning the class-A nested ARN hits, the
-// class-B curated non-ARN hits, and the full set of (literal → consumer
-// address) pairs for both classes. resolved is the in-batch identity set — a
-// nested/non-ARN literal that points at an already-imported resource is not
-// unresolved.
-//
-// Unlike an earlier revision, the walk no longer subtracts the top-level ARN
-// set: a literal that appears BOTH top-level (in X) and nested (in Y) must
-// STILL record Y's consumer edge and STILL surface Y's nested warning (F4). The
-// unified `seen` keyspace in scanGenerated dedups the CHASE to one call; the
-// top-level-vs-nested class distinction is made by the Run loop from
-// scanResult.topLevel, not here.
-func scanNestedAndNonARN(raw []byte, resolved map[string]struct{}) (nested map[string]nestedHit, nonARN map[string]nonARNHit, consumers map[string]map[string]struct{}, err error) {
-	file, diags := hclsyntax.ParseConfig(raw, generatedFile, hcl.Pos{Line: 1, Column: 1})
-	if diags.HasErrors() {
-		return nil, nil, nil, fmt.Errorf("depchase: parse generated.tf (syntax): %s", diags.Error())
-	}
-	body, ok := file.Body.(*hclsyntax.Body)
-	if !ok {
-		return nil, nil, nil, fmt.Errorf("depchase: unexpected body type %T", file.Body)
-	}
-	w := &bodyWalker{
-		resolved:  resolved,
-		nested:    map[string]nestedHit{},
-		nonARN:    map[string]nonARNHit{},
-		consumers: map[string]map[string]struct{}{},
-	}
-	for _, blk := range body.Blocks {
-		if blk.Type != "resource" || len(blk.Labels) != 2 {
-			continue
-		}
-		w.addr = blk.Labels[0] + "." + blk.Labels[1]
-		w.walkBody(blk.Body, "", false)
-	}
-	return w.nested, w.nonARN, w.consumers, nil
-}
-
 // bodyWalker carries the per-resource walk state. addr is reset per resource
 // block; the hit maps and the consumer-edge map accumulate across all resources.
+//
+// A literal that appears BOTH top-level (in X) and nested (in Y) records X in
+// topLevel, records Y's nested warning + edge, and records both consumer edges
+// (F4). The unified consumers keyspace dedups the CHASE to one call; the
+// top-level-vs-nested class distinction is made by the Run loop from
+// scanResult.topLevel.
 type bodyWalker struct {
 	addr     string
 	resolved map[string]struct{}
+	// topLevel is the set of ARN literals found as depth-0 direct attributes —
+	// the historical top-level pass's job, now folded into this single walk.
+	topLevel map[string]struct{}
 	nested   map[string]nestedHit
 	nonARN   map[string]nonARNHit
 	// consumers records EVERY distinct (literal → consumer addr) pair the walk
@@ -157,19 +131,27 @@ func (w *bodyWalker) addConsumer(lit, addr string) {
 	set[addr] = struct{}{}
 }
 
-// walkBody recurses one body. inNested is false for the resource's own
-// top-level attributes (whose pure-literal ARN values are the historical
-// pass's job) and true once we descend into a nested block or collection —
-// only then is a pure-literal ARN a class-A hit.
-func (w *bodyWalker) walkBody(body *hclsyntax.Body, prefix string, inNested bool) {
+// walkBody recurses one body. depth is 0 for the resource's own top-level
+// attributes — whose pure-literal ARN values are the historical top-level case
+// (recorded via recordTopLevelARN) — and increments once per nested block, so
+// depth>0 makes a pure-literal ARN a class-A hit (recordNestedARN). Class B is
+// attr-name gated and applies at every depth.
+func (w *bodyWalker) walkBody(body *hclsyntax.Body, prefix string, depth int) {
 	for name, attr := range body.Attributes {
 		path := joinPath(prefix, name)
 		if v, ok := pureStringLiteral(attr.Expr); ok {
 			// class B is attr-name gated and applies at any depth where an
 			// attribute name exists (top-level attrs + nested-block attrs).
 			w.checkNonARN(name, v, path)
-			if inNested && isARNLiteral(v) {
-				w.recordNestedARN(v, path)
+			if isARNLiteral(v) {
+				if depth == 0 {
+					// Degenerate top-level case: a direct attribute of the
+					// resource body. crossref rewrites it, so it keeps
+					// top-level chase semantics.
+					w.recordTopLevelARN(v)
+				} else {
+					w.recordNestedARN(v, path)
+				}
 			}
 			continue
 		}
@@ -185,14 +167,16 @@ func (w *bodyWalker) walkBody(body *hclsyntax.Body, prefix string, inNested bool
 		for _, lbl := range sub.Labels {
 			seg += "[" + lbl + "]"
 		}
-		w.walkBody(sub.Body, joinPath(prefix, seg), true)
+		w.walkBody(sub.Body, joinPath(prefix, seg), depth+1)
 	}
 }
 
 // walkExprARNs collects pure-literal ARN values (class A) and curated non-ARN
 // identifiers (class B) from a tuple/object expression tree. Function calls,
 // traversals, and other node kinds are deliberately not descended — the
-// conservative contract only acts on concrete string literals.
+// conservative contract only acts on concrete string literals. Every literal
+// reached through a collection expression is nested by construction, so ARN
+// hits here are always class A regardless of the enclosing depth.
 func (w *bodyWalker) walkExprARNs(expr hclsyntax.Expression, path string) {
 	switch e := expr.(type) {
 	case *hclsyntax.TupleConsExpr:
@@ -221,6 +205,21 @@ func (w *bodyWalker) walkExprARNs(expr hclsyntax.Expression, path string) {
 			w.recordNestedARN(v, path)
 		}
 	}
+}
+
+// recordTopLevelARN stores a depth-0 direct-attribute ARN hit, skipping
+// literals that are in-batch (resolved). Top-level hits are a set (the Run loop
+// only needs "is this literal top-level?" for origin-class tagging), so no
+// (addr, path) representative is tracked here — the consumer edge carries the
+// address. The literal is recorded UNCONDITIONALLY (minus resolved) so a
+// top-level occurrence's edge survives even when the same ARN also appears
+// nested elsewhere (F4).
+func (w *bodyWalker) recordTopLevelARN(arn string) {
+	if _, ok := w.resolved[arn]; ok {
+		return
+	}
+	w.topLevel[arn] = struct{}{}
+	w.addConsumer(arn, w.addr)
 }
 
 // recordNestedARN stores a class-A hit, skipping literals that are in-batch
@@ -263,11 +262,13 @@ func (w *bodyWalker) checkNonARN(name, value, path string) {
 	}
 }
 
-// pureStringLiteral is the hclsyntax analogue of stringLiteralValue: it returns
-// the value of an expression IFF the expression is a pure string literal with
-// no interpolation. A template with any `${…}` part, a traversal, or a
-// non-string literal returns ok=false so the walk leaves it alone — matching
-// the top-level pass's conservative contract exactly.
+// pureStringLiteral is the single "pure string literal" extractor for the
+// finder (presets#853 collapsed the historical hclwrite token-count copy into
+// this typed-AST implementation). It returns the value of an expression IFF the
+// expression is a pure string literal with no interpolation. A template with
+// any `${…}` part, a traversal, or a non-string literal returns ok=false so the
+// walk leaves it alone — the conservative contract enforced identically at
+// every depth.
 func pureStringLiteral(expr hclsyntax.Expression) (string, bool) {
 	switch e := expr.(type) {
 	case *hclsyntax.TemplateExpr:

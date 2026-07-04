@@ -7,7 +7,6 @@ import (
 
 	"github.com/hashicorp/hcl/v2"
 	"github.com/hashicorp/hcl/v2/hclsyntax"
-	"github.com/hashicorp/hcl/v2/hclwrite"
 
 	"github.com/luthersystems/insideout-terraform-presets/pkg/composer/imported"
 )
@@ -23,10 +22,11 @@ const generatedFile = "generated.tf"
 // identity (ARN/URL/ImportID/NativeIDs).
 //
 // The walker mirrors genconfig/crossref.go's HCL traversal: parse with
-// hclwrite.ParseConfig, iterate `resource` blocks (two-label blocks),
-// inspect each top-level attribute, and consider only pure
-// double-quoted string literals via stringLiteralValue. Anything more
-// complex (interpolations, function calls, lists) is left alone — the
+// hclsyntax.ParseConfig, iterate `resource` blocks (two-label blocks),
+// and inspect each attribute — recursing into nested blocks and
+// collection expressions — considering only pure double-quoted string
+// literals via pureStringLiteral. Anything more complex
+// (interpolations, function calls, traversals) is left alone — the
 // dep-chase contract is conservative: only act on values we can be
 // certain are concrete external references.
 //
@@ -49,13 +49,14 @@ func FindUnresolved(raw []byte, resources []imported.ImportedResource) ([]string
 // one keyspace so the Run loop's cycle detection / ignore filtering treats
 // them identically. consumers maps each literal to its sorted consumer
 // addresses (for #297 graph edges) — every distinct (literal → consumer) pair
-// across BOTH passes, so no consumer edge is lost when a literal is referenced
-// by multiple resources or appears both top-level and nested (F4). nested /
-// nonARN carry the per-literal location + classification metadata so Run can
-// emit the precise class-A / class-B warnings (presets#834). topLevel is the
-// set of literals the historical top-level ARN pass found — Run consults it to
-// decide a hit's origin class (a literal that is ALSO top-level keeps top-level
-// chase semantics rather than the terminal-by-design nested/nonARN semantics).
+// the single walk observed, so no consumer edge is lost when a literal is
+// referenced by multiple resources or appears both top-level and nested (F4).
+// nested / nonARN carry the per-literal location + classification metadata so
+// Run can emit the precise class-A / class-B warnings (presets#834). topLevel
+// is the set of literals the depth-0 direct-attribute pass found — Run consults
+// it to decide a hit's origin class (a literal that is ALSO top-level keeps
+// top-level chase semantics rather than the terminal-by-design nested/nonARN
+// semantics).
 type scanResult struct {
 	unresolved []string
 	consumers  map[string][]string
@@ -65,115 +66,64 @@ type scanResult struct {
 }
 
 // scanGenerated is the shared parser pass behind the public FindUnresolved
-// and the Run loop. It runs the historical top-level ARN pass (hclwrite) plus
-// the presets#834 nested/non-ARN walk (hclsyntax), unifies their hits into one
-// unresolved set, and records the consumer addresses the Run loop turns into
-// (consumer → discovered) graph edges (#297).
+// and the Run loop. It runs a SINGLE hclsyntax parse and a SINGLE recursive
+// walk per resource body (presets#853): depth-0 direct attributes are the
+// degenerate top-level case (historical ARN semantics), while nested blocks
+// and collection-expression trees surface the class-A / class-B hits of
+// presets#834. All hits flow through one bodyWalker into one unresolved set
+// plus the consumer-address edges the Run loop turns into (consumer →
+// discovered) graph edges (#297).
+//
+// Before #853 this function parsed generated.tf TWICE — once with hclwrite for
+// the top-level pass and once with hclsyntax for the nested walk — stitched by
+// a top-level-set seam and backed by two mirrored "pure string literal"
+// extractors that could drift on edge cases (heredocs). The unified walk keeps
+// a single extractor (pureStringLiteral) and halves the per-iteration parse
+// cost.
 func scanGenerated(raw []byte, resources []imported.ImportedResource) (scanResult, error) {
 	resolved := buildResolvedSet(resources)
-	f, diags := hclwrite.ParseConfig(raw, generatedFile, hcl.Pos{Line: 1, Column: 1})
+	file, diags := hclsyntax.ParseConfig(raw, generatedFile, hcl.Pos{Line: 1, Column: 1})
 	if diags.HasErrors() {
 		return scanResult{}, fmt.Errorf("depchase: parse generated.tf: %s", diags.Error())
 	}
-
-	seen := make(map[string]struct{})
-	consumers := make(map[string]map[string]struct{}) // literal → set of addresses
-	addConsumer := func(lit, addr string) {
-		seen[lit] = struct{}{}
-		set, ok := consumers[lit]
-		if !ok {
-			set = make(map[string]struct{})
-			consumers[lit] = set
-		}
-		set[addr] = struct{}{}
+	body, ok := file.Body.(*hclsyntax.Body)
+	if !ok {
+		return scanResult{}, fmt.Errorf("depchase: unexpected body type %T", file.Body)
 	}
 
-	// topLevel is the set of literals the historical top-level pass finds. Built
-	// independently (not a post-hoc copy of `seen`, which the nested merge below
-	// mutates) so it stays a pure top-level snapshot the Run loop can consult for
-	// origin-class tagging.
-	topLevel := make(map[string]struct{})
-	for _, blk := range f.Body().Blocks() {
-		if blk.Type() != "resource" {
+	w := &bodyWalker{
+		resolved:  resolved,
+		topLevel:  map[string]struct{}{},
+		nested:    map[string]nestedHit{},
+		nonARN:    map[string]nonARNHit{},
+		consumers: map[string]map[string]struct{}{},
+	}
+	for _, blk := range body.Blocks {
+		if blk.Type != "resource" || len(blk.Labels) != 2 {
 			continue
 		}
-		if len(blk.Labels()) != 2 {
-			continue
-		}
-		addr := blk.Labels()[0] + "." + blk.Labels()[1]
-		hits := collectFromBodyWithHits(blk.Body(), resolved)
-		for _, lit := range hits {
-			topLevel[lit] = struct{}{}
-			addConsumer(lit, addr)
-		}
+		w.addr = blk.Labels[0] + "." + blk.Labels[1]
+		w.walkBody(blk.Body, "", 0)
 	}
 
-	// presets#834 classes A + B: nested ARN literals and curated non-ARN
-	// identifier references. Merge their literals into the same unresolved
-	// keyspace and fold EVERY (literal → consumer) pair the nested walk found
-	// into the consumer map — not just each literal's representative winner —
-	// so multi-consumer and dual-occurrence (top-level + nested) edges survive
-	// (F4).
-	nested, nonARN, nestedConsumers, err := scanNestedAndNonARN(raw, resolved)
-	if err != nil {
-		return scanResult{}, err
-	}
-	for lit, addrs := range nestedConsumers {
-		for addr := range addrs {
-			addConsumer(lit, addr)
-		}
-	}
-
-	out := make([]string, 0, len(seen))
-	for k := range seen {
-		out = append(out, k)
-	}
-	sort.Strings(out)
-
-	// Flatten consumers map into deterministic-sorted slices so callers
-	// (and tests) see byte-stable output.
-	flat := make(map[string][]string, len(consumers))
-	for arn, set := range consumers {
+	// Every recorded hit registers a consumer edge, so the consumer map's
+	// keyset IS the unresolved literal set. Derive both the sorted unresolved
+	// slice and the flattened, deterministic-sorted consumer slices in one
+	// pass so callers (and tests) see byte-stable output.
+	out := make([]string, 0, len(w.consumers))
+	flat := make(map[string][]string, len(w.consumers))
+	for lit, set := range w.consumers {
+		out = append(out, lit)
 		addrs := make([]string, 0, len(set))
 		for a := range set {
 			addrs = append(addrs, a)
 		}
 		sort.Strings(addrs)
-		flat[arn] = addrs
+		flat[lit] = addrs
 	}
-	return scanResult{unresolved: out, consumers: flat, nested: nested, nonARN: nonARN, topLevel: topLevel}, nil
-}
+	sort.Strings(out)
 
-// collectFromBodyWithHits scans every top-level attribute on a body
-// for ARN literals not in the resolved set, returning the
-// deduplicated-within-this-body list of hits. This is the HISTORICAL
-// top-level-only pass; nested blocks and collection expressions
-// (`environment { variables = {...} }`, `layers = ["arn:…"]`) are
-// walked separately by scanNestedAndNonARN (finder_nested.go, class A of
-// presets#834), which surfaces them as nested hits with a precise
-// warning. The two passes share the same conservative "pure string
-// literal only" contract (stringLiteralValue ↔ pureStringLiteral).
-func collectFromBodyWithHits(body *hclwrite.Body, resolved map[string]struct{}) []string {
-	var hits []string
-	seen := make(map[string]struct{})
-	for _, attr := range body.Attributes() {
-		lit, ok := stringLiteralValue(attr)
-		if !ok {
-			continue
-		}
-		if !isARNLiteral(lit) {
-			continue
-		}
-		if _, ok := resolved[lit]; ok {
-			continue
-		}
-		if _, dup := seen[lit]; dup {
-			continue
-		}
-		seen[lit] = struct{}{}
-		hits = append(hits, lit)
-	}
-	return hits
+	return scanResult{unresolved: out, consumers: flat, nested: w.nested, nonARN: w.nonARN, topLevel: w.topLevel}, nil
 }
 
 // isARNLiteral is the cheap "is this value worth feeding to ParseRef"
@@ -214,23 +164,4 @@ func buildResolvedSet(resources []imported.ImportedResource) map[string]struct{}
 		}
 	}
 	return set
-}
-
-// stringLiteralValue is a private copy of the helper used in
-// genconfig/crossref.go. Returns the string value of an attribute iff
-// it is a pure double-quoted literal — `"some-value"`. Anything more
-// complex (interpolations, function calls, lists) returns ok=false so
-// the caller leaves it alone.
-func stringLiteralValue(attr *hclwrite.Attribute) (string, bool) {
-	tokens := attr.Expr().BuildTokens(nil)
-	if len(tokens) != 3 {
-		return "", false
-	}
-	if tokens[0].Type != hclsyntax.TokenOQuote || tokens[2].Type != hclsyntax.TokenCQuote {
-		return "", false
-	}
-	if tokens[1].Type != hclsyntax.TokenQuotedLit {
-		return "", false
-	}
-	return string(tokens[1].Bytes), true
 }
