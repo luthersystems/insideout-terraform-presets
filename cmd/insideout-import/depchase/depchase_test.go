@@ -13,6 +13,17 @@ import (
 	"github.com/luthersystems/insideout-terraform-presets/pkg/composer/imported"
 )
 
+// joinWarnings renders a []Warning to newline-joined String() output so the
+// existing substring-grep assertions (presets#854) keep matching the historical
+// prose after Warnings became structured.
+func joinWarnings(ws []Warning) string {
+	parts := make([]string, len(ws))
+	for i, w := range ws {
+		parts[i] = w.String()
+	}
+	return strings.Join(parts, "\n")
+}
+
 // fakeDiscoverer mimics the awsdiscover aggregator's DiscoverByID
 // surface. Callers seed `byID` keyed on tfType|id; `notFound` /
 // `notSupported` slices match against either tfType or id and force
@@ -315,7 +326,7 @@ resource "aws_lambda_function" "h" {
 	if len(got.Edges) != 0 {
 		t.Errorf("Edges=%+v, want none for dropped role", got.Edges)
 	}
-	if len(got.Warnings) != 1 || !strings.Contains(got.Warnings[0], "generated config omitted it") {
+	if len(got.Warnings) != 1 || !strings.Contains(got.Warnings[0].String(), "generated config omitted it") {
 		t.Errorf("Warnings=%v, want generated-config omission warning", got.Warnings)
 	}
 	if p.gcCalls != 1 || p.dfCalls != 1 {
@@ -389,7 +400,7 @@ resource "aws_lambda_function" "h" {
 	if len(got.Warnings) != 2 {
 		t.Fatalf("Warnings=%v, want exactly 2 (one per un-importable ref)", got.Warnings)
 	}
-	joined := strings.Join(got.Warnings, "\n")
+	joined := joinWarnings(got.Warnings)
 	for _, want := range []string{
 		imported.ReasonAWSManagedKMSKey,
 		imported.ReasonServiceLinkedIAMRole,
@@ -470,7 +481,7 @@ resource "aws_lambda_function" "h" {
 	if r := disc.regionByID[kmsARN]; r != "us-east-1" {
 		t.Errorf("nested KMS discovered in region %q, want us-east-1 (ARN region)", r)
 	}
-	joined := strings.Join(got.Warnings, "\n")
+	joined := joinWarnings(got.Warnings)
 	// Both nested literals must be non-silent: a precise class-A warning each.
 	if strings.Count(joined, "nested_ref_literal") != 2 {
 		t.Errorf("want 2 nested_ref_literal warnings (KMS + SLR), got:\n%s", joined)
@@ -539,7 +550,7 @@ resource "aws_sqs_queue" "q" {
 	if len(disc.calls) == 0 || disc.calls[0] != "aws_kms_key|"+keyUUID {
 		t.Errorf("DiscoverByID calls=%v, want first call aws_kms_key|%s", disc.calls, keyUUID)
 	}
-	joined := strings.Join(got.Warnings, "\n")
+	joined := joinWarnings(got.Warnings)
 	if !strings.Contains(joined, "non_arn_ref_literal") {
 		t.Errorf("want a non_arn_ref_literal warning; got:\n%s", joined)
 	}
@@ -643,7 +654,8 @@ resource "aws_lambda_function" "h" {
 		t.Fatal("expected at least one warning for unsupported ARN type")
 	}
 	matched := false
-	for _, w := range got.Warnings {
+	for _, warn := range got.Warnings {
+		w := warn.String()
 		if strings.Contains(w, "unsupported") && strings.Contains(w, subnetARN) {
 			matched = true
 		}
@@ -693,7 +705,7 @@ resource "aws_lambda_function" "h" {
 	if len(got.Warnings) != 1 {
 		t.Fatalf("Warnings=%v, want exactly one", got.Warnings)
 	}
-	w := got.Warnings[0]
+	w := got.Warnings[0].String()
 	if !strings.Contains(w, roleARN) {
 		t.Errorf("warning %q must mention the ARN literal %q", w, roleARN)
 	}
@@ -734,7 +746,7 @@ resource "aws_iam_role" "h" {
 	if len(got.Warnings) != 1 {
 		t.Fatalf("Warnings=%v, want exactly one", got.Warnings)
 	}
-	w := got.Warnings[0]
+	w := got.Warnings[0].String()
 	// Production format ("ARN %q: %s discoverer rejected ID: %v") is
 	// distinct from the ErrNotFound format ("ARN %q (%s): %v"). Pin
 	// "rejected" specifically — that's the disambiguator for an
@@ -795,8 +807,8 @@ resource "aws_lambda_function" "h" {
 		t.Error("expected at least one warning enumerating the stable unresolved set")
 	}
 	matched := false
-	for _, w := range res.Warnings {
-		if strings.Contains(w, roleARN) {
+	for _, warn := range res.Warnings {
+		if strings.Contains(warn.String(), roleARN) {
 			matched = true
 		}
 	}
@@ -1068,7 +1080,7 @@ resource "aws_lambda_function" "h" {
 	if err != nil {
 		t.Fatalf("nested hard error should be non-fatal; err=%v", err)
 	}
-	joined := strings.Join(got.Warnings, "\n")
+	joined := joinWarnings(got.Warnings)
 	if !strings.Contains(joined, "non-fatal") || !strings.Contains(joined, nestedARN) {
 		t.Errorf("want a non-fatal warning mentioning the nested ARN; got:\n%s", joined)
 	}
@@ -1261,7 +1273,7 @@ resource "aws_lambda_function" "y" {
 		t.Errorf("missing nested consumer edge aws_lambda_function.y → aws_iam_role.shared_role; got %+v", got.Edges)
 	}
 	// Y's nested warning must be emitted (not suppressed by X's top-level use).
-	joined := strings.Join(got.Warnings, "\n")
+	joined := joinWarnings(got.Warnings)
 	if !strings.Contains(joined, "nested_ref_literal") || !strings.Contains(joined, "aws_lambda_function.y") {
 		t.Errorf("want a nested_ref_literal warning for aws_lambda_function.y; got:\n%s", joined)
 	}
@@ -1355,5 +1367,64 @@ resource "aws_lambda_function" "h" {
 	}
 	if len(got.Warnings) != 1 {
 		t.Errorf("Warnings=%v, want exactly one (the failed lookup)", got.Warnings)
+	}
+}
+
+// TestAddWarning_DedupOnTuple pins the presets#854 dedup contract: seenWarning
+// keys on (Code, Literal, Consumer), NOT the rendered string. Two warnings that
+// differ only in a render-detail field (Path) collapse to one; a distinct
+// consumer is a separate identity and is kept.
+func TestAddWarning_DedupOnTuple(t *testing.T) {
+	t.Parallel()
+	const lit = "arn:aws:kms:us-east-1:123:key/uuid-1"
+	res := &Result{}
+	seen := make(map[warningKey]struct{})
+
+	addWarning(res, seen, Warning{Code: CodeNestedRefLiteral, Literal: lit, Consumer: "aws_lambda_function.a", Path: "environment.variables.A"})
+	// Same (Code, Literal, Consumer) but a DIFFERENT rendered path → deduped.
+	addWarning(res, seen, Warning{Code: CodeNestedRefLiteral, Literal: lit, Consumer: "aws_lambda_function.a", Path: "environment.variables.B"})
+	if len(res.Warnings) != 1 {
+		t.Fatalf("want 1 warning after tuple dedup (same code+literal+consumer, different path); got %d: %v", len(res.Warnings), res.Warnings)
+	}
+
+	// A different consumer address is a distinct identity → NOT deduped.
+	addWarning(res, seen, Warning{Code: CodeNestedRefLiteral, Literal: lit, Consumer: "aws_lambda_function.b", Path: "environment.variables.A"})
+	if len(res.Warnings) != 2 {
+		t.Fatalf("want 2 warnings (distinct consumer); got %d: %v", len(res.Warnings), res.Warnings)
+	}
+
+	// A different Code with the same literal+consumer is also distinct.
+	addWarning(res, seen, Warning{Code: CodeUnimportableTarget, Literal: lit, Consumer: "aws_lambda_function.a"})
+	if len(res.Warnings) != 3 {
+		t.Fatalf("want 3 warnings (distinct code); got %d: %v", len(res.Warnings), res.Warnings)
+	}
+}
+
+// TestWarningString_RendersHistoricalProse pins that Warning.String() reproduces
+// the pre-#854 operator prose byte-for-byte for the two surfaced classes — the
+// de-facto substring contract downstream consumers grep.
+func TestWarningString_RendersHistoricalProse(t *testing.T) {
+	t.Parallel()
+	nested := Warning{
+		Code:     CodeNestedRefLiteral,
+		Literal:  "arn:aws:kms:us-east-1:123:key/uuid-1",
+		Consumer: "aws_lambda_function.h",
+		Path:     "environment.variables.KEY",
+	}
+	wantNested := "nested_ref_literal: reference literal inside nested attribute environment.variables.KEY of aws_lambda_function.h; target arn:aws:kms:us-east-1:123:key/uuid-1 — surfaced by the nested-body walk (previously silent); chasing target, nested literal retained"
+	if got := nested.String(); got != wantNested {
+		t.Errorf("nested String()=\n%q\nwant\n%q", got, wantNested)
+	}
+
+	nonARN := Warning{
+		Code:     CodeNonARNRefLiteral,
+		Literal:  "1234abcd-12ab-34cd-56ef-1234567890ab",
+		Consumer: "aws_sqs_queue.q",
+		Attr:     "kms_master_key_id",
+		TFType:   "aws_kms_key",
+	}
+	wantNonARN := `non_arn_ref_literal: non-ARN identifier in curated attribute kms_master_key_id of aws_sqs_queue.q; value "1234abcd-12ab-34cd-56ef-1234567890ab" resolves to aws_kms_key — surfaced by the curated-attr walk (previously silent); chasing by bare identifier`
+	if got := nonARN.String(); got != wantNonARN {
+		t.Errorf("non-ARN String()=\n%q\nwant\n%q", got, wantNonARN)
 	}
 }

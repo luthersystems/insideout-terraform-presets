@@ -122,7 +122,11 @@ type Result struct {
 	Iterations    int
 	Resources     []imported.ImportedResource
 	Added         []imported.ImportedResource
-	Warnings      []string
+	// Warnings are structured (presets#854): each carries a stable Code plus the
+	// render inputs, with String() reproducing the historical prose for the
+	// CLI/discover output. reverseimport maps Code → job.Diagnostic.Code so
+	// Reliable's diagnostics surface can classify without pattern-matching prose.
+	Warnings []Warning
 
 	// Edges is the dependency graph the loop built during chase: one
 	// entry per (consumer → producer) Terraform-address pair where the
@@ -196,7 +200,7 @@ func Run(ctx context.Context, opts Options, resources []imported.ImportedResourc
 	generatedPath := filepath.Join(opts.Workdir, generatedFile)
 
 	res := &Result{Resources: slices.Clone(resources)}
-	seenWarning := make(map[string]struct{})
+	seenWarning := make(map[warningKey]struct{})
 	ignoredARNs := make(map[string]struct{})
 	var prevUnresolved []string
 
@@ -299,9 +303,12 @@ func Run(ctx context.Context, opts Options, resources []imported.ImportedResourc
 				if !isTopLevel {
 					class = classNested
 				}
-				addWarning(res, seenWarning,
-					fmt.Sprintf("nested_ref_literal: reference literal inside nested attribute %s of %s; target %s — surfaced by the nested-body walk (previously silent); chasing target, nested literal retained",
-						nh.path, nh.addr, arn))
+				addWarning(res, seenWarning, Warning{
+					Code:     CodeNestedRefLiteral,
+					Literal:  arn,
+					Consumer: nh.addr,
+					Path:     nh.path,
+				})
 			}
 			// presets#834 class B — a curated, non-ARN identifier reference
 			// (a KMS KeyId UUID in kms_key_id / kms_master_key_id). isARNLiteral
@@ -313,9 +320,13 @@ func Run(ctx context.Context, opts Options, resources []imported.ImportedResourc
 			// the run's primary region only if the consumer has none.
 			if nq, ok := scan.nonARN[arn]; ok {
 				chased[arn] = struct{}{}
-				addWarning(res, seenWarning,
-					fmt.Sprintf("non_arn_ref_literal: non-ARN identifier in curated attribute %s of %s; value %q resolves to %s — surfaced by the curated-attr walk (previously silent); chasing by bare identifier",
-						nq.attr, nq.addr, arn, nq.tfType))
+				addWarning(res, seenWarning, Warning{
+					Code:     CodeNonARNRefLiteral,
+					Literal:  arn,
+					Consumer: nq.addr,
+					Attr:     nq.attr,
+					TFType:   nq.tfType,
+				})
 				newSeeds = append(newSeeds, seed{
 					arn:   arn,
 					class: classNonARN,
@@ -331,13 +342,18 @@ func Run(ctx context.Context, opts Options, resources []imported.ImportedResourc
 			ref, err := ParseRef(arn)
 			if err != nil {
 				if errors.Is(err, ErrUnsupportedType) {
-					addWarning(res, seenWarning,
-						fmt.Sprintf("unsupported ARN type %q (no Terraform discoverer)", arn))
+					addWarning(res, seenWarning, Warning{
+						Code:    CodeUnsupportedRef,
+						Literal: arn,
+					})
 					ignoredARNs[arn] = struct{}{}
 					continue
 				}
-				addWarning(res, seenWarning,
-					fmt.Sprintf("could not parse ARN %q: %v", arn, err))
+				addWarning(res, seenWarning, Warning{
+					Code:    CodeUnparseableRef,
+					Literal: arn,
+					Reason:  err.Error(),
+				})
 				ignoredARNs[arn] = struct{}{}
 				continue
 			}
@@ -382,12 +398,22 @@ func Run(ctx context.Context, opts Options, resources []imported.ImportedResourc
 				// whole run — wrong outcome for a per-ARN issue.
 				switch {
 				case errors.Is(err, awsdiscover.ErrNotFound), errors.Is(err, gcpdiscover.ErrNotFound):
-					addWarning(res, seenWarning,
-						fmt.Sprintf("%s %q (%s): %v", label, s.arn, s.ref.TFType, err))
+					addWarning(res, seenWarning, Warning{
+						Code:    CodeRefNotFound,
+						Literal: s.arn,
+						TFType:  s.ref.TFType,
+						Label:   label,
+						Reason:  err.Error(),
+					})
 					ignoredARNs[s.arn] = struct{}{}
 				case errors.Is(err, awsdiscover.ErrNotSupported), errors.Is(err, gcpdiscover.ErrNotSupported):
-					addWarning(res, seenWarning,
-						fmt.Sprintf("%s %q: %s discoverer rejected ID: %v", label, s.arn, s.ref.TFType, err))
+					addWarning(res, seenWarning, Warning{
+						Code:    CodeDiscovererRejected,
+						Literal: s.arn,
+						TFType:  s.ref.TFType,
+						Label:   label,
+						Reason:  err.Error(),
+					})
 					ignoredARNs[s.arn] = struct{}{}
 				default:
 					// A non-sentinel (hard) discovery error aborts the run only
@@ -396,9 +422,14 @@ func Run(ctx context.Context, opts Options, resources []imported.ImportedResourc
 					// import that previously (silently) succeeded — degrade to a
 					// warning and leave the literal (F1).
 					if s.class.terminal() {
-						addWarning(res, seenWarning,
-							fmt.Sprintf("%s %q (%s): discovery error on a %s reference treated as non-fatal (fidelity enhancement; import preserved, literal retained): %v",
-								label, s.arn, s.ref.TFType, s.class, err))
+						addWarning(res, seenWarning, Warning{
+							Code:    CodeDiscoverError,
+							Literal: s.arn,
+							TFType:  s.ref.TFType,
+							Label:   label,
+							Class:   s.class.String(),
+							Reason:  err.Error(),
+						})
 						ignoredARNs[s.arn] = struct{}{}
 						break
 					}
@@ -422,9 +453,13 @@ func Run(ctx context.Context, opts Options, resources []imported.ImportedResourc
 			// aws_kms_key / aws_iam_role literals from the account-141812438321
 			// import (#834) are exactly this class.
 			if reason := imported.UnimportableReason(ir); reason != "" {
-				addWarning(res, seenWarning,
-					fmt.Sprintf("%s %q (%s) references an un-importable resource (%s: %s); leaving the literal reference — the target cannot be adopted into Terraform state, so the literal is the correct terminal state",
-						label, s.arn, s.ref.TFType, reason, imported.ReasonDescription(reason)))
+				addWarning(res, seenWarning, Warning{
+					Code:    CodeUnimportableTarget,
+					Literal: s.arn,
+					TFType:  s.ref.TFType,
+					Label:   label,
+					Reason:  reason,
+				})
 				ignoredARNs[s.arn] = struct{}{}
 				continue
 			}
@@ -474,9 +509,12 @@ func Run(ctx context.Context, opts Options, resources []imported.ImportedResourc
 		for _, d := range dropped {
 			ignoredARNs[d.seed.arn] = struct{}{}
 			removeEdgesTo(res, seenEdges, d.resource.Identity.Address)
-			addWarning(res, seenWarning,
-				fmt.Sprintf("ARN %q (%s) discovered as %s, but generated config omitted it; leaving the literal reference",
-					d.seed.arn, d.seed.ref.TFType, d.resource.Identity.Address))
+			addWarning(res, seenWarning, Warning{
+				Code:    CodeConfigOmitted,
+				Literal: d.seed.arn,
+				TFType:  d.seed.ref.TFType,
+				Reason:  d.resource.Identity.Address,
+			})
 		}
 		for _, d := range kept {
 			// Record one edge per (consumer, discovered) pair (#297).
@@ -684,16 +722,19 @@ func sortEdges(res *Result) {
 	})
 }
 
-// addWarning appends to Warnings if the same message hasn't been
-// emitted before in this run. Dedup is per-message string, not
-// per-ARN, because two ARNs could legitimately produce the same
-// "unsupported ARN type X" warning under their service+rtype.
-func addWarning(res *Result, seen map[string]struct{}, msg string) {
-	if _, ok := seen[msg]; ok {
+// addWarning appends a structured Warning to Warnings if one with the same
+// (Code, Literal, Consumer) identity hasn't been emitted before in this run
+// (presets#854). Keying on the tuple rather than the rendered string means a
+// prose/path change can't duplicate a warning across iterations, while two
+// different ARNs still produce two "unsupported ARN type" warnings (distinct
+// Literal).
+func addWarning(res *Result, seen map[warningKey]struct{}, w Warning) {
+	k := w.key()
+	if _, ok := seen[k]; ok {
 		return
 	}
-	seen[msg] = struct{}{}
-	res.Warnings = append(res.Warnings, msg)
+	seen[k] = struct{}{}
+	res.Warnings = append(res.Warnings, w)
 }
 
 // progressf writes a human-readable progress line to w when w is
@@ -711,8 +752,8 @@ func progressf(w io.Writer, format string, args ...any) {
 // remaining literal as a warning so the operator sees what wasn't
 // chased; the caller decides whether to treat the run as success or
 // failure based on whether anything had been successfully added.
-func emitUnresolvedAsWarnings(unresolved []string, res *Result, seen map[string]struct{}) {
+func emitUnresolvedAsWarnings(unresolved []string, res *Result, seen map[warningKey]struct{}) {
 	for _, arn := range unresolved {
-		addWarning(res, seen, fmt.Sprintf("unresolved ARN reference (stable across iterations): %q", arn))
+		addWarning(res, seen, Warning{Code: CodeUnresolvedStable, Literal: arn})
 	}
 }

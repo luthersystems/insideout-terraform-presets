@@ -72,3 +72,32 @@ package depchase
 // (e.g. a nested ARN of an unsupported service, or a KMS KeyId that resolves to
 // an AWS-managed key) still emits its class-A/B detection warning AND the
 // downstream class-C/G/E outcome warning — surfaced twice, never silent.
+//
+// Structured diagnostic codes (presets#854).
+//
+// Each degradation class emits a Warning with a stable Code (warning.go) rather
+// than a prose-prefixed free-text string. reverseimport maps Code →
+// job.Diagnostic.Code and the consumer address → Field, so Reliable's
+// diagnostics surface classifies on Code without pattern-matching prose;
+// Warning.String() reproduces the historical prose byte-for-byte for the
+// CLI/discover output. Dedup keys on (Code, Literal, Consumer), not the rendered
+// string, so a wording/path edit can't duplicate a warning across iterations.
+//
+//	Degradation class (above)          | Diagnostic Code
+//	-----------------------------------|-----------------------------------
+//	A  nested ref literal              | depchase_nested_ref_literal
+//	B  non-ARN identifier ref          | depchase_non_arn_ref_literal
+//	C  unsupported ARN service/rtype   | depchase_unsupported_ref
+//	D  malformed ARN literal           | depchase_unparseable_ref
+//	E  target not found                | depchase_ref_not_found
+//	F  discoverer rejected the ID      | depchase_discoverer_rejected
+//	   (F1) non-fatal hard error on a  | depchase_discover_error
+//	        terminal (nested/nonARN)   |
+//	        seed                       |
+//	G  target inherently un-importable | depchase_unimportable_target
+//	H  discovered, genconfig dropped   | depchase_config_omitted
+//	I  reference cycle / stable        | depchase_unresolved_stable
+//
+// COMPAT: pre-#854 every warning folded to a single Code="depchase_warning".
+// Reliable-side consumers matching that literal Code must move to the per-class
+// codes (or match the "depchase_" prefix). In-repo there are no such consumers.
