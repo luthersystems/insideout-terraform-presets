@@ -14,15 +14,18 @@ type AWSBedrockagentcoreGatewayTarget struct {
 	TargetID                        *Value[string]                                                    `tf:"target_id" json:"target_id,omitempty"`
 	CredentialProviderConfiguration []AWSBedrockagentcoreGatewayTargetCredentialProviderConfiguration `tf:"credential_provider_configuration,blocks" json:"credential_provider_configuration,omitempty"`
 	MetadataConfiguration           []AWSBedrockagentcoreGatewayTargetMetadataConfiguration           `tf:"metadata_configuration,blocks" json:"metadata_configuration,omitempty"`
+	PrivateEndpoint                 []AWSBedrockagentcoreGatewayTargetPrivateEndpoint                 `tf:"private_endpoint,blocks" json:"private_endpoint,omitempty"`
 	TargetConfiguration             []AWSBedrockagentcoreGatewayTargetTargetConfiguration             `tf:"target_configuration,blocks" json:"target_configuration,omitempty"`
 	Timeouts                        *AWSBedrockagentcoreGatewayTargetTimeouts                         `tf:"timeouts,block" json:"timeouts,omitempty"`
 }
 
 // AWSBedrockagentcoreGatewayTargetCredentialProviderConfiguration is a nested-block type used by the parent resource.
 type AWSBedrockagentcoreGatewayTargetCredentialProviderConfiguration struct {
-	APIKey         []AWSBedrockagentcoreGatewayTargetCredentialProviderConfigurationAPIKey         `tf:"api_key,blocks" json:"api_key,omitempty"`
-	GatewayIAMRole []AWSBedrockagentcoreGatewayTargetCredentialProviderConfigurationGatewayIAMRole `tf:"gateway_iam_role,blocks" json:"gateway_iam_role,omitempty"`
-	Oauth          []AWSBedrockagentcoreGatewayTargetCredentialProviderConfigurationOauth          `tf:"oauth,blocks" json:"oauth,omitempty"`
+	APIKey               []AWSBedrockagentcoreGatewayTargetCredentialProviderConfigurationAPIKey               `tf:"api_key,blocks" json:"api_key,omitempty"`
+	CallerIAMCredentials []AWSBedrockagentcoreGatewayTargetCredentialProviderConfigurationCallerIAMCredentials `tf:"caller_iam_credentials,blocks" json:"caller_iam_credentials,omitempty"`
+	GatewayIAMRole       []AWSBedrockagentcoreGatewayTargetCredentialProviderConfigurationGatewayIAMRole       `tf:"gateway_iam_role,blocks" json:"gateway_iam_role,omitempty"`
+	JWTPassthrough       []AWSBedrockagentcoreGatewayTargetCredentialProviderConfigurationJWTPassthrough       `tf:"jwt_passthrough,blocks" json:"jwt_passthrough,omitempty"`
+	Oauth                []AWSBedrockagentcoreGatewayTargetCredentialProviderConfigurationOauth                `tf:"oauth,blocks" json:"oauth,omitempty"`
 }
 
 // AWSBedrockagentcoreGatewayTargetCredentialProviderConfigurationAPIKey is a nested-block type used by the parent resource.
@@ -33,8 +36,20 @@ type AWSBedrockagentcoreGatewayTargetCredentialProviderConfigurationAPIKey struc
 	ProviderARN             *Value[string] `tf:"provider_arn" json:"provider_arn,omitempty"`
 }
 
+// AWSBedrockagentcoreGatewayTargetCredentialProviderConfigurationCallerIAMCredentials is a nested-block type used by the parent resource.
+type AWSBedrockagentcoreGatewayTargetCredentialProviderConfigurationCallerIAMCredentials struct {
+	Region  *Value[string] `tf:"region" json:"region,omitempty"`
+	Service *Value[string] `tf:"service" json:"service,omitempty"`
+}
+
 // AWSBedrockagentcoreGatewayTargetCredentialProviderConfigurationGatewayIAMRole is a nested-block type used by the parent resource.
 type AWSBedrockagentcoreGatewayTargetCredentialProviderConfigurationGatewayIAMRole struct {
+	Region  *Value[string] `tf:"region" json:"region,omitempty"`
+	Service *Value[string] `tf:"service" json:"service,omitempty"`
+}
+
+// AWSBedrockagentcoreGatewayTargetCredentialProviderConfigurationJWTPassthrough is a nested-block type used by the parent resource.
+type AWSBedrockagentcoreGatewayTargetCredentialProviderConfigurationJWTPassthrough struct {
 }
 
 // AWSBedrockagentcoreGatewayTargetCredentialProviderConfigurationOauth is a nested-block type used by the parent resource.
@@ -53,9 +68,42 @@ type AWSBedrockagentcoreGatewayTargetMetadataConfiguration struct {
 	AllowedResponseHeaders []*Value[string] `tf:"allowed_response_headers" json:"allowed_response_headers,omitempty"`
 }
 
+// AWSBedrockagentcoreGatewayTargetPrivateEndpoint is a nested-block type used by the parent resource.
+type AWSBedrockagentcoreGatewayTargetPrivateEndpoint struct {
+	ManagedVPCResource         []AWSBedrockagentcoreGatewayTargetPrivateEndpointManagedVPCResource         `tf:"managed_vpc_resource,blocks" json:"managed_vpc_resource,omitempty"`
+	SelfManagedLatticeResource []AWSBedrockagentcoreGatewayTargetPrivateEndpointSelfManagedLatticeResource `tf:"self_managed_lattice_resource,blocks" json:"self_managed_lattice_resource,omitempty"`
+}
+
+// AWSBedrockagentcoreGatewayTargetPrivateEndpointManagedVPCResource is a nested-block type used by the parent resource.
+type AWSBedrockagentcoreGatewayTargetPrivateEndpointManagedVPCResource struct {
+	EndpointIpAddressType *Value[string]            `tf:"endpoint_ip_address_type" json:"endpoint_ip_address_type,omitempty"`
+	RoutingDomain         *Value[string]            `tf:"routing_domain" json:"routing_domain,omitempty"`
+	SecurityGroupIDS      []*Value[string]          `tf:"security_group_ids" json:"security_group_ids,omitempty"`
+	SubnetIDS             []*Value[string]          `tf:"subnet_ids" json:"subnet_ids,omitempty"`
+	Tags                  map[string]*Value[string] `tf:"tags" json:"tags,omitempty"`
+	VPCIdentifier         *Value[string]            `tf:"vpc_identifier" json:"vpc_identifier,omitempty"`
+}
+
+// AWSBedrockagentcoreGatewayTargetPrivateEndpointSelfManagedLatticeResource is a nested-block type used by the parent resource.
+type AWSBedrockagentcoreGatewayTargetPrivateEndpointSelfManagedLatticeResource struct {
+	ResourceConfigurationIdentifier *Value[string] `tf:"resource_configuration_identifier" json:"resource_configuration_identifier,omitempty"`
+}
+
 // AWSBedrockagentcoreGatewayTargetTargetConfiguration is a nested-block type used by the parent resource.
 type AWSBedrockagentcoreGatewayTargetTargetConfiguration struct {
-	Mcp []AWSBedrockagentcoreGatewayTargetTargetConfigurationMcp `tf:"mcp,blocks" json:"mcp,omitempty"`
+	HTTP []AWSBedrockagentcoreGatewayTargetTargetConfigurationHTTP `tf:"http,blocks" json:"http,omitempty"`
+	Mcp  []AWSBedrockagentcoreGatewayTargetTargetConfigurationMcp  `tf:"mcp,blocks" json:"mcp,omitempty"`
+}
+
+// AWSBedrockagentcoreGatewayTargetTargetConfigurationHTTP is a nested-block type used by the parent resource.
+type AWSBedrockagentcoreGatewayTargetTargetConfigurationHTTP struct {
+	AgentcoreRuntime []AWSBedrockagentcoreGatewayTargetTargetConfigurationHTTPAgentcoreRuntime `tf:"agentcore_runtime,blocks" json:"agentcore_runtime,omitempty"`
+}
+
+// AWSBedrockagentcoreGatewayTargetTargetConfigurationHTTPAgentcoreRuntime is a nested-block type used by the parent resource.
+type AWSBedrockagentcoreGatewayTargetTargetConfigurationHTTPAgentcoreRuntime struct {
+	ARN       *Value[string] `tf:"arn" json:"arn,omitempty"`
+	Qualifier *Value[string] `tf:"qualifier" json:"qualifier,omitempty"`
 }
 
 // AWSBedrockagentcoreGatewayTargetTargetConfigurationMcp is a nested-block type used by the parent resource.
@@ -282,7 +330,8 @@ type AWSBedrockagentcoreGatewayTargetTargetConfigurationMcpLambdaToolSchemaS3 st
 
 // AWSBedrockagentcoreGatewayTargetTargetConfigurationMcpMcpServer is a nested-block type used by the parent resource.
 type AWSBedrockagentcoreGatewayTargetTargetConfigurationMcpMcpServer struct {
-	Endpoint *Value[string] `tf:"endpoint" json:"endpoint,omitempty"`
+	Endpoint    *Value[string] `tf:"endpoint" json:"endpoint,omitempty"`
+	ListingMode *Value[string] `tf:"listing_mode" json:"listing_mode,omitempty"`
 }
 
 // AWSBedrockagentcoreGatewayTargetTargetConfigurationMcpOpenAPISchema is a nested-block type used by the parent resource.
@@ -336,6 +385,7 @@ var AWSBedrockagentcoreGatewayTargetSchema = map[string]FieldSchema{
 	"target_id":                         {Computed: true, Replacement: ReplacementUnknown},
 	"credential_provider_configuration": {Optional: true, Replacement: ReplacementUnknown},
 	"metadata_configuration":            {Optional: true, Replacement: ReplacementUnknown},
+	"private_endpoint":                  {Optional: true, Replacement: ReplacementUnknown},
 	"target_configuration":              {Optional: true, Replacement: ReplacementUnknown},
 	"timeouts":                          {Optional: true, Replacement: ReplacementUnknown},
 }

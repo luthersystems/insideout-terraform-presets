@@ -1,0 +1,15 @@
+# driftscan allowlist — known-stale missing-required sub-attributes.
+#
+# cmd/driftscan cross-checks every generated typed model
+# (pkg/composer/imported/generated) against a real `terraform providers
+# schema -json` dump and flags any nested-object literal missing a
+# provider-Required sub-attribute (the odb_network_arn bug class, #839).
+#
+# Entries here are misses that are KNOWN and issue-tracked but not yet
+# fixed in the generated model — they print as ALLOWED(stale-model)
+# instead of failing the gate. This list can only SHRINK: every row MUST
+# cite the issue that will remove it (driftscan hard-errors on an entry
+# with no `#<issue>` citation), and a row is deleted the moment its model
+# regenerates.
+#
+# Format: <tfType>.<attr>:<sub-attr>   # refs #<issue>

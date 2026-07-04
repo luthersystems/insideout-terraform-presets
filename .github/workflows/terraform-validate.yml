@@ -369,6 +369,29 @@ jobs:
           terraform_version: "1.7.5"
       - run: make test-golden-stack
 
+  # Cross-checks every generated typed model
+  # (pkg/composer/imported/generated) against the REAL provider schema at the
+  # exact version the composer pins, catching the odb_network_arn bug class
+  # (#839): a nested-object attribute emitted as an object literal that is
+  # missing a provider-Required sub-attribute would fail `terraform plan` the
+  # moment the provider adds it. The provider version is read from the
+  # composed aws_s3 stack's providers.tf (single source of truth in
+  # pkg/composer/imported/provider_pins.go), not hardcoded here. Known-stale,
+  # issue-tracked misses are allowlisted in tests/driftscan-allowlist.txt and
+  # reported as ALLOWED(stale-model) (#845). See tests/drift-scan.sh / #844.
+  drift-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16  # v6.5.0
+        with:
+          go-version-file: go.mod
+          cache: true
+      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e  # v4.0.1
+        with:
+          terraform_version: "1.7.5"
+      - run: bash tests/drift-scan.sh
+
   # Single aggregator status for branch protection to require. Lets the
   # matrix jobs above grow/shrink without updating the protection rule.
   ci-gate:
@@ -389,6 +412,7 @@ jobs:
       - verify-phantom-schema
       - tflint
       - golden-stack-hcl
+      - drift-scan
     if: always()
     runs-on: ubuntu-latest
     steps:

@@ -54,6 +54,7 @@ type AWSOpensearchDomainAdvancedSecurityOptions struct {
 // AWSOpensearchDomainAdvancedSecurityOptionsJWTOptions is a nested-block type used by the parent resource.
 type AWSOpensearchDomainAdvancedSecurityOptionsJWTOptions struct {
 	Enabled    *Value[bool]   `tf:"enabled" json:"enabled,omitempty"`
+	JwksURL    *Value[string] `tf:"jwks_url" json:"jwks_url,omitempty"`
 	PublicKey  *Value[string] `tf:"public_key" json:"public_key,omitempty"`
 	RolesKey   *Value[string] `tf:"roles_key" json:"roles_key,omitempty"`
 	SubjectKey *Value[string] `tf:"subject_key" json:"subject_key,omitempty"`

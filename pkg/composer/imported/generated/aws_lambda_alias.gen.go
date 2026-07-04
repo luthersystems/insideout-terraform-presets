@@ -16,11 +16,17 @@ type AWSLambdaAlias struct {
 	Name            *Value[string]                `tf:"name" json:"name,omitempty"`
 	Region          *Value[string]                `tf:"region" json:"region,omitempty"`
 	RoutingConfig   []AWSLambdaAliasRoutingConfig `tf:"routing_config,blocks" json:"routing_config,omitempty"`
+	Timeouts        *AWSLambdaAliasTimeouts       `tf:"timeouts,block" json:"timeouts,omitempty"`
 }
 
 // AWSLambdaAliasRoutingConfig is a nested-block type used by the parent resource.
 type AWSLambdaAliasRoutingConfig struct {
 	AdditionalVersionWeights map[string]*Value[float64] `tf:"additional_version_weights" json:"additional_version_weights,omitempty"`
+}
+
+// AWSLambdaAliasTimeouts is a nested-block type used by the parent resource.
+type AWSLambdaAliasTimeouts struct {
+	Update *Value[string] `tf:"update" json:"update,omitempty"`
 }
 
 // AWSLambdaAliasSchema describes provider metadata for each attribute / nested
@@ -35,6 +41,7 @@ var AWSLambdaAliasSchema = map[string]FieldSchema{
 	"name":             {Required: true, Replacement: ReplacementUnknown},
 	"region":           {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"routing_config":   {Optional: true, Replacement: ReplacementUnknown},
+	"timeouts":         {Optional: true, Replacement: ReplacementUnknown},
 }
 
 func init() {

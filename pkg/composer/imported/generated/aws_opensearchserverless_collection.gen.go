@@ -21,6 +21,7 @@ type AWSOpensearchserverlessCollection struct {
 	Tags                map[string]*Value[string]                           `tf:"tags" json:"tags,omitempty"`
 	TagsAll             map[string]*Value[string]                           `tf:"tags_all" json:"tags_all,omitempty"`
 	Type_               *Value[string]                                      `tf:"type" json:"type,omitempty"`
+	VectorOptions       []AWSOpensearchserverlessCollectionVectorOptions    `tf:"vector_options" json:"vector_options,omitempty"`
 	Timeouts            *AWSOpensearchserverlessCollectionTimeouts          `tf:"timeouts,block" json:"timeouts,omitempty"`
 }
 
@@ -34,6 +35,11 @@ type AWSOpensearchserverlessCollectionEncryptionConfig struct {
 type AWSOpensearchserverlessCollectionTimeouts struct {
 	Create *Value[string] `tf:"create" json:"create,omitempty"`
 	Delete *Value[string] `tf:"delete" json:"delete,omitempty"`
+}
+
+// AWSOpensearchserverlessCollectionVectorOptions is a nested-block type used by the parent resource.
+type AWSOpensearchserverlessCollectionVectorOptions struct {
+	ServerlessVectorAcceleration *Value[string] `tf:"serverless_vector_acceleration" json:"serverless_vector_acceleration,omitempty"`
 }
 
 // AWSOpensearchserverlessCollectionSchema describes provider metadata for each attribute / nested
@@ -53,6 +59,7 @@ var AWSOpensearchserverlessCollectionSchema = map[string]FieldSchema{
 	"tags":                  {Optional: true, Replacement: ReplacementUnknown},
 	"tags_all":              {Computed: true, Replacement: ReplacementUnknown},
 	"type":                  {Optional: true, Computed: true, Replacement: ReplacementUnknown},
+	"vector_options":        {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"timeouts":              {Optional: true, Replacement: ReplacementUnknown},
 }
 

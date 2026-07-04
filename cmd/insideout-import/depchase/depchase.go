@@ -200,6 +200,24 @@ func Run(ctx context.Context, opts Options, resources []imported.ImportedResourc
 	ignoredARNs := make(map[string]struct{})
 	var prevUnresolved []string
 
+	// chased records every nested (class A) / nonARN (class B) literal that has
+	// been seeded once, regardless of discovery outcome (F2). Such literals are
+	// never rewritten by crossref, so after their single chase they may remain
+	// textually unresolved forever (e.g. a version-qualified lambda ARN whose
+	// adopted NativeIDs never byte-match). Excluding them from re-seeding and
+	// from the unresolved-set stability comparison prevents both a spurious
+	// ErrCyclicDependency on a previously-clean run and pointless re-discovery
+	// every iteration. Their warning already documents that the literal is
+	// retained, so dropping them from the unresolved accounting loses nothing.
+	chased := make(map[string]struct{})
+
+	// seenAddedAddr deduplicates res.Added across iterations by resource
+	// address: the same target can be referenced by two different literals in
+	// one iteration (e.g. a KMS key by full ARN nested AND by bare UUID in a
+	// kms_key_id attr, F8). We record every consumer edge but adopt the resource
+	// once.
+	seenAddedAddr := make(map[string]struct{})
+
 	// seenEdges deduplicates Edges across iterations: the same
 	// (consumer → discovered) pair can re-surface if the regenerate
 	// step rewrites the consumer's HCL without changing the reference.
@@ -210,11 +228,22 @@ func Run(ctx context.Context, opts Options, resources []imported.ImportedResourc
 		if err != nil {
 			return nil, fmt.Errorf("depchase: read generated.tf: %w", err)
 		}
-		unresolved, consumersByARN, err := findUnresolvedWithConsumers(raw, res.Resources)
+		scan, err := scanGenerated(raw, res.Resources)
 		if err != nil {
 			return nil, err
 		}
+		unresolved := scan.unresolved
+		consumersByARN := scan.consumers
 		unresolved = filterIgnoredARNs(unresolved, ignoredARNs)
+		// Drop terminal-by-design literals already chased once (F2): they are
+		// excluded from the len==0 convergence check, the stability comparison,
+		// and re-seeding below.
+		unresolved = filterIgnoredARNs(unresolved, chased)
+		// Build a consumer-address → region index for this iteration so a
+		// class-B bare-UUID seed (which carries no region of its own) can be
+		// discovered in the CONSUMER's region — a KMS CMK is same-region as its
+		// SSE consumer — rather than blindly in the run's primary region (F3).
+		regionByAddr := regionIndex(res.Resources)
 		if len(unresolved) == 0 {
 			res.GeneratedPath = generatedPath
 			sortEdges(res)
@@ -249,6 +278,56 @@ func Run(ctx context.Context, opts Options, resources []imported.ImportedResourc
 
 		var newSeeds []seed
 		for _, arn := range unresolved {
+			// A literal that ALSO appears top-level keeps top-level chase
+			// semantics (fatal-on-error, non-terminal): its top-level occurrence
+			// is rewritten by crossref, so resolution is expected there even if
+			// it is additionally nested elsewhere.
+			_, isTopLevel := scan.topLevel[arn]
+			// presets#834 class A — an ARN literal the historical top-level
+			// pass would have MISSED (nested inside a block or a
+			// list/object expression) is now surfaced. Emit the precise
+			// detection warning up front so class A is never silent,
+			// regardless of whether the chase below succeeds, fails, or hits
+			// an unsupported type. The literal itself is not rewritten (the
+			// genconfig crossref pass is also top-level-only), but the target
+			// is chased and — when adoptable — emitted, improving graph
+			// fidelity. For a dual-occurrence literal (also top-level) the
+			// nested consumer is still warned about here, but the seed is tagged
+			// top-level so its failure policy matches the top-level occurrence.
+			class := classTopLevel
+			if nh, ok := scan.nested[arn]; ok {
+				if !isTopLevel {
+					class = classNested
+				}
+				addWarning(res, seenWarning,
+					fmt.Sprintf("nested_ref_literal: reference literal inside nested attribute %s of %s; target %s — surfaced by the nested-body walk (previously silent); chasing target, nested literal retained",
+						nh.path, nh.addr, arn))
+			}
+			// presets#834 class B — a curated, non-ARN identifier reference
+			// (a KMS KeyId UUID in kms_key_id / kms_master_key_id). isARNLiteral
+			// never considered it, so it was silent. The KMS Cloud Control
+			// DiscoverByID accepts a bare KeyId, so we chase it with a
+			// pre-resolved Ref (no ARN to ParseRef). A bare UUID carries no
+			// region of its own, so the Region is left EMPTY here and filled
+			// from the consumer resource's region below (F3), falling back to
+			// the run's primary region only if the consumer has none.
+			if nq, ok := scan.nonARN[arn]; ok {
+				chased[arn] = struct{}{}
+				addWarning(res, seenWarning,
+					fmt.Sprintf("non_arn_ref_literal: non-ARN identifier in curated attribute %s of %s; value %q resolves to %s — surfaced by the curated-attr walk (previously silent); chasing by bare identifier",
+						nq.attr, nq.addr, arn, nq.tfType))
+				newSeeds = append(newSeeds, seed{
+					arn:   arn,
+					class: classNonARN,
+					ref:   Ref{TFType: nq.tfType, ImportID: arn, Region: regionByAddr[nq.addr]},
+				})
+				continue
+			}
+			// Mark a purely-nested literal terminal-by-design before ParseRef so
+			// it is chased exactly once regardless of the parse/discovery outcome.
+			if class == classNested {
+				chased[arn] = struct{}{}
+			}
 			ref, err := ParseRef(arn)
 			if err != nil {
 				if errors.Is(err, ErrUnsupportedType) {
@@ -262,7 +341,7 @@ func Run(ctx context.Context, opts Options, resources []imported.ImportedResourc
 				ignoredARNs[arn] = struct{}{}
 				continue
 			}
-			newSeeds = append(newSeeds, seed{arn: arn, ref: ref})
+			newSeeds = append(newSeeds, seed{arn: arn, class: class, ref: ref})
 		}
 		// Sort seeds for deterministic discovery order (the discoverer
 		// has no guaranteed ordering on lookups across types/calls).
@@ -270,7 +349,18 @@ func Run(ctx context.Context, opts Options, resources []imported.ImportedResourc
 
 		var added []imported.ImportedResource
 		var discoveries []discoveredResource
+		// seenIterAddr dedups the resources ADDED this iteration by address so
+		// two seeds resolving to the same target (F8) adopt it once. Consumer
+		// edges are still recorded for both via `discoveries`.
+		seenIterAddr := make(map[string]struct{})
 		for _, s := range newSeeds {
+			// label distinguishes an ARN literal from a bare-identifier
+			// (class-B) literal in operator-facing warnings — "reference %q"
+			// reads correctly for a UUID, "ARN %q" does not (F3).
+			label := "ARN"
+			if s.class == classNonARN {
+				label = "reference"
+			}
 			// Discover each ref in ITS OWN region (the ARN's 4th segment),
 			// falling back to the run's primary region for global/region-less
 			// ARNs (IAM/CloudFront/Route53/S3, where Region is empty). This is
@@ -293,20 +383,68 @@ func Run(ctx context.Context, opts Options, resources []imported.ImportedResourc
 				switch {
 				case errors.Is(err, awsdiscover.ErrNotFound), errors.Is(err, gcpdiscover.ErrNotFound):
 					addWarning(res, seenWarning,
-						fmt.Sprintf("ARN %q (%s): %v", s.arn, s.ref.TFType, err))
+						fmt.Sprintf("%s %q (%s): %v", label, s.arn, s.ref.TFType, err))
 					ignoredARNs[s.arn] = struct{}{}
 				case errors.Is(err, awsdiscover.ErrNotSupported), errors.Is(err, gcpdiscover.ErrNotSupported):
 					addWarning(res, seenWarning,
-						fmt.Sprintf("ARN %q: %s discoverer rejected ID: %v", s.arn, s.ref.TFType, err))
+						fmt.Sprintf("%s %q: %s discoverer rejected ID: %v", label, s.arn, s.ref.TFType, err))
 					ignoredARNs[s.arn] = struct{}{}
 				default:
+					// A non-sentinel (hard) discovery error aborts the run only
+					// for a top-level seed, whose resolution is expected. For a
+					// nested/nonARN fidelity-enhancement seed it must NOT fail an
+					// import that previously (silently) succeeded — degrade to a
+					// warning and leave the literal (F1).
+					if s.class.terminal() {
+						addWarning(res, seenWarning,
+							fmt.Sprintf("%s %q (%s): discovery error on a %s reference treated as non-fatal (fidelity enhancement; import preserved, literal retained): %v",
+								label, s.arn, s.ref.TFType, s.class, err))
+						ignoredARNs[s.arn] = struct{}{}
+						break
+					}
 					sortEdges(res)
 					return res, fmt.Errorf("DiscoverByID(%s, %s): %w", s.ref.TFType, s.ref.ImportID, err)
 				}
 				continue
 			}
-			added = append(added, ir)
+			// Un-importability gate (presets#834). A ref can point at a
+			// resource that DiscoverByID finds but that is inherently
+			// un-adoptable into customer Terraform state — an AWS-managed KMS
+			// key (KeyManager=AWS), a service-linked IAM role
+			// (role/aws-service-role/…), a service-managed ENI, an
+			// already-InsideOut-imported resource, etc. Adding it would only
+			// have RunGenconfig drop it again (no generated body / provider
+			// import failure), surfacing the opaque "discovered … but generated
+			// config omitted it" warning and burning a full regenerate cycle.
+			// Consult the SAME classifier discovery and the genconfig prune use
+			// (imported.UnimportableReason, #709) so all three agree, leave the
+			// literal knowingly, and emit a precise reason instead. The observed
+			// aws_kms_key / aws_iam_role literals from the account-141812438321
+			// import (#834) are exactly this class.
+			if reason := imported.UnimportableReason(ir); reason != "" {
+				addWarning(res, seenWarning,
+					fmt.Sprintf("%s %q (%s) references an un-importable resource (%s: %s); leaving the literal reference — the target cannot be adopted into Terraform state, so the literal is the correct terminal state",
+						label, s.arn, s.ref.TFType, reason, imported.ReasonDescription(reason)))
+				ignoredARNs[s.arn] = struct{}{}
+				continue
+			}
+			// Record the discovery for edge accounting regardless, but adopt the
+			// resource into the import set at most once per address (F8): a
+			// second seed pointing at the same target (same key by ARN and by
+			// bare UUID) must not double-add it, though its consumer edge is
+			// still recorded via `discoveries` → `kept` below.
 			discoveries = append(discoveries, discoveredResource{seed: s, resource: ir})
+			addr := ir.Identity.Address
+			if addr != "" {
+				if _, dup := seenIterAddr[addr]; dup {
+					continue
+				}
+				if _, prior := seenAddedAddr[addr]; prior {
+					continue
+				}
+				seenIterAddr[addr] = struct{}{}
+			}
+			added = append(added, ir)
 		}
 
 		if len(added) == 0 {
@@ -353,6 +491,13 @@ func Run(ctx context.Context, opts Options, resources []imported.ImportedResourc
 				for _, fromAddr := range consumersByARN[d.seed.arn] {
 					recordEdge(res, seenEdges, fromAddr, toAddr)
 				}
+				// Adopt the resource into res.Added once per address (F8): both
+				// seeds' edges above are still recorded, but two literals
+				// resolving to the same target contribute a single Added entry.
+				if _, dup := seenAddedAddr[toAddr]; dup {
+					continue
+				}
+				seenAddedAddr[toAddr] = struct{}{}
 			}
 			res.Added = append(res.Added, d.resource)
 		}
@@ -375,6 +520,12 @@ func Run(ctx context.Context, opts Options, resources []imported.ImportedResourc
 	// residual could not actually be enumerated.
 	raw, _ := os.ReadFile(generatedPath)
 	residual, residualErr := FindUnresolved(raw, res.Resources)
+	// Exclude ignored + terminal-by-design (chased) literals from the residual
+	// accounting so the operator-facing "N unresolved ref(s) remain" message
+	// lists only genuinely-unconverged references, not nested/nonARN literals
+	// that are retained by design (F2) or already warned-and-ignored.
+	residual = filterIgnoredARNs(residual, ignoredARNs)
+	residual = filterIgnoredARNs(residual, chased)
 	res.GeneratedPath = generatedPath
 	residualStr := strings.Join(residual, ", ")
 	sortEdges(res)
@@ -386,16 +537,64 @@ func Run(ctx context.Context, opts Options, resources []imported.ImportedResourc
 		ErrMaxIterations, opts.MaxIterations, len(residual), residualStr)
 }
 
-// seed pairs an unresolved ARN string with the parsed Ref so the
-// loop can carry both through to discovery + warning paths.
+// seedClass records where a seed's literal was found so the loop can apply the
+// right failure policy. A topLevel literal is one the historical top-level pass
+// found and that the genconfig crossref rewrites — its discovery is EXPECTED to
+// resolve, so a hard discovery error is fatal. A nested (class A) or nonARN
+// (class B) literal is a fidelity ENHANCEMENT surfaced by presets#834: it is
+// never rewritten in place, so a hard discovery error must not abort an import
+// that previously (silently) succeeded — it degrades to a warning (F1). Both
+// nested/nonARN literals are also terminal-by-design: once chased, they may
+// legitimately remain textually unresolved forever, so the loop chases each
+// exactly once and excludes it from cycle detection (F2).
+type seedClass uint8
+
+const (
+	classTopLevel seedClass = iota
+	classNested
+	classNonARN
+)
+
+func (c seedClass) String() string {
+	switch c {
+	case classNested:
+		return "nested"
+	case classNonARN:
+		return "non-ARN"
+	default:
+		return "top-level"
+	}
+}
+
+// terminal reports whether the class is terminal-by-design (chased once, never
+// re-seeded, excluded from cycle detection) and fail-open on discovery error.
+func (c seedClass) terminal() bool { return c == classNested || c == classNonARN }
+
+// seed pairs an unresolved literal with the parsed Ref and its origin class so
+// the loop can carry all three through to discovery + warning paths.
 type seed struct {
-	arn string
-	ref Ref
+	arn   string
+	class seedClass
+	ref   Ref
 }
 
 type discoveredResource struct {
 	seed     seed
 	resource imported.ImportedResource
+}
+
+// regionIndex maps each resource address to its identity Region so a class-B
+// bare-UUID seed can inherit the region of the resource that consumes it (F3).
+// Addresses with an empty Region are still indexed (as "") so the caller's
+// primary-region fallback applies.
+func regionIndex(resources []imported.ImportedResource) map[string]string {
+	idx := make(map[string]string, len(resources))
+	for _, r := range resources {
+		if r.Identity.Address != "" {
+			idx[r.Identity.Address] = r.Identity.Region
+		}
+	}
+	return idx
 }
 
 func filterIgnoredARNs(unresolved []string, ignored map[string]struct{}) []string {

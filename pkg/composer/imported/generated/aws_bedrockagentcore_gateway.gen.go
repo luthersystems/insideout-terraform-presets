@@ -7,24 +7,25 @@ import "reflect"
 // AWSBedrockagentcoreGateway is the generated Layer 1 typed model for the
 // `aws_bedrockagentcore_gateway` Terraform resource.
 type AWSBedrockagentcoreGateway struct {
-	AuthorizerType           *Value[string]                                       `tf:"authorizer_type" json:"authorizer_type,omitempty"`
-	Description              *Value[string]                                       `tf:"description" json:"description,omitempty"`
-	ExceptionLevel           *Value[string]                                       `tf:"exception_level" json:"exception_level,omitempty"`
-	GatewayARN               *Value[string]                                       `tf:"gateway_arn" json:"gateway_arn,omitempty"`
-	GatewayID                *Value[string]                                       `tf:"gateway_id" json:"gateway_id,omitempty"`
-	GatewayURL               *Value[string]                                       `tf:"gateway_url" json:"gateway_url,omitempty"`
-	KMSKeyARN                *Value[string]                                       `tf:"kms_key_arn" json:"kms_key_arn,omitempty"`
-	Name                     *Value[string]                                       `tf:"name" json:"name,omitempty"`
-	ProtocolType             *Value[string]                                       `tf:"protocol_type" json:"protocol_type,omitempty"`
-	Region                   *Value[string]                                       `tf:"region" json:"region,omitempty"`
-	RoleARN                  *Value[string]                                       `tf:"role_arn" json:"role_arn,omitempty"`
-	Tags                     map[string]*Value[string]                            `tf:"tags" json:"tags,omitempty"`
-	TagsAll                  map[string]*Value[string]                            `tf:"tags_all" json:"tags_all,omitempty"`
-	WorkloadIdentityDetails  []AWSBedrockagentcoreGatewayWorkloadIdentityDetails  `tf:"workload_identity_details" json:"workload_identity_details,omitempty"`
-	AuthorizerConfiguration  []AWSBedrockagentcoreGatewayAuthorizerConfiguration  `tf:"authorizer_configuration,blocks" json:"authorizer_configuration,omitempty"`
-	InterceptorConfiguration []AWSBedrockagentcoreGatewayInterceptorConfiguration `tf:"interceptor_configuration,blocks" json:"interceptor_configuration,omitempty"`
-	ProtocolConfiguration    []AWSBedrockagentcoreGatewayProtocolConfiguration    `tf:"protocol_configuration,blocks" json:"protocol_configuration,omitempty"`
-	Timeouts                 *AWSBedrockagentcoreGatewayTimeouts                  `tf:"timeouts,block" json:"timeouts,omitempty"`
+	AuthorizerType            *Value[string]                                        `tf:"authorizer_type" json:"authorizer_type,omitempty"`
+	Description               *Value[string]                                        `tf:"description" json:"description,omitempty"`
+	ExceptionLevel            *Value[string]                                        `tf:"exception_level" json:"exception_level,omitempty"`
+	GatewayARN                *Value[string]                                        `tf:"gateway_arn" json:"gateway_arn,omitempty"`
+	GatewayID                 *Value[string]                                        `tf:"gateway_id" json:"gateway_id,omitempty"`
+	GatewayURL                *Value[string]                                        `tf:"gateway_url" json:"gateway_url,omitempty"`
+	KMSKeyARN                 *Value[string]                                        `tf:"kms_key_arn" json:"kms_key_arn,omitempty"`
+	Name                      *Value[string]                                        `tf:"name" json:"name,omitempty"`
+	ProtocolType              *Value[string]                                        `tf:"protocol_type" json:"protocol_type,omitempty"`
+	Region                    *Value[string]                                        `tf:"region" json:"region,omitempty"`
+	RoleARN                   *Value[string]                                        `tf:"role_arn" json:"role_arn,omitempty"`
+	Tags                      map[string]*Value[string]                             `tf:"tags" json:"tags,omitempty"`
+	TagsAll                   map[string]*Value[string]                             `tf:"tags_all" json:"tags_all,omitempty"`
+	WorkloadIdentityDetails   []AWSBedrockagentcoreGatewayWorkloadIdentityDetails   `tf:"workload_identity_details" json:"workload_identity_details,omitempty"`
+	AuthorizerConfiguration   []AWSBedrockagentcoreGatewayAuthorizerConfiguration   `tf:"authorizer_configuration,blocks" json:"authorizer_configuration,omitempty"`
+	InterceptorConfiguration  []AWSBedrockagentcoreGatewayInterceptorConfiguration  `tf:"interceptor_configuration,blocks" json:"interceptor_configuration,omitempty"`
+	PolicyEngineConfiguration []AWSBedrockagentcoreGatewayPolicyEngineConfiguration `tf:"policy_engine_configuration,blocks" json:"policy_engine_configuration,omitempty"`
+	ProtocolConfiguration     []AWSBedrockagentcoreGatewayProtocolConfiguration     `tf:"protocol_configuration,blocks" json:"protocol_configuration,omitempty"`
+	Timeouts                  *AWSBedrockagentcoreGatewayTimeouts                   `tf:"timeouts,block" json:"timeouts,omitempty"`
 }
 
 // AWSBedrockagentcoreGatewayAuthorizerConfiguration is a nested-block type used by the parent resource.
@@ -82,6 +83,12 @@ type AWSBedrockagentcoreGatewayInterceptorConfigurationInterceptorLambda struct 
 	ARN *Value[string] `tf:"arn" json:"arn,omitempty"`
 }
 
+// AWSBedrockagentcoreGatewayPolicyEngineConfiguration is a nested-block type used by the parent resource.
+type AWSBedrockagentcoreGatewayPolicyEngineConfiguration struct {
+	ARN  *Value[string] `tf:"arn" json:"arn,omitempty"`
+	Mode *Value[string] `tf:"mode" json:"mode,omitempty"`
+}
+
 // AWSBedrockagentcoreGatewayProtocolConfiguration is a nested-block type used by the parent resource.
 type AWSBedrockagentcoreGatewayProtocolConfiguration struct {
 	Mcp []AWSBedrockagentcoreGatewayProtocolConfigurationMcp `tf:"mcp,blocks" json:"mcp,omitempty"`
@@ -89,9 +96,21 @@ type AWSBedrockagentcoreGatewayProtocolConfiguration struct {
 
 // AWSBedrockagentcoreGatewayProtocolConfigurationMcp is a nested-block type used by the parent resource.
 type AWSBedrockagentcoreGatewayProtocolConfigurationMcp struct {
-	Instructions      *Value[string]   `tf:"instructions" json:"instructions,omitempty"`
-	SearchType        *Value[string]   `tf:"search_type" json:"search_type,omitempty"`
-	SupportedVersions []*Value[string] `tf:"supported_versions" json:"supported_versions,omitempty"`
+	Instructions           *Value[string]                                                             `tf:"instructions" json:"instructions,omitempty"`
+	SearchType             *Value[string]                                                             `tf:"search_type" json:"search_type,omitempty"`
+	SupportedVersions      []*Value[string]                                                           `tf:"supported_versions" json:"supported_versions,omitempty"`
+	SessionConfiguration   []AWSBedrockagentcoreGatewayProtocolConfigurationMcpSessionConfiguration   `tf:"session_configuration,blocks" json:"session_configuration,omitempty"`
+	StreamingConfiguration []AWSBedrockagentcoreGatewayProtocolConfigurationMcpStreamingConfiguration `tf:"streaming_configuration,blocks" json:"streaming_configuration,omitempty"`
+}
+
+// AWSBedrockagentcoreGatewayProtocolConfigurationMcpSessionConfiguration is a nested-block type used by the parent resource.
+type AWSBedrockagentcoreGatewayProtocolConfigurationMcpSessionConfiguration struct {
+	SessionTimeoutInSeconds *Value[int64] `tf:"session_timeout_in_seconds" json:"session_timeout_in_seconds,omitempty"`
+}
+
+// AWSBedrockagentcoreGatewayProtocolConfigurationMcpStreamingConfiguration is a nested-block type used by the parent resource.
+type AWSBedrockagentcoreGatewayProtocolConfigurationMcpStreamingConfiguration struct {
+	EnableResponseStreaming *Value[bool] `tf:"enable_response_streaming" json:"enable_response_streaming,omitempty"`
 }
 
 // AWSBedrockagentcoreGatewayTimeouts is a nested-block type used by the parent resource.
@@ -109,24 +128,25 @@ type AWSBedrockagentcoreGatewayWorkloadIdentityDetails struct {
 // AWSBedrockagentcoreGatewaySchema describes provider metadata for each attribute / nested
 // block of aws_bedrockagentcore_gateway.
 var AWSBedrockagentcoreGatewaySchema = map[string]FieldSchema{
-	"authorizer_type":           {Required: true, Replacement: ReplacementUnknown},
-	"description":               {Optional: true, Replacement: ReplacementUnknown},
-	"exception_level":           {Optional: true, Replacement: ReplacementUnknown},
-	"gateway_arn":               {Computed: true, Replacement: ReplacementUnknown},
-	"gateway_id":                {Computed: true, Replacement: ReplacementUnknown},
-	"gateway_url":               {Computed: true, Replacement: ReplacementUnknown},
-	"kms_key_arn":               {Optional: true, Replacement: ReplacementUnknown},
-	"name":                      {Required: true, Replacement: ReplacementUnknown},
-	"protocol_type":             {Required: true, Replacement: ReplacementUnknown},
-	"region":                    {Optional: true, Computed: true, Replacement: ReplacementUnknown},
-	"role_arn":                  {Required: true, Replacement: ReplacementUnknown},
-	"tags":                      {Optional: true, Replacement: ReplacementUnknown},
-	"tags_all":                  {Computed: true, Replacement: ReplacementUnknown},
-	"workload_identity_details": {Computed: true, Replacement: ReplacementUnknown},
-	"authorizer_configuration":  {Optional: true, Replacement: ReplacementUnknown},
-	"interceptor_configuration": {Optional: true, Replacement: ReplacementUnknown},
-	"protocol_configuration":    {Optional: true, Replacement: ReplacementUnknown},
-	"timeouts":                  {Optional: true, Replacement: ReplacementUnknown},
+	"authorizer_type":             {Required: true, Replacement: ReplacementUnknown},
+	"description":                 {Optional: true, Replacement: ReplacementUnknown},
+	"exception_level":             {Optional: true, Replacement: ReplacementUnknown},
+	"gateway_arn":                 {Computed: true, Replacement: ReplacementUnknown},
+	"gateway_id":                  {Computed: true, Replacement: ReplacementUnknown},
+	"gateway_url":                 {Computed: true, Replacement: ReplacementUnknown},
+	"kms_key_arn":                 {Optional: true, Replacement: ReplacementUnknown},
+	"name":                        {Required: true, Replacement: ReplacementUnknown},
+	"protocol_type":               {Optional: true, Computed: true, Replacement: ReplacementUnknown},
+	"region":                      {Optional: true, Computed: true, Replacement: ReplacementUnknown},
+	"role_arn":                    {Required: true, Replacement: ReplacementUnknown},
+	"tags":                        {Optional: true, Replacement: ReplacementUnknown},
+	"tags_all":                    {Computed: true, Replacement: ReplacementUnknown},
+	"workload_identity_details":   {Computed: true, Replacement: ReplacementUnknown},
+	"authorizer_configuration":    {Optional: true, Replacement: ReplacementUnknown},
+	"interceptor_configuration":   {Optional: true, Replacement: ReplacementUnknown},
+	"policy_engine_configuration": {Optional: true, Replacement: ReplacementUnknown},
+	"protocol_configuration":      {Optional: true, Replacement: ReplacementUnknown},
+	"timeouts":                    {Optional: true, Replacement: ReplacementUnknown},
 }
 
 func init() {

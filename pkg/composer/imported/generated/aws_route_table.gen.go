@@ -31,6 +31,7 @@ type AWSRouteTableRoute struct {
 	LocalGatewayID          *Value[string] `tf:"local_gateway_id" json:"local_gateway_id,omitempty"`
 	NatGatewayID            *Value[string] `tf:"nat_gateway_id" json:"nat_gateway_id,omitempty"`
 	NetworkInterfaceID      *Value[string] `tf:"network_interface_id" json:"network_interface_id,omitempty"`
+	OdbNetworkARN           *Value[string] `tf:"odb_network_arn" json:"odb_network_arn,omitempty"`
 	TransitGatewayID        *Value[string] `tf:"transit_gateway_id" json:"transit_gateway_id,omitempty"`
 	VPCEndpointID           *Value[string] `tf:"vpc_endpoint_id" json:"vpc_endpoint_id,omitempty"`
 	VPCPeeringConnectionID  *Value[string] `tf:"vpc_peering_connection_id" json:"vpc_peering_connection_id,omitempty"`

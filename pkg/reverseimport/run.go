@@ -166,8 +166,15 @@ func Run(ctx context.Context, req job.Request, opts Options) (job.Result, error)
 			}, resources)
 			return chaseErr
 		}); err != nil {
+			// Surface depchase warnings even on a chase error (e.g.
+			// ErrCyclicDependency): the loop records precise per-literal
+			// warnings BEFORE returning the error, and they are the operator's
+			// only breadcrumb to the unconverged references. Mirror how
+			// discover.go surfaces its warnings before a fatal exit (F5).
+			foldDepChaseWarnings(&result, dcRes)
 			return result, fmt.Errorf("depchase: %w", err)
 		}
+		foldDepChaseWarnings(&result, dcRes)
 		if dcRes != nil {
 			resources = dedupeByAddress(dcRes.Resources)
 			appendDepChaseDependencies(dependenciesByAddress, resources, dcRes.Edges)
@@ -286,15 +293,9 @@ func Run(ctx context.Context, req job.Request, opts Options) (job.Result, error)
 			return result, err
 		}
 	}
-	if dcRes != nil {
-		for _, warning := range dcRes.Warnings {
-			result.Diagnostics = append(result.Diagnostics, job.Diagnostic{
-				Severity: "warning",
-				Code:     "depchase_warning",
-				Message:  warning,
-			})
-		}
-	}
+	// depchase warnings are folded into result.Diagnostics right after the
+	// chase phase (success AND error paths, F5) — not here — so they survive a
+	// chase abort. See foldDepChaseWarnings.
 
 	if fpErr != nil {
 		// Un-attributable / non-convergent failure: abort as before. Persist
@@ -636,6 +637,24 @@ func appendDepChaseDependencies(dependenciesByAddress map[string][]imported.Reso
 			continue
 		}
 		dependenciesByAddress[edge.From] = append(dependenciesByAddress[edge.From], to)
+	}
+}
+
+// foldDepChaseWarnings appends every depchase warning to result.Diagnostics as
+// a "depchase_warning". It is called exactly once per run — on the chase
+// success path and on the chase error path (which are mutually exclusive), so
+// warnings survive an ErrCyclicDependency / ErrMaxIterations abort instead of
+// being dropped before the fold (F5). Nil-safe: a nil dcRes is a no-op.
+func foldDepChaseWarnings(result *job.Result, dcRes *depchase.Result) {
+	if dcRes == nil {
+		return
+	}
+	for _, warning := range dcRes.Warnings {
+		result.Diagnostics = append(result.Diagnostics, job.Diagnostic{
+			Severity: "warning",
+			Code:     "depchase_warning",
+			Message:  warning,
+		})
 	}
 }
 
