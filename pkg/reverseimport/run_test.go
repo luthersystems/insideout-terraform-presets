@@ -753,9 +753,14 @@ func TestRunFoldsDepChaseWarningsOnChaseError(t *testing.T) {
 		}},
 	}
 
-	const warning = "nested_ref_literal: reference literal inside nested attribute environment.variables.KEY of aws_lambda_function.h; target arn:aws:iam::123:role/x — nested literal retained"
+	warning := depchase.Warning{
+		Code:     depchase.CodeNestedRefLiteral,
+		Literal:  "arn:aws:iam::123:role/x",
+		Consumer: "aws_lambda_function.h",
+		Path:     "environment.variables.KEY",
+	}
 	chaseErrDepChase := func(_ context.Context, _ depchase.Options, resources []imported.ImportedResource) (*depchase.Result, error) {
-		return &depchase.Result{Resources: resources, Warnings: []string{warning}}, depchase.ErrCyclicDependency
+		return &depchase.Result{Resources: resources, Warnings: []depchase.Warning{warning}}, depchase.ErrCyclicDependency
 	}
 
 	result, err := Run(context.Background(), req, Options{
@@ -774,14 +779,76 @@ func TestRunFoldsDepChaseWarningsOnChaseError(t *testing.T) {
 	if !errors.Is(err, depchase.ErrCyclicDependency) {
 		t.Fatalf("err=%v, want ErrCyclicDependency", err)
 	}
+	// presets#854: the warning maps to its per-class Code (not the legacy
+	// "depchase_warning" aggregate), Field carries the consumer address, and
+	// Message is the String() rendering.
 	found := false
 	for _, d := range result.Diagnostics {
-		if d.Code == "depchase_warning" && d.Message == warning {
+		if d.Code == depchase.CodeNestedRefLiteral {
 			found = true
+			if d.Field != warning.Consumer {
+				t.Errorf("Diagnostic.Field=%q, want consumer address %q", d.Field, warning.Consumer)
+			}
+			if d.Message != warning.String() {
+				t.Errorf("Diagnostic.Message=%q, want String() rendering %q", d.Message, warning.String())
+			}
+		}
+		if d.Code == "depchase_warning" {
+			t.Errorf("found legacy aggregate Code=depchase_warning; #854 maps to per-class codes")
 		}
 	}
 	if !found {
 		t.Fatalf("depchase warning not folded into diagnostics on the error path; got %#v", result.Diagnostics)
+	}
+}
+
+// TestFoldDepChaseWarnings_PerClassCodeMapping pins presets#854: each depchase
+// warning class maps to its own job.Diagnostic.Code, and the consumer
+// address/path lands in Field.
+func TestFoldDepChaseWarnings_PerClassCodeMapping(t *testing.T) {
+	dcRes := &depchase.Result{Warnings: []depchase.Warning{
+		{Code: depchase.CodeNestedRefLiteral, Literal: "arn:aws:iam::123:role/x", Consumer: "aws_lambda_function.h", Path: "environment.variables.KEY"},
+		{Code: depchase.CodeNonARNRefLiteral, Literal: "1234abcd-12ab-34cd-56ef-1234567890ab", Consumer: "aws_sqs_queue.q", Attr: "kms_master_key_id", TFType: "aws_kms_key"},
+		{Code: depchase.CodeUnimportableTarget, Literal: "arn:aws:kms:us-east-1:123:key/aws-managed", TFType: "aws_kms_key", Reason: imported.ReasonServiceLinkedIAMRole},
+		{Code: depchase.CodeUnsupportedRef, Literal: "arn:aws:ec2:us-east-1:123:subnet/subnet-1"},
+		// Config-omitted: Consumer carries the omitted resource's address (G4),
+		// so Field is attributable.
+		{Code: depchase.CodeConfigOmitted, Literal: "arn:aws:iam::123:role/y", TFType: "aws_iam_role", Consumer: "aws_iam_role.y"},
+	}}
+	var result job.Result
+	foldDepChaseWarnings(&result, dcRes)
+
+	if len(result.Diagnostics) != len(dcRes.Warnings) {
+		t.Fatalf("got %d diagnostics, want %d", len(result.Diagnostics), len(dcRes.Warnings))
+	}
+	for i, d := range result.Diagnostics {
+		w := dcRes.Warnings[i]
+		if d.Code != w.Code {
+			t.Errorf("diag[%d].Code=%q, want %q", i, d.Code, w.Code)
+		}
+		if d.Severity != "warning" {
+			t.Errorf("diag[%d].Severity=%q, want warning", i, d.Severity)
+		}
+		if d.Message != w.String() {
+			t.Errorf("diag[%d].Message=%q, want %q", i, d.Message, w.String())
+		}
+		// Field's honest contract (G4): the warning's Consumer address, or "" for
+		// non-attributable classes — never a Path fallback.
+		if d.Field != w.Consumer {
+			t.Errorf("diag[%d].Field=%q, want Consumer %q", i, d.Field, w.Consumer)
+		}
+	}
+	// The two class-A/B detection warnings carry an attributable consumer Field.
+	if result.Diagnostics[0].Field != "aws_lambda_function.h" || result.Diagnostics[1].Field != "aws_sqs_queue.q" {
+		t.Errorf("consumer Field not populated for class-A/B warnings: %q, %q", result.Diagnostics[0].Field, result.Diagnostics[1].Field)
+	}
+	// The unsupported-ref class is non-attributable → empty Field.
+	if result.Diagnostics[3].Field != "" {
+		t.Errorf("unsupported-ref Field=%q, want empty (non-attributable)", result.Diagnostics[3].Field)
+	}
+	// Config-omitted maps to a Diagnostic whose Field is the omitted address (G4).
+	if result.Diagnostics[4].Field != "aws_iam_role.y" {
+		t.Errorf("config-omitted Field=%q, want aws_iam_role.y (omitted resource address)", result.Diagnostics[4].Field)
 	}
 }
 

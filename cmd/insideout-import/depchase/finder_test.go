@@ -256,7 +256,7 @@ resource "aws_s3_bucket" "b" {
   }
 }
 `)
-	scan, err := scanGenerated(raw, nil)
+	scan, err := scanGenerated(raw, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -264,8 +264,10 @@ resource "aws_s3_bucket" "b" {
 	if !ok {
 		t.Fatalf("object-nested kms_master_key_id UUID not surfaced; nonARN=%+v", scan.nonARN)
 	}
-	if hit.path != "rule.x.kms_master_key_id" {
-		t.Errorf("class-B object path=%q, want rule.x.kms_master_key_id", hit.path)
+	// The class-B hit renders from attr (never a path — G5 dropped nonARNHit.path);
+	// pin attr + tfType and the unified unresolved membership.
+	if hit.attr != "kms_master_key_id" || hit.tfType != "aws_kms_key" {
+		t.Errorf("class-B hit=%+v, want attr=kms_master_key_id tfType=aws_kms_key", hit)
 	}
 	if !contains(scan.unresolved, uuid) {
 		t.Errorf("unresolved=%v, want it to include the object-nested UUID", scan.unresolved)
@@ -290,7 +292,7 @@ resource "aws_lambda_function" "fn" {
   }
 }
 `)
-	scan, err := scanGenerated(raw, nil)
+	scan, err := scanGenerated(raw, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -344,7 +346,7 @@ resource "aws_s3_bucket" "b" {
   }
 }
 `)
-	scan, err := scanGenerated(raw, nil)
+	scan, err := scanGenerated(raw, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -402,6 +404,61 @@ variable "external_role" {
 	}
 	if len(got) != 0 {
 		t.Errorf("got %v, want empty (only resource blocks are scanned)", got)
+	}
+}
+
+// TestScanGenerated_Depth0StrictVsHeredocClassification pins G1 at the finder
+// level: a depth-0 ARN attribute is classified top-level ONLY when its raw
+// source is a strict, crossref-rewritable quoted literal (`role = "arn:…"`). The
+// SAME ARN written as a HEREDOC — which pureStringLiteral decodes (with a
+// trailing newline) but genconfig's crossref can never rewrite — is classified
+// as a NESTED (terminal-by-design) hit, NOT top-level, and its recorded key is
+// TrimSpace'd (no trailing newline, G2). The deleted hclwrite stringLiteralValue
+// enforced this implicitly via its OQuote/QuotedLit/CQuote 3-token contract.
+func TestScanGenerated_Depth0StrictVsHeredocClassification(t *testing.T) {
+	t.Parallel()
+	strictARN := "arn:aws:iam::123:role/strict"
+	heredocARN := "arn:aws:iam::123:role/heredoc"
+	// The heredoc terminator must sit at column 0.
+	raw := []byte(`
+resource "aws_lambda_function" "fn" {
+  role      = "` + strictARN + `"
+  exec_role = <<EOT
+` + heredocARN + `
+EOT
+}
+`)
+	scan, err := scanGenerated(raw, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Strict quoted depth-0 ARN → top-level, never nested.
+	if _, ok := scan.topLevel[strictARN]; !ok {
+		t.Errorf("strict quoted depth-0 ARN not classified top-level; topLevel=%+v", scan.topLevel)
+	}
+	if _, ok := scan.nested[strictARN]; ok {
+		t.Errorf("strict quoted depth-0 ARN must NOT be nested; nested=%+v", scan.nested)
+	}
+	// Heredoc depth-0 ARN → nested (terminal-by-design), never top-level.
+	if _, ok := scan.topLevel[heredocARN]; ok {
+		t.Errorf("heredoc depth-0 ARN must NOT be top-level (crossref can't rewrite it); topLevel=%+v", scan.topLevel)
+	}
+	hit, ok := scan.nested[heredocARN]
+	if !ok {
+		t.Fatalf("heredoc depth-0 ARN not surfaced as nested; nested=%+v", scan.nested)
+	}
+	if hit.path != "exec_role" {
+		t.Errorf("heredoc nested path=%q, want the attr name exec_role", hit.path)
+	}
+	// A raw heredoc value carries a trailing newline; the recorded key must be
+	// trimmed, so it appears clean in unresolved (no `\n` leak, G2).
+	if contains(scan.unresolved, heredocARN+"\n") {
+		t.Errorf("unresolved leaked a trailing-newline key: %v", scan.unresolved)
+	}
+	for _, want := range []string{strictARN, heredocARN} {
+		if !contains(scan.unresolved, want) {
+			t.Errorf("unresolved=%v, want it to include the clean literal %q", scan.unresolved, want)
+		}
 	}
 }
 
