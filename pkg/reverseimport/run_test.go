@@ -809,8 +809,11 @@ func TestFoldDepChaseWarnings_PerClassCodeMapping(t *testing.T) {
 	dcRes := &depchase.Result{Warnings: []depchase.Warning{
 		{Code: depchase.CodeNestedRefLiteral, Literal: "arn:aws:iam::123:role/x", Consumer: "aws_lambda_function.h", Path: "environment.variables.KEY"},
 		{Code: depchase.CodeNonARNRefLiteral, Literal: "1234abcd-12ab-34cd-56ef-1234567890ab", Consumer: "aws_sqs_queue.q", Attr: "kms_master_key_id", TFType: "aws_kms_key"},
-		{Code: depchase.CodeUnimportableTarget, Literal: "arn:aws:kms:us-east-1:123:key/aws-managed", TFType: "aws_kms_key", Label: "ARN", Reason: imported.ReasonServiceLinkedIAMRole},
+		{Code: depchase.CodeUnimportableTarget, Literal: "arn:aws:kms:us-east-1:123:key/aws-managed", TFType: "aws_kms_key", Reason: imported.ReasonServiceLinkedIAMRole},
 		{Code: depchase.CodeUnsupportedRef, Literal: "arn:aws:ec2:us-east-1:123:subnet/subnet-1"},
+		// Config-omitted: Consumer carries the omitted resource's address (G4),
+		// so Field is attributable.
+		{Code: depchase.CodeConfigOmitted, Literal: "arn:aws:iam::123:role/y", TFType: "aws_iam_role", Consumer: "aws_iam_role.y"},
 	}}
 	var result job.Result
 	foldDepChaseWarnings(&result, dcRes)
@@ -829,12 +832,10 @@ func TestFoldDepChaseWarnings_PerClassCodeMapping(t *testing.T) {
 		if d.Message != w.String() {
 			t.Errorf("diag[%d].Message=%q, want %q", i, d.Message, w.String())
 		}
-		wantField := w.Consumer
-		if wantField == "" {
-			wantField = w.Path
-		}
-		if d.Field != wantField {
-			t.Errorf("diag[%d].Field=%q, want %q", i, d.Field, wantField)
+		// Field's honest contract (G4): the warning's Consumer address, or "" for
+		// non-attributable classes — never a Path fallback.
+		if d.Field != w.Consumer {
+			t.Errorf("diag[%d].Field=%q, want Consumer %q", i, d.Field, w.Consumer)
 		}
 	}
 	// The two class-A/B detection warnings carry an attributable consumer Field.
@@ -844,6 +845,10 @@ func TestFoldDepChaseWarnings_PerClassCodeMapping(t *testing.T) {
 	// The unsupported-ref class is non-attributable → empty Field.
 	if result.Diagnostics[3].Field != "" {
 		t.Errorf("unsupported-ref Field=%q, want empty (non-attributable)", result.Diagnostics[3].Field)
+	}
+	// Config-omitted maps to a Diagnostic whose Field is the omitted address (G4).
+	if result.Diagnostics[4].Field != "aws_iam_role.y" {
+		t.Errorf("config-omitted Field=%q, want aws_iam_role.y (omitted resource address)", result.Diagnostics[4].Field)
 	}
 }
 

@@ -232,22 +232,21 @@ func Run(ctx context.Context, opts Options, resources []imported.ImportedResourc
 		if err != nil {
 			return nil, fmt.Errorf("depchase: read generated.tf: %w", err)
 		}
-		scan, err := scanGenerated(raw, res.Resources)
+		// Pass the terminal/ignored skip-set (ignoredARNs ∪ chased) into the walk
+		// so a literal we would only filter back out is never recorded in the
+		// first place (F2/G5). Empty on iteration 1, so first-pass edges/warnings
+		// are identical to recording-then-filtering; it grows as refs are
+		// ignored (unsupported/not-found) or chased (terminal-by-design). The
+		// resulting scan.unresolved therefore already excludes them — no
+		// post-filter needed for the len==0 convergence check, the stability
+		// comparison, or re-seeding below.
+		skip := unionSkip(ignoredARNs, chased)
+		scan, err := scanGenerated(raw, res.Resources, skip)
 		if err != nil {
 			return nil, err
 		}
 		unresolved := scan.unresolved
 		consumersByARN := scan.consumers
-		unresolved = filterIgnoredARNs(unresolved, ignoredARNs)
-		// Drop terminal-by-design literals already chased once (F2): they are
-		// excluded from the len==0 convergence check, the stability comparison,
-		// and re-seeding below.
-		unresolved = filterIgnoredARNs(unresolved, chased)
-		// Build a consumer-address → region index for this iteration so a
-		// class-B bare-UUID seed (which carries no region of its own) can be
-		// discovered in the CONSUMER's region — a KMS CMK is same-region as its
-		// SSE consumer — rather than blindly in the run's primary region (F3).
-		regionByAddr := regionIndex(res.Resources)
 		if len(unresolved) == 0 {
 			res.GeneratedPath = generatedPath
 			sortEdges(res)
@@ -279,6 +278,12 @@ func Run(ctx context.Context, opts Options, resources []imported.ImportedResourc
 				ErrCyclicDependency, len(unresolved), res.Iterations)
 		}
 		prevUnresolved = unresolved
+
+		// Build a consumer-address → region index (after the early returns, G5)
+		// so a class-B bare-UUID seed (which carries no region of its own) can be
+		// discovered in the CONSUMER's region — a KMS CMK is same-region as its
+		// SSE consumer — rather than blindly in the run's primary region (F3).
+		regionByAddr := regionIndex(res.Resources)
 
 		var newSeeds []seed
 		for _, arn := range unresolved {
@@ -370,13 +375,6 @@ func Run(ctx context.Context, opts Options, resources []imported.ImportedResourc
 		// edges are still recorded for both via `discoveries`.
 		seenIterAddr := make(map[string]struct{})
 		for _, s := range newSeeds {
-			// label distinguishes an ARN literal from a bare-identifier
-			// (class-B) literal in operator-facing warnings — "reference %q"
-			// reads correctly for a UUID, "ARN %q" does not (F3).
-			label := "ARN"
-			if s.class == classNonARN {
-				label = "reference"
-			}
 			// Discover each ref in ITS OWN region (the ARN's 4th segment),
 			// falling back to the run's primary region for global/region-less
 			// ARNs (IAM/CloudFront/Route53/S3, where Region is empty). This is
@@ -402,7 +400,6 @@ func Run(ctx context.Context, opts Options, resources []imported.ImportedResourc
 						Code:    CodeRefNotFound,
 						Literal: s.arn,
 						TFType:  s.ref.TFType,
-						Label:   label,
 						Reason:  err.Error(),
 					})
 					ignoredARNs[s.arn] = struct{}{}
@@ -411,7 +408,6 @@ func Run(ctx context.Context, opts Options, resources []imported.ImportedResourc
 						Code:    CodeDiscovererRejected,
 						Literal: s.arn,
 						TFType:  s.ref.TFType,
-						Label:   label,
 						Reason:  err.Error(),
 					})
 					ignoredARNs[s.arn] = struct{}{}
@@ -426,8 +422,6 @@ func Run(ctx context.Context, opts Options, resources []imported.ImportedResourc
 							Code:    CodeDiscoverError,
 							Literal: s.arn,
 							TFType:  s.ref.TFType,
-							Label:   label,
-							Class:   s.class.String(),
 							Reason:  err.Error(),
 						})
 						ignoredARNs[s.arn] = struct{}{}
@@ -457,7 +451,6 @@ func Run(ctx context.Context, opts Options, resources []imported.ImportedResourc
 					Code:    CodeUnimportableTarget,
 					Literal: s.arn,
 					TFType:  s.ref.TFType,
-					Label:   label,
 					Reason:  reason,
 				})
 				ignoredARNs[s.arn] = struct{}{}
@@ -509,11 +502,15 @@ func Run(ctx context.Context, opts Options, resources []imported.ImportedResourc
 		for _, d := range dropped {
 			ignoredARNs[d.seed.arn] = struct{}{}
 			removeEdgesTo(res, seenEdges, d.resource.Identity.Address)
+			// Consumer carries the omitted (discovered) resource's address so the
+			// folded Diagnostic.Field is attributable (G4). String() renders it in
+			// the "discovered as %s" slot — byte-identical to the pre-G4
+			// Reason-held address.
 			addWarning(res, seenWarning, Warning{
-				Code:    CodeConfigOmitted,
-				Literal: d.seed.arn,
-				TFType:  d.seed.ref.TFType,
-				Reason:  d.resource.Identity.Address,
+				Code:     CodeConfigOmitted,
+				Literal:  d.seed.arn,
+				TFType:   d.seed.ref.TFType,
+				Consumer: d.resource.Identity.Address,
 			})
 		}
 		for _, d := range kept {
@@ -633,6 +630,24 @@ func regionIndex(resources []imported.ImportedResource) map[string]string {
 		}
 	}
 	return idx
+}
+
+// unionSkip returns the union of two literal sets as the walk's skip-set
+// (ignoredARNs ∪ chased). Returns nil when both are empty so the iteration-1
+// walk records everything minus resolved (edges/warnings unchanged); otherwise a
+// fresh map so a later mutation of either input doesn't alias the walk's view.
+func unionSkip(a, b map[string]struct{}) map[string]struct{} {
+	if len(a) == 0 && len(b) == 0 {
+		return nil
+	}
+	out := make(map[string]struct{}, len(a)+len(b))
+	for k := range a {
+		out[k] = struct{}{}
+	}
+	for k := range b {
+		out[k] = struct{}{}
+	}
+	return out
 }
 
 func filterIgnoredARNs(unresolved []string, ignored map[string]struct{}) []string {

@@ -35,7 +35,7 @@ const generatedFile = "generated.tf"
 // ImportID. A literal that matches any of those is considered
 // in-batch and therefore not unresolved.
 func FindUnresolved(raw []byte, resources []imported.ImportedResource) ([]string, error) {
-	scan, err := scanGenerated(raw, resources)
+	scan, err := scanGenerated(raw, resources, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -53,10 +53,12 @@ func FindUnresolved(raw []byte, resources []imported.ImportedResource) ([]string
 // referenced by multiple resources or appears both top-level and nested (F4).
 // nested / nonARN carry the per-literal location + classification metadata so
 // Run can emit the precise class-A / class-B warnings (presets#834). topLevel
-// is the set of literals the depth-0 direct-attribute pass found — Run consults
-// it to decide a hit's origin class (a literal that is ALSO top-level keeps
-// top-level chase semantics rather than the terminal-by-design nested/nonARN
-// semantics).
+// is the set of literals the depth-0 direct-attribute pass found AS A STRICT,
+// crossref-rewritable quoted literal — Run consults it to decide a hit's origin
+// class (a literal that is ALSO strict-top-level keeps top-level chase semantics
+// rather than the terminal-by-design nested/nonARN semantics). A depth-0 ARN
+// that is NOT a strict quoted literal (heredoc / escape-bearing) is recorded as
+// nested, never here, because crossref cannot rewrite it (G1).
 type scanResult struct {
 	unresolved []string
 	consumers  map[string][]string
@@ -80,7 +82,11 @@ type scanResult struct {
 // extractors that could drift on edge cases (heredocs). The unified walk keeps
 // a single extractor (pureStringLiteral) and halves the per-iteration parse
 // cost.
-func scanGenerated(raw []byte, resources []imported.ImportedResource) (scanResult, error) {
+// skip is an optional caller-supplied set of literals (ignoredARNs ∪ chased)
+// the walk must NOT record — treated like resolved. The Run loop passes it so a
+// terminal/ignored literal isn't re-recorded then re-filtered every iteration
+// (G5); nil (the FindUnresolved path) records everything minus resolved.
+func scanGenerated(raw []byte, resources []imported.ImportedResource, skip map[string]struct{}) (scanResult, error) {
 	resolved := buildResolvedSet(resources)
 	file, diags := hclsyntax.ParseConfig(raw, generatedFile, hcl.Pos{Line: 1, Column: 1})
 	if diags.HasErrors() {
@@ -92,7 +98,9 @@ func scanGenerated(raw []byte, resources []imported.ImportedResource) (scanResul
 	}
 
 	w := &bodyWalker{
+		src:       raw,
 		resolved:  resolved,
+		skip:      skip,
 		topLevel:  map[string]struct{}{},
 		nested:    map[string]nestedHit{},
 		nonARN:    map[string]nonARNHit{},

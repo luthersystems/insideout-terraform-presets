@@ -664,22 +664,16 @@ func foldDepChaseWarnings(result *job.Result, dcRes *depchase.Result) {
 		result.Diagnostics = append(result.Diagnostics, job.Diagnostic{
 			Severity: "warning",
 			Code:     warning.Code,
-			Field:    depChaseWarningField(warning),
-			Message:  warning.String(),
+			// Field is the warning's attributable address: the consumer resource
+			// (class-A/B detection) or the omitted resource (config-omitted, G4).
+			// Non-attributable classes (unsupported/unparseable/stable) carry no
+			// Consumer, so Field is "" — an honest contract, not a Path fallback
+			// (Path is only ever set alongside Consumer, so the old fallback was
+			// unreachable).
+			Field:   warning.Consumer,
+			Message: warning.String(),
 		})
 	}
-}
-
-// depChaseWarningField picks the attributable location for a depchase warning's
-// job.Diagnostic.Field: the consumer resource address when the warning carries
-// one (the class-A/B detection warnings), falling back to the attribute path.
-// Non-attributable classes (unsupported/unparseable/stable) leave both empty,
-// so Field is "".
-func depChaseWarningField(w depchase.Warning) string {
-	if w.Consumer != "" {
-		return w.Consumer
-	}
-	return w.Path
 }
 
 func issuesFromComposer(in []composer.ValidationIssue) []job.Issue {

@@ -89,10 +89,12 @@ type nestedHit struct {
 
 // nonARNHit records a class-B curated non-ARN identifier reference. The bare
 // identifier value itself is the map key in bodyWalker.nonARN, so it is not
-// duplicated here (cleanup).
+// duplicated here (cleanup). No attribute path is kept: the class-B warning
+// renders from attr (the curated attribute name), never a path, so tracking one
+// was dead weight (G5). Deterministic winner selection tie-breaks on (addr,
+// attr).
 type nonARNHit struct {
 	addr   string // consumer resource address
-	path   string // attribute path
 	attr   string // the curated attribute name (e.g. kms_key_id)
 	tfType string // resolved Terraform type (e.g. aws_kms_key)
 }
@@ -106,10 +108,20 @@ type nonARNHit struct {
 // top-level-vs-nested class distinction is made by the Run loop from
 // scanResult.topLevel.
 type bodyWalker struct {
-	addr     string
+	addr string
+	// src is the raw generated.tf bytes, so a depth-0 hit can compare the
+	// expression's raw source against the strict `"<value>"` shape (G1).
+	src      []byte
 	resolved map[string]struct{}
-	// topLevel is the set of ARN literals found as depth-0 direct attributes —
-	// the historical top-level pass's job, now folded into this single walk.
+	// skip is the caller-supplied terminal/ignored literal set (ignoredARNs ∪
+	// chased). Treated exactly like resolved: a literal in it is not re-recorded,
+	// so the Run loop no longer re-records-then-re-filters a terminal literal
+	// every iteration (G5). Empty on iteration 1, so first-pass edges/warnings
+	// are unchanged.
+	skip map[string]struct{}
+	// topLevel is the set of ARN literals found as depth-0 direct attributes
+	// whose raw source is a strict, crossref-rewritable quoted literal — the
+	// historical top-level pass's job, now folded into this single walk.
 	topLevel map[string]struct{}
 	nested   map[string]nestedHit
 	nonARN   map[string]nonARNHit
@@ -136,28 +148,48 @@ func (w *bodyWalker) addConsumer(lit, addr string) {
 // (recorded via recordTopLevelARN) — and increments once per nested block, so
 // depth>0 makes a pure-literal ARN a class-A hit (recordNestedARN). Class B is
 // attr-name gated and applies at every depth.
+//
+// INVARIANT: a topLevel hit ⇒ a crossref-rewritable strict quoted literal. The
+// depth-0 branch records topLevel ONLY when the expression's raw source is the
+// plain `"<value>"` shape (strictQuotedLiteral) — genconfig's crossref pass, and
+// the resolved-set byte-match, both act only on that shape. A depth-0 ARN that
+// pureStringLiteral accepts but crossref cannot (a heredoc, or an
+// escape-decoded literal) is recorded through the NESTED path instead: it is
+// terminal-by-design, exactly like a genuinely nested literal, because crossref
+// will never rewrite it and it can never byte-match the resolved set (G1). The
+// deleted hclwrite `stringLiteralValue` enforced this implicitly via its strict
+// OQuote/QuotedLit/CQuote 3-token contract; e.g. `role = <<EOT\narn:…\nEOT`.
+//
+// Path building is lazy: it is materialized only in the branches that consume it
+// (a nested-ARN record, or the collection-expr recursion). A strict depth-0
+// top-level hit and a class-B check need no path, so a body of plain scalar
+// attributes builds none (G5).
 func (w *bodyWalker) walkBody(body *hclsyntax.Body, prefix string, depth int) {
 	for name, attr := range body.Attributes {
-		path := joinPath(prefix, name)
 		if v, ok := pureStringLiteral(attr.Expr); ok {
 			// class B is attr-name gated and applies at any depth where an
 			// attribute name exists (top-level attrs + nested-block attrs).
-			w.checkNonARN(name, v, path)
+			w.checkNonARN(name, v)
 			if isARNLiteral(v) {
-				if depth == 0 {
+				if depth == 0 && strictQuotedLiteral(w.src, attr.Expr, v) {
 					// Degenerate top-level case: a direct attribute of the
-					// resource body. crossref rewrites it, so it keeps
+					// resource body whose raw source is a strict, rewritable
+					// quoted literal. crossref rewrites it, so it keeps
 					// top-level chase semantics.
 					w.recordTopLevelARN(v)
 				} else {
-					w.recordNestedARN(v, path)
+					// depth>0, OR a depth-0 heredoc / escape-bearing literal that
+					// crossref can never rewrite: record through the nested,
+					// terminal-by-design path, with the attribute name as the
+					// path (G1).
+					w.recordNestedARN(v, joinPath(prefix, name))
 				}
 			}
 			continue
 		}
 		// A complex expression (list / object / …): descend into its element
 		// tree collecting pure-literal ARNs, which are nested by construction.
-		w.walkExprARNs(attr.Expr, path)
+		w.walkExprARNs(attr.Expr, joinPath(prefix, name))
 	}
 	for _, sub := range body.Blocks {
 		// Include block labels in the path segment so two same-type labeled
@@ -192,7 +224,7 @@ func (w *bodyWalker) walkExprARNs(expr hclsyntax.Expression, path string) {
 			// checked on body attributes, never on object items). Non-literal
 			// values recurse.
 			if v, ok := pureStringLiteral(item.ValueExpr); ok {
-				w.checkNonARN(key, v, itemPath)
+				w.checkNonARN(key, v)
 				if isARNLiteral(v) {
 					w.recordNestedARN(v, itemPath)
 				}
@@ -207,15 +239,28 @@ func (w *bodyWalker) walkExprARNs(expr hclsyntax.Expression, path string) {
 	}
 }
 
-// recordTopLevelARN stores a depth-0 direct-attribute ARN hit, skipping
-// literals that are in-batch (resolved). Top-level hits are a set (the Run loop
-// only needs "is this literal top-level?" for origin-class tagging), so no
-// (addr, path) representative is tracked here — the consumer edge carries the
-// address. The literal is recorded UNCONDITIONALLY (minus resolved) so a
-// top-level occurrence's edge survives even when the same ARN also appears
-// nested elsewhere (F4).
+// skipped reports whether a literal must not be recorded because it is already
+// in-batch (resolved) OR in the caller's terminal/ignored skip-set (G5).
+func (w *bodyWalker) skipped(lit string) bool {
+	if _, ok := w.resolved[lit]; ok {
+		return true
+	}
+	_, ok := w.skip[lit]
+	return ok
+}
+
+// recordTopLevelARN stores a depth-0 direct-attribute ARN hit, skipping literals
+// that are in-batch (resolved) or already terminal/ignored (skip). Top-level
+// hits are a set (the Run loop only needs "is this literal top-level?" for
+// origin-class tagging), so no (addr, path) representative is tracked here — the
+// consumer edge carries the address. The literal is recorded UNCONDITIONALLY
+// (minus skipped) so a top-level occurrence's edge survives even when the same
+// ARN also appears nested elsewhere (F4). The value is TrimSpace'd to mirror the
+// class-B / nested record sites, so the recorded key matches the trimmed form
+// isARNLiteral gated on (G2) — a no-op for a genuine strict quoted literal.
 func (w *bodyWalker) recordTopLevelARN(arn string) {
-	if _, ok := w.resolved[arn]; ok {
+	arn = strings.TrimSpace(arn)
+	if w.skipped(arn) {
 		return
 	}
 	w.topLevel[arn] = struct{}{}
@@ -223,14 +268,19 @@ func (w *bodyWalker) recordTopLevelARN(arn string) {
 }
 
 // recordNestedARN stores a class-A hit, skipping literals that are in-batch
-// (resolved). The consumer edge is recorded UNCONDITIONALLY (minus resolved):
-// even when the same ARN also appears top-level in another resource, this
-// nested consumer's dependency edge must survive (F4). When the same ARN
+// (resolved) or terminal/ignored (skip). The consumer edge is recorded
+// UNCONDITIONALLY (minus skipped): even when the same ARN also appears top-level
+// in another resource, this nested consumer's dependency edge must survive (F4).
+// The ARN is TrimSpace'd FIRST (G2): recordNestedARN now receives depth-0
+// heredoc / escape-bearing literals (G1), whose extracted value can carry a
+// trailing newline; storing the raw value would key the map and Warning.Literal
+// on whitespace that can never byte-match the resolved set. When the same ARN
 // appears in multiple nested positions the lexicographically-smallest
 // (addr, path) wins so the emitted warning is byte-stable across runs despite
 // non-deterministic map iteration.
 func (w *bodyWalker) recordNestedARN(arn, path string) {
-	if _, ok := w.resolved[arn]; ok {
+	arn = strings.TrimSpace(arn)
+	if w.skipped(arn) {
 		return
 	}
 	w.addConsumer(arn, w.addr)
@@ -241,9 +291,10 @@ func (w *bodyWalker) recordNestedARN(arn, path string) {
 }
 
 // checkNonARN stores a class-B hit when the attribute name is curated and its
-// value passes the type's shape gate and is not already in-batch. The consumer
-// edge is recorded for every consumer of the identifier (F4).
-func (w *bodyWalker) checkNonARN(name, value, path string) {
+// value passes the type's shape gate and is not already in-batch / skipped. The
+// consumer edge is recorded for every consumer of the identifier (F4). The
+// deterministic winner tie-breaks on (addr, attr) — no path is kept (G5).
+func (w *bodyWalker) checkNonARN(name, value string) {
 	rule, ok := nonARNAttrRules[name]
 	if !ok {
 		return
@@ -252,12 +303,12 @@ func (w *bodyWalker) checkNonARN(name, value, path string) {
 	if !rule.match(v) {
 		return
 	}
-	if _, ok := w.resolved[v]; ok {
+	if w.skipped(v) {
 		return
 	}
 	w.addConsumer(v, w.addr)
-	cand := nonARNHit{addr: w.addr, path: path, attr: name, tfType: rule.tfType}
-	if existing, ok := w.nonARN[v]; !ok || lessLoc(cand.addr, cand.path, existing.addr, existing.path) {
+	cand := nonARNHit{addr: w.addr, attr: name, tfType: rule.tfType}
+	if existing, ok := w.nonARN[v]; !ok || lessLoc(cand.addr, cand.attr, existing.addr, existing.attr) {
 		w.nonARN[v] = cand
 	}
 }
@@ -287,6 +338,29 @@ func pureStringLiteral(expr hclsyntax.Expression) (string, bool) {
 		return e.Val.AsString(), true
 	}
 	return "", false
+}
+
+// strictQuotedLiteral reports whether expr's RAW source is exactly a plain
+// double-quoted literal `"<value>"` — no heredoc, no escape sequences, no
+// interpolation. This is the ONLY shape genconfig's crossref pass can rewrite in
+// place (it uses a strict OQuote/QuotedLit/CQuote token contract), and the ONLY
+// shape whose recorded value can byte-match buildResolvedSet. A depth-0 ARN is
+// recorded top-level ONLY when this holds (G1); everything else (heredocs,
+// escape-decoded literals) flows through the terminal-by-design nested path,
+// because pureStringLiteral's escape/heredoc decoding can accept literals the
+// old hclwrite stringLiteralValue rejected. Compared via the expression's byte
+// Range, so no re-lexing.
+func strictQuotedLiteral(src []byte, expr hclsyntax.Expression, value string) bool {
+	rng := expr.Range()
+	if rng.Start.Byte < 0 || rng.End.Byte > len(src) || rng.Start.Byte >= rng.End.Byte {
+		return false
+	}
+	raw := src[rng.Start.Byte:rng.End.Byte]
+	// Exactly `"` + value + `"`: same length (so no escape shortened/lengthened
+	// the decoded value), quote-delimited, inner bytes byte-equal to value.
+	return len(raw) == len(value)+2 &&
+		raw[0] == '"' && raw[len(raw)-1] == '"' &&
+		string(raw[1:len(raw)-1]) == value
 }
 
 // objectKey renders an object item's key for the attribute path. Handles both

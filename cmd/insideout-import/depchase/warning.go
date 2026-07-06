@@ -50,16 +50,50 @@ const (
 // classification; the remaining fields are the render inputs (only the subset a
 // given Code needs is populated). Reliable's diagnostics surface classifies on
 // Code; the CLI/discover output and reverseimport Message use String().
+//
+// The json tags are a deliberate wire contract (presets#854): Result.Warnings
+// is []Warning, so any serialization must emit stable snake_case keys rather
+// than leaking Go field names. The structured shape is the point — there is no
+// MarshalJSON-to-string collapse.
+//
+// The operator-facing noun ("ARN" vs "reference") and the seed-class word
+// ("nested" vs "non-ARN") are NOT stored: they are derived in String() from the
+// literal's own shape (refNoun / seedClassWord), correct by construction, so the
+// emit sites carry no Label/Class bookkeeping.
 type Warning struct {
-	Code     string // depchase_* classification code (stable parse contract)
-	Literal  string // the reference literal (ARN / bare UUID / raw value)
-	Consumer string // consumer resource address (empty for non-attributable classes)
-	Path     string // attribute path where a nested literal sits
-	Attr     string // curated attribute name (non-ARN hits)
-	TFType   string // parsed / resolved Terraform type
-	Reason   string // free-form detail: err text, un-importable reason code, or omitted address
-	Label    string // operator-facing noun in discovery prose: "ARN" or "reference"
-	Class    string // seed class string, for the non-fatal discover_error prose
+	Code     string `json:"code"`     // depchase_* classification code (stable parse contract)
+	Literal  string `json:"literal"`  // the reference literal (ARN / bare UUID / raw value)
+	Consumer string `json:"consumer"` // consumer / omitted resource address (empty for non-attributable classes)
+	Path     string `json:"path"`     // attribute path where a nested literal sits
+	Attr     string `json:"attr"`     // curated attribute name (non-ARN hits)
+	TFType   string `json:"tf_type"`  // parsed / resolved Terraform type
+	Reason   string `json:"reason"`   // free-form detail: err text or un-importable reason code
+}
+
+// refNoun renders the operator-facing noun for a literal: an ARN-shaped literal
+// is an "ARN", a bare identifier (a KMS KeyId UUID) is a "reference". Correct by
+// construction from the literal's own shape — class A / top-level literals are
+// gated by isARNLiteral, curated class-B literals by the UUID matcher, so the
+// two vocabularies never overlap. Replaces the old per-emit-site Label field
+// (G5); the derivation is byte-identical to the previous `label := "ARN"` /
+// `"reference"` bookkeeping.
+func refNoun(literal string) string {
+	if isARNLiteral(literal) {
+		return "ARN"
+	}
+	return "reference"
+}
+
+// seedClassWord renders the seed-class word for the non-fatal discover_error
+// prose. Only terminal seeds reach that branch — a class-A nested hit (ARN) or a
+// class-B nonARN hit (bare UUID) — so the word derives from the literal's shape:
+// ARN ⇒ "nested", bare identifier ⇒ "non-ARN". Byte-identical to the old
+// seedClass.String() value that was carried in the dropped Class field (G5).
+func seedClassWord(literal string) string {
+	if isARNLiteral(literal) {
+		return "nested"
+	}
+	return "non-ARN"
 }
 
 // String renders the historical operator-facing prose for the warning, byte-
@@ -78,18 +112,21 @@ func (w Warning) String() string {
 	case CodeUnparseableRef:
 		return fmt.Sprintf("could not parse ARN %q: %s", w.Literal, w.Reason)
 	case CodeRefNotFound:
-		return fmt.Sprintf("%s %q (%s): %s", w.Label, w.Literal, w.TFType, w.Reason)
+		return fmt.Sprintf("%s %q (%s): %s", refNoun(w.Literal), w.Literal, w.TFType, w.Reason)
 	case CodeDiscovererRejected:
-		return fmt.Sprintf("%s %q: %s discoverer rejected ID: %s", w.Label, w.Literal, w.TFType, w.Reason)
+		return fmt.Sprintf("%s %q: %s discoverer rejected ID: %s", refNoun(w.Literal), w.Literal, w.TFType, w.Reason)
 	case CodeDiscoverError:
 		return fmt.Sprintf("%s %q (%s): discovery error on a %s reference treated as non-fatal (fidelity enhancement; import preserved, literal retained): %s",
-			w.Label, w.Literal, w.TFType, w.Class, w.Reason)
+			refNoun(w.Literal), w.Literal, w.TFType, seedClassWord(w.Literal), w.Reason)
 	case CodeUnimportableTarget:
 		return fmt.Sprintf("%s %q (%s) references an un-importable resource (%s: %s); leaving the literal reference — the target cannot be adopted into Terraform state, so the literal is the correct terminal state",
-			w.Label, w.Literal, w.TFType, w.Reason, imported.ReasonDescription(w.Reason))
+			refNoun(w.Literal), w.Literal, w.TFType, w.Reason, imported.ReasonDescription(w.Reason))
 	case CodeConfigOmitted:
+		// Consumer carries the omitted (discovered) resource's address — the
+		// attributable location genconfig dropped (G4). Rendered identically to
+		// the pre-G4 Reason-held address.
 		return fmt.Sprintf("ARN %q (%s) discovered as %s, but generated config omitted it; leaving the literal reference",
-			w.Literal, w.TFType, w.Reason)
+			w.Literal, w.TFType, w.Consumer)
 	case CodeUnresolvedStable:
 		return fmt.Sprintf("unresolved ARN reference (stable across iterations): %q", w.Literal)
 	default:
@@ -101,7 +138,9 @@ func (w Warning) String() string {
 
 // warningKey is the dedup identity for a Warning: (Code, Literal, Consumer).
 // Distinct from the rendered string so a wording/path change can't duplicate a
-// warning across iterations (presets#854).
+// warning across iterations (presets#854). The key intentionally emits at most
+// one path-representative warning per (literal, consumer) per run, even if the
+// winning representative Path changes across iterations (F4/dedup).
 type warningKey struct {
 	code     string
 	literal  string

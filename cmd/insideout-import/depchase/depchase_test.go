@@ -1153,6 +1153,107 @@ resource "aws_lambda_function" "h" {
 	}
 }
 
+// TestRun_Depth0HeredocARNTerminalNoCycle pins the G1 empirical repro: a depth-0
+// ARN written as a HEREDOC (which genconfig's crossref can never rewrite, and
+// whose discovered id never byte-matches the literal) must be treated as a
+// terminal-by-design NESTED hit — chased exactly once, warned via
+// nested_ref_literal, converging cleanly — NOT tagged top-level. On origin/main
+// the widened depth-0 extractor tagged it topLevel, which either aborted the run
+// on a discovery error or manufactured ErrCyclicDependency after a successful
+// adoption. Mirrors TestRun_NestedLiteralTerminalNoCycle's non-byte-matching id.
+func TestRun_Depth0HeredocARNTerminalNoCycle(t *testing.T) {
+	t.Parallel()
+	heredocARN := "arn:aws:iam::123:role/heredoc-role"
+	canonicalARN := "arn:aws:iam::999:role/heredoc-role" // different account → never byte-matches
+	gen0 := `
+resource "aws_lambda_function" "h" {
+  role = <<EOT
+` + heredocARN + `
+EOT
+}`
+	dir := writeGen(t, gen0)
+	lambda := newRes("aws_lambda_function.h", "io-foo-h",
+		"arn:aws:lambda:us-east-1:123:function:io-foo-h", "aws_lambda_function")
+	// Discovered role adopts a canonical arn that does not match the literal.
+	role := newRes("aws_iam_role.heredoc_role", canonicalARN, canonicalARN, "aws_iam_role")
+	disc := &fakeDiscoverer{byID: map[string]imported.ImportedResource{
+		"aws_iam_role|" + heredocARN: role,
+	}}
+	p := &scriptedPipeline{t: t, workdir: dir, generatedTF: []string{gen0}}
+
+	got, err := Run(context.Background(), Options{
+		Workdir: dir, Region: "us-east-1", AccountID: "123",
+		Discoverer: disc, Pipeline: p.fns(),
+	}, []imported.ImportedResource{lambda})
+	if err != nil {
+		t.Fatalf("depth-0 heredoc ARN must converge as terminal-by-design, not cycle/abort; err=%v", err)
+	}
+	if errors.Is(err, ErrCyclicDependency) {
+		t.Error("depth-0 heredoc ARN must not manufacture ErrCyclicDependency")
+	}
+	// Discovered once, with the CLEAN (trimmed) heredoc ARN — no trailing newline.
+	if len(disc.calls) != 1 || disc.calls[0] != "aws_iam_role|"+heredocARN {
+		t.Errorf("DiscoverByID calls=%v, want exactly 1 with the trimmed heredoc ARN", disc.calls)
+	}
+	joined := joinWarnings(got.Warnings)
+	if !strings.Contains(joined, "nested_ref_literal") {
+		t.Errorf("want a nested_ref_literal warning for the depth-0 heredoc ARN; got:\n%s", joined)
+	}
+	if strings.Contains(joined, heredocARN+"\n") {
+		t.Errorf("warning literal leaked a trailing newline; got:\n%s", joined)
+	}
+}
+
+// TestRun_NestedHeredocARNTrimmedAndResolves pins G2: a nested ARN written as a
+// HEREDOC (extracted value carries a trailing newline) is TrimSpace'd at the
+// record site, so Warning.Literal has no trailing newline AND the trimmed
+// literal byte-matches the adopted resource's clean NativeIDs[arn] — the run
+// discovers the key by the clean ARN and adopts it.
+func TestRun_NestedHeredocARNTrimmedAndResolves(t *testing.T) {
+	t.Parallel()
+	kmsARN := "arn:aws:kms:us-east-1:123:key/aaaa1111-bbbb-2222-cccc-333333333333"
+	gen0 := `
+resource "aws_lambda_function" "h" {
+  environment {
+    signing_key = <<EOT
+` + kmsARN + `
+EOT
+  }
+}`
+	dir := writeGen(t, gen0)
+	lambda := newRes("aws_lambda_function.h", "io-foo-h",
+		"arn:aws:lambda:us-east-1:123:function:io-foo-h", "aws_lambda_function")
+	// Discovered key's NativeIDs carry the CLEAN ARN (no newline).
+	key := newRes("aws_kms_key.signing", kmsARN, kmsARN, "aws_kms_key")
+	disc := &fakeDiscoverer{byID: map[string]imported.ImportedResource{
+		"aws_kms_key|" + kmsARN: key,
+	}}
+	p := &scriptedPipeline{t: t, workdir: dir, generatedTF: []string{gen0}}
+
+	got, err := Run(context.Background(), Options{
+		Workdir: dir, Region: "us-east-1", AccountID: "123",
+		Discoverer: disc, Pipeline: p.fns(),
+	}, []imported.ImportedResource{lambda})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	// DiscoverByID was called once with the CLEAN, trimmed ARN.
+	if len(disc.calls) != 1 || disc.calls[0] != "aws_kms_key|"+kmsARN {
+		t.Errorf("DiscoverByID calls=%v, want exactly 1 with the trimmed ARN (no trailing newline)", disc.calls)
+	}
+	joined := joinWarnings(got.Warnings)
+	if strings.Contains(joined, kmsARN+"\n") {
+		t.Errorf("warning literal leaked a trailing newline; got:\n%s", joined)
+	}
+	if !strings.Contains(joined, "nested_ref_literal") || !strings.Contains(joined, kmsARN) {
+		t.Errorf("want a nested_ref_literal warning with the clean ARN; got:\n%s", joined)
+	}
+	// The clean literal byte-matches the adopted key → it is pulled into the set.
+	if len(got.Added) != 1 || got.Added[0].Identity.Address != "aws_kms_key.signing" {
+		t.Errorf("Added=%+v, want the adopted clean-ARN key", got.Added)
+	}
+}
+
 // TestRun_ClassBUsesConsumerRegion pins F3: a class-B bare-UUID reference is
 // discovered in the CONSUMER resource's region (a KMS CMK is same-region as its
 // SSE consumer), not the run's primary region.
