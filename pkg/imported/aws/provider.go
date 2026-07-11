@@ -175,9 +175,10 @@ func (p *Provider) CanonicalAddress(identity *imported.ResourceIdentity) string 
 //   - TagSelectors → TagSelectors (translated to awsdiscover.TagSelector)
 //   - AccountID  → AccountID
 //   - Progress   → a per-type progress bridge on Emitter (#699)
+//   - Found      → a per-resource trickle bridge on the same Emitter
 //
-// Per-type progress: when opts.Progress is non-nil, the Emitter handed
-// to DiscoverTypes is a bridge (imp.NewProgressEmitter) that forwards
+// Per-type progress: when opts.Progress and/or opts.Found is non-nil, the
+// Emitter handed to DiscoverTypes is a bridge (imp.NewDiscoverEmitter) that forwards
 // one per-Terraform-type completion event to opts.Progress as the
 // parallel walk lands each type, serialized and with a monotonic
 // N-of-total count. A nil sink resolves to progress.NopEmitter{}, which
@@ -192,7 +193,7 @@ func (p *Provider) Discover(ctx context.Context, types []string, clients imp.Cli
 		Regions:      opts.Regions,
 		TagSelectors: toAWSTagSelectors(opts.TagSelectors),
 		AccountID:    opts.AccountID,
-		Emitter:      imp.NewProgressEmitter(opts.Progress),
+		Emitter:      imp.NewDiscoverEmitter(opts.Progress, opts.Found),
 	}
 	return p.d.DiscoverTypes(ctx, types, args)
 }

@@ -133,8 +133,8 @@ func (p *Provider) CanonicalAddress(identity *imported.ResourceIdentity) string 
 // construction time). opts.ProjectID is ignored when the underlying
 // discoverer was constructed with one — see NewGCPDiscoverer.
 //
-// Per-type progress: when opts.Progress is non-nil, the Emitter handed
-// to DiscoverTypes is a bridge (imp.NewProgressEmitter) that forwards
+// Per-type progress: when opts.Progress and/or opts.Found is non-nil, the
+// Emitter handed to DiscoverTypes is a bridge (imp.NewDiscoverEmitter) that forwards
 // one per-Terraform-type completion event to opts.Progress with a
 // monotonic N-of-total count (#699). A nil sink resolves to
 // progress.NopEmitter{}, byte-for-byte the pre-#699 behavior.
@@ -146,7 +146,7 @@ func (p *Provider) Discover(ctx context.Context, types []string, clients imp.Cli
 		Project:      opts.Project,
 		Regions:      opts.Regions,
 		TagSelectors: toGCPTagSelectors(opts.TagSelectors),
-		Emitter:      imp.NewProgressEmitter(opts.Progress),
+		Emitter:      imp.NewDiscoverEmitter(opts.Progress, opts.Found),
 	}
 	return p.d.DiscoverTypes(ctx, types, args)
 }

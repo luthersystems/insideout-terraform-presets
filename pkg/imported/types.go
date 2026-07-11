@@ -141,6 +141,40 @@ type DiscoverOpts struct {
 	AccountID    string
 	ProjectID    string
 	Progress     func(DiscoverProgress)
+	// Found is an optional per-resource sink fired the moment each
+	// resource is discovered, DURING the scan — before the full
+	// ImportedResource set is assembled and returned. It carries the
+	// identity fragment the underlying discoverers report on their
+	// ItemFound tick (service slug, region, Terraform type, import id) —
+	// enough for a live "resources as we find them" panel to render a
+	// provisional row, not enough to import. Consumers must treat rows
+	// delivered here as provisional and replace them with the
+	// authoritative ImportedResource set when Discover returns. A nil
+	// sink is byte-for-byte the pre-existing behavior. Like Progress,
+	// invocations are serialized by the provider's bridge, so the sink
+	// may be called from concurrent per-type scan goroutines without
+	// caller-side locking.
+	Found func(DiscoverFound)
+}
+
+// DiscoverFound is one per-resource discovery event delivered to
+// DiscoverOpts.Found as the underlying scan finds each resource. It is
+// the wire-through of the discoverers' ItemFound tick: identity
+// fragments for a provisional UI row, not a full ImportedResource (no
+// address, tags, or attrs — those arrive with Discover's return value).
+type DiscoverFound struct {
+	// Phase is "discover" or "enrich", mirroring DiscoverProgress.Phase.
+	Phase string
+	// Service is the cloud service slug the discoverer reported, e.g.
+	// "sqs" (AWS) or a GCP service slug. Display-informational only.
+	Service string
+	// Region is the region/location the resource was found in.
+	Region string
+	// Type is the Terraform resource type, e.g. "aws_sqs_queue".
+	Type string
+	// ImportID is the provider import identifier the discoverer
+	// reported (an ARN, URL, name, or composite id depending on type).
+	ImportID string
 }
 
 // DiscoverProgress is one per-Terraform-type completion event delivered
