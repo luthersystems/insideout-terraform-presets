@@ -413,6 +413,91 @@ func TestRun_RecoversFromPlanErrorWhenFileWritten(t *testing.T) {
 	}
 }
 
+// refuseIfExistsRunner models the REAL `terraform plan -generate-config-out`
+// pre-write refusal: when the target file already exists and is non-empty,
+// terraform fails BEFORE generating ("Target generated file already exists")
+// and writes nothing, leaving the stale file intact. This is distinct from
+// recoveringFakeRunner, which models the post-write validation failure
+// (aws_lambda_function) where the file IS written before the error.
+type refuseIfExistsRunner struct {
+	fakeRunner
+}
+
+func (r *refuseIfExistsRunner) PlanGenerate(_ context.Context, generatedPath string, parallelism int) (bool, error) {
+	r.calls = append(r.calls, "plan")
+	r.planCalled++
+	r.generatedPath = generatedPath
+	r.lastParallelism = parallelism
+	if b, err := os.ReadFile(generatedPath); err == nil && len(b) > 0 {
+		// Pre-write refusal: write NOTHING, leave the stale file, error out.
+		return false, errors.New("Target generated file already exists")
+	}
+	if err := os.WriteFile(generatedPath, []byte(r.planBody), 0o644); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+// TestRun_RegeneratesIntoFreshFileOnSameWorkdir is the regression guard for the
+// depchase silent-drop bug: genconfig is re-invoked on the SAME workdir after
+// the first pass already wrote generated.tf (depchase's RunGenconfig contract),
+// but `terraform plan -generate-config-out` refuses to overwrite an existing
+// file. runSingleRegion must clear the stale generated.tf before the readback
+// so the regenerate renders the CURRENT (expanded) resource set. Without the
+// os.Remove, the second pass errors out, the recovery branch mis-reads the
+// leftover pass-1 file as a "partial config", the newly-added resource has no
+// body and is orphan-pruned — reproducing the live loss of 19 depchase-
+// discovered aws_kms_key deps (job ri-be57064b-bqqvq, 0 imported).
+func TestRun_RegeneratesIntoFreshFileOnSameWorkdir(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	schema := minimalAWSSchema()
+
+	// Pass 1: fresh workdir, one resource. Writes generated.tf with body A.
+	pass1 := &refuseIfExistsRunner{fakeRunner: fakeRunner{
+		planBody: `resource "aws_sqs_queue" "x" { name = "alpha" }`,
+		schemas:  schema,
+	}}
+	if _, err := Run(context.Background(), Options{Workdir: dir, Region: "us-east-1", Runner: pass1},
+		[]imported.ImportedResource{{Identity: imported.ResourceIdentity{Address: "aws_sqs_queue.x", ImportID: "x"}}}); err != nil {
+		t.Fatalf("pass 1: %v", err)
+	}
+
+	// Pass 2: SAME workdir, expanded set (x + newly-discovered y), mimicking a
+	// depchase regenerate. Body B renders BOTH resources. The pre-existing
+	// generated.tf must be cleared so PlanGenerate writes body B fresh; then y
+	// survives instead of being orphan-pruned against the stale body A.
+	pass2 := &refuseIfExistsRunner{fakeRunner: fakeRunner{
+		planBody: "resource \"aws_sqs_queue\" \"x\" { name = \"alpha\" }\n" +
+			"resource \"aws_sqs_queue\" \"y\" { name = \"beta\" }\n",
+		schemas: schema,
+	}}
+	res, err := Run(context.Background(), Options{Workdir: dir, Region: "us-east-1", Runner: pass2},
+		[]imported.ImportedResource{
+			{Identity: imported.ResourceIdentity{Address: "aws_sqs_queue.x", ImportID: "x"}},
+			{Identity: imported.ResourceIdentity{Address: "aws_sqs_queue.y", ImportID: "y"}},
+		})
+	if err != nil {
+		t.Fatalf("pass 2 (regenerate on existing workdir): %v", err)
+	}
+	if len(res.Resources) != 2 {
+		t.Fatalf("regenerate dropped a resource: got %d, want 2 (%+v) — stale generated.tf was not cleared before the readback",
+			len(res.Resources), res.Resources)
+	}
+	if len(res.Skipped) != 0 {
+		t.Errorf("regenerate orphan-pruned %d resource(s); want 0: %+v", len(res.Skipped), res.Skipped)
+	}
+	// The retained body must be the FRESH pass-2 render (contains y), not the
+	// leftover pass-1 body.
+	got := map[string]bool{}
+	for _, r := range res.Resources {
+		got[r.Identity.Address] = true
+	}
+	if !got["aws_sqs_queue.x"] || !got["aws_sqs_queue.y"] {
+		t.Errorf("regenerated set = %v, want both x and y", got)
+	}
+}
+
 func TestRun_DarioBroadAWSStackFixupsReachValidate(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
