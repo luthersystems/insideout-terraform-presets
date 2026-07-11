@@ -259,6 +259,12 @@ func (p *Provider) EnrichByID(ctx context.Context, identity *imported.ResourceId
 		return nil, fmt.Errorf("%w: %s", imp.ErrEnrichByIDNotImplemented, identity.Type)
 	case errors.Is(err, awsdiscover.ErrEnrichClientUnavailable):
 		return nil, fmt.Errorf("%w: %s", imp.ErrEnrichClientUnavailable, identity.Type)
+	case errors.Is(err, awsdiscover.ErrNotFound):
+		// A definitive not-found means the resource is gone. Wrap the
+		// cross-cloud sentinel so a cloud-agnostic caller (imp.FilterExisting)
+		// can classify existence, while keeping awsdiscover.ErrNotFound in the
+		// chain for existing drift-refresh callers that match on it.
+		return nil, fmt.Errorf("%w: %w", imp.ErrResourceNotFound, err)
 	default:
 		return nil, err
 	}
