@@ -101,7 +101,38 @@ const (
 	// literal knowingly instead of dropping it as an opaque no_generated_config
 	// orphan (presets#834).
 	ReasonServiceLinkedIAMRole = "service_linked_iam_role"
+
+	// ReasonAWSDefaultParameterGroup marks an AWS-managed default parameter
+	// group (ElastiCache `default.<family>` / RDS `default.<family>` names —
+	// the reserved `default.` prefix customers cannot create under). AWS
+	// creates one per engine family; they import into state, but every
+	// mutating operation is rejected — the triggering case was the imported
+	// Project tag stamp failing the WHOLE apply with "InvalidParameterValue:
+	// Tagging on default resources is not supported" (20 default ElastiCache
+	// parameter groups on a whole-account staging import). Not customer
+	// infrastructure; manage a custom parameter group instead.
+	ReasonAWSDefaultParameterGroup = "aws_default_parameter_group"
 )
+
+// awsDefaultParameterGroupPrefix is the reserved name prefix of AWS-managed
+// default parameter groups (ElastiCache and RDS both use `default.<family>`;
+// the API rejects customer-created groups under it).
+const awsDefaultParameterGroupPrefix = "default."
+
+// awsDefaultParameterGroupTypes is the set of Terraform types whose
+// AWS-managed `default.*` instances are un-importable (tagging and every
+// other mutation is rejected by the service).
+var awsDefaultParameterGroupTypes = map[string]struct{}{
+	"aws_elasticache_parameter_group": {},
+	"aws_db_parameter_group":          {},
+	"aws_rds_cluster_parameter_group": {},
+}
+
+// IsAWSDefaultParameterGroupName reports whether a parameter-group name is an
+// AWS-managed default (reserved `default.` prefix).
+func IsAWSDefaultParameterGroupName(name string) bool {
+	return strings.HasPrefix(strings.TrimSpace(name), awsDefaultParameterGroupPrefix)
+}
 
 // awsManagedKMSAliasPrefix is the reserved alias prefix the AWS provider
 // refuses to create or import an aws_kms_alias under.
@@ -256,7 +287,42 @@ func UnimportableReason(ir ImportedResource) string {
 		// ReasonEphemeralLogStream).
 		return ReasonEphemeralLogStream
 	}
+	if _, pg := awsDefaultParameterGroupTypes[ir.Identity.Type]; pg {
+		if IsAWSDefaultParameterGroupName(parameterGroupName(ir.Identity)) {
+			return ReasonAWSDefaultParameterGroup
+		}
+	}
 	return ""
+}
+
+// DropUnimportable returns irs with every resource whose UnimportableReason
+// is non-empty removed, plus the dropped (address, reason) pairs for the
+// caller's audit trail. Compose consumes this right after
+// DropOrphanedChildren and with the same philosophy: one un-manageable
+// resource must not fail the entire stack. The canonical case is an
+// AWS-managed default parameter group persisted into a session's imported
+// baseline before discovery learned to exclude it — it imports, but the
+// Project-tag stamp then fails the WHOLE apply ("Tagging on default
+// resources is not supported").
+func DropUnimportable(irs []ImportedResource) (kept []ImportedResource, dropped [][2]string) {
+	kept = make([]ImportedResource, 0, len(irs))
+	for _, ir := range irs {
+		if reason := UnimportableReason(ir); reason != "" {
+			dropped = append(dropped, [2]string{ir.Identity.Address, reason})
+			continue
+		}
+		kept = append(kept, ir)
+	}
+	return kept, dropped
+}
+
+// parameterGroupName resolves a parameter group's name: the import ID is the
+// group name for all three parameter-group types; NameHint is the fallback.
+func parameterGroupName(id ResourceIdentity) string {
+	if n := strings.TrimSpace(id.ImportID); n != "" {
+		return n
+	}
+	return strings.TrimSpace(id.NameHint)
 }
 
 // ReasonDescription returns a short, operator-facing explanation for an
@@ -279,6 +345,8 @@ func ReasonDescription(reason string) string {
 		return "Already managed by InsideOut — cannot be selected for a new import."
 	case ReasonServiceLinkedIAMRole:
 		return "AWS service-linked IAM role (role/aws-service-role/* path) — created and deleted by the owning AWS service; cannot be imported into Terraform."
+	case ReasonAWSDefaultParameterGroup:
+		return "AWS-managed default parameter group (reserved default.* name) — AWS rejects tagging and every other modification; manage a custom parameter group instead."
 	default:
 		return ""
 	}

@@ -712,6 +712,17 @@ func (c *Client) composeStackImpl(opts ComposeStackOpts) (*ComposeStackResult, e
 	// dropped addresses).
 	importedResources, _ := imported.DropOrphanedChildren(opts.Imported)
 
+	// Drop inherently un-importable resources (same philosophy: one
+	// un-manageable resource must not fail the entire stack). A session's
+	// persisted imported baseline can carry instances discovery now
+	// excludes — the canonical case is an AWS-managed default parameter
+	// group (default.<family>): it imports into state, but the Project-tag
+	// stamp then fails the WHOLE apply with "InvalidParameterValue: Tagging
+	// on default resources is not supported" (20 of them on a whole-account
+	// staging import). UnimportableReason is the same classifier the
+	// discover/run path uses to route these to unsupported.json.
+	importedResources, _ = imported.DropUnimportable(importedResources)
+
 	issues = append(issues, ValidateImportedResources(cloud, importedResources)...)
 	// Emit-readiness checks (required-argument completeness) run here —
 	// at compose time, on the final ready-to-emit resource set — not in
