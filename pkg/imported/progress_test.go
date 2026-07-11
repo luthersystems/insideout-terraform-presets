@@ -115,3 +115,66 @@ func TestProgressBridge_ConcurrentTypeDoneIsSafe(t *testing.T) {
 		}
 	}
 }
+
+// TestNewDiscoverEmitter_FoundSink pins the per-resource trickle bridge:
+// ItemFound ticks forward to the Found sink as DiscoverFound events with
+// Phase="discover" and verbatim service/region/type/import-id; a found-
+// only bridge (nil progress sink) must swallow TypeDone without
+// panicking; and both-nil resolves to NopEmitter.
+func TestNewDiscoverEmitter_FoundSink(t *testing.T) {
+	t.Parallel()
+
+	var found []imp.DiscoverFound
+	e := imp.NewDiscoverEmitter(nil, func(f imp.DiscoverFound) { found = append(found, f) })
+
+	e.ItemFound("sqs", "us-east-1", "aws_sqs_queue", "https://sqs.us-east-1.amazonaws.com/1/q")
+	e.ItemFound("s3", "us-west-2", "aws_s3_bucket", "my-bucket")
+
+	if len(found) != 2 {
+		t.Fatalf("expected 2 found events, got %d", len(found))
+	}
+	want := imp.DiscoverFound{Phase: "discover", Service: "sqs", Region: "us-east-1", Type: "aws_sqs_queue", ImportID: "https://sqs.us-east-1.amazonaws.com/1/q"}
+	if found[0] != want {
+		t.Errorf("found[0] = %+v, want %+v", found[0], want)
+	}
+
+	// Found-only bridge must not panic on TypeDone (nil progress sink).
+	if tp, ok := e.(progress.TypeProgressEmitter); ok {
+		tp.TypeDone(progress.TypeProgress{Phase: "discover", TFType: "aws_s3_bucket", Found: 1, Total: 2})
+	} else {
+		t.Fatal("found-sink emitter must still implement TypeProgressEmitter")
+	}
+
+	// Both sinks nil → NopEmitter (the zero-overhead default path).
+	if imp.NewDiscoverEmitter(nil, nil) != (progress.NopEmitter{}) {
+		t.Error("NewDiscoverEmitter(nil, nil) must be NopEmitter")
+	}
+}
+
+// TestNewDiscoverEmitter_ConcurrentItemFound pins the serialization
+// contract: concurrent ItemFound callers (the per-type scan goroutines)
+// are safe with a lock-free consumer sink.
+func TestNewDiscoverEmitter_ConcurrentItemFound(t *testing.T) {
+	t.Parallel()
+	var mu sync.Mutex // consumer-side count only; the bridge serializes delivery
+	count := 0
+	e := imp.NewDiscoverEmitter(nil, func(imp.DiscoverFound) {
+		mu.Lock()
+		count++
+		mu.Unlock()
+	})
+	var wg sync.WaitGroup
+	for i := 0; i < 8; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for j := 0; j < 50; j++ {
+				e.ItemFound("svc", "r", "t", "id")
+			}
+		}()
+	}
+	wg.Wait()
+	if count != 400 {
+		t.Fatalf("expected 400 found events, got %d", count)
+	}
+}
