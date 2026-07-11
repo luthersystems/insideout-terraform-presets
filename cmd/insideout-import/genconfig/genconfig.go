@@ -481,6 +481,26 @@ func runSingleRegion(ctx context.Context, opts Options, resources []imported.Imp
 	}
 
 	generatedPath := filepath.Join(opts.Workdir, generatedFile)
+	// `terraform plan -generate-config-out=<path>` refuses to write when
+	// <path> already exists and is non-empty: it fails PRE-write with
+	// "Target generated file already exists" and writes nothing. The first
+	// pass runs in a fresh workdir so this never bites, but depchase
+	// (Stage 2c3) re-invokes genconfig on the SAME workdir — after the first
+	// pass already wrote generated.tf and driftfix mutated it in place — to
+	// render the dependencies it just discovered. Without clearing the stale
+	// file the re-run's plan errors out, the recovery branch below mis-reads
+	// the leftover pass-1 file as a freshly-written "partial config", and
+	// every depchase-discovered dependency is then pruned as an orphan
+	// against the stale HCL and silently dropped. Observed live: 19
+	// customer aws_kms_key refs (nested kms_master_key_id in S3 SSE configs)
+	// discovered by depchase, 0 imported — reverse-import job
+	// ri-be57064b-bqqvq / session sess_v2_ENiPyXEdf6Ja. Remove any stale
+	// generated.tf so the regenerate always writes into a new file, honoring
+	// the depchase RunGenconfig contract that it regenerates generated.tf
+	// from the CURRENT resource set.
+	if err := os.Remove(generatedPath); err != nil && !os.IsNotExist(err) {
+		return nil, fmt.Errorf("remove stale generated.tf before regenerate: %w", err)
+	}
 	progressf(opts.Stdout, "genconfig: %s: terraform plan -generate-config-out (parallelism=%d)…\n", scope, opts.parallelismOrDefault())
 	if _, err := runner.PlanGenerate(ctx, generatedPath, opts.parallelismOrDefault()); err != nil {
 		// `terraform plan -generate-config-out` writes generated.tf and
