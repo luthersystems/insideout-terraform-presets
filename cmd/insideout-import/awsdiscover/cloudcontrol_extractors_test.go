@@ -236,23 +236,46 @@ func TestCloudWatchEventRuleConfig(t *testing.T) {
 	}
 
 	// Service-managed marker (#785): AWS-managed rules (AutoScalingManagedRule,
-	// etc.) carry a ManagedBy property. The discoverer must surface it so the
-	// importability classifier greys them out — tag/PutRule/DeleteRule all fail
-	// with ManagedRuleException on a managed rule.
+	// etc.) carry a ManagedBy principal, and the importability classifier greys
+	// them out — tag/PutRule/DeleteRule all fail with ManagedRuleException on a
+	// managed rule.
 	if cfg.ServiceManagedByFromProperties == nil {
-		t.Fatal("aws_cloudwatch_event_rule: ServiceManagedByFromProperties must be set to capture managed rules")
+		t.Fatal("aws_cloudwatch_event_rule: ServiceManagedByFromProperties must be set (props fast-path)")
 	}
+	// REALITY CHECK (staging apply ccs-101d5181-5czmw): Cloud Control's
+	// AWS::Events::Rule schema does NOT surface ManagedBy among its read-only
+	// properties, so for a REAL managed rule the props payload omits it and the
+	// fast-path returns "". Asserting only the with-ManagedBy case was false
+	// confidence — it let AutoScalingManagedRule through, get tag-stamped in
+	// imported.tf, and fail the whole 264-import apply with ManagedRuleException.
+	// The authoritative marker is backfilled at DISCOVER time by PostDiscover
+	// (events:DescribeRule); the props fast-path is best-effort only.
+	realWorldManagedProps := map[string]any{
+		"Name": "AutoScalingManagedRule",
+		"Arn":  "arn:aws:events:us-east-1:111111111111:rule/AutoScalingManagedRule",
+		// NOTE: no "ManagedBy" — this mirrors what CC actually returns.
+	}
+	if got := cfg.ServiceManagedByFromProperties(realWorldManagedProps); got != "" {
+		t.Errorf("ServiceManagedBy (CC omits ManagedBy for a real managed rule): got %q, want empty (backfilled by PostDiscover instead)", got)
+	}
+	// Fast-path: IF CC ever does carry ManagedBy, the extractor surfaces it.
 	managedProps := map[string]any{
 		"Name":      "AutoScalingManagedRule",
 		"Arn":       "arn:aws:events:us-east-1:111111111111:rule/AutoScalingManagedRule",
 		"ManagedBy": "autoscaling.amazonaws.com",
 	}
 	if got := cfg.ServiceManagedByFromProperties(managedProps); got != "autoscaling.amazonaws.com" {
-		t.Errorf("ServiceManagedBy (managed rule): got %q, want autoscaling.amazonaws.com", got)
+		t.Errorf("ServiceManagedBy (props fast-path, ManagedBy present): got %q, want autoscaling.amazonaws.com", got)
 	}
 	// A customer rule has no ManagedBy → empty marker → importable.
 	if got := cfg.ServiceManagedByFromProperties(props); got != "" {
 		t.Errorf("ServiceManagedBy (customer rule): got %q, want empty", got)
+	}
+	// The authoritative mechanism: PostDiscover MUST be wired so ManagedBy is
+	// backfilled via events:DescribeRule even though CC omits it (the fix for
+	// staging apply ccs-101d5181-5czmw).
+	if cfg.PostDiscover == nil {
+		t.Fatal("aws_cloudwatch_event_rule: PostDiscover must be wired to backfill ManagedBy via events:DescribeRule (CC omits it)")
 	}
 }
 

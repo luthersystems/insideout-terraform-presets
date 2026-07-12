@@ -112,6 +112,21 @@ const (
 	// parameter groups on a whole-account staging import). Not customer
 	// infrastructure; manage a custom parameter group instead.
 	ReasonAWSDefaultParameterGroup = "aws_default_parameter_group"
+
+	// ReasonAWSManagedEventRule marks an aws_cloudwatch_event_rule whose name
+	// is a well-known AWS-managed rule (AutoScalingManagedRule, …). AWS sets
+	// ManagedBy on these rules and rejects tag / PutRule / DeleteRule with a
+	// ManagedRuleException, so the rule cannot be managed by Terraform. The
+	// generic ReasonServiceManaged path already catches these WHEN discovery
+	// surfaced the ManagedBy marker (Identity.ServiceManagedBy) — but a stale
+	// imported baseline persisted before discovery learned to backfill
+	// ManagedBy carries no marker, so this NAME-based classifier is the
+	// compose-time backstop that still drops the rule (DropUnimportable in
+	// ComposeStackWithIssues, #860). Triggering incident: staging apply
+	// ccs-101d5181-5czmw, where the imported Project-tag stamp on
+	// AutoScalingManagedRule (arn …:rule/AutoScalingManagedRule) failed the
+	// whole 264-import apply with ManagedRuleException.
+	ReasonAWSManagedEventRule = "aws_managed_event_rule"
 )
 
 // awsDefaultParameterGroupPrefix is the reserved name prefix of AWS-managed
@@ -132,6 +147,31 @@ var awsDefaultParameterGroupTypes = map[string]struct{}{
 // AWS-managed default (reserved `default.` prefix).
 func IsAWSDefaultParameterGroupName(name string) bool {
 	return strings.HasPrefix(strings.TrimSpace(name), awsDefaultParameterGroupPrefix)
+}
+
+// awsManagedEventRuleNames is the allowlist of well-known AWS-managed
+// EventBridge rule names. AWS creates these on the customer's behalf and
+// stamps ManagedBy on them, so tag / PutRule / DeleteRule are all rejected
+// with ManagedRuleException — they cannot be managed by Terraform. This is a
+// name-based backstop for the case where discovery did NOT surface the live
+// ManagedBy marker (a stale imported baseline); a fresh discovery backfills
+// Identity.ServiceManagedBy and the generic IsServiceManaged path catches it
+// first. Extend by adding the exact rule name AWS uses.
+//
+//   - AutoScalingManagedRule — the EC2 Auto Scaling capacity-rebalance /
+//     lifecycle rule (ManagedBy = autoscaling.amazonaws.com). Triggering
+//     incident: staging apply ccs-101d5181-5czmw.
+var awsManagedEventRuleNames = map[string]struct{}{
+	"AutoScalingManagedRule": {},
+}
+
+// IsAWSManagedEventRuleName reports whether an EventBridge rule name is a
+// well-known AWS-managed rule (see awsManagedEventRuleNames). The empty string
+// (name not surfaced by the discoverer) is treated as importable so an absent
+// name never drops a customer rule — matching the KMS-key / ENI posture.
+func IsAWSManagedEventRuleName(name string) bool {
+	_, ok := awsManagedEventRuleNames[strings.TrimSpace(name)]
+	return ok
 }
 
 // awsManagedKMSAliasPrefix is the reserved alias prefix the AWS provider
@@ -286,6 +326,16 @@ func UnimportableReason(ir ImportedResource) string {
 		// Type-level: every log stream is ephemeral and un-importable (see
 		// ReasonEphemeralLogStream).
 		return ReasonEphemeralLogStream
+	case "aws_cloudwatch_event_rule":
+		// Name-based backstop for AWS-managed rules (AutoScalingManagedRule,
+		// …) when discovery did not surface the live ManagedBy marker — a
+		// stale imported baseline. A fresh discovery stamps
+		// Identity.ServiceManagedBy and the IsServiceManaged check above wins
+		// first (ReasonServiceManaged); this fires only when that marker is
+		// absent (incident: staging apply ccs-101d5181-5czmw).
+		if IsAWSManagedEventRuleName(eventRuleName(ir.Identity)) {
+			return ReasonAWSManagedEventRule
+		}
 	}
 	if _, pg := awsDefaultParameterGroupTypes[ir.Identity.Type]; pg {
 		if IsAWSDefaultParameterGroupName(parameterGroupName(ir.Identity)) {
@@ -325,6 +375,21 @@ func parameterGroupName(id ResourceIdentity) string {
 	return strings.TrimSpace(id.NameHint)
 }
 
+// eventRuleName resolves an EventBridge rule's bare name from the identity the
+// aws_cloudwatch_event_rule discoverer populates. NameHint carries the CFN
+// `Name` property (the bare rule name); ImportID is the `<bus>/<name>` form, so
+// the segment after the last `/` is the fallback rule name.
+func eventRuleName(id ResourceIdentity) string {
+	if n := strings.TrimSpace(id.NameHint); n != "" {
+		return n
+	}
+	imp := strings.TrimSpace(id.ImportID)
+	if idx := strings.LastIndex(imp, "/"); idx != -1 {
+		return imp[idx+1:]
+	}
+	return imp
+}
+
 // ReasonDescription returns a short, operator-facing explanation for an
 // un-importability reason code, suitable for a wizard tooltip or a CLI / 422
 // message. Returns "" for an unknown code so callers can fall back to a generic
@@ -347,6 +412,8 @@ func ReasonDescription(reason string) string {
 		return "AWS service-linked IAM role (role/aws-service-role/* path) — created and deleted by the owning AWS service; cannot be imported into Terraform."
 	case ReasonAWSDefaultParameterGroup:
 		return "AWS-managed default parameter group (reserved default.* name) — AWS rejects tagging and every other modification; manage a custom parameter group instead."
+	case ReasonAWSManagedEventRule:
+		return "AWS-managed EventBridge rule (well-known managed rule such as AutoScalingManagedRule, ManagedBy set) — AWS rejects tag / PutRule / DeleteRule with ManagedRuleException; manage a custom rule instead."
 	default:
 		return ""
 	}
