@@ -178,12 +178,9 @@ func IsAWSManagedEventRuleName(name string) bool {
 // refuses to create or import an aws_kms_alias under.
 const awsManagedKMSAliasPrefix = "alias/aws/"
 
-const (
-	awsTagKeyImported        = "InsideOutImported"
-	gcpLabelKeyImported      = "insideout-imported"
-	awsTagKeyImportProject   = "InsideOutImportProject"
-	gcpLabelKeyImportProject = "insideout-import-project"
-)
+// The provenance marker key literals live in marker_tags.go (canonical home
+// for both this package and the pkg/composer re-exports — reliable#2230
+// consolidation; this file previously carried a private duplicate set).
 
 // awsManagedKMSKeyManager is the KeyManager value KMS reports for keys it
 // manages on the customer's behalf (vs "CUSTOMER" for customer-managed
@@ -265,18 +262,12 @@ func IsServiceManagedENIInterfaceType(interfaceType string) bool {
 // adopted-resource marker tag/label stamped by InsideOut. The marker key's
 // presence is enough; callers must not infer ownership from the project tag
 // because some historical resources carry a bare account/project marker
-// without having been imported.
+// without having been imported. Key matching (TrimSpace + case-insensitive)
+// is shared with the provenance-owner reader via normalizedTagValue so the
+// "is it marked" and "who marked it" questions can never disagree.
 func HasInsideOutImportedMarker(tags map[string]string) bool {
-	if tags == nil {
-		return false
-	}
-	for key := range tags {
-		switch strings.ToLower(strings.TrimSpace(key)) {
-		case strings.ToLower(awsTagKeyImported), gcpLabelKeyImported:
-			return true
-		}
-	}
-	return false
+	_, ok := normalizedTagValue(tags, AWSTagKeyImported, GCPLabelKeyImported)
+	return ok
 }
 
 // UnimportableReason classifies a discovered resource as inherently

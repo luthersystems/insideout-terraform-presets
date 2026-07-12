@@ -1,58 +1,54 @@
-package composer
+package imported
 
-import "github.com/luthersystems/insideout-terraform-presets/pkg/composer/imported"
-
-// Exported InsideOut import-provenance marker tag/label keys.
+// Canonical InsideOut import-provenance marker tag/label keys.
 //
 // Every taggable resource adopted by `insideout-import` is stamped with these
 // keys on first apply. Downstream consumers (the reliable backend, the
 // imported-resource drift classifier, the UI) need the same literals to
-// classify plan diffs as "expected provenance write" vs. real drift. The
-// canonical definitions live in pkg/composer/imported (marker_tags.go) so
-// that package's un-importability classifier and provenance-owner reader
-// share the exact literals without an import cycle (reliable#2230); this
-// re-export preserves the established pkg/composer surface — see issue #679
-// for the duplication that prompted the original export.
+// classify plan diffs as "expected provenance write" vs. real drift — see
+// issue #679 for the duplication that prompted the original export from
+// pkg/composer.
+//
+// This package is the single definition site (reliable#2230 consolidation):
+// pkg/composer re-exports these constants for its established public surface,
+// and importability.go's un-importability classifier reads the same literals —
+// previously it carried a private duplicate set. pkg/composer/imported cannot
+// import pkg/composer (cycle), so the canonical home is here, at the bottom of
+// the dependency graph.
 //
 // AWS uses CamelCase tag keys; GCP labels are restricted to lowercase letters,
 // digits, `-`, and `_`, so the GCP mirror uses kebab-case.
 const (
 	// AWSTagKeyImportProject identifies the InsideOut stack/import-project
 	// that owns this resource. Required on every adopted AWS resource.
-	AWSTagKeyImportProject = imported.AWSTagKeyImportProject
+	AWSTagKeyImportProject = "InsideOutImportProject"
 
 	// AWSTagKeyImportSession identifies the specific import session that
 	// adopted this resource. Optional — omitted when the caller did not
 	// supply a session ID.
-	AWSTagKeyImportSession = imported.AWSTagKeyImportSession
+	AWSTagKeyImportSession = "InsideOutImportSession"
 
 	// AWSTagKeyImported is the canonical boolean marker stamped on every
 	// adopted AWS resource. Its value is always "true".
-	AWSTagKeyImported = imported.AWSTagKeyImported
+	AWSTagKeyImported = "InsideOutImported"
 
 	// AWSTagKeyImportedAt is the RFC3339 UTC timestamp recorded when the
 	// resource was first adopted.
-	AWSTagKeyImportedAt = imported.AWSTagKeyImportedAt
+	AWSTagKeyImportedAt = "InsideOutImportedAt"
 
 	// GCPLabelKeyImportProject is the GCP-label mirror of
 	// AWSTagKeyImportProject.
-	GCPLabelKeyImportProject = imported.GCPLabelKeyImportProject
+	GCPLabelKeyImportProject = "insideout-import-project"
 
 	// GCPLabelKeyImportSession is the GCP-label mirror of
 	// AWSTagKeyImportSession.
-	GCPLabelKeyImportSession = imported.GCPLabelKeyImportSession
+	GCPLabelKeyImportSession = "insideout-import-session"
 
 	// GCPLabelKeyImported is the GCP-label mirror of AWSTagKeyImported.
-	GCPLabelKeyImported = imported.GCPLabelKeyImported
+	GCPLabelKeyImported = "insideout-imported"
 
 	// GCPLabelKeyImportedAt is the GCP-label mirror of AWSTagKeyImportedAt.
 	// The value is RFC3339 UTC, downcased with `:` and `.` replaced by `-`
 	// to satisfy the GCP label charset.
-	GCPLabelKeyImportedAt = imported.GCPLabelKeyImportedAt
+	GCPLabelKeyImportedAt = "insideout-imported-at"
 )
-
-// markerValueTrue is the canonical value of AWSTagKeyImported /
-// GCPLabelKeyImported. Kept unexported because it is the same literal in
-// both clouds and downstream classifiers only need to compare against the
-// constant `"true"`.
-const markerValueTrue = "true"

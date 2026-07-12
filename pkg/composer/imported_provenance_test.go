@@ -515,6 +515,108 @@ func TestInjectProvenance_Idempotent_OnReEmissionWithPriorStamp(t *testing.T) {
 	}
 }
 
+// TestInjectProvenance_PreservesImportedAt_AttrsShapedPriorStamp pins the
+// Mars-leg variant of the idempotency contract (reliable#2230 review, F8b):
+// on the reverse-import leg the prior stamp lives in TYPED ATTRS — the plan
+// backfill (pkg/reverseimport.BackfillImportedAttrsFromPlan) writes the
+// merged tags, InsideOut markers included, back into Attrs and never touches
+// Identity.Tags. The historical preservation predicate read Identity.Tags
+// ONLY, so every recompose of such a resource re-stamped InsideOutImportedAt
+// with a fresh nowFn() value — a tag-only diff on every no-op pass, exactly
+// the churn preserveExistingImportedAt exists to prevent. The unified
+// layer-coherent read (priorProvenanceStamp: Attrs → Attributes →
+// Identity.Tags) must preserve the Attrs-shaped stamp and keep two composes
+// at different wall-clock times byte-identical.
+func TestInjectProvenance_PreservesImportedAt_AttrsShapedPriorStamp(t *testing.T) {
+	t.Parallel()
+	priorStampLit := "2026-05-26T21:10:48Z"
+	mkIR := func() imported.ImportedResource {
+		return imported.ImportedResource{
+			Identity: imported.ResourceIdentity{
+				Cloud:   "aws",
+				Type:    "aws_sqs_queue",
+				Address: "aws_sqs_queue.q",
+				// Identity.Tags deliberately EMPTY — the Mars-leg shape.
+			},
+			Tier: imported.TierImportedFlat,
+			Attrs: []byte(`{"name":{"literal":"q"},"tags":{` +
+				`"InsideOutImportProject":{"literal":"io-stack-1"},` +
+				`"InsideOutImportSession":{"literal":"sess-9"},` +
+				`"InsideOutImported":{"literal":"true"},` +
+				`"InsideOutImportedAt":{"literal":"` + priorStampLit + `"}` +
+				`}}`),
+		}
+	}
+
+	ir1 := mkIR()
+	body1, _, err := emitTestBody(t, ir1)
+	require.NoError(t, err)
+	out1, err := injectProvenance(body1, &ir1, "io-stack-1", "sess-9", fixedTime())
+	require.NoError(t, err)
+
+	// Second pass a week later: identical inputs, different clock.
+	ir2 := mkIR()
+	body2, _, err := emitTestBody(t, ir2)
+	require.NoError(t, err)
+	out2, err := injectProvenance(body2, &ir2, "io-stack-1", "sess-9", fixedTime().Add(24*7*time.Hour))
+	require.NoError(t, err)
+
+	assert.True(t, hasAttr(t, string(out1), "InsideOutImportedAt", `"`+priorStampLit+`"`),
+		"Attrs-shaped prior stamp must be preserved:\n%s", out1)
+	assert.NotContains(t, string(out1), "2026-04-29T14:30:00Z",
+		"fresh nowFn stamp must not appear when the Attrs-shaped prior stamp matches:\n%s", out1)
+	assert.Equal(t, string(out1), string(out2),
+		"recompose of a Mars-leg (Attrs-shaped) stamp must be byte-identical regardless of the clock")
+}
+
+// TestInjectProvenance_PreservesImportedAt_PartialAttrsStampFallsToLive pins
+// the R4 refinement of the layer scan (reliable#2230 review): a desired-state
+// layer whose project+session markers match the current pass but which
+// carries NO usable InsideOutImportedAt (a partial backfill — the plan
+// captured the ownership markers but not the timestamp) must not TERMINATE
+// preservation. The scan continues to the live Identity.Tags layer and, when
+// that layer's OWN project+session also match (each layer must independently
+// qualify — no cross-layer stitching), preserves the live timestamp. Without
+// the fall-through, this shape re-stamps a fresh nowFn() on every recompose:
+// permanent tag-only drift churn on an unchanged resource.
+func TestInjectProvenance_PreservesImportedAt_PartialAttrsStampFallsToLive(t *testing.T) {
+	t.Parallel()
+	priorStampLit := "2026-05-26T21:10:48Z"
+	ir := imported.ImportedResource{
+		Identity: imported.ResourceIdentity{
+			Cloud:   "aws",
+			Type:    "aws_sqs_queue",
+			Address: "aws_sqs_queue.q",
+			// Live cloud-side snapshot: the FULL prior stamp, timestamp
+			// included, matching the current pass's project+session.
+			Tags: map[string]string{
+				"InsideOutImportProject": "io-stack-1",
+				"InsideOutImportSession": "sess-9",
+				"InsideOutImported":      "true",
+				"InsideOutImportedAt":    priorStampLit,
+			},
+		},
+		Tier: imported.TierImportedFlat,
+		// Typed Attrs: project+session literals present, InsideOutImportedAt
+		// ABSENT — the partial-backfill shape.
+		Attrs: []byte(`{"name":{"literal":"q"},"tags":{` +
+			`"InsideOutImportProject":{"literal":"io-stack-1"},` +
+			`"InsideOutImportSession":{"literal":"sess-9"}` +
+			`}}`),
+	}
+	body, _, err := emitTestBody(t, ir)
+	require.NoError(t, err)
+	got, err := injectProvenance(body, &ir, "io-stack-1", "sess-9", fixedTime())
+	require.NoError(t, err)
+	s := string(got)
+
+	assert.True(t, hasAttr(t, s, "InsideOutImportedAt", `"`+priorStampLit+`"`),
+		"live-layer timestamp must be preserved when the partial Attrs layer qualifies but has no stamp:\n%s", s)
+	// fixedTime()'s RFC3339 form must not appear as the emitted stamp.
+	assert.False(t, hasAttr(t, s, "InsideOutImportedAt", `"2026-04-29T14:30:00Z"`),
+		"fresh nowFn stamp must not be emitted for the partial-Attrs + full-live shape:\n%s", s)
+}
+
 // TestPreserveExistingImportedAt covers the negative arms of the
 // preservation predicate: each non-match case must fall back to the
 // fresh stamp from `entries` so the caller's intent (re-stamp on a

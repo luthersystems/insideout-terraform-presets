@@ -13,8 +13,9 @@ package policy
 //
 // NOTE: this resource type does NOT accept tags. Confirmed in the
 // repo's NON_TAGGABLE_AWS allowlist (tests/lint-project-tag.sh) and
-// the untaggableAWS map in pkg/composer/imported_provenance.go. The
-// `tags` / `tags_all` entries are intentionally omitted.
+// the untaggableAWS map in pkg/composer/imported/provenance_owner.go
+// (alongside TaggableAttr). The `tags` / `tags_all` entries are
+// intentionally omitted.
 var awsApprunnerCustomDomainAssociationPolicy = Map{
 	// Identity ----------------------------------------------------------
 	"id": {

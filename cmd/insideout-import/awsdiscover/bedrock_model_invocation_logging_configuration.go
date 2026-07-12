@@ -80,7 +80,7 @@ func (d *bedrockModelInvocationLoggingConfigurationDiscoverer) ResourceType() st
 //     multi-region scan should not abort the whole run).
 //
 // The resource carries no tags (untaggable in AWS provider 6.x — pinned
-// in pkg/composer/imported_provenance.go::untaggableAWS), so this
+// in pkg/composer/imported/provenance_owner.go::untaggableAWS), so this
 // discoverer does not run the post-fetch tag filter and emits an empty
 // (non-nil) Tags map per the #255 contract.
 //
