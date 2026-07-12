@@ -22,6 +22,8 @@ func TestReasonCodes_WireStable(t *testing.T) {
 	assert.Equal(t, "ephemeral_log_stream", ReasonEphemeralLogStream)
 	assert.Equal(t, "insideout_imported", ReasonInsideOutImported)
 	assert.Equal(t, "service_linked_iam_role", ReasonServiceLinkedIAMRole)
+	assert.Equal(t, "aws_default_parameter_group", ReasonAWSDefaultParameterGroup)
+	assert.Equal(t, "aws_managed_event_rule", ReasonAWSManagedEventRule)
 }
 
 func TestIsAWSManagedKMSAliasName(t *testing.T) {

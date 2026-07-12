@@ -339,9 +339,26 @@ var cloudControlTypeConfigs = []cloudControlConfig{
 		// rule with ManagedBy set (ManagedRuleException), so the rule cannot
 		// be managed by Terraform at all. Absent-safe: a customer rule has no
 		// ManagedBy → empty marker → importable.
+		//
+		// LIMITATION: Cloud Control's AWS::Events::Rule schema does NOT list
+		// ManagedBy among its read-only properties, so this props fast-path
+		// returns "" for a real managed rule (surfacing it via props alone
+		// was false confidence — it let AutoScalingManagedRule through, get
+		// tag-stamped in imported.tf, and fail the whole 264-import apply
+		// with ManagedRuleException on staging job ccs-101d5181-5czmw). The
+		// authoritative marker is backfilled at DISCOVER time by PostDiscover
+		// (events:DescribeRule); the props fast-path is kept only for the
+		// rare case CC does carry ManagedBy.
 		ServiceManagedByFromProperties: func(props map[string]any) string {
 			return extractString(props, "ManagedBy")
 		},
+		// Resolve ManagedBy at DISCOVER time via events:DescribeRule. The CC
+		// schema omits ManagedBy (see the LIMITATION note above), so the
+		// props extractor above can't set it. PostDiscover stamps
+		// Identity.ServiceManagedBy so imported.UnimportableReason classifies
+		// AWS-managed rules (AutoScalingManagedRule, …) into unsupported.json
+		// instead of letting them sink the apply (job ccs-101d5181-5czmw).
+		PostDiscover: eventRulePostDiscover,
 	},
 
 	// =====================================================================
