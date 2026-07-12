@@ -32,10 +32,22 @@ import (
 // DiscoverOpts.Progress / EnrichOpts.Progress and let the Provider wire
 // it up.
 func NewProgressEmitter(sink func(DiscoverProgress)) progress.Emitter {
-	if sink == nil {
+	return NewDiscoverEmitter(sink, nil)
+}
+
+// NewDiscoverEmitter is NewProgressEmitter plus an optional per-resource
+// Found sink: when found is non-nil the bridge ALSO forwards each
+// ItemFound tick (fired by the discoverers the moment each resource is
+// found, mid-scan) as a DiscoverFound. This powers the live
+// "resources as we find them" trickle on the reverse-import Scan panel.
+// Both sinks nil → NopEmitter, byte-for-byte the no-progress path.
+// Found invocations are serialized under the same mutex as TypeDone, so
+// the sink is safe to call from the parallel per-type scan goroutines.
+func NewDiscoverEmitter(sink func(DiscoverProgress), found func(DiscoverFound)) progress.Emitter {
+	if sink == nil && found == nil {
 		return progress.NopEmitter{}
 	}
-	return &progressBridge{sink: sink}
+	return &progressBridge{sink: sink, found: found}
 }
 
 // progressBridge adapts a per-type DiscoverProgress sink onto the
@@ -45,7 +57,8 @@ func NewProgressEmitter(sink func(DiscoverProgress)) progress.Emitter {
 // progress.TypeProgressEmitter to receive and forward the per-type
 // completion events.
 type progressBridge struct {
-	sink func(DiscoverProgress)
+	sink  func(DiscoverProgress)
+	found func(DiscoverFound)
 
 	mu        sync.Mutex
 	completed int // running count of types done; guarded by mu
@@ -58,13 +71,35 @@ var (
 	_ progress.TypeProgressEmitter = (*progressBridge)(nil)
 )
 
-// The per-(service,region) Emitter events are not part of the facade's
-// per-type progress contract, so the bridge swallows them.
+// The per-(service,region) Emitter events other than ItemFound are not
+// part of the facade's contract, so the bridge swallows them.
 func (b *progressBridge) ServiceStart(string, string)                      {}
 func (b *progressBridge) ServiceFinish(string, string, int, time.Duration) {}
-func (b *progressBridge) ItemFound(string, string, string, string)         {}
 func (b *progressBridge) StageFinish(string, int, time.Duration)           {}
 func (b *progressBridge) ServiceWarn(string, string, string)               {}
+
+// ItemFound forwards each per-resource discovery tick to the optional
+// Found sink (NewDiscoverEmitter), serialized under the same mutex as
+// TypeDone so a single consumer-side sink needs no locking. Phase is
+// fixed to "discover": providers wire the Found sink only on the
+// Discover leg (EnrichAttributes keeps the progress-only emitter), and
+// the enrich pass's own ItemFound ticks identify themselves via the
+// "enrich" service slug anyway. Nil sink (NewProgressEmitter callers)
+// keeps the historical swallow.
+func (b *progressBridge) ItemFound(service, region, tfType, importID string) {
+	if b.found == nil {
+		return
+	}
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.found(DiscoverFound{
+		Phase:    "discover",
+		Service:  service,
+		Region:   region,
+		Type:     tfType,
+		ImportID: importID,
+	})
+}
 
 // TypeDone increments the running completed-type counter and forwards a
 // DiscoverProgress to the sink. The lock both serializes concurrent
@@ -72,6 +107,11 @@ func (b *progressBridge) ServiceWarn(string, string, string)               {}
 // the increment-then-deliver atomic, so the sink observes CompletedTypes
 // as a strictly monotonic 1..Total sequence.
 func (b *progressBridge) TypeDone(p progress.TypeProgress) {
+	if b.sink == nil {
+		// Found-only bridge (NewDiscoverEmitter(nil, found)): no per-type
+		// progress consumer, so swallow — matching the pre-bridge NopEmitter.
+		return
+	}
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	b.completed++

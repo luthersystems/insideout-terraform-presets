@@ -25,9 +25,9 @@ package depchase
 //
 //	# | Degradation class                     | Trigger (code)                                   | Warned?                              | Decision            | Rationale
 //	--|---------------------------------------|--------------------------------------------------|--------------------------------------|---------------------|----------
-//	A | Ref in a nested attr / block          | scanNestedAndNonARN walks nested blocks +        | yes: "nested_ref_literal"            | EMIT (Tier 2)       | #834: nested/collection ARN literals are surfaced by the recursive hclsyntax walk (finder_nested.go) and fed into the SAME discover→gate→add chase as top-level hits. Adoptable targets are emitted; the nested literal itself is retained (crossref rewrite is still top-level-only — Tier 3 skipped as it would contort the rewriter). Post-review hardening: a nested literal is TERMINAL-BY-DESIGN (chased exactly once, then excluded from cycle detection so a never-byte-matching literal can't trip ErrCyclicDependency — F2); a hard (non-sentinel) discovery error on a nested ref degrades to a warning instead of aborting the whole import (F1); and EVERY nested consumer of a literal records its own graph edge — a literal referenced by two resources, or one that ALSO appears top-level, keeps every edge and every distinct nested warning (F4).
-//	  |                                       | tuple/object expression trees (finder_nested.go) |                                      |                     |
-//	B | Ref in a non-ARN identifier form      | scanNestedAndNonARN curated attr map             | yes: "non_arn_ref_literal"           | EMIT (curated attrs)| #834: a curated (attr-name → tfType) allowlist with per-type value gates surfaces bare-identifier refs. KMS KeyId UUIDs in kms_key_id / kms_master_key_id → aws_kms_key are CHASED (the KMS Cloud Control DiscoverByID accepts a bare KeyId), now including UUIDs nested inside OBJECT expressions (`rule = { x = { kms_master_key_id = "<uuid>" } }`, F6), not just body attributes. The bare UUID carries no region, so it is discovered in the CONSUMER resource's region — a CMK is same-region as its SSE consumer — falling back to the run's primary region only when the consumer has none (F3). Class B shares class A's terminal-by-design (F2) + fail-open-on-hard-error (F1) semantics, and a key referenced by BOTH a full ARN and a bare UUID is adopted once while recording both consumer edges (F8). Other bare forms (S3 name, GCP self-link) remain out of scope: their value shapes are too permissive to gate without false positives — extend nonARNAttrRules to add one.
+//	A | Ref in a nested attr / block          | bodyWalker (single hclsyntax walk) descends       | yes: "nested_ref_literal"            | EMIT (Tier 2)       | #834: nested/collection ARN literals are surfaced by the recursive hclsyntax walk (finder_nested.go) and fed into the SAME discover→gate→add chase as top-level hits. Adoptable targets are emitted; the nested literal itself is retained (crossref rewrite is still top-level-only — Tier 3 skipped as it would contort the rewriter). Post-review hardening: a nested literal is TERMINAL-BY-DESIGN (chased exactly once, then excluded from cycle detection so a never-byte-matching literal can't trip ErrCyclicDependency — F2); a hard (non-sentinel) discovery error on a nested ref degrades to a warning instead of aborting the whole import (F1); and EVERY nested consumer of a literal records its own graph edge — a literal referenced by two resources, or one that ALSO appears top-level, keeps every edge and every distinct nested warning (F4).
+//	  |                                       | nested blocks + tuple/object expr trees (#853)   |                                      |                     |
+//	B | Ref in a non-ARN identifier form      | bodyWalker curated attr map (single walk)        | yes: "non_arn_ref_literal"           | EMIT (curated attrs)| #834: a curated (attr-name → tfType) allowlist with per-type value gates surfaces bare-identifier refs. KMS KeyId UUIDs in kms_key_id / kms_master_key_id → aws_kms_key are CHASED (the KMS Cloud Control DiscoverByID accepts a bare KeyId), now including UUIDs nested inside OBJECT expressions (`rule = { x = { kms_master_key_id = "<uuid>" } }`, F6), not just body attributes. The bare UUID carries no region, so it is discovered in the CONSUMER resource's region — a CMK is same-region as its SSE consumer — falling back to the run's primary region only when the consumer has none (F3). Class B shares class A's terminal-by-design (F2) + fail-open-on-hard-error (F1) semantics, and a key referenced by BOTH a full ARN and a bare UUID is adopted once while recording both consumer edges (F8). Other bare forms (S3 name, GCP self-link) remain out of scope: their value shapes are too permissive to gate without false positives — extend nonARNAttrRules to add one.
 //	C | Unsupported ARN service/resource-type | ParseRef -> ErrUnsupportedType (not in           | yes: "unsupported ARN type"          | documented-literal  | Type has no discoverer + typed model (SNS, ECR, ACM, SES, EFS, ...). Emitting needs a new discoverer+model — deliberate scope expansion, not a chase bug.
 //	  |                                       | arnTFTypeMap)                                    |                                      | (out of scope)      |
 //	D | Malformed ARN literal                 | ParseRef -> parse error                          | yes: "could not parse ARN"           | documented-literal  | Not a resolvable reference.
@@ -72,3 +72,32 @@ package depchase
 // (e.g. a nested ARN of an unsupported service, or a KMS KeyId that resolves to
 // an AWS-managed key) still emits its class-A/B detection warning AND the
 // downstream class-C/G/E outcome warning — surfaced twice, never silent.
+//
+// Structured diagnostic codes (presets#854).
+//
+// Each degradation class emits a Warning with a stable Code (warning.go) rather
+// than a prose-prefixed free-text string. reverseimport maps Code →
+// job.Diagnostic.Code and the consumer address → Field, so Reliable's
+// diagnostics surface classifies on Code without pattern-matching prose;
+// Warning.String() reproduces the historical prose byte-for-byte for the
+// CLI/discover output. Dedup keys on (Code, Literal, Consumer), not the rendered
+// string, so a wording/path edit can't duplicate a warning across iterations.
+//
+//	Degradation class (above)          | Diagnostic Code
+//	-----------------------------------|-----------------------------------
+//	A  nested ref literal              | depchase_nested_ref_literal
+//	B  non-ARN identifier ref          | depchase_non_arn_ref_literal
+//	C  unsupported ARN service/rtype   | depchase_unsupported_ref
+//	D  malformed ARN literal           | depchase_unparseable_ref
+//	E  target not found                | depchase_ref_not_found
+//	F  discoverer rejected the ID      | depchase_discoverer_rejected
+//	   (F1) non-fatal hard error on a  | depchase_discover_error
+//	        terminal (nested/nonARN)   |
+//	        seed                       |
+//	G  target inherently un-importable | depchase_unimportable_target
+//	H  discovered, genconfig dropped   | depchase_config_omitted
+//	I  reference cycle / stable        | depchase_unresolved_stable
+//
+// COMPAT: pre-#854 every warning folded to a single Code="depchase_warning".
+// Reliable-side consumers matching that literal Code must move to the per-class
+// codes (or match the "depchase_" prefix). In-repo there are no such consumers.

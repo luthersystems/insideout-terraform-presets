@@ -29,3 +29,17 @@ var ErrEnrichClientUnavailable = errors.New("imported: required SDK client unava
 // Clients correctly at construction time; this sentinel exists so
 // runtime guards in the per-cloud impls have a typed return path.
 var ErrClientsWrongCloud = errors.New("imported: Clients union carries the wrong cloud")
+
+// ErrResourceNotFound signals that a per-resource EnrichByID probe
+// determined the resource no longer exists in the cloud (a definitive
+// not-found from the underlying describe/get, NOT a transient / auth /
+// throttle error). The per-cloud providers wrap the underlying
+// awsdiscover.ErrNotFound / gcpdiscover.ErrNotFound with this
+// cross-cloud sentinel (preserving the original in the chain), so a
+// cloud-agnostic caller — the existence-prune in FilterExisting, and
+// reliable's reverse-import carry-forward prune (which drops import{}
+// blocks for resources deleted since they were adopted, #reliable) —
+// can classify "gone" without importing the per-cloud discover
+// packages. Distinct from ErrEnrichByIDNotImplemented (the type has no
+// by-id probe, so existence is UNKNOWN, not "gone").
+var ErrResourceNotFound = errors.New("imported: resource no longer exists")

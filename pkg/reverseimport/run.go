@@ -640,11 +640,22 @@ func appendDepChaseDependencies(dependenciesByAddress map[string][]imported.Reso
 	}
 }
 
-// foldDepChaseWarnings appends every depchase warning to result.Diagnostics as
-// a "depchase_warning". It is called exactly once per run — on the chase
-// success path and on the chase error path (which are mutually exclusive), so
-// warnings survive an ErrCyclicDependency / ErrMaxIterations abort instead of
-// being dropped before the fold (F5). Nil-safe: a nil dcRes is a no-op.
+// foldDepChaseWarnings appends every depchase warning to result.Diagnostics,
+// mapping each structured warning's stable Code onto job.Diagnostic.Code and
+// its consumer address onto Field (presets#854), with the historical prose
+// rendered via String() as the Message. Reliable's diagnostics surface can then
+// classify on Code (depchase_nested_ref_literal, depchase_unimportable_target,
+// …) instead of pattern-matching prose.
+//
+// COMPAT: before #854 every warning folded to a single Code="depchase_warning".
+// Reliable-side UI/log consumers matching that literal Code must switch to the
+// per-class codes (or match the "depchase_" prefix) — see the PR body's
+// coordination note. In-repo there are no Code=="depchase_warning" consumers.
+//
+// It is called exactly once per run — on the chase success path and on the
+// chase error path (which are mutually exclusive), so warnings survive an
+// ErrCyclicDependency / ErrMaxIterations abort instead of being dropped before
+// the fold (F5). Nil-safe: a nil dcRes is a no-op.
 func foldDepChaseWarnings(result *job.Result, dcRes *depchase.Result) {
 	if dcRes == nil {
 		return
@@ -652,8 +663,15 @@ func foldDepChaseWarnings(result *job.Result, dcRes *depchase.Result) {
 	for _, warning := range dcRes.Warnings {
 		result.Diagnostics = append(result.Diagnostics, job.Diagnostic{
 			Severity: "warning",
-			Code:     "depchase_warning",
-			Message:  warning,
+			Code:     warning.Code,
+			// Field is the warning's attributable address: the consumer resource
+			// (class-A/B detection) or the omitted resource (config-omitted, G4).
+			// Non-attributable classes (unsupported/unparseable/stable) carry no
+			// Consumer, so Field is "" — an honest contract, not a Path fallback
+			// (Path is only ever set alongside Consumer, so the old fallback was
+			// unreachable).
+			Field:   warning.Consumer,
+			Message: warning.String(),
 		})
 	}
 }
