@@ -2,7 +2,6 @@ package composer
 
 import (
 	"fmt"
-	"reflect"
 	"sort"
 	"strings"
 	"time"
@@ -20,125 +19,16 @@ import (
 // docs/managed-resource-tiers.md: the same logical <import-project-id> is
 // used across AWS+GCP for one InsideOut stack/session.
 
-// untaggableAWS mirrors the canonical NON_TAGGABLE_AWS array in
-// tests/lint-project-tag.sh. Resource types in this set do NOT accept a tags
-// attribute in AWS provider 6.x; the provenance injector skips them and marks
-// the resource WeakLocked. TestUntaggableAllowlistsMatchLintScripts ensures
-// this list stays in sync with the bash array.
-var untaggableAWS = map[string]struct{}{
-	"aws_acm_certificate_validation":                     {},
-	"aws_api_gateway_deployment":                         {},
-	"aws_api_gateway_resource":                           {},
-	"aws_apigatewayv2_api_mapping":                       {},
-	"aws_apigatewayv2_authorizer":                        {},
-	"aws_apigatewayv2_integration":                       {},
-	"aws_apigatewayv2_route":                             {},
-	"aws_apprunner_custom_domain_association":            {},
-	"aws_autoscaling_group_tag":                          {},
-	"aws_backup_selection":                               {},
-	"aws_bedrock_model_invocation_logging_configuration": {},
-	"aws_bedrockagent_agent_action_group":                {},
-	"aws_bedrockagent_agent_knowledge_base_association":  {},
-	"aws_bedrockagent_data_source":                       {},
-	"aws_bedrockagentcore_gateway_target":                {},
-	"aws_cloudfront_monitoring_subscription":             {},
-	"aws_cloudfront_origin_access_identity":              {},
-	"aws_cloudwatch_dashboard":                           {},
-	"aws_cloudwatch_log_resource_policy":                 {},
-	"aws_cloudwatch_log_stream":                          {},
-	"aws_cognito_identity_provider":                      {},
-	"aws_cognito_resource_server":                        {},
-	"aws_cognito_user_pool_client":                       {},
-	"aws_cognito_user_pool_domain":                       {},
-	"aws_dynamodb_contributor_insights":                  {},
-	"aws_ecs_cluster_capacity_providers":                 {},
-	"aws_iam_group":                                      {},
-	"aws_iam_instance_profile":                           {},
-	"aws_iam_role_policy":                                {},
-	"aws_iam_role_policy_attachment":                     {},
-	"aws_iam_service_linked_role":                        {},
-	"aws_kms_alias":                                      {},
-	"aws_lambda_alias":                                   {},
-	"aws_lambda_function_url":                            {},
-	"aws_lambda_permission":                              {},
-	"aws_msk_configuration":                              {},
-	"aws_opensearchserverless_access_policy":             {},
-	"aws_opensearchserverless_security_policy":           {},
-	"aws_route53_record":                                 {},
-	"aws_s3_bucket_lifecycle_configuration":              {},
-	"aws_s3_bucket_ownership_controls":                   {},
-	"aws_s3_bucket_policy":                               {},
-	"aws_s3_bucket_public_access_block":                  {},
-	"aws_s3_bucket_server_side_encryption_configuration": {},
-	"aws_s3_bucket_versioning":                           {},
-	"aws_secretsmanager_secret_rotation":                 {},
-	"aws_security_group_rule":                            {},
-	"aws_sns_topic_subscription":                         {},
-	"aws_wafv2_web_acl_association":                      {},
-}
-
 // taggable returns the HCL attribute name ("tags" for AWS, "labels" for GCP)
 // to inject provenance into for ir, or ("", false) if the resource type does
-// not support tag/label-based mutual exclusion (weak lock).
-//
-// Decision order:
-//  1. Layer 1 generated schema (authoritative when registered): the schema
-//     map indicates whether the type carries a "tags" or "labels" key.
-//  2. AWS unregistered types: default to taggable unless explicitly listed
-//     in untaggableAWS (most AWS resources accept tags).
-//  3. GCP unregistered types: weak-lock (the long tail of GCP types lives
-//     in the typed registry now after Bundle 9–12; anything still
-//     unregistered is too unknown to label safely). The historical
-//     `labelableGCP` static allowlist was deleted in #396 once every
-//     entry it carried also lived in the typed registry — the schema
-//     branch above subsumes it.
+// not support tag/label-based mutual exclusion (weak lock). Thin wrapper over
+// imported.TaggableAttr — the canonical home since reliable#2230, so the
+// pick-time ownership readers (imported.ProvenanceOwner /
+// imported.ProvenanceOwnedByOther) share the exact gate the compose-time
+// validator and injector apply; see there for the decision order and the
+// #785 service-managed instance override.
 func taggable(ir imported.ImportedResource) (attr string, ok bool) {
-	cloud := strings.ToLower(strings.TrimSpace(ir.Identity.Cloud))
-	tfType := strings.TrimSpace(ir.Identity.Type)
-	if cloud == "" || tfType == "" {
-		return "", false
-	}
-
-	// Instance-level untaggability (#785): a resource whose type is normally
-	// taggable is still NOT taggable when the cloud marks it service-managed.
-	// AWS rejects every tag operation on a service-managed instance (an
-	// EventBridge ManagedBy rule fails with ManagedRuleException), so the
-	// injector must skip provenance and weak-lock it. This sits alongside the
-	// type-level untaggableAWS map but keys off the per-instance marker the
-	// discoverer captured, so it works for any type and any selection path —
-	// the composer's last line of defense even if classification let the
-	// instance through.
-	if imported.IsServiceManaged(ir.Identity) {
-		return "", false
-	}
-
-	if _, schema, registered := generated.Lookup(tfType); registered {
-		switch cloud {
-		case "aws":
-			if _, has := schema["tags"]; has {
-				return "tags", true
-			}
-			return "", false
-		case "gcp":
-			if _, has := schema["labels"]; has {
-				return "labels", true
-			}
-			return "", false
-		}
-	}
-
-	switch cloud {
-	case "aws":
-		if _, blocked := untaggableAWS[tfType]; blocked {
-			return "", false
-		}
-		return "tags", true
-	case "gcp":
-		// Unregistered GCP types weak-lock by design — see header
-		// comment for the rationale.
-		return "", false
-	}
-	return "", false
+	return imported.TaggableAttr(ir)
 }
 
 // provenanceEntry is a single key/value pair to emit into the provenance
@@ -195,123 +85,99 @@ func gcpLabelTimestamp(t time.Time) string {
 	return s
 }
 
-// existingProvenanceProject reads the InsideOutImportProject (AWS) or
-// insideout-import-project (GCP) value from ir's desired state, preferring
-// the typed Attrs over the opaque Attributes bag. Returns ("", false) when
-// the resource does not advertise a prior owner. Used by the validator to
-// detect cross-session ownership conflicts.
-func existingProvenanceProject(ir imported.ImportedResource) (string, bool) {
+// readProvenanceMarker reads the InsideOut provenance marker identified by
+// awsKey (AWS tag key) / gcpKey (GCP label key — GCP claims live in labels)
+// from ir's DESIRED STATE, preferring the typed Attrs over the opaque
+// Attributes bag.
+//
+// Deliberately NOT consulted here: ir.Identity.Tags, the live cloud-side
+// snapshot (reliable#2230 follow-up). The validator and injector this feeds
+// run at compose time, where live-tag claims are already handled upstream —
+// composeStackImpl runs imported.DropUnimportable BEFORE
+// ValidateProvenanceConflicts, silently dropping every resource whose live
+// tags carry the InsideOutImported co-marker (ReasonInsideOutImported), and
+// the Mars-leg gates (pkg/reverseimport run.go, closure.go; depchase) reject
+// the same class before it ever reaches a compose. The live-tag population
+// that WOULD reach this reader is therefore the bare/partial-marker class
+// that imported.HasInsideOutImportedMarker's contract explicitly documents
+// as NOT ownership ("some historical resources carry a bare account/project
+// marker without having been imported") — conflicting on those would demand
+// a ForceTakeover from an owner that never owned, and refusing to stamp them
+// would break the #690 discovered-tags backfill. Pick-time surfacing of live
+// full-stamp claims is imported.ProvenanceOwnedByOther's job.
+func readProvenanceMarker(ir imported.ImportedResource, awsKey, gcpKey string) (string, bool) {
 	attrName, ok := taggable(ir)
 	if !ok {
 		return "", false
 	}
-	key := AWSTagKeyImportProject
+	key := awsKey
 	if attrName == "labels" {
-		key = GCPLabelKeyImportProject
+		key = gcpKey
 	}
 
 	if len(ir.Attrs) > 0 {
-		if v, found := readTypedTagLiteral(ir.Identity.Type, ir.Attrs, attrName, key); found {
-			return v, true
+		if vals := imported.TagLiteralValues(ir.Identity.Type, ir.Attrs, attrName, key); vals != nil {
+			if v, found := vals[key]; found {
+				return v, true
+			}
 		}
 	}
 	if len(ir.Attributes) > 0 {
-		if v, found := readOpaqueTagLiteral(ir.Attributes, attrName, key); found {
-			return v, true
+		if vals := imported.OpaqueTagValues(ir.Attributes, attrName, key); vals != nil {
+			if v, found := vals[key]; found {
+				return v, true
+			}
 		}
 	}
 	return "", false
 }
 
+// existingProvenanceProject reads the InsideOutImportProject (AWS) or
+// insideout-import-project (GCP) value from ir's desired state (Attrs →
+// Attributes; see readProvenanceMarker for why Identity.Tags is out of
+// scope). Returns ("", false) when the resource does not advertise a prior
+// owner. Used by the validator (ValidateProvenanceConflicts) and the
+// injector (injectProvenance) to detect cross-session ownership conflicts.
+func existingProvenanceProject(ir imported.ImportedResource) (string, bool) {
+	return readProvenanceMarker(ir, AWSTagKeyImportProject, GCPLabelKeyImportProject)
+}
+
 // existingProvenanceSession reads the InsideOutImportSession (AWS) or
-// insideout-import-session (GCP) value from ir's desired state, preferring the
-// typed Attrs over the opaque Attributes bag. Returns ("", false) when the
-// resource does not advertise a prior import session. Mirrors
-// existingProvenanceProject exactly, only over the session key.
+// insideout-import-session (GCP) value from ir's desired state. Returns
+// ("", false) when the resource does not advertise a prior import session.
+// Mirrors existingProvenanceProject exactly, only over the session key.
 //
 // The validator uses this for the same-import-session self-claim allowance
 // (reliable#2068): the session tag is the namespace-stable self identity
 // because it is stamped identically on every import leg, unlike the project
 // id whose namespace differs between the reconcile and apply legs.
 func existingProvenanceSession(ir imported.ImportedResource) (string, bool) {
-	attrName, ok := taggable(ir)
-	if !ok {
-		return "", false
-	}
-	key := AWSTagKeyImportSession
-	if attrName == "labels" {
-		key = GCPLabelKeyImportSession
-	}
-
-	if len(ir.Attrs) > 0 {
-		if v, found := readTypedTagLiteral(ir.Identity.Type, ir.Attrs, attrName, key); found {
-			return v, true
-		}
-	}
-	if len(ir.Attributes) > 0 {
-		if v, found := readOpaqueTagLiteral(ir.Attributes, attrName, key); found {
-			return v, true
-		}
-	}
-	return "", false
+	return readProvenanceMarker(ir, AWSTagKeyImportSession, GCPLabelKeyImportSession)
 }
 
-// readTypedTagLiteral decodes typed Attrs and reads the literal string value
-// at <Tags|Labels>[key]. Returns ok=false when the typed model has no
-// matching field, the entry is missing, or the entry's state is anything
-// other than a string literal (Expr / Null / Absent).
-//
-// Implementation: reflect into the decoded struct and find the field whose
-// `tf:"tags"` / `tf:"labels"` tag matches attrName. The map element type is
-// always *generated.Value[string] for tag/label maps, so the Literal pointer
-// gives us the string directly.
-func readTypedTagLiteral(tfType string, raw []byte, attrName, key string) (string, bool) {
-	decoded, err := generated.UnmarshalAttrs(tfType, raw)
-	if err != nil {
-		return "", false
-	}
-	v := reflect.ValueOf(decoded)
-	if v.Kind() == reflect.Pointer {
-		v = v.Elem()
-	}
-	if v.Kind() != reflect.Struct {
-		return "", false
-	}
-	t := v.Type()
-	for i := 0; i < t.NumField(); i++ {
-		fld := t.Field(i)
-		tag := strings.Split(fld.Tag.Get("tf"), ",")[0]
-		if tag != attrName {
-			continue
-		}
-		fv := v.Field(i)
-		if fv.Kind() != reflect.Map || fv.IsNil() {
-			return "", false
-		}
-		entry := fv.MapIndex(reflect.ValueOf(key))
-		if !entry.IsValid() {
-			return "", false
-		}
-		if entry.Kind() == reflect.Pointer {
-			if entry.IsNil() {
-				return "", false
-			}
-			entry = entry.Elem()
-		}
-		if entry.Kind() != reflect.Struct {
-			return "", false
-		}
-		lit := entry.FieldByName("Literal")
-		if !lit.IsValid() || lit.IsNil() {
-			return "", false
-		}
-		s, ok := lit.Elem().Interface().(string)
-		if !ok {
-			return "", false
-		}
-		return s, true
-	}
-	return "", false
+// ProvenanceOwner re-exports imported.ProvenanceOwner on the established
+// pkg/composer surface — the single stable reader of an imported resource's
+// InsideOut provenance claim for downstream consumers (reliable's resource
+// picker and reverse-run / plan-preview guards, reliable#2230). The canonical
+// layer/precedence contract is documented on imported.ProvenanceOwner.
+func ProvenanceOwner(ir imported.ImportedResource) (project, session string, ok bool) {
+	return imported.ProvenanceOwner(ir)
+}
+
+// ProvenanceOwnedByOther re-exports imported.ProvenanceOwnedByOther — the
+// pick/plan-time ownership DECISION ("claimed by project X"), encapsulating
+// the same-session self-claim allowance (reliable#2068) and the
+// backwards-compat mode. ownProjectIDs is the caller's full own-claim SET —
+// a session's own stamp may carry the session-derived "io-<suffix>" name OR
+// the Oracle deployment-project UUID (reliable#2068's double namespace), so
+// pass every identifier the session may have stamped under. It is a strict
+// SUPERSET of this package's compose-time
+// imported_resource_provenance_conflict set (compose silently DROPS
+// full-stamp live claims via imported.DropUnimportable rather than
+// conflicting); the invariant is pinned by the pipeline matrix test. See
+// imported.ProvenanceOwnedByOther for the full contract.
+func ProvenanceOwnedByOther(ir imported.ImportedResource, importSessionID string, ownProjectIDs ...string) (owner string, claimed bool) {
+	return imported.ProvenanceOwnedByOther(ir, importSessionID, ownProjectIDs...)
 }
 
 // validForceTakeover reports whether ft is non-nil, fully-populated, and
@@ -327,28 +193,6 @@ func validForceTakeover(ft *imported.ForceTakeover, observed string) bool {
 		return false
 	}
 	return ft.PreviousOwner == observed
-}
-
-// readOpaqueTagLiteral reads attrs[attrName][key] from the Phase 1 opaque
-// attribute bag. Returns ok=false on any type mismatch.
-func readOpaqueTagLiteral(attrs map[string]any, attrName, key string) (string, bool) {
-	raw, ok := attrs[attrName]
-	if !ok {
-		return "", false
-	}
-	m, ok := raw.(map[string]any)
-	if !ok {
-		return "", false
-	}
-	v, has := m[key]
-	if !has {
-		return "", false
-	}
-	s, ok := v.(string)
-	if !ok {
-		return "", false
-	}
-	return s, true
 }
 
 // injectProvenance rewrites the tags/labels attribute in body so it carries
@@ -576,21 +420,119 @@ func buildDiscoveredTagsExpression(cloud string, tags map[string]string, exclude
 	return b.String()
 }
 
-// preserveExistingImportedAt rewrites the InsideOutImportedAt entry's
-// value to the literal already present on the cloud-side resource
-// (ir.Identity.Tags) when the resource was previously imported under the
-// same project+session. Returns the entries slice unchanged when:
+// priorStampLayers collects each placement's marker values (presence
+// semantics: a key appears in a layer map iff that placement carries it),
+// in precedence order Attrs → Attributes → Identity.Tags. Unlike the
+// compose-time conflict reader, the live Identity.Tags leg here is
+// unconditional and needs no full-stamp co-marker: the preservation
+// predicate only ever fires when project AND session both match the CURRENT
+// pass (a self-stamp check), so a stale or bare foreign live marker can
+// never trigger it.
+//
+// Why all three placements (reliable#2230 review, F8b): the prior stamp
+// lands in different placements per leg — a Mars reverse-import leg
+// backfills it into typed Attrs (BackfillImportedAttrsFromPlan), while
+// post-apply re-discovery echoes it through Identity.Tags. Reading only
+// Identity.Tags (the historical behavior) meant an Attrs-shaped prior stamp
+// was re-stamped with a fresh nowFn() timestamp on every recompose,
+// breaking the byte-identical-HCL idempotency contract for exactly the
+// Mars-leg carry-forward this function exists to keep quiet.
+func priorStampLayers(ir *imported.ImportedResource, attrName, projectKey, sessionKey, importedAtKey string) []map[string]string {
+	var layers []map[string]string
+	if len(ir.Attrs) > 0 {
+		if vals := imported.TagLiteralValues(ir.Identity.Type, ir.Attrs, attrName, projectKey, sessionKey, importedAtKey); len(vals) > 0 {
+			layers = append(layers, vals)
+		}
+	}
+	if len(ir.Attributes) > 0 {
+		if vals := imported.OpaqueTagValues(ir.Attributes, attrName, projectKey, sessionKey, importedAtKey); len(vals) > 0 {
+			layers = append(layers, vals)
+		}
+	}
+	if len(ir.Identity.Tags) > 0 {
+		vals := map[string]string{}
+		for _, key := range []string{projectKey, sessionKey, importedAtKey} {
+			if v, ok := ir.Identity.Tags[key]; ok {
+				vals[key] = v
+			}
+		}
+		if len(vals) > 0 {
+			layers = append(layers, vals)
+		}
+	}
+	return layers
+}
+
+// qualifiedPriorImportedAt scans the placement layers for a preservable
+// prior ImportedAt stamp. Each layer must INDEPENDENTLY qualify — its OWN
+// project and session markers must match the current pass — before its
+// timestamp is accepted; project/session/ImportedAt are never stitched
+// across layers.
+//
+// Scan rules per layer, in placement order:
+//
+//   - no project marker in the layer → keep scanning (the layer says
+//     nothing about ownership);
+//   - project marker present but the layer does NOT qualify (project or
+//     session mismatch) → STOP with no preservation: the most
+//     authoritative placement that expresses ownership says it changed
+//     (force-takeover / cross-project / cross-session re-import), and a
+//     fresh stamp asserts the new ownership — falling past it could
+//     resurrect a stale stamp;
+//   - layer qualifies and carries a usable (non-blank) ImportedAt →
+//     preserve that literal;
+//   - layer qualifies but has NO usable ImportedAt → CONTINUE to later
+//     layers (reliable#2230 review, R4): a partial desired-state stamp
+//     (project+session backfilled, timestamp not captured) must not block
+//     preservation when the live cloud-side layer carries the full stamp —
+//     otherwise the timestamp churns on every recompose, permanent
+//     tag-only drift.
+func qualifiedPriorImportedAt(layers []map[string]string, projectKey, sessionKey, importedAtKey, projectID, sessionID string) (string, bool) {
+	for _, vals := range layers {
+		p, found := vals[projectKey]
+		if !found {
+			continue
+		}
+		if p != projectID {
+			return "", false
+		}
+		// Session marker comparison: if the current pass has a session, it
+		// must match the layer's. If the current pass has no session, the
+		// layer must also have no session — otherwise the prior belongs to
+		// a different temporal scope and a fresh stamp is the right signal.
+		s, hasS := vals[sessionKey]
+		if sessionID != "" {
+			if !hasS || s != sessionID {
+				return "", false
+			}
+		} else if hasS {
+			return "", false
+		}
+		if at, ok := vals[importedAtKey]; ok && strings.TrimSpace(at) != "" {
+			return at, true
+		}
+	}
+	return "", false
+}
+
+// preserveExistingImportedAt rewrites the InsideOutImportedAt entry's value
+// to the literal the resource already carries (via priorStampLayers /
+// qualifiedPriorImportedAt over typed Attrs, opaque Attributes, and the
+// cloud-side Identity.Tags snapshot) when the resource was previously
+// imported under the same project+session. Returns the entries slice
+// unchanged when:
 //
 //   - the cloud is neither aws nor gcp (the entries slice is empty in
 //     that case anyway — defensive),
-//   - ir.Identity.Tags has no ImportProject marker (first import — fresh
+//   - no placement carries an ImportProject marker (first import — fresh
 //     stamp is correct),
-//   - the existing ImportProject marker doesn't match projectID (a
+//   - the first ownership-expressing placement doesn't match projectID (a
 //     force-takeover or cross-project re-import — fresh stamp asserts
 //     the new ownership),
 //   - the session changed since the prior stamp (the session boundary is
 //     the natural place to refresh the timestamp),
-//   - or no existing ImportedAt literal is present (nothing to preserve).
+//   - or no qualifying placement carries a usable ImportedAt literal
+//     (nothing to preserve).
 //
 // Why this lives at the entries layer rather than overriding importedAt
 // for the whole call: provenanceKeysFor's signature is small and
@@ -605,16 +547,18 @@ func buildDiscoveredTagsExpression(cloud string, tags map[string]string, exclude
 // a tag-only diff in `terraform plan` on every flow even when nothing
 // material changed.
 func preserveExistingImportedAt(entries []provenanceEntry, ir *imported.ImportedResource, cloud, projectID, sessionID string) []provenanceEntry {
-	if ir == nil || len(ir.Identity.Tags) == 0 {
+	if ir == nil {
 		return entries
 	}
-	var projectKey, sessionKey, importedAtKey string
+	var attrName, projectKey, sessionKey, importedAtKey string
 	switch strings.ToLower(strings.TrimSpace(cloud)) {
 	case "aws":
+		attrName = "tags"
 		projectKey = AWSTagKeyImportProject
 		sessionKey = AWSTagKeyImportSession
 		importedAtKey = AWSTagKeyImportedAt
 	case "gcp":
+		attrName = "labels"
 		projectKey = GCPLabelKeyImportProject
 		sessionKey = GCPLabelKeyImportSession
 		importedAtKey = GCPLabelKeyImportedAt
@@ -622,24 +566,9 @@ func preserveExistingImportedAt(entries []provenanceEntry, ir *imported.Imported
 		return entries
 	}
 
-	if got, ok := ir.Identity.Tags[projectKey]; !ok || got != projectID {
-		return entries
-	}
-	// Session marker comparison: if the current pass has a session, it
-	// must match the prior stamp. If the current pass has no session,
-	// the prior stamp must also have no session — otherwise the prior
-	// belongs to a different temporal scope and a fresh stamp is the
-	// right signal.
-	if sessionID != "" {
-		if got, ok := ir.Identity.Tags[sessionKey]; !ok || got != sessionID {
-			return entries
-		}
-	} else if _, ok := ir.Identity.Tags[sessionKey]; ok {
-		return entries
-	}
-
-	existing, ok := ir.Identity.Tags[importedAtKey]
-	if !ok || strings.TrimSpace(existing) == "" {
+	layers := priorStampLayers(ir, attrName, projectKey, sessionKey, importedAtKey)
+	prior, ok := qualifiedPriorImportedAt(layers, projectKey, sessionKey, importedAtKey, projectID, sessionID)
+	if !ok {
 		return entries
 	}
 
@@ -650,7 +579,7 @@ func preserveExistingImportedAt(entries []provenanceEntry, ir *imported.Imported
 	copy(out, entries)
 	for i := range out {
 		if out[i].Key == importedAtKey {
-			out[i].Value = existing
+			out[i].Value = prior
 			break
 		}
 	}
@@ -801,14 +730,10 @@ func withFixedNow(t time.Time) (restore func()) {
 }
 
 // untaggableAWSSlice returns the sorted untaggable AWS resource type list
-// for cross-checking against the lint script. The slice is a stable copy.
+// for cross-checking against the lint script. The canonical map lives in
+// pkg/composer/imported alongside TaggableAttr (reliable#2230).
 func untaggableAWSSlice() []string {
-	out := make([]string, 0, len(untaggableAWS))
-	for k := range untaggableAWS {
-		out = append(out, k)
-	}
-	sort.Strings(out)
-	return out
+	return imported.UntaggableAWSTypes()
 }
 
 // labelableGCPFromRegistry returns the sorted list of GCP types whose

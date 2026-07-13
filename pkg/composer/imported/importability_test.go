@@ -172,11 +172,11 @@ func TestHasInsideOutImportedMarker(t *testing.T) {
 		want bool
 	}{
 		"aws imported marker present": {
-			tags: map[string]string{awsTagKeyImported: "true"},
+			tags: map[string]string{AWSTagKeyImported: "true"},
 			want: true,
 		},
 		"aws imported marker presence is enough": {
-			tags: map[string]string{awsTagKeyImported: ""},
+			tags: map[string]string{AWSTagKeyImported: ""},
 			want: true,
 		},
 		"aws imported marker match is case-insensitive": {
@@ -184,15 +184,15 @@ func TestHasInsideOutImportedMarker(t *testing.T) {
 			want: true,
 		},
 		"gcp imported marker present": {
-			tags: map[string]string{gcpLabelKeyImported: "true"},
+			tags: map[string]string{GCPLabelKeyImported: "true"},
 			want: true,
 		},
 		"bare aws import project account id is not ownership": {
-			tags: map[string]string{awsTagKeyImportProject: "123456789012"},
+			tags: map[string]string{AWSTagKeyImportProject: "123456789012"},
 			want: false,
 		},
 		"bare gcp import project label is not ownership": {
-			tags: map[string]string{gcpLabelKeyImportProject: "customer-project"},
+			tags: map[string]string{GCPLabelKeyImportProject: "customer-project"},
 			want: false,
 		},
 		"no tags": {
@@ -219,21 +219,21 @@ func TestUnimportableReason_InsideOutImportedMarker(t *testing.T) {
 	t.Run("aws marker makes otherwise importable resource un-importable", func(t *testing.T) {
 		ir := ImportedResource{Identity: ResourceIdentity{
 			Type: "aws_vpc",
-			Tags: map[string]string{awsTagKeyImported: "true"},
+			Tags: map[string]string{AWSTagKeyImported: "true"},
 		}}
 		assert.Equal(t, ReasonInsideOutImported, UnimportableReason(ir))
 	})
 	t.Run("gcp marker makes otherwise importable resource un-importable", func(t *testing.T) {
 		ir := ImportedResource{Identity: ResourceIdentity{
 			Type: "google_storage_bucket",
-			Tags: map[string]string{gcpLabelKeyImported: "true"},
+			Tags: map[string]string{GCPLabelKeyImported: "true"},
 		}}
 		assert.Equal(t, ReasonInsideOutImported, UnimportableReason(ir))
 	})
 	t.Run("bare import project account id stays importable", func(t *testing.T) {
 		ir := ImportedResource{Identity: ResourceIdentity{
 			Type: "aws_vpc",
-			Tags: map[string]string{awsTagKeyImportProject: "123456789012"},
+			Tags: map[string]string{AWSTagKeyImportProject: "123456789012"},
 		}}
 		assert.Equal(t, "", UnimportableReason(ir))
 	})

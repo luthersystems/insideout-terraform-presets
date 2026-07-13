@@ -576,6 +576,100 @@ func TestValidateProvenanceConflicts_DifferentSessionDifferentProjectFails(t *te
 	assert.Equal(t, "io-other", issues[0].Value)
 }
 
+// TestValidateProvenanceConflicts_ClaimPlacementScope parameterizes WHERE the
+// foreign claim marker sits and pins the validator's read scope
+// (reliable#2230): desired-state placements (typed Attrs, opaque Attributes)
+// conflict; a claim visible ONLY on the live Identity.Tags snapshot does NOT
+// — that class is owned upstream. composeStackImpl runs
+// imported.DropUnimportable (keying on the InsideOutImported co-marker)
+// before this validator, silently dropping full-stamp live claims, and a
+// bare live project marker is explicitly not ownership (see
+// HasInsideOutImportedMarker's contract: historical resources carry a bare
+// account/project marker without having been imported). Conflicting on live
+// tags here would turn those bare markers into fatal conflicts demanding a
+// ForceTakeover from an owner that never owned. Pick-time surfacing of live
+// full-stamp claims is imported.ProvenanceOwnedByOther's job (pinned by
+// TestProvenancePipelineMatrix).
+func TestValidateProvenanceConflicts_ClaimPlacementScope(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name         string
+		ir           imported.ImportedResource
+		cloud        string
+		wantConflict bool
+	}{
+		{
+			// Attributes-shaped claims are covered by
+			// TestValidateProvenanceConflicts_DifferentTagFails; typed-Attrs
+			// GCP by ..._GCPTagFromTypedAttrs. This row adds typed-Attrs AWS.
+			name:  "aws typed-Attrs claim conflicts",
+			cloud: "aws",
+			ir: imported.ImportedResource{
+				Identity: imported.ResourceIdentity{Cloud: "aws", Type: "aws_sqs_queue", Address: "aws_sqs_queue.q", ImportID: "q"},
+				Tier:     imported.TierImportedFlat,
+				Attrs:    []byte(`{"name":{"literal":"q"},"tags":{"InsideOutImportProject":{"literal":"io-other"}}}`),
+			},
+			wantConflict: true,
+		},
+		{
+			name:  "aws live-only full stamp does not conflict (DropUnimportable owns it)",
+			cloud: "aws",
+			ir: imported.ImportedResource{
+				Identity: imported.ResourceIdentity{
+					Cloud: "aws", Type: "aws_sqs_queue", Address: "aws_sqs_queue.q", ImportID: "q",
+					Tags: map[string]string{
+						"InsideOutImportProject": "io-other",
+						"InsideOutImported":      "true",
+					},
+				},
+				Tier: imported.TierImportedFlat,
+			},
+			wantConflict: false,
+		},
+		{
+			name:  "gcp live-only full stamp does not conflict",
+			cloud: "gcp",
+			ir: imported.ImportedResource{
+				Identity: imported.ResourceIdentity{
+					Cloud: "gcp", Type: "google_storage_bucket", Address: "google_storage_bucket.b", ImportID: "b",
+					Tags: map[string]string{
+						"insideout-import-project": "io-other",
+						"insideout-imported":       "true",
+					},
+				},
+				Tier: imported.TierImportedFlat,
+			},
+			wantConflict: false,
+		},
+		{
+			name:  "aws bare live project marker does not conflict (not ownership)",
+			cloud: "aws",
+			ir: imported.ImportedResource{
+				Identity: imported.ResourceIdentity{
+					Cloud: "aws", Type: "aws_sqs_queue", Address: "aws_sqs_queue.q", ImportID: "q",
+					Tags: map[string]string{"InsideOutImportProject": "io-other"},
+				},
+				Tier:  imported.TierImportedFlat,
+				Attrs: []byte(`{"name":{"literal":"q"}}`),
+			},
+			wantConflict: false,
+		},
+	}
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			issues := ValidateProvenanceConflicts(tc.cloud, []imported.ImportedResource{tc.ir}, ProvenanceOpts{ImportProjectID: "io-1"})
+			got := countCode(issues, "imported_resource_provenance_conflict")
+			if tc.wantConflict {
+				assert.Equal(t, 1, got, "expected a conflict; issues=%v", issueCodes(issues))
+			} else {
+				assert.Zero(t, got, "expected no conflict; issues=%v", issueCodes(issues))
+			}
+		})
+	}
+}
+
 // TestValidateProvenanceConflicts_SameProjectNoSessionOK proves the existing
 // project-id match path is intact: a resource claimed under the same project
 // with NO session tag is still allowed (the session allowance is additive).
