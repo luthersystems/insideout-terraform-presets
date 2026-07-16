@@ -238,6 +238,17 @@ func mergeClosureResources(in mergeClosureInput) ([]imported.ImportedResource, m
 			continue
 		}
 		r.Identity.ParentAddress = selectedParentAddr
+		// Closure provenance (presets#864): this child is auto-included because
+		// its parent was selected. Stamp pulled_in_by so reliable's disclosure
+		// surface can render *why* it appears in the import set (auto_included)
+		// without re-deriving it from the dependency edges. Only set when absent
+		// so a resource that arrived with provenance keeps it.
+		if r.PulledInBy == nil {
+			r.PulledInBy = &imported.PulledInBy{
+				Reason:    imported.PulledInReasonSelectionClosure,
+				Consumers: []string{selectedParentAddr},
+			}
+		}
 		existing[resourceKey(r.Identity)] = struct{}{}
 		merged = append(merged, r)
 		deps[selectedParentAddr] = append(deps[selectedParentAddr], r.Identity)

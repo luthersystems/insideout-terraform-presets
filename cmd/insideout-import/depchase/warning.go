@@ -33,6 +33,7 @@ import (
 //	depchase_discover_error       (F1)   — non-fatal hard error on a terminal seed
 //	depchase_config_omitted       class H — discovered but genconfig dropped it
 //	depchase_unresolved_stable    class I — reference cycle / stable unresolved
+//	depchase_reference_retained   class J — bounded by the closure contract (#864)
 const (
 	CodeNestedRefLiteral   = "depchase_nested_ref_literal"
 	CodeNonARNRefLiteral   = "depchase_non_arn_ref_literal"
@@ -44,6 +45,15 @@ const (
 	CodeDiscoverError      = "depchase_discover_error"
 	CodeConfigOmitted      = "depchase_config_omitted"
 	CodeUnresolvedStable   = "depchase_unresolved_stable"
+	// CodeReferenceRetained (class J, presets#864) marks a discovered,
+	// importable dependency that the closure contract's AdoptionPolicy chose to
+	// represent as a REFERENCE rather than adopt into the managed set — e.g. a
+	// data-store selection referencing a foreign, out-of-scope admin IAM role.
+	// The literal stays in the consumer's HCL (valid Terraform for a concrete
+	// external identifier); the target is not adopted. Reason carries the
+	// stable decision code (ReferenceReasonOutOfScope) so reliable's disclosure
+	// surface can explain the bound without re-deriving it.
+	CodeReferenceRetained = "depchase_reference_retained"
 )
 
 // Warning is a single structured depchase diagnostic. Code is the stable
@@ -129,6 +139,12 @@ func (w Warning) String() string {
 			w.Literal, w.TFType, w.Consumer)
 	case CodeUnresolvedStable:
 		return fmt.Sprintf("unresolved ARN reference (stable across iterations): %q", w.Literal)
+	case CodeReferenceRetained:
+		// The closure-contract bound (presets#864): an importable dependency
+		// intentionally left as a reference instead of adopted. Consumer is the
+		// referencing resource; Reason is the stable decision code.
+		return fmt.Sprintf("%s %q (%s) referenced by %s left as a reference (not adopted: %s) — bounded by the reverse-import closure contract; the literal is retained and the target is not managed",
+			refNoun(w.Literal), w.Literal, w.TFType, w.Consumer, w.Reason)
 	default:
 		// Defensive: an unmapped code still renders something traceable rather
 		// than an empty string.

@@ -88,8 +88,8 @@ test-golden-stack: ## Replay genconfig cleanup over captured real-world stacks a
 .PHONY: test-tfvalidate
 test-tfvalidate: ## Build-tagged terraform-validate harnesses: emit real HCL (imported.tf + AWS provider blocks incl. retry tuning #780) and run `terraform validate` against the live provider schema. Needs terraform + the AWS provider; NO AWS creds. -p 1: the harnesses share TF_PLUGIN_CACHE_DIR, so serialize packages to avoid a concurrent-init plugin handshake race.
 	$(GO) test -tags tfvalidate -count=1 -p 1 -timeout 10m \
-		-run 'TestImportedTF_TerraformValidate|TestEmitProviders_TerraformValidate|TestRenderImportedProvidersTF_TerraformValidate' \
-		./pkg/composer/ ./cmd/insideout-import/genconfig/ ./pkg/reverseimport/
+		-run 'TestImportedTF_TerraformValidate|TestEmitProviders_TerraformValidate|TestRenderImportedProvidersTF_TerraformValidate|TestReferenceRepresentation_Validates' \
+		./pkg/composer/ ./cmd/insideout-import/genconfig/ ./pkg/reverseimport/ ./cmd/insideout-import/depchase/
 
 .PHONY: reverse-e2e
 reverse-e2e: ## Live whole-account reverse-import e2e: discover->genconfig->driftfix->depchase->plan via the prod engine, asserting a clean tag-only plan. Needs real AWS creds + terraform + an offline provider mirror. REVERSE_E2E_REGIONS=all for multi-region; see scripts/reverse-e2e.sh header for knobs.
