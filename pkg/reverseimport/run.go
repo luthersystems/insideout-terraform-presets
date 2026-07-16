@@ -152,17 +152,26 @@ func Run(ctx context.Context, req job.Request, opts Options) (job.Result, error)
 				return &depchase.DriftfixResult{GeneratedPath: r.GeneratedPath, Iterations: r.Iterations}, nil
 			},
 		}
+		// Closure contract (presets#864): when the caller opts in, bound the
+		// chase to the selection scope by handing depchase a SelectionScopePolicy
+		// built from the resource set entering the phase (selected + closure
+		// resources). Off by default → nil policy → historical adopt-all.
+		var adoptionPolicy depchase.AdoptionPolicy
+		if opts.BoundClosureToSelection {
+			adoptionPolicy = depchase.NewSelectionScopePolicy(resources)
+		}
 		opts.progressf("reverse-import: chasing resource dependencies…\n")
 		if err := opts.runPhase("chasing resource dependencies", func() error {
 			var chaseErr error
 			dcRes, chaseErr = opts.deps.runDepChase(ctx, depchase.Options{
-				Workdir:       workdir,
-				Region:        region,
-				AccountID:     firstResourceField(resources, func(id imported.ResourceIdentity) string { return id.AccountID }),
-				MaxIterations: opts.MaxDepChaseIterations,
-				Discoverer:    opts.Discoverer,
-				Pipeline:      pipeline,
-				Stdout:        opts.Stdout,
+				Workdir:        workdir,
+				Region:         region,
+				AccountID:      firstResourceField(resources, func(id imported.ResourceIdentity) string { return id.AccountID }),
+				MaxIterations:  opts.MaxDepChaseIterations,
+				Discoverer:     opts.Discoverer,
+				Pipeline:       pipeline,
+				Stdout:         opts.Stdout,
+				AdoptionPolicy: adoptionPolicy,
 			}, resources)
 			return chaseErr
 		}); err != nil {

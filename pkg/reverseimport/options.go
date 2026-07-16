@@ -66,6 +66,19 @@ type Options struct {
 	Discoverer            Discoverer
 	ClosureDiscoverer     ClosureDiscoverer
 
+	// BoundClosureToSelection opts the dependency-chase phase into the closure
+	// contract (presets#864): a discovered dependency whose Terraform type is
+	// outside the selection scope (the types the operator's selected + closure
+	// resources cover) is represented as a REFERENCE — the literal stays in the
+	// generated HCL and the target is not adopted into the managed import set —
+	// instead of being transitively adopted. Off by default, so the historical
+	// adopt-all behavior is unchanged unless a caller opts in. When set, Run
+	// builds a depchase.SelectionScopePolicy from the resource set entering
+	// dep-chase and passes it as depchase.Options.AdoptionPolicy. Provenance
+	// (pulled_in_by) is stamped on auto-included resources regardless of this
+	// flag. See docs/depchase-closure-contract.md.
+	BoundClosureToSelection bool
+
 	// Parallelism overrides the `-parallelism=<n>` flag passed to the
 	// engine's final `terraform plan` (the authoritative combined-stack plan
 	// over the full imported set) AND propagated to the genconfig readback /

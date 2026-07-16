@@ -99,6 +99,16 @@ type Options struct {
 	Discoverer    Discoverer
 	Pipeline      PipelineFns
 
+	// AdoptionPolicy bounds the closure (presets#864). For each discovered,
+	// importable dependency it decides ADOPT (add to the managed import set,
+	// historical behavior) vs REFERENCE (leave the literal in the consumer's
+	// HCL and record a depchase_reference_retained warning). Nil means
+	// adopt-all — the historical unbounded closure — so existing callers are
+	// unaffected. reverse-import constructs a SelectionScopePolicy here when
+	// Options.BoundClosureToSelection is set. See
+	// docs/depchase-closure-contract.md.
+	AdoptionPolicy AdoptionPolicy
+
 	// Stdout, when non-nil, receives a concise per-iteration progress
 	// line ("depchase: iteration k: discovered N resource(s)…") so a
 	// long-running caller — the Mars reverse-import job — can surface live
@@ -226,6 +236,15 @@ func Run(ctx context.Context, opts Options, resources []imported.ImportedResourc
 	// (consumer → discovered) pair can re-surface if the regenerate
 	// step rewrites the consumer's HCL without changing the reference.
 	seenEdges := make(map[string]struct{})
+
+	// provByAddr accumulates the closure provenance (presets#864) for every
+	// resource the loop adopts, keyed by Terraform address. It is applied to
+	// res.Resources at the end of each iteration (after genconfig replaces the
+	// slice) so imported.json — which reverse-import writes from res.Resources —
+	// carries a pulled_in_by reason on each auto-included resource regardless of
+	// genconfig round-tripping the resource list. Consumer edges are unioned
+	// across literals/iterations that resolve to the same target.
+	provByAddr := make(map[string]*imported.PulledInBy)
 
 	for iter := 1; iter <= opts.MaxIterations; iter++ {
 		raw, err := os.ReadFile(generatedPath)
@@ -456,6 +475,33 @@ func Run(ctx context.Context, opts Options, resources []imported.ImportedResourc
 				ignoredARNs[s.arn] = struct{}{}
 				continue
 			}
+			// Closure-contract bound (presets#864). The target is importable and
+			// unclaimed (the UnimportableReason gate above already rejects
+			// InsideOut-claimed and inherently un-adoptable targets), so the only
+			// remaining question is scope: does the configured AdoptionPolicy
+			// want this dependency ADOPTED or represented as a REFERENCE? A
+			// declined dependency is left as its literal in the consumer's HCL —
+			// already valid Terraform for a concrete external identifier — and is
+			// NOT adopted. Mark it terminal-by-design (chased) and ignored so it
+			// drains from the unresolved accounting and the loop converges
+			// without burning a regenerate cycle for it. A nil policy (the
+			// default) adopts everything, preserving historical behavior.
+			if decision := decideAdoption(opts.AdoptionPolicy, ir, consumersByARN[s.arn]); !decision.Adopt {
+				consumer := ""
+				if cs := consumersByARN[s.arn]; len(cs) > 0 {
+					consumer = cs[0]
+				}
+				addWarning(res, seenWarning, Warning{
+					Code:     CodeReferenceRetained,
+					Literal:  s.arn,
+					TFType:   s.ref.TFType,
+					Consumer: consumer,
+					Reason:   decision.Reason,
+				})
+				chased[s.arn] = struct{}{}
+				ignoredARNs[s.arn] = struct{}{}
+				continue
+			}
 			// Record the discovery for edge accounting regardless, but adopt the
 			// resource into the import set at most once per address (F8): a
 			// second seed pointing at the same target (same key by ARN and by
@@ -526,6 +572,13 @@ func Run(ctx context.Context, opts Options, resources []imported.ImportedResourc
 				for _, fromAddr := range consumersByARN[d.seed.arn] {
 					recordEdge(res, seenEdges, fromAddr, toAddr)
 				}
+				// Record the closure provenance for this adoption (presets#864):
+				// the consumers that referenced it become PulledInBy.Consumers,
+				// unioned across every literal/iteration that resolves to the
+				// same address (F8) so a target referenced twice carries all its
+				// consumers. Recorded even before the F8 dedup below so both
+				// seeds' consumers land on the single Added entry.
+				mergeProvenance(provByAddr, toAddr, consumersByARN[d.seed.arn])
 				// Adopt the resource into res.Added once per address (F8): both
 				// seeds' edges above are still recorded, but two literals
 				// resolving to the same target contribute a single Added entry.
@@ -534,8 +587,15 @@ func Run(ctx context.Context, opts Options, resources []imported.ImportedResourc
 				}
 				seenAddedAddr[toAddr] = struct{}{}
 			}
+			d.resource.PulledInBy = provByAddr[toAddr]
 			res.Added = append(res.Added, d.resource)
 		}
+		// Stamp the accumulated provenance onto res.Resources (presets#864). Done
+		// every iteration because genconfig replaced the slice above; provByAddr
+		// accumulates, so re-applying it to the current slice keeps every prior
+		// iteration's adoption stamped through to the converged final set that
+		// reverse-import serializes into imported.json.
+		stampProvenance(res.Resources, provByAddr)
 
 		if _, err := opts.Pipeline.RunDriftfix(ctx); err != nil {
 			sortEdges(res)

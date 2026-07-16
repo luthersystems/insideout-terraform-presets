@@ -84,7 +84,48 @@ type ImportedResource struct {
 	// (see imported_resource_address_collision); the four-key provenance
 	// schema is not emitted. Read-only metadata; callers should not set it.
 	WeakLocked bool `json:"weak_locked,omitempty"`
+
+	// PulledInBy records why a resource is in the import set even though the
+	// operator did not directly select it: the reverse-import pipeline
+	// auto-included it because an already-in-set resource referenced it (the
+	// dependency-chase phase) or because it is a scoped child of a selected
+	// parent (the selection-closure phase). Nil for operator-selected
+	// resources.
+	//
+	// This is the machine-readable provenance the reverse-import closure
+	// contract (presets#864, reliable#2234) threads onto every auto-adopted
+	// resource so reliable's disclosure surface can render *why* each
+	// auto-included resource is present without re-deriving it from graph.json
+	// or the dependency edges. Additive per the snapshot envelope rules
+	// (pkg/imported/snapshot): an omitempty pointer round-trips through the
+	// versioned "resources" array via encoding/json without a version bump.
+	PulledInBy *PulledInBy `json:"pulled_in_by,omitempty"`
 }
+
+// PulledInBy is the provenance stamp for an auto-included imported resource —
+// the reverse-import counterpart of "the operator picked this row." Reason is a
+// stable machine-readable code (one of the PulledInReason* consts); Consumers
+// are the Terraform addresses of the already-in-set resources whose presence
+// caused this resource to be pulled in (the referencing resources for a
+// dependency chase, or the selected parent for a selection-closure child),
+// sorted and de-duplicated. See presets#864.
+type PulledInBy struct {
+	// Reason is the stable pull-in mechanism code (PulledInReason*).
+	Reason string `json:"reason"`
+	// Consumers are the in-set addresses that caused the pull-in, sorted.
+	Consumers []string `json:"consumers,omitempty"`
+}
+
+const (
+	// PulledInReasonDependencyChase marks a resource the dependency-chase phase
+	// (cmd/insideout-import/depchase) adopted because an in-set resource's
+	// generated HCL referenced its ARN / identifier literal.
+	PulledInReasonDependencyChase = "dependency_chase"
+	// PulledInReasonSelectionClosure marks a resource the selection-closure
+	// phase (pkg/reverseimport/closure.go) adopted because it is a registered
+	// scoped child of a selected parent.
+	PulledInReasonSelectionClosure = "selection_closure"
+)
 
 // ForceTakeover is the audited operator override for a cross-session
 // provenance conflict. Every field is required: a takeover with missing
