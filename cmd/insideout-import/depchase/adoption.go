@@ -135,12 +135,19 @@ func mergeProvenance(m map[string]*imported.PulledInBy, addr string, consumers [
 }
 
 // stampProvenance applies the accumulated closure provenance onto a resource
-// slice by Terraform address: every resource whose address is in provByAddr and
-// that does not already carry provenance is stamped with its *PulledInBy. Called
-// after genconfig replaces res.Resources so the provenance survives the
-// round-trip into imported.json. Operator-selected resources (absent from
-// provByAddr) are never touched.
-func stampProvenance(resources []imported.ImportedResource, provByAddr map[string]*imported.PulledInBy) {
+// slice by Terraform address: every resource whose address is in provByAddr,
+// is NOT an operator-selected address, and does not already carry provenance
+// is stamped with its *PulledInBy. Called after genconfig replaces
+// res.Resources so the provenance survives the round-trip into imported.json.
+//
+// operatorAddrs (the pre-chase in-set address snapshot) makes the "operator-
+// selected resources are never touched" guarantee real: address alone is not
+// enough, because a chased duplicate can generate the SAME address as an
+// in-set resource (the dedupeByAddress collision class) and provByAddr is
+// keyed purely by address — without the snapshot, the operator-selected entry
+// at the collided address would be mislabeled pulled_in_by:dependency_chase
+// (#866 review finding).
+func stampProvenance(resources []imported.ImportedResource, provByAddr map[string]*imported.PulledInBy, operatorAddrs map[string]struct{}) {
 	if len(provByAddr) == 0 {
 		return
 	}
@@ -148,7 +155,11 @@ func stampProvenance(resources []imported.ImportedResource, provByAddr map[strin
 		if resources[i].PulledInBy != nil {
 			continue
 		}
-		if p, ok := provByAddr[resources[i].Identity.Address]; ok {
+		addr := resources[i].Identity.Address
+		if _, operatorSelected := operatorAddrs[addr]; operatorSelected {
+			continue
+		}
+		if p, ok := provByAddr[addr]; ok {
 			resources[i].PulledInBy = p
 		}
 	}

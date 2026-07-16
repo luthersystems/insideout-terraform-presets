@@ -246,6 +246,24 @@ func Run(ctx context.Context, opts Options, resources []imported.ImportedResourc
 	// across literals/iterations that resolve to the same target.
 	provByAddr := make(map[string]*imported.PulledInBy)
 
+	// operatorAddrs snapshots the Terraform addresses of the operator-selected
+	// resources present BEFORE the first chase iteration. stampProvenance must
+	// never stamp these: on an address collision — a chased duplicate whose
+	// identity tuple generates the SAME address as an in-set resource (the
+	// dedupeByAddress class, pkg/reverseimport/run.go) — a purely address-keyed
+	// stamp would mislabel the operator-selected entry as
+	// pulled_in_by:dependency_chase, and dedupeByAddress keeps that first
+	// (operator) entry, so imported.json would misreport why the resource is in
+	// the set (#866 review finding). The discovered duplicate itself still
+	// carries its provenance on the res.Added entry (stamped directly at
+	// adoption above).
+	operatorAddrs := make(map[string]struct{}, len(res.Resources))
+	for i := range res.Resources {
+		if addr := res.Resources[i].Identity.Address; addr != "" {
+			operatorAddrs[addr] = struct{}{}
+		}
+	}
+
 	for iter := 1; iter <= opts.MaxIterations; iter++ {
 		raw, err := os.ReadFile(generatedPath)
 		if err != nil {
@@ -595,7 +613,7 @@ func Run(ctx context.Context, opts Options, resources []imported.ImportedResourc
 		// accumulates, so re-applying it to the current slice keeps every prior
 		// iteration's adoption stamped through to the converged final set that
 		// reverse-import serializes into imported.json.
-		stampProvenance(res.Resources, provByAddr)
+		stampProvenance(res.Resources, provByAddr, operatorAddrs)
 
 		if _, err := opts.Pipeline.RunDriftfix(ctx); err != nil {
 			sortEdges(res)

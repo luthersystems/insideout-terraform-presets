@@ -291,3 +291,50 @@ func TestMergeProvenance_UnionsConsumers(t *testing.T) {
 		t.Errorf("blank addr recorded provenance")
 	}
 }
+
+// TestStampProvenance_SkipsOperatorSelectedAddressOnCollision pins the #866
+// review finding: when a chased duplicate generates the SAME Terraform address
+// as an operator-selected resource (the dedupeByAddress collision class —
+// e.g. an IAM role selected by bare ImportID while another resource references
+// its full ARN), the address-keyed provByAddr must NOT stamp
+// pulled_in_by:dependency_chase onto the operator-selected entry.
+// dedupeByAddress keeps that first entry, so a stamp there would ship a
+// provenance lie into imported.json. Genuinely-discovered addresses still get
+// stamped, and an existing stamp is never overwritten.
+func TestStampProvenance_SkipsOperatorSelectedAddressOnCollision(t *testing.T) {
+	t.Parallel()
+	const collidedAddr = "aws_iam_role.admin"
+	const discoveredAddr = "aws_kms_key.k"
+
+	prior := &imported.PulledInBy{Reason: imported.PulledInReasonDependencyChase, Consumers: []string{"aws_sqs_queue.prior"}}
+	resources := []imported.ImportedResource{
+		// Operator-selected original (pre-chase in-set).
+		{Identity: imported.ResourceIdentity{Address: collidedAddr}},
+		// Chased duplicate at the SAME address, appended by a later iteration.
+		{Identity: imported.ResourceIdentity{Address: collidedAddr}},
+		// Genuinely discovered resource at a fresh address.
+		{Identity: imported.ResourceIdentity{Address: discoveredAddr}},
+		// Already-stamped entry must keep its existing provenance pointer.
+		{Identity: imported.ResourceIdentity{Address: discoveredAddr}, PulledInBy: prior},
+	}
+	provByAddr := map[string]*imported.PulledInBy{
+		collidedAddr:   {Reason: imported.PulledInReasonDependencyChase, Consumers: []string{"aws_sqs_queue.c"}},
+		discoveredAddr: {Reason: imported.PulledInReasonDependencyChase, Consumers: []string{"aws_sqs_queue.d"}},
+	}
+	operatorAddrs := map[string]struct{}{collidedAddr: {}}
+
+	stampProvenance(resources, provByAddr, operatorAddrs)
+
+	if resources[0].PulledInBy != nil {
+		t.Errorf("operator-selected entry at %s was stamped %+v; must stay nil", collidedAddr, resources[0].PulledInBy)
+	}
+	if resources[1].PulledInBy != nil {
+		t.Errorf("duplicate at the collided operator address was stamped; dedupeByAddress keeps entry 0, and Added carries the chase provenance instead")
+	}
+	if resources[2].PulledInBy == nil || len(resources[2].PulledInBy.Consumers) != 1 || resources[2].PulledInBy.Consumers[0] != "aws_sqs_queue.d" {
+		t.Errorf("discovered entry at %s not stamped correctly: %+v", discoveredAddr, resources[2].PulledInBy)
+	}
+	if resources[3].PulledInBy != prior {
+		t.Errorf("pre-stamped entry's provenance pointer was replaced")
+	}
+}
