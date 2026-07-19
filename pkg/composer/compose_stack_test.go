@@ -3070,3 +3070,75 @@ func TestComposeStack_GCPCloudKMS_MovedBlocksRebindUpstreamState(t *testing.T) {
 	require.NotContains(t, planStr, "slice end_index",
 		"terraform plan surfaced 'slice end_index' (issue #182 regression):\n%s", planStr)
 }
+
+// TestComposeStack_Deterministic pins the composed archive to be byte-for-byte
+// identical across repeated in-process composes of the same stack. This is the
+// poka-yoke drift guard for reliable#2286: EmitRootMainTFWithLocals ranged Go
+// maps directly for the module `providers = {…}` pairs, the Raw (DefaultWiring
+// RawHCL) args, and the namespaced Inputs, so module-argument order shuffled
+// between two identical `GET /api/v2/tf-download` calls and the emitted archive
+// (and its hash) differed run-to-run. The stack selection deliberately includes
+// WAF (exercises the multi-key `providers` map site: `aws = aws`,
+// `aws.us_east_1 = aws.us_east_1`) and RDS (exercises the wired Raw/Inputs
+// arg sites), so a regression at any of the three sorted sites re-surfaces here.
+func TestComposeStack_Deterministic(t *testing.T) {
+	selected := []ComponentKey{
+		KeyAWSVPC,
+		KeyAWSEKS,
+		KeyAWSBastion,
+		KeyAWSALB,
+		KeyAWSRDS,
+		KeyAWSElastiCache,
+		KeyAWSWAF,
+		KeyAWSCloudfront,
+		KeyAWSCloudWatchLogs,
+		KeyAWSSQS,
+		KeyAWSCloudWatchMonitoring,
+		KeyAWSGitHubActions,
+	}
+
+	compose := func() Files {
+		c := newTestClient()
+		out, err := c.ComposeStack(ComposeStackOpts{
+			Cloud:        "aws",
+			SelectedKeys: selected,
+			Comps:        awsKitchenSinkCompsV2(),
+			Cfg:          awsKitchenSinkCfgV2(),
+			Project:      "demo",
+			Region:       "us-west-2",
+		})
+		require.NoError(t, err, "ComposeStack should succeed")
+		return out
+	}
+
+	first := compose()
+	require.NotEmpty(t, first, "compose produced no files")
+	// The providers map site must actually be exercised by this fixture,
+	// otherwise the guard can pass while that loop stays unsorted.
+	require.Contains(t, string(first["/main.tf"]), "aws.us_east_1 = aws.us_east_1",
+		"fixture must exercise the multi-key module providers map (WAF)")
+
+	// Sorted key list of the first compose, for stable comparison messaging.
+	firstKeys := make([]string, 0, len(first))
+	for k := range first {
+		firstKeys = append(firstKeys, k)
+	}
+	sort.Strings(firstKeys)
+
+	for i := 0; i < 10; i++ {
+		got := compose()
+
+		gotKeys := make([]string, 0, len(got))
+		for k := range got {
+			gotKeys = append(gotKeys, k)
+		}
+		sort.Strings(gotKeys)
+		require.Equal(t, firstKeys, gotKeys,
+			"compose iteration %d produced a different set of files", i)
+
+		for _, name := range firstKeys {
+			require.Equal(t, first[name], got[name],
+				"compose iteration %d: file %q differs byte-for-byte from the first compose (reliable#2286 nondeterminism regressed)", i, name)
+		}
+	}
+}
