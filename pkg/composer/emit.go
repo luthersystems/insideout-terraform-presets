@@ -435,19 +435,45 @@ func EmitRootMainTFWithLocals(blocks []ModuleBlock, locals map[string]string) []
 		mb := b.Body()
 		mb.SetAttributeValue("source", cty.StringVal(m.Source))
 
+		// Emit the providers map, Raw (DefaultWiring RawHCL args), and Inputs
+		// (namespaced var refs) each in sorted key order. Ranging a Go map
+		// yields keys in randomized order, so identical composes previously
+		// shuffled module-argument order between calls (reliable#2286: the
+		// tf-download archive differed byte-for-byte across identical
+		// tf-download requests). Sorting each site makes the emission
+		// deterministic. The Raw-before-Inputs grouping is preserved — sorting
+		// only orders keys *within* each group. Idiom matches
+		// EmitVariablesTFWithSchema / the locals block / renderRequiredProviders.
 		if len(m.Providers) > 0 {
-			var pairs []string
-			for k, v := range m.Providers {
-				pairs = append(pairs, fmt.Sprintf("%s = %s", k, v))
+			provKeys := make([]string, 0, len(m.Providers))
+			for k := range m.Providers {
+				provKeys = append(provKeys, k)
+			}
+			sort.Strings(provKeys)
+			pairs := make([]string, 0, len(provKeys))
+			for _, k := range provKeys {
+				pairs = append(pairs, fmt.Sprintf("%s = %s", k, m.Providers[k]))
 			}
 			mapExpr := fmt.Sprintf("{ %s }", strings.Join(pairs, ", "))
 			setRawExpr(mb, "providers", mapExpr)
 		}
 
-		for k, raw := range m.Raw {
-			setRawExpr(mb, k, raw)
+		rawKeys := make([]string, 0, len(m.Raw))
+		for k := range m.Raw {
+			rawKeys = append(rawKeys, k)
 		}
-		for k, v := range m.Inputs {
+		sort.Strings(rawKeys)
+		for _, k := range rawKeys {
+			setRawExpr(mb, k, m.Raw[k])
+		}
+
+		inputKeys := make([]string, 0, len(m.Inputs))
+		for k := range m.Inputs {
+			inputKeys = append(inputKeys, k)
+		}
+		sort.Strings(inputKeys)
+		for _, k := range inputKeys {
+			v := m.Inputs[k]
 			if _, exists := m.Raw[k]; exists {
 				continue
 			}
