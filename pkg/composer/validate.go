@@ -146,6 +146,7 @@ func ValidateAll(
 		cloud = comps.Cloud
 	}
 	all = append(all, ValidateAWSVPCNATConsistency(cloud, comps, cfg)...)
+	all = append(all, ValidateAWSVPCNATHealed(cloud, comps, cfg)...)
 	return dedupeAndSortIssues(all)
 }
 

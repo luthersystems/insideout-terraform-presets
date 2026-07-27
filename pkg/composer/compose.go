@@ -79,16 +79,27 @@ type Files map[string][]byte
 // ProvidersUsedKeyAWS ("aws"), ProvidersUsedKeyGCP ("gcp"),
 // ProvidersUsedKeyGCPBeta ("gcp-beta"). The map is nil when no imported
 // resources were emitted (matching EmitImportedTF's zero-result contract).
+//
+// VPCNetworking surfaces the composer's EFFECTIVE AWS VPC networking decision
+// (NAT gateway on/off, topology, count, and why) so consumers never have to
+// re-derive it from Components/Config or parse it back out of
+// BuildModuleValues — the mistake behind the reliable pricing defect that
+// quoted "$0.00 — no NAT Gateway" for a stack composed with 2 NAT gateways
+// (2026-07-26). Nil when the composed stack has no aws/vpc module (GCP stacks,
+// or AWS stacks that selected no VPC). See EffectiveVPCNetworking.
 type ComposeStackResult struct {
 	Files         Files
 	Issues        []ValidationIssue
 	ProvidersUsed map[string]bool
+	VPCNetworking *VPCNetworkingDecision
 }
 
 // ComposeSingleResult mirrors ComposeStackResult for the single-module path.
+// VPCNetworking is populated only for a KeyAWSVPC compose.
 type ComposeSingleResult struct {
-	Files  Files
-	Issues []ValidationIssue
+	Files         Files
+	Issues        []ValidationIssue
+	VPCNetworking *VPCNetworkingDecision
 }
 
 func rebasePresetFiles(files map[string][]byte, moduleDir string) Files {
@@ -302,6 +313,7 @@ func (c *Client) composeSingleImpl(opts ComposeSingleOpts) (*ComposeSingleResult
 	issues = append(issues, validateRequiredIssues(vars, wired, vals, string(opts.Key))...)
 	issues = append(issues, ValidateGCPProjectID(cloud, opts.GCPProjectID)...)
 	issues = append(issues, ValidateAWSVPCNATConsistency(cloud, opts.Comps, opts.Cfg)...)
+	issues = append(issues, ValidateAWSVPCNATHealed(cloud, opts.Comps, opts.Cfg)...)
 
 	var tfvars []VarEntry
 	for _, v := range vars {
@@ -340,7 +352,24 @@ func (c *Client) composeSingleImpl(opts ComposeSingleOpts) (*ComposeSingleResult
 	}
 
 	files["/.terraform-version"] = []byte(c.TerraformVersion + "\n")
-	return &ComposeSingleResult{Files: files, Issues: issues}, nil
+	return &ComposeSingleResult{
+		Files:         files,
+		Issues:        issues,
+		VPCNetworking: effectiveVPCNetworkingFor(cloud, opts.Key == KeyAWSVPC, opts.Comps, opts.Cfg),
+	}, nil
+}
+
+// effectiveVPCNetworkingFor returns the composer's effective AWS VPC
+// networking decision when the composed stack actually contains an aws/vpc
+// module, and nil otherwise (GCP stacks, or AWS stacks with no VPC selected).
+// Nil means "this stack has no VPC networking decision to report" — it must
+// never be read as "NAT is off".
+func effectiveVPCNetworkingFor(cloud string, hasVPC bool, comps *Components, cfg *Config) *VPCNetworkingDecision {
+	if !hasVPC || !strings.EqualFold(strings.TrimSpace(cloud), "aws") {
+		return nil
+	}
+	d := EffectiveVPCNetworking(comps, cfg)
+	return &d
 }
 
 /* ---------- Stack ---------- */
@@ -830,11 +859,20 @@ func (c *Client) composeStackImpl(opts ComposeStackOpts) (*ComposeStackResult, e
 	issues = append(issues, ValidateComposedRoot(files)...)
 	issues = append(issues, ValidateGCPProjectID(cloud, opts.GCPProjectID)...)
 	issues = append(issues, ValidateAWSVPCNATConsistency(cloud, opts.Comps, opts.Cfg)...)
+	issues = append(issues, ValidateAWSVPCNATHealed(cloud, opts.Comps, opts.Cfg)...)
+
+	// Surface the effective VPC networking decision so consumers stop
+	// re-deriving it. presetPaths is keyed by module name, which for the VPC
+	// module is string(KeyAWSVPC) — so its presence is the authoritative
+	// "this stack has an aws/vpc module" test (it already accounts for
+	// implicit-dependency expansion, e.g. RDS pulling in the VPC).
+	_, hasVPCModule := presetPaths[string(KeyAWSVPC)]
 
 	return &ComposeStackResult{
 		Files:         files,
 		Issues:        issues,
 		ProvidersUsed: importedClouds,
+		VPCNetworking: effectiveVPCNetworkingFor(cloud, hasVPCModule, opts.Comps, opts.Cfg),
 	}, nil
 }
 

@@ -92,102 +92,70 @@ func (m DefaultMapper) BuildModuleValues(
 	switch k {
 
 	case KeyAWSVPC:
-		// Map "Public VPC" / "Private VPC" component enum to preset variables.
-		// "Public VPC" = public subnets only, no NAT gateway.
-		// "Private VPC" (or default) = private + public subnets with NAT.
+		// THE RULES LIVE IN EffectiveVPCNetworking, NOT HERE. This case is a
+		// thin translator: it asks the composer for its effective networking
+		// decision (private subnets, NAT on/off, NAT topology, AZ count, and
+		// the machine-greppable reason) and writes that decision into the
+		// module's tfvars.
 		//
-		// However, if downstream components (EKS, RDS, ElastiCache, OpenSearch,
-		// EKS node groups) require private subnets, we must keep them enabled
-		// regardless of the VPC type. These components wire to
-		// module.vpc.private_subnet_ids and fail validation when it's empty.
-		if comps != nil && strings.EqualFold(comps.AWSVPC, "Public VPC") {
-			if stackNeedsPrivateSubnets(comps) {
-				// Keep private subnets + NAT for downstream components.
-				// The VPC will have both public and private subnets.
-			} else {
-				vals["enable_private_subnets"] = false
-				vals["enable_nat_gateway"] = false
-			}
+		// Why the split: the decision used to be implicit in this switch case,
+		// so downstream consumers had to re-derive it — and got it wrong.
+		// reliable's pricing path quoted "$0.00 — no NAT Gateway" for a stack
+		// this mapper composed with 2 NAT gateways (~$64.80/mo unpriced,
+		// observed live 2026-07-26). EffectiveVPCNetworking now owns the rules
+		// (#393 default-on, #389 stale-true coerced off, #805/#806 frozen-false
+		// healed on) and is exported for those consumers;
+		// TestVPCNetworkingMapperParity asserts the tfvars emitted below equal
+		// that decision, so the two cannot drift apart.
+		//
+		// AZCount bounds — HCL validation says >= 1; enforce the same at the
+		// mapper so users see a Go-level error before `terraform plan`.
+		// EffectiveVPCNetworking is total (never errors), so this stays here.
+		if cfg != nil && cfg.AWSVPC != nil && cfg.AWSVPC.AZCount != nil && *cfg.AWSVPC.AZCount < 1 {
+			return nil, NewValidationError(fmt.Sprintf(
+				"AWSVPC.AZCount must be >= 1, got %d", *cfg.AWSVPC.AZCount,
+			))
 		}
 
-		// Topology knobs from Config.AWSVPC override Public-VPC-derived defaults.
-		// Unset pointer fields defer to the HCL default.
+		dec := EffectiveVPCNetworking(comps, cfg)
+
+		// Emission rules (unchanged by the refactor): only write a key when
+		// the composer has an opinion the preset's HCL default wouldn't
+		// already produce. An unset knob stays out of the tfvars and defers to
+		// the default — which is exactly why consumers must read
+		// EffectiveVPCNetworking rather than the emitted tfvars alone.
 		if cfg != nil && cfg.AWSVPC != nil {
-			// NOTE: EnableNATGateway=false on a stack that needs private subnets
-			// (EKS/ECS/RDS/ElastiCache/OpenSearch/EC2 node groups) is always
-			// invalid — private subnets without NAT can't pull container images
-			// or run package installs. #805 failed fast here, but existing
-			// stack snapshots froze EnableNATGateway=false into their stored
-			// config BEFORE #805 fixed the defaulting path, and reliable
-			// composes that stored config verbatim (no re-derive), so a
-			// fail-fast only yields an error the user can't act on. We now HEAL
-			// it instead: the coercion at the end of this case forces
-			// enable_nat_gateway=true (the final word over the explicit-false
-			// assignment below). See the heal block tagged "heal frozen NAT".
-			//
-			// AZCount bounds — HCL validation says >= 1; enforce the same at
-			// the mapper so users see a Go-level error before `terraform plan`.
-			if cfg.AWSVPC.AZCount != nil && *cfg.AWSVPC.AZCount < 1 {
-				return nil, NewValidationError(fmt.Sprintf(
-					"AWSVPC.AZCount must be >= 1, got %d", *cfg.AWSVPC.AZCount,
-				))
-			}
 			if cfg.AWSVPC.SingleNATGateway != nil {
-				vals["single_nat_gateway"] = *cfg.AWSVPC.SingleNATGateway
-			}
-			if cfg.AWSVPC.EnableNATGateway != nil {
-				vals["enable_nat_gateway"] = *cfg.AWSVPC.EnableNATGateway
+				vals["single_nat_gateway"] = dec.SingleNATGateway
 			}
 			if cfg.AWSVPC.AZCount != nil {
-				vals["az_count"] = *cfg.AWSVPC.AZCount
+				vals["az_count"] = dec.AZCount
 			}
 		}
 
-		// Explicit NAT=true when private subnets are needed and the user
-		// hasn't authored AWSVPC.EnableNATGateway (#393). Without this, the
-		// HCL default (which #393 flips from true to false in
-		// aws/vpc/variables.tf so a stale-true backfill can no longer wedge a
-		// Public-VPC stack) would silently disable NAT on Private-VPC stacks
-		// that didn't set the field. Tfvars now record the mapper's
-		// decision rather than rely on the preset's HCL default.
-		if _, alreadySet := vals["enable_nat_gateway"]; !alreadySet && stackNeedsPrivateSubnets(comps) {
-			vals["enable_nat_gateway"] = true
+		// enable_private_subnets is written only where the decision differs
+		// from the HCL default (false on a public-only VPC), plus on the heal
+		// path where it is pinned true so the outputs.tf invariant
+		// "enable_nat_gateway=true requires enable_private_subnets=true"
+		// cannot trip.
+		if !dec.EnablePrivateSubnets || dec.Reason == VPCNATReasonFrozenNATHealed {
+			vals["enable_private_subnets"] = dec.EnablePrivateSubnets
 		}
 
-		// NAT-vs-private-subnets coercion (#389). If private subnets were
-		// disabled above (Public VPC with no downstream consumers), NAT must
-		// be off too — the upstream terraform-aws-modules/vpc/aws plans
-		// aws_route.private_nat_gateway against the now-empty
-		// aws_route_table.private and apply fails with "element() on empty
-		// list". This rule overrides cfg.AWSVPC.EnableNATGateway when the
-		// caller's saved config is stale (e.g. OpenSearch was removed from
-		// the stack but EnableNATGateway=true persisted). A parallel
-		// ValidationIssue ("aws_vpc_stale_nat_gateway") surfaces the
-		// coercion to upstream callers so the stale field can be cleared.
-		if pSubn, ok := vals["enable_private_subnets"].(bool); ok && !pSubn {
-			vals["enable_nat_gateway"] = false
+		// enable_nat_gateway is recorded explicitly whenever the composer
+		// decided it — i.e. anything other than "no opinion, no private
+		// workload, private subnets left at their default" (#393: the HCL
+		// default is a backstop, not the source of truth).
+		explicitNATAuthored := cfg != nil && cfg.AWSVPC != nil && cfg.AWSVPC.EnableNATGateway != nil
+		if explicitNATAuthored || dec.NeedsPrivateSubnets || !dec.EnablePrivateSubnets {
+			vals["enable_nat_gateway"] = dec.EnableNATGateway
 		}
 
-		// Heal frozen NAT: a stack that needs private subnets but ends up with
-		// enable_nat_gateway=false is always invalid (private subnets without
-		// NAT can't reach the internet). This supersedes #805's explicit-false
-		// fail-fast — pre-#805 snapshots froze that bad value into stored
-		// config that reliable composes verbatim, so we coerce instead of
-		// erroring. This runs LAST so it is the final word over the
-		// explicit-false / derived-false assignments above; the #389 coercion
-		// just above only sets NAT=false when private subnets are disabled,
-		// which never overlaps a needs-private stack. enable_private_subnets is
-		// pinned true so the outputs.tf invariant "enable_nat_gateway=true
-		// requires enable_private_subnets=true" cannot trip.
-		if stackNeedsPrivateSubnets(comps) {
-			if nat, ok := vals["enable_nat_gateway"].(bool); ok && !nat {
-				log.Printf("[composer/mapper] AWSVPC heal: enable_nat_gateway=false is " +
-					"incompatible with a stack that needs private subnets " +
-					"(EKS/ECS/RDS/ElastiCache/OpenSearch/EC2); coercing " +
-					"enable_nat_gateway=true and enable_private_subnets=true (frozen pre-#805 value)")
-				vals["enable_nat_gateway"] = true
-				vals["enable_private_subnets"] = true
-			}
+		if dec.Reason == VPCNATReasonFrozenNATHealed {
+			log.Printf("[composer/mapper] AWSVPC heal: enable_nat_gateway=false is " +
+				"incompatible with a stack that needs private subnets " +
+				"(EKS/ECS/RDS/ElastiCache/OpenSearch/EC2); coercing " +
+				"enable_nat_gateway=true and enable_private_subnets=true (frozen pre-#805 value)")
 		}
 
 	case KeyCloud:

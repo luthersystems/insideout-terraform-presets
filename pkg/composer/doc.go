@@ -58,6 +58,31 @@
 // (e.g. The InsideOut backend's dry-run path) that want the full picture without going
 // through ComposeStack.
 //
+// Two AWS-VPC cross-field validators also run on both entry points:
+// ValidateAWSVPCNATConsistency (Code "aws_vpc_stale_nat_gateway", #389) and
+// ValidateAWSVPCNATHealed (Code "aws_vpc_nat_gateway_healed", #805/#806).
+// Both fire when the composer OVERRODE an explicit
+// cfg.aws_vpc.enable_nat_gateway; see the effective-decision section below.
+//
 // Use StrictValidate on the WithIssues entry points to escalate any
 // non-empty Issues list into an aggregated error.
+//
+// # Effective decisions
+//
+// Some emitted values are DERIVED — the composer decides them from the
+// component mix rather than copying a caller-supplied field, and it may
+// override an explicit setting. Consumers must never re-derive those rules;
+// the composer exports the effective answer:
+//
+//   - [EffectiveVPCNetworking] returns the AWS VPC networking decision
+//     ([VPCNetworkingDecision]): NAT gateway on/off, one-vs-per-AZ topology,
+//     AZ count, the resulting NATGatewayCount, and a machine-greppable Reason
+//     (the VPCNATReason* constants). ComposeStackWithIssues /
+//     ComposeSingleWithIssues also return it as Result.VPCNetworking (nil when
+//     the stack has no aws/vpc module).
+//
+// Reading the emitted tfvars instead is not equivalent: the mapper omits keys
+// whose decision matches the preset's HCL default, so an absent
+// enable_nat_gateway does not mean NAT is off. A downstream pricing path made
+// exactly that mistake and quoted $0.00 for a stack running two NAT gateways.
 package composer
