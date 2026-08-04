@@ -1,0 +1,32 @@
+name: govulncheck
+
+# Known-vulnerability gate: govulncheck is call-graph-aware, so it only fails
+# on vulnerabilities whose vulnerable code this module actually reaches —
+# low-noise by design. Uses the latest stable Go toolchain so the stdlib is
+# scanned at a current patch level. NOTE: this module's generated composer
+# models are large — the scan needs a full-size runner's memory (it OOMs in
+# small sandboxes); if it ever hits runner limits, split the scan per
+# package tree (./pkg/... ./cmd/...).
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  govulncheck:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "stable"
+          cache: true
+      - name: Run govulncheck
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+          govulncheck ./...
