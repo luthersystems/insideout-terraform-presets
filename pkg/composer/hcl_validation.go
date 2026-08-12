@@ -3,6 +3,7 @@ package composer
 import (
 	"fmt"
 	"net"
+	"reflect"
 	"sort"
 	"strconv"
 	"strings"
@@ -28,10 +29,15 @@ type moduleVarKey struct {
 }
 
 type moduleVariableValidator struct {
-	name    string
-	typ     cty.Type
-	rules   []moduleValidationRule
-	allowed []string
+	name string
+	typ  cty.Type
+	// defaults carries the declared optional-attribute defaults (e.g.
+	// `optional(string, "90d")`). Terraform applies these before validation
+	// rules run, so rules may reference attributes the raw value omits;
+	// evaluating without them yields spurious "Unsupported attribute" errors.
+	defaults *typeexpr.Defaults
+	rules    []moduleValidationRule
+	allowed  []string
 }
 
 type moduleValidationRule struct {
@@ -106,9 +112,10 @@ func discoverModuleVariableValidators(files map[string][]byte) (map[string]modul
 				typ:  cty.DynamicPseudoType,
 			}
 			if attr, ok := block.Body.Attributes["type"]; ok && attr.Expr != nil {
-				typ, typeDiags := typeexpr.TypeConstraint(attr.Expr)
+				typ, defaults, typeDiags := typeexpr.TypeConstraintWithDefaults(attr.Expr)
 				if !typeDiags.HasErrors() {
 					validator.typ = typ
+					validator.defaults = defaults
 				}
 			}
 
@@ -153,6 +160,9 @@ func (r *validationRegistry) validate(component ComponentKey, variable string, r
 			code:   "invalid_type",
 			reason: fmt.Sprintf("%s=%s: %v", variable, issueValue(raw), err),
 		}, false
+	}
+	if validator.defaults != nil {
+		value = validator.defaults.Apply(value)
 	}
 	if !validator.typ.Equals(cty.DynamicPseudoType) {
 		value, err = convert.Convert(value, validator.typ)
@@ -224,6 +234,7 @@ func validationFunctions() map[string]function.Function {
 			"can":         tryfunc.CanFunc,
 			"contains":    stdlib.ContainsFunc,
 			"distinct":    stdlib.DistinctFunc,
+			"jsonencode":  stdlib.JSONEncodeFunc,
 			"length":      lengthFunc(),
 			"lower":       stdlib.LowerFunc,
 			"regex":       stdlib.RegexFunc,
@@ -423,6 +434,93 @@ func ctyValueForType(v any, target cty.Type) (cty.Value, error) {
 			vals[i] = cty.NumberIntVal(int64(n))
 		}
 		return cty.TupleVal(vals), nil
+	case map[string]any:
+		if len(x) == 0 {
+			return emptyObjectForType(target), nil
+		}
+		vals := make(map[string]cty.Value, len(x))
+		for k, elem := range x {
+			val, err := ctyValueForType(elem, cty.DynamicPseudoType)
+			if err != nil {
+				return cty.NilVal, err
+			}
+			vals[k] = val
+		}
+		return cty.ObjectVal(vals), nil
+	default:
+		// Class-level fallback. The typed cases above are fast paths for the
+		// shapes the mappers emit today; this catches every other slice / map /
+		// numeric shape by reflect kind, so the next mapper to emit e.g.
+		// map[string]string (a tags variable) or []map[string]any (a list of
+		// rule objects) cannot reintroduce the aws_backups.default_rule
+		// failure — a valid stack rejected as invalid_type, surfacing
+		// downstream as a deploy-start 500. Guarded in CI by
+		// TestNoUnsupportedGoValueTypeAcrossAllComponents.
+		return ctyValueByReflection(v, target)
+	}
+}
+
+// ctyValueByReflection converts the Go values ctyValueForType has no explicit
+// case for, dispatching on reflect kind instead of concrete type.
+//
+// It deliberately handles ONLY kinds with a faithful cty analogue: slices and
+// arrays become tuples, string-keyed maps become objects, numerics become
+// numbers, plus bool/string and pointer indirection. Structs, channels, funcs
+// and non-string map keys have no HCL analogue and still error, so a genuinely
+// unconvertible value is still reported rather than silently coerced. The
+// declared-type conversion in the caller (convert.Convert against the module's
+// variables.tf type) remains the real type gate — this only decides whether a
+// value is expressible in cty at all.
+func ctyValueByReflection(v any, target cty.Type) (cty.Value, error) {
+	rv := reflect.ValueOf(v)
+	switch rv.Kind() {
+	case reflect.Pointer:
+		if rv.IsNil() {
+			return ctyValueForType(nil, target)
+		}
+		return ctyValueForType(rv.Elem().Interface(), target)
+	case reflect.String:
+		return cty.StringVal(rv.String()), nil
+	case reflect.Bool:
+		return cty.BoolVal(rv.Bool()), nil
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		return cty.NumberIntVal(rv.Int()), nil
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		return cty.NumberUIntVal(rv.Uint()), nil
+	case reflect.Float32, reflect.Float64:
+		return cty.NumberFloatVal(rv.Float()), nil
+	case reflect.Slice, reflect.Array:
+		// A nil slice has Len 0 and lands here, matching the []string / []any
+		// fast paths above (empty collection, not null).
+		if rv.Len() == 0 {
+			return emptyCollectionForType(target), nil
+		}
+		vals := make([]cty.Value, rv.Len())
+		for i := 0; i < rv.Len(); i++ {
+			val, err := ctyValueForType(rv.Index(i).Interface(), cty.DynamicPseudoType)
+			if err != nil {
+				return cty.NilVal, err
+			}
+			vals[i] = val
+		}
+		return cty.TupleVal(vals), nil
+	case reflect.Map:
+		if rv.Type().Key().Kind() != reflect.String {
+			return cty.NilVal, fmt.Errorf("unsupported Go value type %T: map keys must be strings", v)
+		}
+		if rv.Len() == 0 {
+			return emptyObjectForType(target), nil
+		}
+		vals := make(map[string]cty.Value, rv.Len())
+		iter := rv.MapRange()
+		for iter.Next() {
+			val, err := ctyValueForType(iter.Value().Interface(), cty.DynamicPseudoType)
+			if err != nil {
+				return cty.NilVal, err
+			}
+			vals[iter.Key().String()] = val
+		}
+		return cty.ObjectVal(vals), nil
 	default:
 		return cty.NilVal, fmt.Errorf("unsupported Go value type %T", v)
 	}
@@ -439,6 +537,13 @@ func emptyCollectionForType(target cty.Type) cty.Value {
 	default:
 		return cty.EmptyTupleVal
 	}
+}
+
+func emptyObjectForType(target cty.Type) cty.Value {
+	if target.IsMapType() {
+		return cty.MapValEmpty(target.ElementType())
+	}
+	return cty.EmptyObjectVal
 }
 
 func extractAllowedValues(expr hcl.Expression, varName string) []string {

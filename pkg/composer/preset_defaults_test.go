@@ -1,11 +1,14 @@
 package composer
 
 import (
+	"encoding/json"
+	"strings"
 	"testing"
 
 	hcl "github.com/hashicorp/hcl/v2"
 	"github.com/stretchr/testify/require"
 	cty "github.com/zclconf/go-cty/cty"
+	"github.com/zclconf/go-cty/cty/convert"
 )
 
 // TestPresetDefaultsSatisfyValidations protects against the silent-drift class
@@ -60,6 +63,21 @@ func TestPresetDefaultsSatisfyValidations(t *testing.T) {
 			t.Logf("skip %s.%s default cty conversion: %v", key.component, key.variable, err)
 			continue
 		}
+		// Mirror Terraform's variable pipeline (and validate() above): fill
+		// optional-attribute defaults, then convert to the declared type, so
+		// rules referencing optional attributes can evaluate.
+		if validator.defaults != nil {
+			defaultCty = validator.defaults.Apply(defaultCty)
+		}
+		if !validator.typ.Equals(cty.DynamicPseudoType) {
+			converted, err := convert.Convert(defaultCty, validator.typ)
+			if err != nil {
+				eligibleSkipped++
+				t.Logf("skip %s.%s default type conversion: %v", key.component, key.variable, err)
+				continue
+			}
+			defaultCty = converted
+		}
 		// Run every validation rule against the default.
 		for _, rule := range validator.rules {
 			ctx := &hcl.EvalContext{
@@ -89,6 +107,134 @@ func TestPresetDefaultsSatisfyValidations(t *testing.T) {
 	// half the registry has stopped being checkable and the test value evaporates.
 	require.Less(t, eligibleSkipped, checked,
 		"too many eligible (default, validation) pairs are being skipped (%d skipped vs %d checked); investigate before silencing", eligibleSkipped, checked)
+}
+
+// TestNoUnsupportedGoValueTypeAcrossAllComponents is the class-level guard for
+// the failure that shipped as aws_backups.default_rule: a mapper emitted a Go
+// value (map[string]any) that ctyValueForType had no case for, so
+// ValidateValueTypes reported invalid_type on a perfectly valid stack and the
+// downstream InsideOut backend turned it into a deploy-start 500. Every stack
+// selecting AWS Backup was undeployable from the day that mapper default
+// landed until it was found in production two months later.
+//
+// The per-shape unit tests in hcl_validation_test.go cover the converter in
+// isolation; this asserts the property that actually matters end-to-end — no
+// component's real mapper output can be inexpressible in cty — so a future
+// mapper edit that reaches for a new Go shape fails here at CI time rather
+// than at a customer's deploy.
+func TestNoUnsupportedGoValueTypeAcrossAllComponents(t *testing.T) {
+	t.Parallel()
+
+	client := newTestClient()
+	swept := 0
+	for _, key := range AllComponentKeys {
+		cloud := CloudFor(key)
+		if cloud == "" {
+			continue
+		}
+		comps := &Components{Cloud: strings.ToUpper(cloud)}
+		cfg := &Config{Region: "us-east-1"}
+		if cloud == "gcp" {
+			cfg.Region = "us-central1"
+		}
+		result, err := client.ComposeStackWithIssues(ComposeStackOpts{
+			Cloud:        cloud,
+			SelectedKeys: []ComponentKey{key},
+			Comps:        comps,
+			Cfg:          cfg,
+			Project:      "io-typesweep",
+			GCPProjectID: "io-typesweep-1",
+			Region:       cfg.Region,
+		})
+		if err != nil {
+			// Components that can't stand alone (compute exclusivity, required
+			// wiring) legitimately fail to compose solo; their mapper output is
+			// still exercised via the multi-component compose tests. The
+			// unconvertible-value class is what this guard is about.
+			t.Logf("skip solo compose %s: %v", key, err)
+			continue
+		}
+		swept++
+		for _, iss := range result.Issues {
+			require.NotContainsf(t, iss.Reason, "unsupported Go value type",
+				"component %s emits a mapper value the cty converter cannot express "+
+					"(field %s) — add the shape to ctyValueForType/ctyValueByReflection",
+				key, iss.Field)
+		}
+	}
+	// Cardinality guard: if compose started erroring for every component this
+	// test would silently pass while checking nothing.
+	require.Greaterf(t, swept, 1,
+		"expected to sweep more than one component; got %d — the sweep is not running", swept)
+}
+
+// TestComposeBackupsStack_NoFatalIssues pins the exact stack that surfaced the
+// unconvertible-value bug in production: staging session sess_v2_vgndhurpWTMi,
+// a "small ARM app server with backups" ticket, whose deploy returned HTTP 500
+// from tf/start while the download and compose endpoints returned 200 — the
+// tell that generation was fine and a pre-flight self-check was the blocker.
+//
+// The sweep above composes each component solo and asserts only that no value
+// is inexpressible in cty. This is the user-facing case: a realistic
+// multi-component stack, asserting the deploy path sees NO fatal issue at all.
+// The two guard different things — keep both.
+func TestComposeBackupsStack_NoFatalIssues(t *testing.T) {
+	t.Parallel()
+
+	var comps Components
+	require.NoError(t, json.Unmarshal([]byte(`{
+		"architecture": "Monolith",
+		"cloud": "AWS",
+		"aws_vpc": "Public VPC",
+		"aws_ec2": "ARM",
+		"aws_secretsmanager": true,
+		"aws_backups": {"aws_ec2": true}
+	}`), &comps))
+
+	var cfg Config
+	require.NoError(t, json.Unmarshal([]byte(`{
+		"region": "us-east-1",
+		"aws_ec2": {
+			"instanceType": "t4g.large",
+			"numServers": "1",
+			"numCoresPerServer": "2",
+			"diskSizePerServer": "32",
+			"customIngressPorts": [22]
+		},
+		"aws_secretsmanager": {"numSecrets": "1"}
+	}`), &cfg))
+
+	result, err := newTestClient().ComposeStackWithIssues(ComposeStackOpts{
+		Cloud:        "aws",
+		SelectedKeys: []ComponentKey{KeyAWSVPC, KeyAWSEC2, KeyAWSSecretsManager, KeyAWSBackups},
+		Comps:        &comps,
+		Cfg:          &cfg,
+		Project:      "io-vgndhurpwtmi",
+		Region:       cfg.Region,
+	})
+	require.NoError(t, err)
+
+	// sensitive_propagation is advisory downstream; everything else blocks the
+	// deploy. Mirror that partition so this test fails for exactly the reasons
+	// a real deploy would.
+	var fatal []ValidationIssue
+	for _, iss := range result.Issues {
+		if iss.Code == "sensitive_propagation" ||
+			iss.Code == "imported_resource_missing_required_attr" {
+			continue
+		}
+		fatal = append(fatal, iss)
+	}
+	require.Emptyf(t, fatal,
+		"backups stack must compose without fatal issues; a non-empty set here is a deploy-start 500: %+v", fatal)
+
+	// The object-shaped value that started it all must actually reach the
+	// emitted tfvars — a pass with the rule silently dropped would be a
+	// hollow green.
+	tfvars, ok := result.Files["/aws_backups.auto.tfvars"]
+	require.True(t, ok, "expected /aws_backups.auto.tfvars in composed output")
+	require.Contains(t, string(tfvars), "aws_backups_default_rule")
+	require.Contains(t, string(tfvars), "schedule_expression")
 }
 
 // emptyPresetAllowlist enumerates presets that intentionally declare zero
