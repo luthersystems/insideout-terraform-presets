@@ -1,6 +1,7 @@
 package composer
 
 import (
+	"strings"
 	"testing"
 
 	hcl "github.com/hashicorp/hcl/v2"
@@ -105,6 +106,65 @@ func TestPresetDefaultsSatisfyValidations(t *testing.T) {
 	// half the registry has stopped being checkable and the test value evaporates.
 	require.Less(t, eligibleSkipped, checked,
 		"too many eligible (default, validation) pairs are being skipped (%d skipped vs %d checked); investigate before silencing", eligibleSkipped, checked)
+}
+
+// TestNoUnsupportedGoValueTypeAcrossAllComponents is the class-level guard for
+// the failure that shipped as aws_backups.default_rule: a mapper emitted a Go
+// value (map[string]any) that ctyValueForType had no case for, so
+// ValidateValueTypes reported invalid_type on a perfectly valid stack and the
+// downstream InsideOut backend turned it into a deploy-start 500. Every stack
+// selecting AWS Backup was undeployable from the day that mapper default
+// landed until it was found in production two months later.
+//
+// The per-shape unit tests in hcl_validation_test.go cover the converter in
+// isolation; this asserts the property that actually matters end-to-end — no
+// component's real mapper output can be inexpressible in cty — so a future
+// mapper edit that reaches for a new Go shape fails here at CI time rather
+// than at a customer's deploy.
+func TestNoUnsupportedGoValueTypeAcrossAllComponents(t *testing.T) {
+	t.Parallel()
+
+	client := newTestClient()
+	swept := 0
+	for _, key := range AllComponentKeys {
+		cloud := CloudFor(key)
+		if cloud == "" {
+			continue
+		}
+		comps := &Components{Cloud: strings.ToUpper(cloud)}
+		cfg := &Config{Region: "us-east-1"}
+		if cloud == "gcp" {
+			cfg.Region = "us-central1"
+		}
+		result, err := client.ComposeStackWithIssues(ComposeStackOpts{
+			Cloud:        cloud,
+			SelectedKeys: []ComponentKey{key},
+			Comps:        comps,
+			Cfg:          cfg,
+			Project:      "io-typesweep",
+			GCPProjectID: "io-typesweep-1",
+			Region:       cfg.Region,
+		})
+		if err != nil {
+			// Components that can't stand alone (compute exclusivity, required
+			// wiring) legitimately fail to compose solo; their mapper output is
+			// still exercised via the multi-component compose tests. The
+			// unconvertible-value class is what this guard is about.
+			t.Logf("skip solo compose %s: %v", key, err)
+			continue
+		}
+		swept++
+		for _, iss := range result.Issues {
+			require.NotContainsf(t, iss.Reason, "unsupported Go value type",
+				"component %s emits a mapper value the cty converter cannot express "+
+					"(field %s) — add the shape to ctyValueForType/ctyValueByReflection",
+				key, iss.Field)
+		}
+	}
+	// Cardinality guard: if compose started erroring for every component this
+	// test would silently pass while checking nothing.
+	require.Greaterf(t, swept, 1,
+		"expected to sweep more than one component; got %d — the sweep is not running", swept)
 }
 
 // emptyPresetAllowlist enumerates presets that intentionally declare zero

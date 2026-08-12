@@ -56,3 +56,76 @@ func TestCtyValueForType_Map(t *testing.T) {
 		require.Error(t, err)
 	})
 }
+
+// The map case above fixed the shape that reached production, but the switch
+// was still type-by-type: map[string]string, []map[string]any, []bool, int32
+// and friends each remained one mapper edit away from the same
+// "unsupported Go value type" deploy-start 500. These assert the reflect-kind
+// fallback closes the whole class, not just the instance.
+func TestCtyValueForType_ReflectFallbackShapes(t *testing.T) {
+	t.Parallel()
+
+	num := 7
+
+	t.Run("typed maps convert", func(t *testing.T) {
+		// The shape a `tags` / `labels` variable would arrive as.
+		got, err := ctyValueForType(map[string]string{"Project": "io-abc"}, cty.DynamicPseudoType)
+		require.NoError(t, err)
+		require.Equal(t, "io-abc", got.GetAttr("Project").AsString())
+
+		got, err = ctyValueForType(map[string]bool{"enabled": true}, cty.DynamicPseudoType)
+		require.NoError(t, err)
+		require.True(t, got.GetAttr("enabled").True())
+
+		got, err = ctyValueForType(map[string]int{"days": 30}, cty.DynamicPseudoType)
+		require.NoError(t, err)
+		require.Equal(t, "30", got.GetAttr("days").AsBigFloat().Text('f', -1))
+	})
+
+	t.Run("list of objects converts", func(t *testing.T) {
+		// e.g. per-service backup rule overrides.
+		got, err := ctyValueForType([]map[string]any{{"retention_days": 7}}, cty.DynamicPseudoType)
+		require.NoError(t, err)
+		require.True(t, got.Type().IsTupleType())
+		require.Equal(t, "7",
+			got.Index(cty.NumberIntVal(0)).GetAttr("retention_days").AsBigFloat().Text('f', -1))
+	})
+
+	t.Run("remaining scalar and slice kinds convert", func(t *testing.T) {
+		for name, v := range map[string]any{
+			"[]bool":    []bool{true},
+			"[]float64": []float64{1.5},
+			"int32":     int32(3),
+			"float32":   float32(1.5),
+			"uint":      uint(9),
+			"pointer":   &num,
+		} {
+			_, err := ctyValueForType(v, cty.DynamicPseudoType)
+			require.NoErrorf(t, err, "%s should convert", name)
+		}
+	})
+
+	t.Run("empty typed collections honor the target", func(t *testing.T) {
+		got, err := ctyValueForType(map[string]string{}, cty.Map(cty.String))
+		require.NoError(t, err)
+		require.True(t, got.Type().IsMapType())
+
+		got, err = ctyValueForType([]bool{}, cty.List(cty.Bool))
+		require.NoError(t, err)
+		require.True(t, got.Type().IsListType())
+	})
+
+	t.Run("kinds with no HCL analogue still error", func(t *testing.T) {
+		// The fallback must not silently coerce genuinely unconvertible
+		// values — that would trade a loud validation failure for a
+		// confusing terraform plan error further downstream.
+		for name, v := range map[string]any{
+			"struct":          struct{ A int }{1},
+			"channel":         make(chan int),
+			"non-string keys": map[int]string{1: "a"},
+		} {
+			_, err := ctyValueForType(v, cty.DynamicPseudoType)
+			require.Errorf(t, err, "%s should error", name)
+		}
+	})
+}
