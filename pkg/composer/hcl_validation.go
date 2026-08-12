@@ -28,8 +28,8 @@ type moduleVarKey struct {
 }
 
 type moduleVariableValidator struct {
-	name    string
-	typ     cty.Type
+	name string
+	typ  cty.Type
 	// defaults carries the declared optional-attribute defaults (e.g.
 	// `optional(string, "90d")`). Terraform applies these before validation
 	// rules run, so rules may reference attributes the raw value omits;

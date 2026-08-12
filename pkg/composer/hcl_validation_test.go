@@ -3,8 +3,8 @@ package composer
 import (
 	"testing"
 
-	"github.com/zclconf/go-cty/cty"
 	"github.com/stretchr/testify/require"
+	"github.com/zclconf/go-cty/cty"
 )
 
 // Regression: ctyValueForType had no map case, so any object-shaped value —
