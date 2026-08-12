@@ -6,6 +6,7 @@ import (
 	hcl "github.com/hashicorp/hcl/v2"
 	"github.com/stretchr/testify/require"
 	cty "github.com/zclconf/go-cty/cty"
+	"github.com/zclconf/go-cty/cty/convert"
 )
 
 // TestPresetDefaultsSatisfyValidations protects against the silent-drift class
@@ -59,6 +60,21 @@ func TestPresetDefaultsSatisfyValidations(t *testing.T) {
 			eligibleSkipped++
 			t.Logf("skip %s.%s default cty conversion: %v", key.component, key.variable, err)
 			continue
+		}
+		// Mirror Terraform's variable pipeline (and validate() above): fill
+		// optional-attribute defaults, then convert to the declared type, so
+		// rules referencing optional attributes can evaluate.
+		if validator.defaults != nil {
+			defaultCty = validator.defaults.Apply(defaultCty)
+		}
+		if !validator.typ.Equals(cty.DynamicPseudoType) {
+			converted, err := convert.Convert(defaultCty, validator.typ)
+			if err != nil {
+				eligibleSkipped++
+				t.Logf("skip %s.%s default type conversion: %v", key.component, key.variable, err)
+				continue
+			}
+			defaultCty = converted
 		}
 		// Run every validation rule against the default.
 		for _, rule := range validator.rules {

@@ -30,8 +30,13 @@ type moduleVarKey struct {
 type moduleVariableValidator struct {
 	name    string
 	typ     cty.Type
-	rules   []moduleValidationRule
-	allowed []string
+	// defaults carries the declared optional-attribute defaults (e.g.
+	// `optional(string, "90d")`). Terraform applies these before validation
+	// rules run, so rules may reference attributes the raw value omits;
+	// evaluating without them yields spurious "Unsupported attribute" errors.
+	defaults *typeexpr.Defaults
+	rules    []moduleValidationRule
+	allowed  []string
 }
 
 type moduleValidationRule struct {
@@ -106,9 +111,10 @@ func discoverModuleVariableValidators(files map[string][]byte) (map[string]modul
 				typ:  cty.DynamicPseudoType,
 			}
 			if attr, ok := block.Body.Attributes["type"]; ok && attr.Expr != nil {
-				typ, typeDiags := typeexpr.TypeConstraint(attr.Expr)
+				typ, defaults, typeDiags := typeexpr.TypeConstraintWithDefaults(attr.Expr)
 				if !typeDiags.HasErrors() {
 					validator.typ = typ
+					validator.defaults = defaults
 				}
 			}
 
@@ -153,6 +159,9 @@ func (r *validationRegistry) validate(component ComponentKey, variable string, r
 			code:   "invalid_type",
 			reason: fmt.Sprintf("%s=%s: %v", variable, issueValue(raw), err),
 		}, false
+	}
+	if validator.defaults != nil {
+		value = validator.defaults.Apply(value)
 	}
 	if !validator.typ.Equals(cty.DynamicPseudoType) {
 		value, err = convert.Convert(value, validator.typ)
@@ -224,6 +233,7 @@ func validationFunctions() map[string]function.Function {
 			"can":         tryfunc.CanFunc,
 			"contains":    stdlib.ContainsFunc,
 			"distinct":    stdlib.DistinctFunc,
+			"jsonencode":  stdlib.JSONEncodeFunc,
 			"length":      lengthFunc(),
 			"lower":       stdlib.LowerFunc,
 			"regex":       stdlib.RegexFunc,
@@ -423,6 +433,19 @@ func ctyValueForType(v any, target cty.Type) (cty.Value, error) {
 			vals[i] = cty.NumberIntVal(int64(n))
 		}
 		return cty.TupleVal(vals), nil
+	case map[string]any:
+		if len(x) == 0 {
+			return emptyObjectForType(target), nil
+		}
+		vals := make(map[string]cty.Value, len(x))
+		for k, elem := range x {
+			val, err := ctyValueForType(elem, cty.DynamicPseudoType)
+			if err != nil {
+				return cty.NilVal, err
+			}
+			vals[k] = val
+		}
+		return cty.ObjectVal(vals), nil
 	default:
 		return cty.NilVal, fmt.Errorf("unsupported Go value type %T", v)
 	}
@@ -439,6 +462,13 @@ func emptyCollectionForType(target cty.Type) cty.Value {
 	default:
 		return cty.EmptyTupleVal
 	}
+}
+
+func emptyObjectForType(target cty.Type) cty.Value {
+	if target.IsMapType() {
+		return cty.MapValEmpty(target.ElementType())
+	}
+	return cty.EmptyObjectVal
 }
 
 func extractAllowedValues(expr hcl.Expression, varName string) []string {
