@@ -1,6 +1,7 @@
 package composer
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 
@@ -165,6 +166,75 @@ func TestNoUnsupportedGoValueTypeAcrossAllComponents(t *testing.T) {
 	// test would silently pass while checking nothing.
 	require.Greaterf(t, swept, 1,
 		"expected to sweep more than one component; got %d — the sweep is not running", swept)
+}
+
+// TestComposeBackupsStack_NoFatalIssues pins the exact stack that surfaced the
+// unconvertible-value bug in production: staging session sess_v2_vgndhurpWTMi,
+// a "small ARM app server with backups" ticket, whose deploy returned HTTP 500
+// from tf/start while the download and compose endpoints returned 200 — the
+// tell that generation was fine and a pre-flight self-check was the blocker.
+//
+// The sweep above composes each component solo and asserts only that no value
+// is inexpressible in cty. This is the user-facing case: a realistic
+// multi-component stack, asserting the deploy path sees NO fatal issue at all.
+// The two guard different things — keep both.
+func TestComposeBackupsStack_NoFatalIssues(t *testing.T) {
+	t.Parallel()
+
+	var comps Components
+	require.NoError(t, json.Unmarshal([]byte(`{
+		"architecture": "Monolith",
+		"cloud": "AWS",
+		"aws_vpc": "Public VPC",
+		"aws_ec2": "ARM",
+		"aws_secretsmanager": true,
+		"aws_backups": {"aws_ec2": true}
+	}`), &comps))
+
+	var cfg Config
+	require.NoError(t, json.Unmarshal([]byte(`{
+		"region": "us-east-1",
+		"aws_ec2": {
+			"instanceType": "t4g.large",
+			"numServers": "1",
+			"numCoresPerServer": "2",
+			"diskSizePerServer": "32",
+			"customIngressPorts": [22]
+		},
+		"aws_secretsmanager": {"numSecrets": "1"}
+	}`), &cfg))
+
+	result, err := newTestClient().ComposeStackWithIssues(ComposeStackOpts{
+		Cloud:        "aws",
+		SelectedKeys: []ComponentKey{KeyAWSVPC, KeyAWSEC2, KeyAWSSecretsManager, KeyAWSBackups},
+		Comps:        &comps,
+		Cfg:          &cfg,
+		Project:      "io-vgndhurpwtmi",
+		Region:       cfg.Region,
+	})
+	require.NoError(t, err)
+
+	// sensitive_propagation is advisory downstream; everything else blocks the
+	// deploy. Mirror that partition so this test fails for exactly the reasons
+	// a real deploy would.
+	var fatal []ValidationIssue
+	for _, iss := range result.Issues {
+		if iss.Code == "sensitive_propagation" ||
+			iss.Code == "imported_resource_missing_required_attr" {
+			continue
+		}
+		fatal = append(fatal, iss)
+	}
+	require.Emptyf(t, fatal,
+		"backups stack must compose without fatal issues; a non-empty set here is a deploy-start 500: %+v", fatal)
+
+	// The object-shaped value that started it all must actually reach the
+	// emitted tfvars — a pass with the rule silently dropped would be a
+	// hollow green.
+	tfvars, ok := result.Files["/aws_backups.auto.tfvars"]
+	require.True(t, ok, "expected /aws_backups.auto.tfvars in composed output")
+	require.Contains(t, string(tfvars), "aws_backups_default_rule")
+	require.Contains(t, string(tfvars), "schedule_expression")
 }
 
 // emptyPresetAllowlist enumerates presets that intentionally declare zero
