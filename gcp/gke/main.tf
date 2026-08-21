@@ -68,8 +68,16 @@ locals {
 }
 
 module "gke" {
-  source  = "terraform-google-modules/kubernetes-engine/google//modules/private-cluster"
-  version = "~> 33.0"
+  source = "terraform-google-modules/kubernetes-engine/google//modules/private-cluster"
+  # Pinned exactly: composed archives pin hashicorp/google to the mars
+  # provider-mirror bake (= 6.10.0, pkg/composer/imported/provider_pins.go),
+  # and a floating "~> 33.0" resolves the newest 33.x at init time without
+  # considering provider constraints (the #839/#881 failure class — see
+  # aws/eks). v33.1.0 is the newest 33.x (private-cluster submodule requires
+  # google >= 5.40.0, < 7 — satisfied by 6.10.0). Do NOT jump majors:
+  # kubernetes-engine >= 35 requires google >= 6.11, incompatible with the
+  # 6.10.0 pin. Bump this pin together with the base provider pin / mars bake.
+  version = "33.1.0"
 
   project_id = var.project_id
   name       = local.cluster_name

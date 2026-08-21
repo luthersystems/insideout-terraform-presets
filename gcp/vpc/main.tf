@@ -17,8 +17,15 @@ locals {
 }
 
 module "vpc" {
-  source  = "terraform-google-modules/network/google"
-  version = "~> 9.0"
+  source = "terraform-google-modules/network/google"
+  # Pinned exactly: composed archives pin hashicorp/google to the mars
+  # provider-mirror bake (= 6.10.0, pkg/composer/imported/provider_pins.go),
+  # and a floating "~> 9.0" resolves the newest 9.x at init time without
+  # considering provider constraints (the #839/#881 failure class — see
+  # aws/eks). v9.3.0 is the newest 9.x (requires google >= 4.64, < 7 —
+  # satisfied by 6.10.0). Bump this pin together with the base provider
+  # pin / mars bake.
+  version = "9.3.0"
 
   project_id   = var.project_id
   network_name = local.network_name
@@ -59,9 +66,13 @@ resource "google_compute_router" "router" {
 
 # Cloud NAT for private instances
 module "cloud_nat" {
-  count   = var.enable_cloud_nat ? 1 : 0
-  source  = "terraform-google-modules/cloud-nat/google"
-  version = "~> 5.0"
+  count  = var.enable_cloud_nat ? 1 : 0
+  source = "terraform-google-modules/cloud-nat/google"
+  # Pinned exactly: same rationale as module "vpc" above (= 6.10.0 google
+  # pin, #839/#881 failure class). v5.4.0 is the newest 5.x (requires
+  # google >= 4.51, < 8 — satisfied by 6.10.0). Bump this pin together
+  # with the base provider pin / mars bake.
+  version = "5.4.0"
 
   project_id = var.project_id
   region     = var.region
