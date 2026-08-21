@@ -42,8 +42,18 @@ locals {
 }
 
 module "this" {
-  source  = "terraform-aws-modules/vpc/aws"
-  version = "~> 6.0"
+  source = "terraform-aws-modules/vpc/aws"
+  # Pinned exactly: composed archives pin hashicorp/aws to the mars
+  # provider-mirror bake (= 6.52.0, pkg/composer/imported/provider_pins.go),
+  # and a floating "~> 6.0" resolves whatever the registry's newest 6.x is at
+  # init time without considering provider constraints — upstream vpc already
+  # raised its aws floor once inside 6.x (>= 6.0 → >= 6.28 at v6.6.0), so the
+  # next floor raise past 6.52 would make the composed constraint set
+  # unsatisfiable and fail every customer deploy archive's terraform init
+  # (the #839/#881 failure class — see aws/eks for the eks v21.25.0 instance).
+  # v6.7.0 is the newest release compatible with the 6.52.0 pin (requires
+  # aws >= 6.28). Bump this pin together with the base provider pin / mars bake.
+  version = "6.7.0"
 
   name = module.name.name
   cidr = var.vpc_cidr
