@@ -203,8 +203,16 @@ resource "aws_iam_role_policy_attachment" "ebs_csi" {
 }
 
 module "eks" {
-  source  = "terraform-aws-modules/eks/aws"
-  version = "~> 21.0"
+  source = "terraform-aws-modules/eks/aws"
+  # Pinned exactly: composed archives pin hashicorp/aws to the mars
+  # provider-mirror bake (= 6.52.0, pkg/composer/imported/provider_pins.go),
+  # and a floating "~> 21.0" here resolved eks v21.25.0 the day it released,
+  # which requires aws >= 6.59 — making the composed constraint set
+  # unsatisfiable and failing every terraform init (CI go-test run
+  # 32429710972 and customer deploys alike). v21.24.0 is the newest release
+  # compatible with the 6.52.0 pin (requires aws >= 6.52). Bump this pin
+  # together with the base provider pin / mars bake.
+  version = "21.24.0"
 
   name               = local.cluster_name
   kubernetes_version = var.cluster_version
