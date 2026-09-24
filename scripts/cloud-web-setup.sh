@@ -4,9 +4,19 @@
 #
 # This is the union of the system tools needed by both `reliable` and
 # `insideout-terraform-presets`, so a single Claude Code on the web environment can be
-# reused across both repos. This file is committed IDENTICALLY in both repos; copy the
-# full contents into the "Setup script" field of the shared environment:
+# reused across both repos. Copy the full contents into the "Setup script" field of the
+# shared environment:
 #     claude.ai/code -> New session -> cloud icon -> Add/Edit environment -> Setup script.
+#
+# UPSTREAM: luthersystems/reliable scripts/cloud-web-setup.sh is the canonical copy (and the
+# one to paste into the shared environment -- it is a superset of this file). This copy is
+# derived from it. Last synced with reliable origin/main on 2026-09-24.
+# When syncing, take reliable's generic fixes (tool version bumps, apt/dpkg hardening,
+# idempotency fixes) and keep these intentional differences:
+#   - GO_VERSION follows THIS repo's go.mod directive, not reliable's CI toolchain.
+#   - reliable-only extras are omitted here: air (reliable `make dev`), agent-browser
+#     (reliable UI validation), and the AWS CLI / kubectl / gcloud ops-troubleshooting CLIs.
+# Never lower a version this file pins higher than reliable does.
 #
 # It runs ONCE as root on a fresh Ubuntu 24.04 VM and its filesystem output is CACHED
 # (~7-day expiry), so it only re-runs when you edit it. Keep it to repo-independent
@@ -29,8 +39,8 @@ mkdir -p "$(dirname "$LOG_FILE")" 2>/dev/null || true
 : > "$LOG_FILE" 2>/dev/null || true
 
 TERRAFORM_VERSION=1.7.5     # presets CI pin (hashicorp/setup-terraform)
-GOLANGCI_VERSION=v2.6.2     # reliable CI pin (golangci-lint-action)
-GO_VERSION=1.25.0           # both repos' go.mod
+GOLANGCI_VERSION=v2.13.2    # fleet pin (reliable CI golangci-lint-action)
+GO_VERSION=1.25.8           # this repo's go.mod directive (CI uses go-version-file: go.mod)
 ARCH="$(dpkg --print-architecture)"   # auto-detect: amd64 or arm64
 
 log() {
@@ -151,7 +161,7 @@ install_apt_extras() {
 
   log "configuring 1Password CLI apt repo"
   curl -fsSL https://downloads.1password.com/linux/keys/1password.asc \
-    | gpg --dearmor --output /usr/share/keyrings/1password-archive-keyring.gpg
+    | gpg --batch --yes --dearmor --output /usr/share/keyrings/1password-archive-keyring.gpg
   echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/1password-archive-keyring.gpg] https://downloads.1password.com/linux/debian/$(dpkg --print-architecture) stable main" \
     > /etc/apt/sources.list.d/1password.list
   mkdir -p /etc/debsig/policies/AC2D62742012EA22/
@@ -159,10 +169,10 @@ install_apt_extras() {
     -o /etc/debsig/policies/AC2D62742012EA22/1password.pol
   mkdir -p /usr/share/debsig/keyrings/AC2D62742012EA22
   curl -fsSL https://downloads.1password.com/linux/keys/1password.asc \
-    | gpg --dearmor --output /usr/share/debsig/keyrings/AC2D62742012EA22/debsig.gpg
+    | gpg --batch --yes --dearmor --output /usr/share/debsig/keyrings/AC2D62742012EA22/debsig.gpg
 
   log "installing gh + 1password-cli"
-  apt-get update -y
+  apt-get update -y --allow-releaseinfo-change   # tolerate PPA Release-metadata changes (see phase 1)
   apt-get install -y gh 1password-cli
   gh --version
   op --version
@@ -187,18 +197,39 @@ ensure_go() {
   go version
 }
 
+# Phase 0 (apt hardening): on a fresh Ubuntu 24.04 VM the boot-time apt-daily /
+# unattended-upgrades timers grab /var/lib/dpkg/lock-frontend a minute or two after boot --
+# i.e. right in the gap between phase 1's apt and install_apt_extras' apt. An `apt-get install`
+# with no lock timeout then dies instantly with "Could not get lock ... (exit 100)" -- an
+# intermittent "setup aborted at line N" failure. Two defenses, both before any apt-get runs:
+#   1. A global apt.conf.d drop-in so EVERY apt-get in this script (incl. the one buried inside
+#      `playwright install-deps`) WAITS up to 10 min for the lock instead of failing immediately.
+#   2. Best-effort stop of the background timers so they don't contend at all. No-op (|| true)
+#      where systemd isn't the init (e.g. a container sandbox), where the conf drop-in is the
+#      real safety net.
+log "hardening apt against dpkg-lock contention (DPkg::Lock::Timeout + stop apt-daily timers)"
+mkdir -p /etc/apt/apt.conf.d
+printf 'DPkg::Lock::Timeout "600";\n' > /etc/apt/apt.conf.d/99-cloud-web-setup
+systemctl stop apt-daily.timer apt-daily-upgrade.timer       >/dev/null 2>&1 || true
+systemctl stop apt-daily.service apt-daily-upgrade.service   >/dev/null 2>&1 || true
+
 # Phase 1 (sync): base packages the parallel installers depend on. git-lfs is needed by
 # reliable's go tests (LFS-tracked tokenizer model); 'git lfs install' is system-wide here.
 # bubblewrap is codex's sandbox runtime -- without it on PATH codex warns on every invocation
 # and falls back to its bundled copy. rsync drives reliable's `make export-mock` /
 # `make verify-mock` (mock-ui/scripts/export-mock.sh rsyncs the shared component tree into the
 # insideout-app-mock export); without it that target dies with "rsync: command not found".
-# This setup script is committed identically in both repos, so rsync ships here too even though
-# presets has no mock-ui. Installed in this single synchronous transaction (not the parallel
-# phase) to avoid dpkg-lock contention with install_apt_extras.
+# The setup script is shared with reliable, so rsync ships here too even though presets has no
+# mock-ui. Installed in this single synchronous transaction (not the parallel phase) to avoid
+# dpkg-lock contention with install_apt_extras.
 log "installing base apt packages (incl. git-lfs, bubblewrap, rsync)"
 export DEBIAN_FRONTEND=noninteractive
-apt-get update -y
+# --allow-releaseinfo-change: the base image pre-configures PPAs this repo never installs from
+# (deadsnakes, ondrej/php). When one of them changes its Release metadata -- e.g. ondrej/php
+# flipped its Label from "PPA for PHP" to "Use packages.sury.org/php instead" -- a bare
+# `apt-get update` aborts with exit 100 ("changed its 'Label' value ..."). The flag accepts the
+# metadata change and proceeds; safe here because we pull nothing from those PPAs.
+apt-get update -y --allow-releaseinfo-change
 apt-get install -y --no-install-recommends unzip jq ca-certificates curl gnupg git-lfs bubblewrap rsync
 git lfs install --system || true
 
