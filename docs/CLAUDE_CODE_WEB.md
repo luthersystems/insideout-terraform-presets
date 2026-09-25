@@ -9,8 +9,10 @@ session automatically) and **what you configure once in the web UI** (the enviro
 setup script, env vars, network — these cannot be committed).
 
 **Shared environment.** This repo and `reliable` share ONE Claude Code on the web
-environment. The setup script below is the **union** of both repos' tools and is committed
-identically in both — copy it from either. The environment supplies the tool image + the
+environment. The setup script below is the **union** of both repos' tools. `reliable`'s
+`scripts/cloud-web-setup.sh` is the upstream copy (a superset — paste that one into the
+shared environment); this repo's copy is derived from it and records its last sync date and
+intentional differences in its header. The environment supplies the tool image + the
 1Password token + the network allowlist; each repo's committed `.claude/` config decides
 what to run and which secrets to pull. (For a TF-only, leaner environment, drop reliable's
 tools from the script.)
@@ -169,5 +171,5 @@ every session** — the hook pre-warms `go mod download`; Terraform providers
 | Hook logs "skipping secret injection" | `OP_SERVICE_ACCOUNT_TOKEN` not set, `op` not installed, or the template is missing. Check the env var and that the setup script ran. |
 | `op inject` fails / auth error | Token wrong, expired, or lacks read access to `Reliable-Dev`; or `*.1password.com` not in the Custom allowlist. |
 | codex "not authenticated" | The `op://` item/field in `scripts/cloud-secrets.op.tpl` doesn't resolve to a valid key, or `api.openai.com` isn't allowlisted. |
-| `go build` fails on a language-version error | Preinstalled Go older than `go.mod`; the setup script installs Go `1.25.0` then (also allowlist `go.dev`). |
+| `go build` fails on a language-version error | Preinstalled Go older than `go.mod`; the setup script installs the `go.mod` Go (`1.25.8`) then (also allowlist `go.dev`). |
 | Setup script "cache build failed" | Must finish within ~5 min and exit 0. Check the failing installer in the build log. |
