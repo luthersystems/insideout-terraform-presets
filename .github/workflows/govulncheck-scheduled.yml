@@ -30,10 +30,9 @@ jobs:
       - uses: actions/checkout@v7
       - uses: actions/setup-go@v7
         with:
-          go-version: "1.26.x"
-          # The runner image caches a Go 1.26 patch that can lag the latest
-          # release, and govulncheck scans the stdlib of the Go that runs it.
-          check-latest: true
+          # Scan with the Go the module ships (go.mod's toolchain line):
+          # govulncheck scans the stdlib of the Go that runs it.
+          go-version-file: go.mod
           cache: true
 
       - name: Install govulncheck
