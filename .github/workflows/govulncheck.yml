@@ -25,6 +25,9 @@ jobs:
       - uses: actions/setup-go@v7
         with:
           go-version: "1.26.x"
+          # The runner image caches a Go 1.26 patch that can lag the latest
+          # release, and govulncheck scans the stdlib of the Go that runs it.
+          check-latest: true
           cache: true
       - name: Run govulncheck
         run: |
