@@ -9,7 +9,7 @@ import (
 )
 
 func TestExecTerraformRunnerValidateStreamsHumanOutputAndCapturesJSON(t *testing.T) {
-	t.Parallel()
+	// Not parallel: see writeFakeTerraform.
 	dir := t.TempDir()
 	bin := writeFakeTerraform(t, dir, `#!/bin/sh
 if [ "$1" = "validate" ] && [ "$2" = "-no-color" ]; then
@@ -46,7 +46,7 @@ exit 7
 }
 
 func TestExecTerraformRunnerValidateStillCapturesJSONAfterHumanValidateFailure(t *testing.T) {
-	t.Parallel()
+	// Not parallel: see writeFakeTerraform.
 	dir := t.TempDir()
 	bin := writeFakeTerraform(t, dir, `#!/bin/sh
 if [ "$1" = "validate" ] && [ "$2" = "-no-color" ]; then
@@ -121,7 +121,7 @@ func TestPlanParallelismDefaults(t *testing.T) {
 // plan actually shells out with -parallelism. End-to-end complement to
 // TestPlanArgs.
 func TestExecTerraformRunnerPlanPassesParallelism(t *testing.T) {
-	t.Parallel()
+	// Not parallel: see writeFakeTerraform.
 	dir := t.TempDir()
 	argsFile := filepath.Join(dir, "args.txt")
 	bin := writeFakeTerraform(t, dir, `#!/bin/sh
@@ -142,6 +142,11 @@ exit 0
 	}
 }
 
+// writeFakeTerraform writes an executable script and returns its path.
+// Tests that call it must not be parallel: while one test holds the
+// script open for writing, another test's fork can inherit that
+// descriptor, and exec of the script then fails with "text file busy"
+// (ETXTBSY) until the child execs.
 func writeFakeTerraform(t *testing.T, dir, script string) string {
 	t.Helper()
 	path := filepath.Join(dir, "terraform")
