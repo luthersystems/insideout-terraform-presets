@@ -13,7 +13,7 @@
 # derived from it. Last synced with reliable origin/main on 2026-09-24.
 # When syncing, take reliable's generic fixes (tool version bumps, apt/dpkg hardening,
 # idempotency fixes) and keep these intentional differences:
-#   - GO_VERSION follows THIS repo's go.mod directive, not reliable's CI toolchain.
+#   - GO_VERSION follows THIS repo's go.mod toolchain line, not reliable's CI toolchain.
 #   - reliable-only extras are omitted here: air (reliable `make dev`), agent-browser
 #     (reliable UI validation), and the AWS CLI / kubectl / gcloud ops-troubleshooting CLIs.
 # Never lower a version this file pins higher than reliable does.
@@ -40,7 +40,7 @@ mkdir -p "$(dirname "$LOG_FILE")" 2>/dev/null || true
 
 TERRAFORM_VERSION=1.7.5     # presets CI pin (hashicorp/setup-terraform)
 GOLANGCI_VERSION=v2.13.2    # fleet pin (reliable CI golangci-lint-action)
-GO_VERSION=1.25.8           # this repo's go.mod directive (CI uses go-version-file: go.mod)
+GO_VERSION=1.26.10          # this repo's go.mod toolchain line (CI uses go-version-file: go.mod)
 ARCH="$(dpkg --print-architecture)"   # auto-detect: amd64 or arm64
 
 log() {
