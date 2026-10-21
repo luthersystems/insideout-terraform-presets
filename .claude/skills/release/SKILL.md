@@ -43,36 +43,26 @@ Ensure the Go embed compiles cleanly:
 go build ./...
 ```
 
-### 5. Create the Tag
+### 5. Cut the Release
+
+Dispatch the `Release (tag)` workflow (`.github/workflows/release-tag.yml`) on
+`main`. Do not run `git push origin v<X.Y.Z>`: agent sandboxes cannot push tags
+or create releases, and the workflow checks what a hand-cut tag skips (the
+commit is live `main`, and Terraform Validate passed on its push run).
 
 ```bash
-git tag -a v<X.Y.Z> -m "v<X.Y.Z>: <summary of changes>"
+# Dry run first: prints the version it would cut
+gh workflow run release-tag.yml --ref main -f version=v<X.Y.Z> -f dry_run=true
+# Then the real run (empty version = next patch of the latest tag)
+gh workflow run release-tag.yml --ref main -f version=v<X.Y.Z> -f dry_run=false
+gh run watch "$(gh run list -w release-tag.yml -L1 --json databaseId --jq '.[0].databaseId')" --exit-status
 ```
 
-### 6. Push the Tag
+The workflow creates the tag and the GitHub release, with notes generated from
+the merged pull requests. Edit the release notes afterwards to add the module
+changes if they matter to a downstream reader.
 
-```bash
-git push origin v<X.Y.Z>
-```
-
-### 7. Create GitHub Release
-
-```bash
-gh release create v<X.Y.Z> --title "v<X.Y.Z>" --notes "$(cat <<'EOF'
-## What's Changed
-
-- <bullet points of notable changes>
-
-## Module Changes
-
-- <new/modified/removed modules>
-
-**Full Changelog**: https://github.com/luthersystems/insideout-terraform-presets/compare/<prev-tag>...v<X.Y.Z>
-EOF
-)"
-```
-
-### 8. Verify Downstream Consumption
+### 6. Verify Downstream Consumption
 
 After release, the downstream InsideOut backend repo can update its `go.mod`:
 
@@ -100,6 +90,5 @@ Remind the user to update the downstream dependency.
 - [ ] Changes reviewed and version bump determined
 - [ ] `/verify` passes
 - [ ] `go build ./...` succeeds
-- [ ] Tag created and pushed
-- [ ] GitHub release created with changelog
+- [ ] `Release (tag)` workflow run succeeded (tag and GitHub release created)
 - [ ] User reminded to update downstream `go.mod`
