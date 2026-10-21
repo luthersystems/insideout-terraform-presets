@@ -69,9 +69,14 @@ jobs:
             echo "error: run commit $GITHUB_SHA is not live main $live; dispatch again" >&2
             exit 1
           fi
-          ok=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/$CI_WORKFLOW/runs?head_sha=$GITHUB_SHA&event=push&status=success" --jq .total_count)
-          if [ "$ok" -lt 1 ]; then
-            echo "error: no successful push run of $CI_WORKFLOW for $GITHUB_SHA; wait for main CI to pass" >&2
+          # Name the state of the newest push run, so a red main reads as
+          # red, not as "wait": waiting will not fix a failed run.
+          runs=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/$CI_WORKFLOW/runs?head_sha=$GITHUB_SHA&event=push" \
+            --jq '[.workflow_runs[] | {status, conclusion, url: .html_url}]')
+          if [ "$(jq '[.[] | select(.conclusion == "success")] | length' <<<"$runs")" -lt 1 ]; then
+            latest_run=$(jq -r 'if length == 0 then "none" else (.[0] | "\(.status) \(.conclusion // "-") \(.url)") end' <<<"$runs")
+            echo "error: no successful push run of $CI_WORKFLOW for $GITHUB_SHA (newest: $latest_run)" >&2
+            echo "error: wait for a run in progress; fix or re-run a failed one" >&2
             exit 1
           fi
           echo "commit $GITHUB_SHA is live main and $CI_WORKFLOW passed"
@@ -91,8 +96,10 @@ jobs:
             echo "error: no existing vMAJOR.MINOR.PATCH tag to bump from; pass an explicit version" >&2
             exit 1
           fi
-          echo "$version" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$' || {
-            echo "error: version '$version' is not vMAJOR.MINOR.PATCH" >&2
+          # No leading zeros: v0.012.0 is not semver, and Go ignores it as a
+          # module version, so such a tag could never be fetched.
+          echo "$version" | grep -Eq '^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$' || {
+            echo "error: version '$version' is not vMAJOR.MINOR.PATCH without leading zeros" >&2
             exit 1
           }
           if git rev-parse -q --verify "refs/tags/$version" >/dev/null; then
@@ -101,7 +108,7 @@ jobs:
           fi
           if [ -n "$latest" ]; then
             newest=$(printf '%s\n%s\n' "$latest" "$version" | sort -V | tail -n1)
-            if [ "$newest" != "$version" ] || [ "$version" = "$latest" ]; then
+            if [ "$newest" != "$version" ]; then
               echo "error: version $version is not strictly newer than latest tag $latest" >&2
               exit 1
             fi

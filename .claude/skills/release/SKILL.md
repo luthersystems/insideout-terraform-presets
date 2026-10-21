@@ -50,17 +50,44 @@ Dispatch the `Release (tag)` workflow (`.github/workflows/release-tag.yml`) on
 or create releases, and the workflow checks what a hand-cut tag skips (the
 commit is live `main`, and Terraform Validate passed on its push run).
 
+Run the dry run, wait for it, and read the version it printed before the real
+run. `gh workflow run` returns before the run exists, so look up each run's ID
+by the time you dispatched it, never with a bare `-L1`, which can return an
+older run (the dry run, or someone else's).
+
 ```bash
-# Dry run first: prints the version it would cut
+# watch_new_run: wait for the release-tag run created after $1, then watch it.
+watch_new_run() {
+  local since=$1 id=""
+  for _ in $(seq 30); do
+    id=$(gh run list -w release-tag.yml -e workflow_dispatch -L 5 \
+      --json databaseId,createdAt \
+      --jq "[.[] | select(.createdAt >= \"$since\")] | last | .databaseId // empty")
+    [ -n "$id" ] && break
+    sleep 2
+  done
+  [ -n "$id" ] || { echo "no new release-tag run found" >&2; return 1; }
+  gh run watch "$id" --exit-status && gh run view "$id" --log | grep -E 'DRY RUN|released|error:'
+}
+
+# 1. Dry run: prints the version it would cut and runs every check
+since=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 gh workflow run release-tag.yml --ref main -f version=v<X.Y.Z> -f dry_run=true
-# Then the real run (empty version = next patch of the latest tag)
+watch_new_run "$since"
+
+# 2. Only when the dry run printed the right version: the real run
+#    (empty version = next patch of the latest tag)
+since=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 gh workflow run release-tag.yml --ref main -f version=v<X.Y.Z> -f dry_run=false
-gh run watch "$(gh run list -w release-tag.yml -L1 --json databaseId --jq '.[0].databaseId')" --exit-status
+watch_new_run "$since"
 ```
 
 The workflow creates the tag and the GitHub release, with notes generated from
-the merged pull requests. Edit the release notes afterwards to add the module
-changes if they matter to a downstream reader.
+the merged pull requests. Then edit the release (`gh release edit v<X.Y.Z>
+--notes-file ...`) and add a **Module Changes** section: new, changed and
+removed modules, and any renamed variable or removed output. The downstream
+InsideOut backend reads it when it bumps this module, and PR titles alone do
+not show a breaking variable rename.
 
 ### 6. Verify Downstream Consumption
 
@@ -90,5 +117,7 @@ Remind the user to update the downstream dependency.
 - [ ] Changes reviewed and version bump determined
 - [ ] `/verify` passes
 - [ ] `go build ./...` succeeds
+- [ ] Dry run printed the right version
 - [ ] `Release (tag)` workflow run succeeded (tag and GitHub release created)
+- [ ] Release notes have a Module Changes section
 - [ ] User reminded to update downstream `go.mod`
