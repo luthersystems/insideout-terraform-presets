@@ -68,10 +68,10 @@ func main() {
 	}
 	for path, content := range res.Files {
 		dst := filepath.Join(*out, strings.TrimPrefix(path, "/"))
-		if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
+		if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil { //nolint:gosec // G301: generated source committed to this repo, mode of any source file
 			fatal("mkdir: %v", err)
 		}
-		if err := os.WriteFile(dst, content, 0o644); err != nil {
+		if err := os.WriteFile(dst, content, 0o644); err != nil { //nolint:gosec // G306: generated source committed to this repo, mode of any source file
 			fatal("write %s: %v", dst, err)
 		}
 	}

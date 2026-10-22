@@ -46,7 +46,7 @@ func emitImports(dir string, resources []imported.ImportedResource) error {
 		bb.SetAttributeTraversal("to", traversal)
 		bb.SetAttributeValue("id", cty.StringVal(importid.ForResource(ir)))
 	}
-	return os.WriteFile(filepath.Join(dir, importsFile), f.Bytes(), 0o644)
+	return os.WriteFile(filepath.Join(dir, importsFile), f.Bytes(), 0o644) //nolint:gosec // G306: Terraform config and import artifacts in the operator's workspace, read by terraform
 }
 
 // regionAlias converts a region id into a filesystem-/label-safe token
@@ -142,7 +142,7 @@ func emitProviders(dir string, opts providerEmitOptions) error {
 		configureAWSProviderBody(body.AppendNewBlock("provider", []string{"aws"}).Body(), opts.Region, opts)
 	}
 
-	return os.WriteFile(filepath.Join(dir, providersFile), f.Bytes(), 0o644)
+	return os.WriteFile(filepath.Join(dir, providersFile), f.Bytes(), 0o644) //nolint:gosec // G306: Terraform config and import artifacts in the operator's workspace, read by terraform
 }
 
 // configureAWSProviderBody fills an `aws` provider block body with the

@@ -36,7 +36,7 @@ func TestGCPCloudFunctionsPlaceholderZip(t *testing.T) {
 			t.Fatalf("open %s: %v", f.Name, err)
 		}
 		b, err := io.ReadAll(rc)
-		rc.Close()
+		_ = rc.Close() // read-only embedded file; the read error is checked below
 		if err != nil {
 			t.Fatalf("read %s: %v", f.Name, err)
 		}

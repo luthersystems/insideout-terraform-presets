@@ -211,7 +211,7 @@ func runStack(ctx context.Context, opts Options, stackDir string, out io.Writer)
 		}
 
 		curDrift := driftMap(classifications)
-		raw, err := os.ReadFile(generatedPath)
+		raw, err := os.ReadFile(generatedPath) //nolint:gosec // G304: path from the CLI's flags or its own workspace
 		if err != nil {
 			return nil, fmt.Errorf("driftfix iter %d: read generated.tf: %w", iter, err)
 		}
@@ -232,7 +232,7 @@ func runStack(ctx context.Context, opts Options, stackDir string, out io.Writer)
 			if err != nil {
 				return nil, fmt.Errorf("driftfix iter %d: ignore_changes escalation: %w", iter, err)
 			}
-			if err := os.WriteFile(generatedPath, patched, 0o644); err != nil {
+			if err := os.WriteFile(generatedPath, patched, 0o644); err != nil { //nolint:gosec // G306: Terraform config and import artifacts in the operator's workspace, read by terraform
 				return nil, fmt.Errorf("driftfix iter %d: write generated.tf: %w", iter, err)
 			}
 			markEscalated(curDrift, alreadyEscalated)
@@ -251,7 +251,7 @@ func runStack(ctx context.Context, opts Options, stackDir string, out io.Writer)
 		if err != nil {
 			return nil, fmt.Errorf("driftfix iter %d: patch: %w", iter, err)
 		}
-		if err := os.WriteFile(generatedPath, patched, 0o644); err != nil {
+		if err := os.WriteFile(generatedPath, patched, 0o644); err != nil { //nolint:gosec // G306: Terraform config and import artifacts in the operator's workspace, read by terraform
 			return nil, fmt.Errorf("driftfix iter %d: write generated.tf: %w", iter, err)
 		}
 		progressf(opts.Stdout, "driftfix: iteration %d: validating patch…\n", iter)

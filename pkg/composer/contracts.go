@@ -229,7 +229,7 @@ var ComposeOrder = []ComponentKey{
 }
 
 // ModulePath defines the base directory for each component's preset.
-var ModulePath = map[ComponentKey]string{
+var ModulePath = map[ComponentKey]string{ //nolint:gosec // G101: Terraform module paths, not credentials
 	// Third-party toggles
 	KeySplunk:  "modules/splunk",
 	KeyDatadog: "modules/datadog",

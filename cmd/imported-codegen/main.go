@@ -135,7 +135,7 @@ func runGen(args []string) int {
 		return 2
 	}
 
-	if err := os.MkdirAll(*outDir, 0o755); err != nil {
+	if err := os.MkdirAll(*outDir, 0o755); err != nil { //nolint:gosec // G301: generated source committed to this repo, mode of any source file
 		fmt.Fprintln(os.Stderr, err)
 		return 1
 	}
@@ -249,7 +249,7 @@ func runZod(args []string) int {
 		return 2
 	}
 
-	if err := os.MkdirAll(*outDir, 0o755); err != nil {
+	if err := os.MkdirAll(*outDir, 0o755); err != nil { //nolint:gosec // G301: generated source committed to this repo, mode of any source file
 		fmt.Fprintln(os.Stderr, err)
 		return 1
 	}
@@ -351,7 +351,7 @@ func runPolicyTS(args []string) int {
 		return 2
 	}
 
-	if err := os.MkdirAll(*outDir, 0o755); err != nil {
+	if err := os.MkdirAll(*outDir, 0o755); err != nil { //nolint:gosec // G301: generated source committed to this repo, mode of any source file
 		fmt.Fprintln(os.Stderr, err)
 		return 1
 	}

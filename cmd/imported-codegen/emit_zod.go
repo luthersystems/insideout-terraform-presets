@@ -87,7 +87,7 @@ func EmitZodTypeFile(outDir string, res *tfjson.Schema, providerSource, tfType s
 		return "", fmt.Errorf("execute zod type template for %s: %w", tfType, err)
 	}
 	path := filepath.Join(outDir, tfType+".ts")
-	if err := os.WriteFile(path, buf.Bytes(), 0o644); err != nil {
+	if err := os.WriteFile(path, buf.Bytes(), 0o644); err != nil { //nolint:gosec // G306: generated source committed to this repo, mode of any source file
 		return "", fmt.Errorf("write %s: %w", path, err)
 	}
 	return path, nil
@@ -105,7 +105,7 @@ func EmitZodValueFile(outDir string) (string, error) {
 		return "", fmt.Errorf("execute zod value template: %w", err)
 	}
 	path := filepath.Join(outDir, "_value.ts")
-	if err := os.WriteFile(path, buf.Bytes(), 0o644); err != nil {
+	if err := os.WriteFile(path, buf.Bytes(), 0o644); err != nil { //nolint:gosec // G306: generated source committed to this repo, mode of any source file
 		return "", fmt.Errorf("write %s: %w", path, err)
 	}
 	return path, nil
@@ -137,7 +137,7 @@ func EmitZodRegistryFile(outDir string, entries []ZodRegistryEntry, pins Provide
 		return "", fmt.Errorf("execute zod registry template: %w", err)
 	}
 	path := filepath.Join(outDir, "_registry.ts")
-	if err := os.WriteFile(path, buf.Bytes(), 0o644); err != nil {
+	if err := os.WriteFile(path, buf.Bytes(), 0o644); err != nil { //nolint:gosec // G306: generated source committed to this repo, mode of any source file
 		return "", fmt.Errorf("write %s: %w", path, err)
 	}
 	return path, nil

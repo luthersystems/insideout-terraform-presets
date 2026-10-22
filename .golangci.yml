@@ -1,0 +1,16 @@
+version: "2"
+
+# Used by the org's shared security workflow, which runs gosec through
+# golangci-lint (luthersystems/.github docs/security-workflow.md). Only
+# gosec reads this file today.
+linters:
+  exclusions:
+    rules:
+      # Tests write fixtures to t.TempDir() (G301, G306, G703), read
+      # fixtures and golden files by path (G304), run a terraform binary
+      # found on PATH (G204), and use fake secret names and ARNs as fixture
+      # data (G101). None of these is reachable outside the test.
+      - path: _test\.go
+        linters:
+          - gosec
+        text: "G101|G204|G301|G304|G306|G703"

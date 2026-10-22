@@ -81,7 +81,7 @@ func EmitPolicyTypeFile(outDir, tfType string) (string, error) {
 		return "", fmt.Errorf("execute policy ts template for %s: %w", tfType, err)
 	}
 	path := filepath.Join(outDir, tfType+".policy.ts")
-	if err := os.WriteFile(path, buf.Bytes(), 0o644); err != nil {
+	if err := os.WriteFile(path, buf.Bytes(), 0o644); err != nil { //nolint:gosec // G306: generated source committed to this repo, mode of any source file
 		return "", fmt.Errorf("write %s: %w", path, err)
 	}
 	return path, nil
@@ -99,7 +99,7 @@ func EmitPolicyValueFile(outDir string) (string, error) {
 		return "", fmt.Errorf("execute policy value template: %w", err)
 	}
 	path := filepath.Join(outDir, "_policy.ts")
-	if err := os.WriteFile(path, buf.Bytes(), 0o644); err != nil {
+	if err := os.WriteFile(path, buf.Bytes(), 0o644); err != nil { //nolint:gosec // G306: generated source committed to this repo, mode of any source file
 		return "", fmt.Errorf("write %s: %w", path, err)
 	}
 	return path, nil
@@ -117,7 +117,7 @@ func EmitPolicyRegistryFile(outDir string, entries []PolicyRegistryEntry) (strin
 		return "", fmt.Errorf("execute policy registry template: %w", err)
 	}
 	path := filepath.Join(outDir, "_policy_registry.ts")
-	if err := os.WriteFile(path, buf.Bytes(), 0o644); err != nil {
+	if err := os.WriteFile(path, buf.Bytes(), 0o644); err != nil { //nolint:gosec // G306: generated source committed to this repo, mode of any source file
 		return "", fmt.Errorf("write %s: %w", path, err)
 	}
 	return path, nil

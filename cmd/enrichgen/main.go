@@ -65,7 +65,7 @@ func main() {
 			log.Fatal(err)
 		}
 		out := filepath.Join(root, t.outputPath)
-		if err := os.WriteFile(out, formatted, 0644); err != nil {
+		if err := os.WriteFile(out, formatted, 0644); err != nil { //nolint:gosec // G306: generated source committed to this repo, mode of any source file
 			log.Fatal(err)
 		}
 		fmt.Printf("wrote %s (%d bytes, %d lines)\n",
@@ -86,7 +86,7 @@ func main() {
 				log.Fatal(ferr)
 			}
 			fout := filepath.Join(root, t.fetchersOutputPath)
-			if err := os.WriteFile(fout, fformatted, 0644); err != nil {
+			if err := os.WriteFile(fout, fformatted, 0644); err != nil { //nolint:gosec // G306: generated source committed to this repo, mode of any source file
 				log.Fatal(err)
 			}
 			fmt.Printf("wrote %s (%d bytes, %d lines)\n",

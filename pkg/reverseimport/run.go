@@ -27,7 +27,7 @@ func Run(ctx context.Context, req job.Request, opts Options) (job.Result, error)
 	if opts.OutputDir == "" {
 		return result, fmt.Errorf("reverseimport: OutputDir required")
 	}
-	if err := os.MkdirAll(opts.OutputDir, 0o755); err != nil {
+	if err := os.MkdirAll(opts.OutputDir, 0o755); err != nil { //nolint:gosec // G301: Terraform config and import artifacts in the operator's workspace, read by terraform
 		return result, fmt.Errorf("mkdir output dir: %w", err)
 	}
 

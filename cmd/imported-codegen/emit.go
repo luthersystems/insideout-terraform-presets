@@ -73,7 +73,7 @@ func EmitTypeFile(outDir string, res *tfjson.Schema, providerSource, tfType, pro
 	}
 
 	path := filepath.Join(outDir, tfType+".gen.go")
-	if err := os.WriteFile(path, formatted, 0o644); err != nil {
+	if err := os.WriteFile(path, formatted, 0o644); err != nil { //nolint:gosec // G306: generated source committed to this repo, mode of any source file
 		return "", fmt.Errorf("write %s: %w", path, err)
 	}
 	return path, nil
@@ -103,7 +103,7 @@ func EmitVersionFile(outDir, awsVersion, googleVersion, googleBetaVersion string
 		return "", fmt.Errorf("format version: %w\n%s", err, buf.String())
 	}
 	path := filepath.Join(outDir, "version.gen.go")
-	if err := os.WriteFile(path, formatted, 0o644); err != nil {
+	if err := os.WriteFile(path, formatted, 0o644); err != nil { //nolint:gosec // G306: generated source committed to this repo, mode of any source file
 		return "", fmt.Errorf("write %s: %w", path, err)
 	}
 	return path, nil

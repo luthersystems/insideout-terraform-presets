@@ -289,7 +289,7 @@ func groupResourcesByRegion(resources []imported.ImportedResource, primaryRegion
 const maxRegionConcurrency = 6
 
 func runMultiRegion(ctx context.Context, opts Options, groups []regionGroup) (*Result, error) {
-	if err := os.MkdirAll(opts.Workdir, 0o755); err != nil {
+	if err := os.MkdirAll(opts.Workdir, 0o755); err != nil { //nolint:gosec // G301: Terraform config and import artifacts in the operator's workspace, read by terraform
 		return nil, fmt.Errorf("mkdir workdir: %w", err)
 	}
 	limit := min(len(groups), maxRegionConcurrency)
@@ -421,7 +421,7 @@ func (s *syncWriter) Write(p []byte) (int, error) {
 func WriteMergedGenerated(destPath string, subdirs []string) error {
 	var buf bytes.Buffer
 	for _, d := range subdirs {
-		b, err := os.ReadFile(filepath.Join(d, generatedFile))
+		b, err := os.ReadFile(filepath.Join(d, generatedFile)) //nolint:gosec // G304: path from the CLI's flags or its own workspace
 		if err != nil {
 			continue
 		}
@@ -432,7 +432,7 @@ func WriteMergedGenerated(destPath string, subdirs []string) error {
 	if buf.Len() == 0 {
 		return fmt.Errorf("no per-region generated.tf produced")
 	}
-	return os.WriteFile(destPath, buf.Bytes(), 0o644)
+	return os.WriteFile(destPath, buf.Bytes(), 0o644) //nolint:gosec // G306: Terraform config and import artifacts in the operator's workspace, read by terraform
 }
 
 // runSingleRegion is the single-region genconfig core: emit imports.tf +
@@ -441,7 +441,7 @@ func WriteMergedGenerated(destPath string, subdirs []string) error {
 // opts.Workdir must already be absolute (Run resolves it).
 func runSingleRegion(ctx context.Context, opts Options, resources []imported.ImportedResource) (*Result, error) {
 	provider := providerOrDefault(opts.Provider)
-	if err := os.MkdirAll(opts.Workdir, 0o755); err != nil {
+	if err := os.MkdirAll(opts.Workdir, 0o755); err != nil { //nolint:gosec // G301: Terraform config and import artifacts in the operator's workspace, read by terraform
 		return nil, fmt.Errorf("mkdir workdir: %w", err)
 	}
 
@@ -544,7 +544,7 @@ func cleanValidateExtract(ctx context.Context, opts Options, runner terraformRun
 	}
 
 	progressf(opts.Stdout, "genconfig: %s: reading generated terraform config…\n", scope)
-	raw, err := os.ReadFile(generatedPath)
+	raw, err := os.ReadFile(generatedPath) //nolint:gosec // G304: path from the CLI's flags or its own workspace
 	if err != nil {
 		return nil, nil, fmt.Errorf("read generated.tf: %w", err)
 	}
@@ -628,7 +628,7 @@ func cleanValidateExtract(ctx context.Context, opts Options, runner terraformRun
 		return nil, nil, fmt.Errorf("cross-ref: %w", err)
 	}
 
-	if err := os.WriteFile(generatedPath, cleaned, 0o644); err != nil {
+	if err := os.WriteFile(generatedPath, cleaned, 0o644); err != nil { //nolint:gosec // G306: Terraform config and import artifacts in the operator's workspace, read by terraform
 		return nil, nil, fmt.Errorf("rewrite generated.tf: %w", err)
 	}
 

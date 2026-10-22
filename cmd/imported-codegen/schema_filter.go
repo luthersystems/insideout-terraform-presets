@@ -97,5 +97,5 @@ func writeJSON(path string, v any) error {
 		return err
 	}
 	b = append(b, '\n')
-	return os.WriteFile(path, b, 0o644)
+	return os.WriteFile(path, b, 0o644) //nolint:gosec // G306: generated source committed to this repo, mode of any source file
 }

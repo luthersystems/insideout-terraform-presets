@@ -127,7 +127,7 @@ func terraformOutputString(path, key string) (string, error) {
 }
 
 func jsonFileString(path, key string) (string, bool, error) {
-	body, err := os.ReadFile(path)
+	body, err := os.ReadFile(path) //nolint:gosec // G304: path from the caller's options
 	if err != nil {
 		return "", false, err
 	}

@@ -292,7 +292,7 @@ func enrichWithRetry(ctx context.Context, fn func() error) error {
 		}
 		// Half-fixed + half-random of the current backoff window so
 		// retrying goroutines don't re-synchronize into a fresh burst.
-		sleep := backoff/2 + time.Duration(rand.Int63n(int64(backoff/2)+1))
+		sleep := backoff/2 + time.Duration(rand.Int63n(int64(backoff/2)+1)) //nolint:gosec // G404: retry jitter, not a security value
 		t := time.NewTimer(sleep)
 		select {
 		case <-ctx.Done():
@@ -403,7 +403,7 @@ func (g *GCPDiscoverer) EnrichAttributes(ctx context.Context, irs []imported.Imp
 			// staggered by errgroup slot availability — jittering all
 			// of them would add tens of seconds of dead wall time.
 			if pos < enrichConcurrency {
-				sleep := time.Duration(rand.Int63n(int64(defaultEnrichStartupJitterMax)))
+				sleep := time.Duration(rand.Int63n(int64(defaultEnrichStartupJitterMax))) //nolint:gosec // G404: retry jitter, not a security value
 				t := time.NewTimer(sleep)
 				select {
 				case <-ctx.Done():

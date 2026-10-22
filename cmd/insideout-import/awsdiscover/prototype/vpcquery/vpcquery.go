@@ -281,21 +281,21 @@ func (d *Discoverer) prepareWorkDir(region string) (string, func(), error) {
 	}
 
 	if err := os.WriteFile(filepath.Join(dir, "vpc.tfquery.hcl"), vpcQueryHCL, 0o600); err != nil {
-		os.RemoveAll(dir)
+		_ = os.RemoveAll(dir) // best-effort cleanup; err is the one to report
 		return "", nil, err
 	}
 
 	var buf bytes.Buffer
 	if err := providersTmpl.Execute(&buf, struct{ Region string }{Region: region}); err != nil {
-		os.RemoveAll(dir)
+		_ = os.RemoveAll(dir) // best-effort cleanup; err is the one to report
 		return "", nil, fmt.Errorf("render providers.tf: %w", err)
 	}
 	if err := os.WriteFile(filepath.Join(dir, "providers.tf"), buf.Bytes(), 0o600); err != nil {
-		os.RemoveAll(dir)
+		_ = os.RemoveAll(dir) // best-effort cleanup; err is the one to report
 		return "", nil, err
 	}
 
-	cleanup := func() { os.RemoveAll(dir) }
+	cleanup := func() { _ = os.RemoveAll(dir) } // best-effort: a temp dir
 	return dir, cleanup, nil
 }
 
@@ -434,7 +434,7 @@ func (TerraformBinaryRunner) Run(ctx context.Context, workDir, region, projectFi
 
 	// terraform init: idempotent, fast on warm cache. We re-run it per
 	// invocation because the workdir is freshly created.
-	initCmd := exec.CommandContext(ctx, bin, "init", "-input=false", "-no-color")
+	initCmd := exec.CommandContext(ctx, bin, "init", "-input=false", "-no-color") //nolint:gosec // G204: the terraform binary (PATH or configured), arguments as argv, no shell
 	initCmd.Dir = workDir
 	var initErr bytes.Buffer
 	initCmd.Stderr = &initErr
@@ -443,7 +443,7 @@ func (TerraformBinaryRunner) Run(ctx context.Context, workDir, region, projectFi
 	}
 
 	args := []string{"query", "-json", "-no-color", "-var", "project_filter=" + projectFilter}
-	queryCmd := exec.CommandContext(ctx, bin, args...)
+	queryCmd := exec.CommandContext(ctx, bin, args...) //nolint:gosec // G204: the terraform binary (PATH or configured), arguments as argv, no shell
 	queryCmd.Dir = workDir
 	var stdout, stderr bytes.Buffer
 	queryCmd.Stdout = &stdout
