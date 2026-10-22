@@ -120,7 +120,7 @@ func parsePlanOutput(out string, expectedImports map[string]struct{}) planVerdic
 }
 
 func runTerraform(ctx context.Context, bin, dir string, args []string, stdout io.Writer) error {
-	cmd := exec.CommandContext(ctx, bin, args...)
+	cmd := exec.CommandContext(ctx, bin, args...) //nolint:gosec // G204: the terraform binary (PATH or configured), arguments as argv, no shell
 	cmd.Dir = dir
 	cmd.Stdout = io.MultiWriter(stdout, os.Stdout)
 	cmd.Stderr = os.Stderr

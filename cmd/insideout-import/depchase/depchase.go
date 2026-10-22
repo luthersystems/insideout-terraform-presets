@@ -265,7 +265,7 @@ func Run(ctx context.Context, opts Options, resources []imported.ImportedResourc
 	}
 
 	for iter := 1; iter <= opts.MaxIterations; iter++ {
-		raw, err := os.ReadFile(generatedPath)
+		raw, err := os.ReadFile(generatedPath) //nolint:gosec // G304: path from the CLI's flags or its own workspace
 		if err != nil {
 			return nil, fmt.Errorf("depchase: read generated.tf: %w", err)
 		}
@@ -631,7 +631,7 @@ func Run(ctx context.Context, opts Options, resources []imported.ImportedResourc
 	// enumeration itself failed: dropping it on the floor produced a
 	// misleading "0 unresolved ref(s) remain" message even when the
 	// residual could not actually be enumerated.
-	raw, _ := os.ReadFile(generatedPath)
+	raw, _ := os.ReadFile(generatedPath) //nolint:gosec // G304: path from the CLI's flags or its own workspace
 	residual, residualErr := FindUnresolved(raw, res.Resources)
 	// Exclude ignored + terminal-by-design (chased) literals from the residual
 	// accounting so the operator-facing "N unresolved ref(s) remain" message

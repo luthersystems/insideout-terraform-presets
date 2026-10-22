@@ -118,7 +118,7 @@ func (r execTerraformRunner) Init(ctx context.Context, dir string) error {
 
 func (r execTerraformRunner) Validate(ctx context.Context, dir string) ([]byte, error) {
 	streamErr := r.run(ctx, dir, "validate", "-no-color")
-	cmd := exec.CommandContext(ctx, r.bin(), "validate", "-json")
+	cmd := exec.CommandContext(ctx, r.bin(), "validate", "-json") //nolint:gosec // G204: the terraform binary (PATH or configured), arguments as argv, no shell
 	cmd.Dir = dir
 	// stdout is captured as the validate.json artifact, so only stderr
 	// streams to the progress sink here.
@@ -137,7 +137,7 @@ func (r execTerraformRunner) Plan(ctx context.Context, dir, planPath string) err
 	// sink still receives the same bytes (the import wizard's log console
 	// keeps streaming); the buffer is only read on error.
 	var captured bytes.Buffer
-	cmd := exec.CommandContext(ctx, r.bin(), planArgs(planPath, r.planParallelism())...)
+	cmd := exec.CommandContext(ctx, r.bin(), planArgs(planPath, r.planParallelism())...) //nolint:gosec // G204: the terraform binary (PATH or configured), arguments as argv, no shell
 	cmd.Dir = dir
 	cmd.Stdout = r.outW()
 	cmd.Stderr = io.MultiWriter(r.outW(), &captured)
@@ -156,7 +156,7 @@ func (r execTerraformRunner) Plan(ctx context.Context, dir, planPath string) err
 }
 
 func (r execTerraformRunner) ShowPlanJSON(ctx context.Context, dir, planPath string) ([]byte, error) {
-	cmd := exec.CommandContext(ctx, r.bin(), "show", "-json", planPath)
+	cmd := exec.CommandContext(ctx, r.bin(), "show", "-json", planPath) //nolint:gosec // G204: the terraform binary (PATH or configured), arguments as argv, no shell
 	cmd.Dir = dir
 	// stdout is captured as the tfplan.json artifact, so only stderr
 	// streams to the progress sink here.
@@ -170,7 +170,7 @@ func (r execTerraformRunner) ShowPlanJSON(ctx context.Context, dir, planPath str
 }
 
 func (r execTerraformRunner) run(ctx context.Context, dir string, args ...string) error {
-	cmd := exec.CommandContext(ctx, r.bin(), args...)
+	cmd := exec.CommandContext(ctx, r.bin(), args...) //nolint:gosec // G204: the terraform binary (PATH or configured), arguments as argv, no shell
 	cmd.Dir = dir
 	cmd.Stdout = r.outW()
 	cmd.Stderr = r.outW()

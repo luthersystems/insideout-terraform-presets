@@ -93,7 +93,7 @@ Exit codes:
 
 	out := renderImportsFile(pairs)
 	outPath := filepath.Join(*stackDir, importsFile)
-	if err := os.WriteFile(outPath, out, 0o644); err != nil {
+	if err := os.WriteFile(outPath, out, 0o644); err != nil { //nolint:gosec // G306: Terraform config and import artifacts in the operator's workspace, read by terraform
 		fmt.Fprintf(os.Stderr, "adopt: write %s: %v\n", outPath, err)
 		return adoptExitFatal
 	}
@@ -187,7 +187,7 @@ type importsFileEntry struct {
 }
 
 func readImportsFile(path string) ([]importPair, error) {
-	raw, err := os.ReadFile(path)
+	raw, err := os.ReadFile(path) //nolint:gosec // G304: path from the CLI's flags or its own workspace
 	if err != nil {
 		return nil, err
 	}

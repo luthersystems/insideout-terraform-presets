@@ -56,7 +56,7 @@ const summaryManifestFile = "summary.json"
 // directory across retries.
 func writeFileAtomic(path string, body []byte, perm os.FileMode) (rerr error) {
 	tmp := path + ".tmp"
-	f, err := os.OpenFile(tmp, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, perm)
+	f, err := os.OpenFile(tmp, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, perm) //nolint:gosec // G304: path from the CLI's flags or its own workspace
 	if err != nil {
 		return fmt.Errorf("open temp %s: %w", tmp, err)
 	}
@@ -150,7 +150,7 @@ func writeManifest(dir, cloud string, resources []imported.ImportedResource) (st
 	}
 	body = append(body, '\n')
 
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	if err := os.MkdirAll(dir, 0o755); err != nil { //nolint:gosec // G301: Terraform config and import artifacts in the operator's workspace, read by terraform
 		return "", 0, fmt.Errorf("mkdir %s: %w", dir, err)
 	}
 	out := filepath.Join(dir, manifestFile)
@@ -206,7 +206,7 @@ func dropDanglingParents(resources []imported.ImportedResource, dangling []compo
 // Returns ([]ImportedResource, nil) on success — never a nil slice with no
 // error: an empty manifest decodes to a zero-length slice.
 func readManifest(path, cloud string) ([]imported.ImportedResource, error) {
-	body, err := os.ReadFile(path)
+	body, err := os.ReadFile(path) //nolint:gosec // G304: path from the CLI's flags or its own workspace
 	if err != nil {
 		return nil, err
 	}
@@ -286,7 +286,7 @@ func writeUnsupportedManifest(dir string, resources []UnsupportedResource, trunc
 	}
 	body = append(body, '\n')
 
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	if err := os.MkdirAll(dir, 0o755); err != nil { //nolint:gosec // G301: Terraform config and import artifacts in the operator's workspace, read by terraform
 		return "", 0, fmt.Errorf("mkdir %s: %w", dir, err)
 	}
 	out := filepath.Join(dir, unsupportedManifestFile)
@@ -334,7 +334,7 @@ func writeGraphManifest(dir string, edges []depchase.GraphEdge) (string, int, er
 	}
 	body = append(body, '\n')
 
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	if err := os.MkdirAll(dir, 0o755); err != nil { //nolint:gosec // G301: Terraform config and import artifacts in the operator's workspace, read by terraform
 		return "", 0, fmt.Errorf("mkdir %s: %w", dir, err)
 	}
 	out := filepath.Join(dir, graphManifestFile)
@@ -372,7 +372,7 @@ func writeSummary(dir string, summary imported.DiscoverySummary) (string, error)
 	}
 	body = append(body, '\n')
 
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	if err := os.MkdirAll(dir, 0o755); err != nil { //nolint:gosec // G301: Terraform config and import artifacts in the operator's workspace, read by terraform
 		return "", fmt.Errorf("mkdir %s: %w", dir, err)
 	}
 	out := filepath.Join(dir, summaryManifestFile)

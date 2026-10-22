@@ -70,7 +70,7 @@ type orphanImportsWrapper struct {
 // not fatal — the block is left in place and Stage 2c1 surfaces it.
 func pruneOrphanImports(workdir string, generated []byte) ([]OrphanImport, error) {
 	importsPath := filepath.Join(workdir, importsFile)
-	importsRaw, err := os.ReadFile(importsPath)
+	importsRaw, err := os.ReadFile(importsPath) //nolint:gosec // G304: path from the CLI's flags or its own workspace
 	if err != nil {
 		return nil, fmt.Errorf("read imports.tf: %w", err)
 	}
@@ -147,7 +147,7 @@ func pruneOrphanImports(workdir string, generated []byte) ([]OrphanImport, error
 		return skipped[i].ImportID < skipped[j].ImportID
 	})
 
-	if err := os.WriteFile(importsPath, importsAST.Bytes(), 0o644); err != nil {
+	if err := os.WriteFile(importsPath, importsAST.Bytes(), 0o644); err != nil { //nolint:gosec // G306: Terraform config and import artifacts in the operator's workspace, read by terraform
 		return nil, fmt.Errorf("rewrite imports.tf: %w", err)
 	}
 	return skipped, nil
@@ -171,7 +171,7 @@ func writeOrphanImportsManifest(workdir string, skipped []OrphanImport) (string,
 		return "", fmt.Errorf("marshal imports-skipped.json: %w", err)
 	}
 	path := filepath.Join(workdir, orphanImportsFile)
-	if err := os.WriteFile(path, append(buf, '\n'), 0o644); err != nil {
+	if err := os.WriteFile(path, append(buf, '\n'), 0o644); err != nil { //nolint:gosec // G306: Terraform config and import artifacts in the operator's workspace, read by terraform
 		return "", fmt.Errorf("write imports-skipped.json: %w", err)
 	}
 	return path, nil

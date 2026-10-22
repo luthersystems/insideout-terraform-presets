@@ -49,7 +49,7 @@ func runSupportedResources(args []string) int {
 		return 0
 	}
 
-	if err := os.WriteFile(*out, []byte(rendered), 0o644); err != nil {
+	if err := os.WriteFile(*out, []byte(rendered), 0o644); err != nil { //nolint:gosec // G306: generated source committed to this repo, mode of any source file
 		fmt.Fprintf(os.Stderr, "supported-resources: write %s: %v\n", *out, err)
 		return 1
 	}

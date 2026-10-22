@@ -192,7 +192,7 @@ func (a *AWSDiscoverer) defaultJitterSample() time.Duration {
 	if a.startupJitter <= 0 {
 		return 0
 	}
-	return time.Duration(rand.Int63n(int64(a.startupJitter)))
+	return time.Duration(rand.Int63n(int64(a.startupJitter))) //nolint:gosec // G404: retry jitter, not a security value
 }
 
 // NewAWSDiscoverer wires up the production set of AWS discoverers with the

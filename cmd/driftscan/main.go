@@ -39,7 +39,7 @@ var issueRef = regexp.MustCompile(`#\d+`)
 // full-line `#` comments are ignored. A citation-free entry is a hard error.
 func loadAllowlist(path string) (map[string]bool, error) {
 	allow := map[string]bool{}
-	f, err := os.Open(path)
+	f, err := os.Open(path) //nolint:gosec // G304: path from the CLI's flags or its own workspace
 	if err != nil {
 		return nil, err
 	}

@@ -13,7 +13,7 @@ import (
 // `filter` subcommand. The file may include only the providers and types
 // we want to generate.
 func LoadFiltered(path string) (*tfjson.ProviderSchemas, error) {
-	b, err := os.ReadFile(path)
+	b, err := os.ReadFile(path) //nolint:gosec // G304: path from the CLI's flags or its own workspace
 	if err != nil {
 		return nil, fmt.Errorf("read %s: %w", path, err)
 	}

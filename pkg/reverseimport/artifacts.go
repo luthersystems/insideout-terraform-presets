@@ -33,11 +33,11 @@ func writeJSON(path string, v any) error {
 }
 
 func writeFileAtomic(path string, body []byte, perm os.FileMode) (rerr error) {
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil { //nolint:gosec // G301: Terraform config and import artifacts in the operator's workspace, read by terraform
 		return err
 	}
 	tmp := path + ".tmp"
-	f, err := os.OpenFile(tmp, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, perm)
+	f, err := os.OpenFile(tmp, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, perm) //nolint:gosec // G304: path from the caller's options
 	if err != nil {
 		return fmt.Errorf("open temp %s: %w", tmp, err)
 	}
@@ -68,7 +68,7 @@ func artifact(path, mediaType string) (*job.Artifact, error) {
 	if err != nil {
 		return nil, err
 	}
-	body, err := os.ReadFile(path)
+	body, err := os.ReadFile(path) //nolint:gosec // G304: path from the caller's options
 	if err != nil {
 		return nil, err
 	}

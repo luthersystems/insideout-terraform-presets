@@ -103,7 +103,7 @@ func pruneUnimportable(workdir string, generated []byte) (unimportablePruneResul
 
 	// Drop the matching import blocks from imports.tf and capture their IDs.
 	importsPath := filepath.Join(workdir, importsFile)
-	importsRaw, err := os.ReadFile(importsPath)
+	importsRaw, err := os.ReadFile(importsPath) //nolint:gosec // G304: path from the CLI's flags or its own workspace
 	if err != nil {
 		return unimportablePruneResult{}, fmt.Errorf("read imports.tf: %w", err)
 	}
@@ -150,7 +150,7 @@ func pruneUnimportable(workdir string, generated []byte) (unimportablePruneResul
 		return skipped[i].ImportID < skipped[j].ImportID
 	})
 
-	if err := os.WriteFile(importsPath, importsAST.Bytes(), 0o644); err != nil {
+	if err := os.WriteFile(importsPath, importsAST.Bytes(), 0o644); err != nil { //nolint:gosec // G306: Terraform config and import artifacts in the operator's workspace, read by terraform
 		return unimportablePruneResult{}, fmt.Errorf("rewrite imports.tf: %w", err)
 	}
 	return unimportablePruneResult{HCL: genAST.Bytes(), Skipped: skipped}, nil

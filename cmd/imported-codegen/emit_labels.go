@@ -105,7 +105,7 @@ func writeJSONOutput(outPath string, v any) int {
 		}
 		return 0
 	}
-	if err := os.WriteFile(outPath, buf, 0o644); err != nil {
+	if err := os.WriteFile(outPath, buf, 0o644); err != nil { //nolint:gosec // G306: generated source committed to this repo, mode of any source file
 		fmt.Fprintf(os.Stderr, "write %s: %v\n", outPath, err)
 		return 1
 	}

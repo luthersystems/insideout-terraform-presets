@@ -51,7 +51,7 @@ func (r *scriptedRunner) PlanTo(_ context.Context, planFile string, parallelism 
 	if !planHasNonNoOp(r.plansByCall[idx]) {
 		return false, nil
 	}
-	_ = os.WriteFile(planFile, []byte{byte(idx)}, 0o644)
+	_ = os.WriteFile(planFile, []byte{byte(idx)}, 0o644) //nolint:gosec // G115: idx indexes a short fixture slice
 	return true, nil
 }
 
@@ -225,7 +225,7 @@ func (r *alwaysHasChangesRunner) PlanTo(_ context.Context, planFile string, para
 	if idx >= len(r.plansByCall) {
 		return false, nil
 	}
-	_ = os.WriteFile(planFile, []byte{byte(idx)}, 0o644)
+	_ = os.WriteFile(planFile, []byte{byte(idx)}, 0o644) //nolint:gosec // G115: idx indexes a short fixture slice
 	return true, nil
 }
 
