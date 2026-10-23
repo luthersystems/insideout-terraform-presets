@@ -1,0 +1,24 @@
+# Trivy IaC exemptions for the shared security workflow (security / iac).
+# id | path | expires (YYYY-MM-DD) | issue | reason
+#
+# Why these rows: they baseline the High and Critical findings that were on
+# main when the check was turned on, so it can block new ones at once
+# without failing every PR. Each row expires; fix the finding and delete
+# its row (luthersystems/insideout-terraform-presets#902). A row for a finding kept on purpose
+# needs a real reason, not the Trivy title.
+AWS-0052 | aws/alb/main.tf | 2027-01-31 | luthersystems/insideout-terraform-presets#902 | HIGH: Load balancers should drop invalid headers
+AWS-0053 | aws/alb/main.tf | 2027-01-31 | luthersystems/insideout-terraform-presets#902 | HIGH: Load balancer is exposed to the internet.
+AWS-0054 | aws/alb/main.tf | 2027-01-31 | luthersystems/insideout-terraform-presets#902 | CRITICAL: Use of plain HTTP.
+AWS-0095 | aws/cloudwatchmonitoring/main.tf | 2027-01-31 | luthersystems/insideout-terraform-presets#902 | HIGH: Unencrypted SNS topic.
+AWS-0104 | aws/alb/main.tf | 2027-01-31 | luthersystems/insideout-terraform-presets#902 | CRITICAL: A security group rule should not allow unrestricted egress to any IP address.
+AWS-0104 | aws/bastion/main.tf | 2027-01-31 | luthersystems/insideout-terraform-presets#902 | CRITICAL: A security group rule should not allow unrestricted egress to any IP address.
+AWS-0104 | aws/ec2/main.tf | 2027-01-31 | luthersystems/insideout-terraform-presets#902 | CRITICAL: A security group rule should not allow unrestricted egress to any IP address.
+AWS-0104 | aws/elasticache/main.tf | 2027-01-31 | luthersystems/insideout-terraform-presets#902 | CRITICAL: A security group rule should not allow unrestricted egress to any IP address.
+AWS-0104 | aws/lambda/main.tf | 2027-01-31 | luthersystems/insideout-terraform-presets#902 | CRITICAL: A security group rule should not allow unrestricted egress to any IP address.
+AWS-0104 | aws/msk/main.tf | 2027-01-31 | luthersystems/insideout-terraform-presets#902 | CRITICAL: A security group rule should not allow unrestricted egress to any IP address.
+AWS-0104 | aws/rds/main.tf | 2027-01-31 | luthersystems/insideout-terraform-presets#902 | CRITICAL: A security group rule should not allow unrestricted egress to any IP address.
+AWS-0107 | aws/bastion/main.tf | 2027-01-31 | luthersystems/insideout-terraform-presets#902 | HIGH: Security groups should not allow unrestricted ingress to SSH or RDP from any IP address.
+AWS-0131 | aws/bastion/main.tf | 2027-01-31 | luthersystems/insideout-terraform-presets#902 | HIGH: Instance with unencrypted block device.
+AWS-0132 | aws/alb/main.tf | 2027-01-31 | luthersystems/insideout-terraform-presets#902 | HIGH: S3 encryption should use Customer Managed Keys
+AWS-0132 | aws/s3/main.tf | 2027-01-31 | luthersystems/insideout-terraform-presets#902 | HIGH: S3 encryption should use Customer Managed Keys
+AWS-0132 | aws/sagemaker/main.tf | 2027-01-31 | luthersystems/insideout-terraform-presets#902 | HIGH: S3 encryption should use Customer Managed Keys
