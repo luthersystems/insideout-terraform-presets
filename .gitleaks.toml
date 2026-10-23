@@ -1,0 +1,16 @@
+# gitleaks config for the shared security workflow (security / secrets).
+# It keeps every default rule and allows only the files below.
+#
+# Why each file is allowed: it holds a test value, not a real secret, so a
+# scan of the whole tree would fail on it every time. Each entry names one
+# file, so a real secret added anywhere else still fails the check.
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Go tests of the importer: made-up Secrets Manager ARNs and KMS key UUIDs (account 123, '...abc...' IDs), not real secrets."
+paths = [
+  '''^cmd/insideout-import/address_test\.go$''',
+  '''^cmd/insideout-import/depchase/depchase_test\.go$''',
+]
