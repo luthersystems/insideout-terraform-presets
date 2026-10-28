@@ -150,6 +150,15 @@ resource "aws_lb" "alb" {
 
   enable_deletion_protection = var.enable_deletion_protection
 
+  # Drop request headers whose names are not valid HTTP field names
+  # (anything outside [-A-Za-z0-9]) instead of passing them to targets.
+  # Why: malformed headers are a request-smuggling / desync vector between
+  # the ALB and the target's HTTP parser (Trivy AWS-0052). The attribute
+  # updates in place, so an existing ALB is not replaced. A caller whose
+  # app depends on such a header (e.g. one with an underscore in its name)
+  # can opt out with var.drop_invalid_header_fields = false.
+  drop_invalid_header_fields = var.drop_invalid_header_fields
+
   access_logs {
     bucket  = aws_s3_bucket.alb_logs.bucket
     enabled = true

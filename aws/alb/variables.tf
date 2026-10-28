@@ -80,6 +80,12 @@ variable "enable_deletion_protection" {
   default     = false
 }
 
+variable "drop_invalid_header_fields" {
+  description = "Drop HTTP headers with invalid field names (anything outside [-A-Za-z0-9], e.g. underscores) at the ALB instead of forwarding them. On by default as a request-smuggling defense; set false only if the app needs such headers."
+  type        = bool
+  default     = true
+}
+
 variable "access_logs_retention_days" {
   description = "Days to retain ALB access logs in the in-module S3 bucket before expiration."
   type        = number

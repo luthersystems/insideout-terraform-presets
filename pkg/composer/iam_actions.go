@@ -103,7 +103,7 @@ var AWSIAMActions = map[ComponentKey][]string{
 	KeyAWSSQS:                  {"sqs:CreateQueue"},
 	KeyAWSMSK:                  {"kafka:CreateClusterV2"},
 	KeyAWSCloudWatchLogs:       {"logs:CreateLogGroup"},
-	KeyAWSCloudWatchMonitoring: {"cloudwatch:PutMetricAlarm"},
+	KeyAWSCloudWatchMonitoring: {"cloudwatch:PutMetricAlarm", "kms:CreateAlias", "kms:CreateKey"}, // kms: the module's key for the alarms SNS topic (see aws/cloudwatchmonitoring/main.tf)
 	KeyAWSGrafana:              {"grafana:CreateWorkspace"},
 	KeyAWSCognito:              {"cognito-idp:CreateUserPool"},
 	KeyAWSBackups:              {"backup:CreateBackupPlan", "backup:CreateBackupVault"},

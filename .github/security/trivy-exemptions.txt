@@ -1,24 +1,24 @@
 # Trivy IaC exemptions for the shared security workflow (security / iac).
 # id | path | expires (YYYY-MM-DD) | issue | reason
 #
-# Why these rows: they baseline the High and Critical findings that were on
-# main when the check was turned on, so it can block new ones at once
-# without failing every PR. Each row expires; fix the finding and delete
-# its row (luthersystems/insideout-terraform-presets#902). A row for a finding kept on purpose
-# needs a real reason, not the Trivy title.
-AWS-0052 | aws/alb/main.tf | 2027-01-31 | luthersystems/insideout-terraform-presets#902 | HIGH: Load balancers should drop invalid headers
-AWS-0053 | aws/alb/main.tf | 2027-01-31 | luthersystems/insideout-terraform-presets#902 | HIGH: Load balancer is exposed to the internet.
-AWS-0054 | aws/alb/main.tf | 2027-01-31 | luthersystems/insideout-terraform-presets#902 | CRITICAL: Use of plain HTTP.
-AWS-0095 | aws/cloudwatchmonitoring/main.tf | 2027-01-31 | luthersystems/insideout-terraform-presets#902 | HIGH: Unencrypted SNS topic.
-AWS-0104 | aws/alb/main.tf | 2027-01-31 | luthersystems/insideout-terraform-presets#902 | CRITICAL: A security group rule should not allow unrestricted egress to any IP address.
-AWS-0104 | aws/bastion/main.tf | 2027-01-31 | luthersystems/insideout-terraform-presets#902 | CRITICAL: A security group rule should not allow unrestricted egress to any IP address.
-AWS-0104 | aws/ec2/main.tf | 2027-01-31 | luthersystems/insideout-terraform-presets#902 | CRITICAL: A security group rule should not allow unrestricted egress to any IP address.
-AWS-0104 | aws/elasticache/main.tf | 2027-01-31 | luthersystems/insideout-terraform-presets#902 | CRITICAL: A security group rule should not allow unrestricted egress to any IP address.
-AWS-0104 | aws/lambda/main.tf | 2027-01-31 | luthersystems/insideout-terraform-presets#902 | CRITICAL: A security group rule should not allow unrestricted egress to any IP address.
-AWS-0104 | aws/msk/main.tf | 2027-01-31 | luthersystems/insideout-terraform-presets#902 | CRITICAL: A security group rule should not allow unrestricted egress to any IP address.
-AWS-0104 | aws/rds/main.tf | 2027-01-31 | luthersystems/insideout-terraform-presets#902 | CRITICAL: A security group rule should not allow unrestricted egress to any IP address.
-AWS-0107 | aws/bastion/main.tf | 2027-01-31 | luthersystems/insideout-terraform-presets#902 | HIGH: Security groups should not allow unrestricted ingress to SSH or RDP from any IP address.
-AWS-0131 | aws/bastion/main.tf | 2027-01-31 | luthersystems/insideout-terraform-presets#902 | HIGH: Instance with unencrypted block device.
-AWS-0132 | aws/alb/main.tf | 2027-01-31 | luthersystems/insideout-terraform-presets#902 | HIGH: S3 encryption should use Customer Managed Keys
-AWS-0132 | aws/s3/main.tf | 2027-01-31 | luthersystems/insideout-terraform-presets#902 | HIGH: S3 encryption should use Customer Managed Keys
-AWS-0132 | aws/sagemaker/main.tf | 2027-01-31 | luthersystems/insideout-terraform-presets#902 | HIGH: S3 encryption should use Customer Managed Keys
+# Why these rows: the check was turned on with the High and Critical
+# findings then on main baselined here (#902). The fixable ones are fixed.
+# Each row left is either on purpose (a later expiry date) or needs a
+# change to running customer stacks that cannot ship as a preset default,
+# and names the follow-up issue that tracks it. Presets apply into customer
+# accounts on every compose, so a fix that replaces a resource or changes
+# its network or access behaviour on the next apply is planned, not baselined
+# silently.
+AWS-0053 | aws/alb/main.tf | 2027-10-31 | luthersystems/insideout-terraform-presets#910 | on purpose: the preset is the stack's public entry point, so the ALB is internet-facing; an internal option is #910
+AWS-0054 | aws/alb/main.tf | 2027-10-31 | luthersystems/insideout-terraform-presets#910 | on purpose: with no certificate_arn there is no certificate for TLS, so HTTP forwards; with one, HTTP redirects to HTTPS
+AWS-0132 | aws/alb/main.tf | 2027-10-31 | luthersystems/insideout-terraform-presets#909 | on purpose: ELB delivers ALB access logs only to SSE-S3 buckets; a customer-managed KMS key would stop log delivery
+AWS-0132 | aws/s3/main.tf | 2027-01-31 | luthersystems/insideout-terraform-presets#909 | SSE-KMS by default would need kms:Decrypt grants for every reader (CloudFront OAC, app roles) on live buckets; opt-in key in #909
+AWS-0132 | aws/sagemaker/main.tf | 2027-01-31 | luthersystems/insideout-terraform-presets#909 | SSE-KMS by default would need a key grant for the SageMaker execution role on live workspace buckets; opt-in key in #909
+AWS-0104 | aws/alb/main.tf | 2027-01-31 | luthersystems/insideout-terraform-presets#907 | egress could narrow to the VPC CIDRs, but needs CIDR wiring and a check for IP targets outside the VPC on live stacks
+AWS-0104 | aws/rds/main.tf | 2027-01-31 | luthersystems/insideout-terraform-presets#907 | egress could narrow to the VPC CIDRs, but live databases may use extensions that call out (aws_s3, aws_lambda, dblink)
+AWS-0104 | aws/elasticache/main.tf | 2027-01-31 | luthersystems/insideout-terraform-presets#907 | egress could narrow to the VPC CIDRs once the presets get the CIDR and node replication is confirmed in-VPC only
+AWS-0104 | aws/msk/main.tf | 2027-01-31 | luthersystems/insideout-terraform-presets#907 | egress could narrow to self and the VPC CIDRs once the presets get the CIDR and broker traffic is confirmed
+AWS-0104 | aws/bastion/main.tf | 2027-01-31 | luthersystems/insideout-terraform-presets#907 | needs internet egress for SSM Session Manager, dnf and the EKS tools in user_data; no VPC endpoints exist to narrow it to
+AWS-0104 | aws/ec2/main.tf | 2027-01-31 | luthersystems/insideout-terraform-presets#907 | general-purpose instance: the app's outbound traffic is unknown to the preset, and no VPC endpoints exist to narrow it to
+AWS-0104 | aws/lambda/main.tf | 2027-01-31 | luthersystems/insideout-terraform-presets#907 | default SG of a VPC function, which reaches AWS APIs and third parties through NAT; no VPC endpoints exist to narrow it to
+AWS-0107 | aws/bastion/main.tf | 2027-01-31 | luthersystems/insideout-terraform-presets#908 | admin_cidrs defaults to 0.0.0.0/0; removing it locks out key-pair and EC2 Instance Connect users on live bastions (#908)
