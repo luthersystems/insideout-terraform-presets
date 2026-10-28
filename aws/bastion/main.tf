@@ -108,5 +108,21 @@ resource "aws_instance" "bastion" {
     http_tokens = "required"
   }
 
+  # Encrypt the root volume (Trivy AWS-0131) with the account's default EBS
+  # key. Only the encryption flag is set; size and type stay the AMI's.
+  root_block_device {
+    encrypted = true
+  }
+
   tags = merge(module.name.tags, var.tags)
+
+  # Why ignore_changes: root_block_device.encrypted cannot change on a
+  # running instance, so Terraform would replace every bastion deployed
+  # before this setting (new instance, new public IP, new SSH host keys).
+  # Ignoring the flag makes new and replaced bastions encrypted and leaves
+  # existing ones alone; the next replacement for any other reason (an AMI
+  # or instance-type change) brings them up encrypted.
+  lifecycle {
+    ignore_changes = [root_block_device[0].encrypted]
+  }
 }

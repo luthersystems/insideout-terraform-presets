@@ -27,9 +27,72 @@ locals {
 # -----------------------------------------------------------------------------
 # Alarm notifications
 # -----------------------------------------------------------------------------
+#
+# The topic is encrypted at rest with a customer-managed KMS key owned by this
+# module (Trivy AWS-0095). Why a customer-managed key and not the AWS-managed
+# alias/aws/sns: CloudWatch alarms publish to this topic, and the AWS-managed
+# key's policy cannot be changed to let cloudwatch.amazonaws.com use it, so
+# alarms would fail to publish. Every alarm that targets this topic (this
+# module's and the per-component observability.tf alarms wired through
+# alarm_topic_arn) is a CloudWatch alarm in this account, which the key
+# policy below admits.
+#
+# On an existing stack, apply creates the key and alias and updates the
+# topic in place (kms_master_key_id is not a replace-on-change attribute);
+# subscriptions are kept.
+data "aws_caller_identity" "current" {}
+data "aws_partition" "current" {}
+
+data "aws_iam_policy_document" "alarms_kms" {
+  # The account keeps full control of the key, so IAM policies in the
+  # account govern its administration (the default key policy); without
+  # this statement the key could become unmanageable.
+  statement {
+    sid       = "AccountAdministration"
+    effect    = "Allow"
+    actions   = ["kms:*"]
+    resources = ["*"]
+    principals {
+      type        = "AWS"
+      identifiers = ["arn:${data.aws_partition.current.partition}:iam::${data.aws_caller_identity.current.account_id}:root"]
+    }
+  }
+
+  # CloudWatch needs a data key to publish an alarm notification to an
+  # encrypted topic. This is the statement AWS documents for alarm actions
+  # on an encrypted topic. Why no aws:SourceAccount condition: AWS does not
+  # document that CloudWatch's KMS calls through SNS carry it, and if they
+  # do not, every alarm notification would fail silently. Who may publish
+  # is already limited by the topic policy (the account owner by default).
+  statement {
+    sid       = "CloudWatchAlarmsPublish"
+    effect    = "Allow"
+    actions   = ["kms:Decrypt", "kms:GenerateDataKey*"]
+    resources = ["*"]
+    principals {
+      type        = "Service"
+      identifiers = ["cloudwatch.amazonaws.com"]
+    }
+  }
+}
+
+resource "aws_kms_key" "alarms" {
+  description             = "Encrypts the ${module.name.name}-alarms SNS topic"
+  enable_key_rotation     = true
+  deletion_window_in_days = 7
+  policy                  = data.aws_iam_policy_document.alarms_kms.json
+  tags                    = merge(module.name.tags, var.tags)
+}
+
+resource "aws_kms_alias" "alarms" {
+  name          = "alias/${module.name.name}-alarms"
+  target_key_id = aws_kms_key.alarms.key_id
+}
+
 resource "aws_sns_topic" "alarms" {
-  name = "${module.name.name}-alarms"
-  tags = merge(module.name.tags, var.tags)
+  name              = "${module.name.name}-alarms"
+  kms_master_key_id = aws_kms_key.alarms.arn
+  tags              = merge(module.name.tags, var.tags)
 }
 
 resource "aws_sns_topic_subscription" "emails" {
