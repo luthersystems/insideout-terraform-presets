@@ -142,6 +142,13 @@ resource "aws_iam_role_policy" "index_cloudwatch" {
         Action   = ["logs:CreateLogGroup"]
         Resource = "arn:${data.aws_partition.current.partition}:logs:${data.aws_region.current.region}:${data.aws_caller_identity.current.account_id}:log-group:/aws/kendra/*"
       },
+      # DescribeLogStreams is a log-group action; CreateLogStream and
+      # PutLogEvents are log-stream actions. From 2027-04-26 CloudWatch Logs
+      # stops granting a log-group action through a log-stream ARN, so the
+      # log-group form is listed for DescribeLogStreams and the log-stream
+      # form stays for the stream actions. The group form covers the same
+      # /aws/kendra/* groups CreateKendraLogGroup already grants, so access
+      # does not widen.
       {
         Sid    = "WriteKendraLogStreams"
         Effect = "Allow"
@@ -150,7 +157,10 @@ resource "aws_iam_role_policy" "index_cloudwatch" {
           "logs:CreateLogStream",
           "logs:PutLogEvents",
         ]
-        Resource = "arn:${data.aws_partition.current.partition}:logs:${data.aws_region.current.region}:${data.aws_caller_identity.current.account_id}:log-group:/aws/kendra/*:log-stream:*"
+        Resource = [
+          "arn:${data.aws_partition.current.partition}:logs:${data.aws_region.current.region}:${data.aws_caller_identity.current.account_id}:log-group:/aws/kendra/*",
+          "arn:${data.aws_partition.current.partition}:logs:${data.aws_region.current.region}:${data.aws_caller_identity.current.account_id}:log-group:/aws/kendra/*:log-stream:*",
+        ]
       },
     ]
   })

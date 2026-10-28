@@ -198,6 +198,13 @@ resource "aws_iam_role_policy" "service" {
     Version = "2012-10-17"
     Statement = [
       # CloudWatch Logs — every build emits a log stream.
+      #
+      # CreateLogGroup is a log-group action; CreateLogStream and
+      # PutLogEvents are log-stream actions. From 2027-04-26 CloudWatch Logs
+      # stops granting a log-group action through a log-stream ARN (the
+      # ":*" form), so the bare log-group ARN is listed for CreateLogGroup
+      # and the ":*" form stays for the stream actions. Both name the
+      # project's own group, so access does not widen.
       {
         Effect = "Allow"
         Action = [
@@ -205,7 +212,10 @@ resource "aws_iam_role_policy" "service" {
           "logs:CreateLogStream",
           "logs:PutLogEvents",
         ]
-        Resource = "arn:aws:logs:${var.region}:${data.aws_caller_identity.current.account_id}:log-group:/aws/codebuild/${local.project_name}:*"
+        Resource = [
+          "arn:aws:logs:${var.region}:${data.aws_caller_identity.current.account_id}:log-group:/aws/codebuild/${local.project_name}",
+          "arn:aws:logs:${var.region}:${data.aws_caller_identity.current.account_id}:log-group:/aws/codebuild/${local.project_name}:*",
+        ]
       },
       # ECR pull — the standard build image lives on a public ECR;
       # private images need ECR auth + pull.
