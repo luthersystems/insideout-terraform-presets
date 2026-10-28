@@ -59,8 +59,11 @@ data "aws_iam_policy_document" "alarms_kms" {
   }
 
   # CloudWatch needs a data key to publish an alarm notification to an
-  # encrypted topic. Scoped to alarms in this account so another account's
-  # CloudWatch cannot use the key.
+  # encrypted topic. This is the statement AWS documents for alarm actions
+  # on an encrypted topic. Why no aws:SourceAccount condition: AWS does not
+  # document that CloudWatch's KMS calls through SNS carry it, and if they
+  # do not, every alarm notification would fail silently. Who may publish
+  # is already limited by the topic policy (the account owner by default).
   statement {
     sid       = "CloudWatchAlarmsPublish"
     effect    = "Allow"
@@ -69,11 +72,6 @@ data "aws_iam_policy_document" "alarms_kms" {
     principals {
       type        = "Service"
       identifiers = ["cloudwatch.amazonaws.com"]
-    }
-    condition {
-      test     = "StringEquals"
-      variable = "aws:SourceAccount"
-      values   = [data.aws_caller_identity.current.account_id]
     }
   }
 }
