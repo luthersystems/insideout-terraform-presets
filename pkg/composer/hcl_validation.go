@@ -262,7 +262,7 @@ func cidrnetmaskFunc() function.Function {
 		Type:   function.StaticReturnType(cty.String),
 		Impl: func(args []cty.Value, _ cty.Type) (cty.Value, error) {
 			s := args[0].AsString()
-			if _, _, err := parseCIDR(s); err != nil {
+			if _, _, err := net.ParseCIDR(s); err != nil {
 				return cty.NilVal, fmt.Errorf("invalid CIDR %q: %w", s, err)
 			}
 			return cty.StringVal("0.0.0.0"), nil
@@ -311,13 +311,6 @@ func cidrhostFunc() function.Function {
 			return cty.StringVal(net.IP(out).String()), nil
 		},
 	})
-}
-
-// parseCIDR validates that s is a parseable CIDR. The return values are
-// discarded — the cidrnetmask stub only cares about parse success.
-func parseCIDR(s string) (any, any, error) {
-	ip, ipnet, err := net.ParseCIDR(s)
-	return ip, ipnet, err
 }
 
 // literalString extracts a string literal from an HCL expression, handling
