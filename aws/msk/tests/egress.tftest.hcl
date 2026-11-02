@@ -87,3 +87,19 @@ run "msk_rejects_host_bits_egress_cidr" {
 
   expect_failures = [var.egress_cidrs]
 }
+
+# self follows "egress_cidrs is not the default", not a string match on
+# 0.0.0.0/0: any list the caller sets admits self, so the rule does not
+# depend on which CIDRs the list happens to hold.
+run "msk_any_caller_list_admits_self" {
+  command = plan
+
+  variables {
+    egress_cidrs = ["0.0.0.0/0", "10.0.0.0/8"]
+  }
+
+  assert {
+    condition     = one(aws_security_group.msk.egress).self == true
+    error_message = "Any egress_cidrs other than the default must admit self."
+  }
+}
