@@ -70,12 +70,19 @@ resource "aws_security_group" "msk" {
     }
   }
 
+  # Egress to var.egress_cidrs, 0.0.0.0/0 by default (#907). Opt-in
+  # because a narrower rule changes the network behaviour of a live stack
+  # on its next apply; the caller knows its targets, the preset does not.
+  # A narrowed rule also admits self: brokers talk to each other, which
+  # the open rule allowed before. The open default leaves self unset, as
+  # before, so the plan of live clusters does not change.
   egress {
     description = "All egress"
     from_port   = 0
     to_port     = 0
     protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
+    cidr_blocks = var.egress_cidrs
+    self        = contains(var.egress_cidrs, "0.0.0.0/0") ? null : true
   }
 
   tags = local.tags

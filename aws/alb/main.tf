@@ -47,12 +47,14 @@ resource "aws_security_group" "alb_sg" {
     cidr_blocks = var.allow_cidrs
   }
 
-  # Outbound
+  # Egress to var.egress_cidrs, 0.0.0.0/0 by default (#907). Opt-in
+  # because a narrower rule changes the network behaviour of a live stack
+  # on its next apply; the caller knows its targets, the preset does not.
   egress {
     from_port   = 0
     to_port     = 0
     protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
+    cidr_blocks = var.egress_cidrs
   }
 
   tags = merge(module.name.tags, { Name = "${module.name.prefix}-sg" }, var.tags)

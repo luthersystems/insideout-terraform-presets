@@ -239,3 +239,13 @@ variable "monitoring_interval" {
     error_message = "monitoring_interval must be one of: 0, 1, 5, 10, 15, 30, 60."
   }
 }
+
+variable "egress_cidrs" {
+  description = "CIDR blocks the security group may send traffic to. Default 0.0.0.0/0 keeps the current open egress. Set it, for example to the VPC CIDR, to narrow egress. Narrowing changes the network behaviour of a live stack on its next apply (the rule updates in place). Check first that the database uses no extension that calls out (aws_s3, aws_lambda, dblink, postgres_fdw)."
+  type        = list(string)
+  default     = ["0.0.0.0/0"]
+  validation {
+    condition     = length(var.egress_cidrs) > 0 && alltrue([for c in var.egress_cidrs : can(cidrhost(c, 0))])
+    error_message = "egress_cidrs must contain at least one valid CIDR block."
+  }
+}

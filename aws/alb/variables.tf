@@ -113,3 +113,13 @@ variable "tags" {
   type        = map(string)
   default     = {}
 }
+
+variable "egress_cidrs" {
+  description = "CIDR blocks the security group may send traffic to. Default 0.0.0.0/0 keeps the current open egress. Set it, for example to the VPC CIDR, to narrow egress. Narrowing changes the network behaviour of a live stack on its next apply (the rule updates in place). Check first that every target is in those CIDRs (IP targets in a peered VPC or on-premises) and that no listener rule uses authenticate-oidc, which calls the IdP over the internet."
+  type        = list(string)
+  default     = ["0.0.0.0/0"]
+  validation {
+    condition     = length(var.egress_cidrs) > 0 && alltrue([for c in var.egress_cidrs : can(cidrhost(c, 0))])
+    error_message = "egress_cidrs must contain at least one valid CIDR block."
+  }
+}
