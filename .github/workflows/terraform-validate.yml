@@ -445,6 +445,11 @@ jobs:
     needs: ci-gate
     if: ${{ always() && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main' }}
     runs-on: ubuntu-latest
+    # One writer at a time: two runs that both see no open issue would each
+    # open one. Queue, do not cancel, so every result is recorded.
+    concurrency:
+      group: ci-drift-issue
+      cancel-in-progress: false
     permissions:
       contents: read
       issues: write

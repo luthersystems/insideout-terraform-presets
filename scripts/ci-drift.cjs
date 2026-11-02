@@ -15,36 +15,43 @@ const LABEL = 'ci-drift';
 const TITLE = 'Terraform Validate is failing on main (scheduled run)';
 
 module.exports = async function run({ github, context, core, result }) {
-  // Only success and failure/cancelled are signals. A skipped gate checked
-  // nothing, so it must not close a real failure.
-  const red = result === 'failure' || result === 'cancelled';
+  // Only success and failure are signals. A skipped gate checked nothing,
+  // and a cancelled one (a person or a newer run stopped it) did not
+  // finish, so neither may open or close an issue.
+  const red = result === 'failure';
   if (!red && result !== 'success') {
-    core.info(`ci-gate result is "${result}"; leaving the ${LABEL} issue as it is.`);
+    core.info(`ci-gate result is "${result}"; leaving the ${LABEL} issues as they are.`);
     return;
   }
 
   const { owner, repo } = context.repo;
   const runUrl = `${context.serverUrl}/${owner}/${repo}/actions/runs/${context.runId}`;
-  const { data: open } = await github.rest.issues.listForRepo({
-    owner, repo, labels: LABEL, state: 'open', per_page: 10,
+  // Oldest first, so a red run always refreshes the same issue. The list
+  // also holds pull requests with the label; those are not drift issues.
+  const { data: listed } = await github.rest.issues.listForRepo({
+    owner, repo, labels: LABEL, state: 'open', sort: 'created', direction: 'asc', per_page: 100,
   });
-  const issue = open[0];
+  const open = listed.filter((i) => !i.pull_request);
 
   if (!red) {
-    if (!issue) return;
-    await github.rest.issues.createComment({
-      owner, repo, issue_number: issue.number,
-      body: `The scheduled run on main is green again: ${runUrl} (commit ${context.sha}). Closing.`,
-    });
-    await github.rest.issues.update({
-      owner, repo, issue_number: issue.number, state: 'closed', state_reason: 'completed',
-    });
-    core.info(`Closed #${issue.number}.`);
+    // Close every open drift issue: a duplicate (two runs at once, or one
+    // opened by hand) must not stay open after main is green.
+    for (const issue of open) {
+      await github.rest.issues.createComment({
+        owner, repo, issue_number: issue.number,
+        body: `The scheduled run on main is green again: ${runUrl} (commit ${context.sha}). Closing.`,
+      });
+      await github.rest.issues.update({
+        owner, repo, issue_number: issue.number, state: 'closed', state_reason: 'completed',
+      });
+      core.info(`Closed #${issue.number}.`);
+    }
     return;
   }
+  const issue = open[0];
 
   const body = [
-    `The scheduled Terraform Validate run on main failed (ci-gate: ${result}).`,
+    'The scheduled Terraform Validate run on main failed (ci-gate: failure).',
     '',
     `- Run: ${runUrl}`,
     `- Commit: ${context.sha}`,
@@ -59,7 +66,7 @@ module.exports = async function run({ github, context, core, result }) {
   if (issue) {
     await github.rest.issues.createComment({
       owner, repo, issue_number: issue.number,
-      body: `Still failing (ci-gate: ${result}): ${runUrl} (commit ${context.sha}).`,
+      body: `Still failing: ${runUrl} (commit ${context.sha}).`,
     });
     core.warning(`Refreshed #${issue.number}.`);
     return;

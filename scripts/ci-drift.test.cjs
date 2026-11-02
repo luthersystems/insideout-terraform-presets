@@ -50,10 +50,43 @@ test('red run with an open issue comments on it, no second issue', async () => {
   assert.equal(c.issue_number, 9);
 });
 
-test('cancelled run counts as red', async () => {
-  const gh = fakeGithub([]);
+test('cancelled gate changes nothing', async () => {
+  // A cancelled run (a newer run, or a person, stopped it) says nothing
+  // about main: it must neither open nor close an issue.
+  const gh = fakeGithub([{ number: 9 }]);
   await run({ github: gh, context, core, result: 'cancelled' });
+  assert.deepEqual(names(gh), []);
+});
+
+test('pull requests with the label are not drift issues', async () => {
+  // listForRepo returns pull requests too; a labelled PR must not be
+  // commented on or closed as if it were the drift issue.
+  const pr = { number: 5, pull_request: { url: 'x' } };
+  let gh = fakeGithub([pr]);
+  await run({ github: gh, context, core, result: 'success' });
+  assert.deepEqual(names(gh), ['listForRepo']);
+  gh = fakeGithub([pr]);
+  await run({ github: gh, context, core, result: 'failure' });
   assert.ok(names(gh).includes('create'));
+  assert.ok(!gh.calls.some((c) => c.name === 'createComment' && c.args.issue_number === 5));
+});
+
+test('green run closes every open drift issue', async () => {
+  const gh = fakeGithub([{ number: 3 }, { number: 9 }]);
+  await run({ github: gh, context, core, result: 'success' });
+  const closed = gh.calls.filter((c) => c.name === 'update').map((c) => c.args.issue_number);
+  assert.deepEqual(closed.sort(), [3, 9]);
+});
+
+test('red run comments on the oldest open drift issue only', async () => {
+  const gh = fakeGithub([{ number: 3 }, { number: 9 }]);
+  await run({ github: gh, context, core, result: 'failure' });
+  const listed = gh.calls.find((c) => c.name === 'listForRepo').args;
+  assert.equal(listed.sort, 'created');
+  assert.equal(listed.direction, 'asc');
+  const comments = gh.calls.filter((c) => c.name === 'createComment').map((c) => c.args.issue_number);
+  assert.deepEqual(comments, [3]);
+  assert.ok(!names(gh).includes('create'));
 });
 
 test('green run closes the open issue', async () => {
