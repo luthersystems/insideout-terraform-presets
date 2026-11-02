@@ -176,6 +176,18 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "workspace" {
     # Null when SSE-S3 keeps the current plan unchanged.
     bucket_key_enabled = var.workspace_kms_key_arn == null ? null : true
   }
+
+  # S3 uses only a KMS key in the bucket's own region. A key or alias from
+  # another region fails at apply time, after the bucket exists; this check
+  # fails the plan instead. Field 4 of a KMS ARN (key or alias) is the
+  # region. A validation cannot do it: it would need var.region, and
+  # cross-variable validations need Terraform 1.9.
+  lifecycle {
+    precondition {
+      condition     = var.workspace_kms_key_arn == null ? true : split(":", var.workspace_kms_key_arn)[3] == var.region
+      error_message = "workspace_kms_key_arn must be a KMS key or alias in the bucket's region (var.region)."
+    }
+  }
 }
 
 resource "aws_s3_bucket_public_access_block" "workspace" {

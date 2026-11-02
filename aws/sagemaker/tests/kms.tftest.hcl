@@ -90,3 +90,19 @@ run "sagemaker_rejects_non_kms_arn" {
 
   expect_failures = [var.workspace_kms_key_arn]
 }
+
+# S3 can use only a KMS key in the bucket's own region; the precondition
+# moves the apply-time failure to plan time.
+run "sagemaker_rejects_key_in_other_region" {
+  command = plan
+
+  variables {
+    project               = "test"
+    region                = "us-east-1"
+    vpc_id                = "vpc-12345"
+    subnet_ids            = ["subnet-aaa"]
+    workspace_kms_key_arn = "arn:aws:kms:eu-west-2:123456789012:key/11111111-2222-3333-4444-555555555555"
+  }
+
+  expect_failures = [aws_s3_bucket_server_side_encryption_configuration.workspace]
+}
