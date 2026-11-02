@@ -2,6 +2,7 @@ package composer
 
 import (
 	"fmt"
+	"math/big"
 	"net"
 	"reflect"
 	"sort"
@@ -269,8 +270,12 @@ func cidrnetmaskFunc() function.Function {
 	})
 }
 
-// cidrhostFunc stubs Terraform's cidrhost() function the same way
-// cidrnetmaskFunc does — validate the input parses, return a placeholder.
+// cidrhostFunc implements Terraform's cidrhost(): the address of host
+// number hostnum in the network prefix. A negative hostnum counts back
+// from the end of the range, as in Terraform. It is a real implementation,
+// not a placeholder, because a validation rule may compare its result (the
+// egress_cidrs rule checks cidrhost(c, 0) == the CIDR's address part, #907).
+// A placeholder would make the composer reject values Terraform accepts.
 func cidrhostFunc() function.Function {
 	return function.New(&function.Spec{
 		Params: []function.Parameter{
@@ -280,16 +285,36 @@ func cidrhostFunc() function.Function {
 		Type: function.StaticReturnType(cty.String),
 		Impl: func(args []cty.Value, _ cty.Type) (cty.Value, error) {
 			s := args[0].AsString()
-			if _, _, err := parseCIDR(s); err != nil {
+			_, ipnet, err := net.ParseCIDR(s)
+			if err != nil {
 				return cty.NilVal, fmt.Errorf("invalid CIDR %q: %w", s, err)
 			}
-			return cty.StringVal("0.0.0.0"), nil
+			hostnum, accuracy := args[1].AsBigFloat().Int(nil)
+			if accuracy != big.Exact {
+				return cty.NilVal, fmt.Errorf("hostnum must be a whole number")
+			}
+			ones, bits := ipnet.Mask.Size()
+			size := new(big.Int).Lsh(big.NewInt(1), uint(bits-ones))
+			if hostnum.Sign() < 0 {
+				hostnum.Add(hostnum, size)
+			}
+			if hostnum.Sign() < 0 || hostnum.Cmp(size) >= 0 {
+				return cty.NilVal, fmt.Errorf("prefix %q has no host number %s", s, args[1].AsBigFloat().String())
+			}
+			base := ipnet.IP
+			if v4 := base.To4(); v4 != nil && bits == 32 {
+				base = v4
+			}
+			addr := new(big.Int).SetBytes(base)
+			addr.Add(addr, hostnum)
+			out := addr.FillBytes(make([]byte, len(base)))
+			return cty.StringVal(net.IP(out).String()), nil
 		},
 	})
 }
 
 // parseCIDR validates that s is a parseable CIDR. The return values are
-// discarded — the cidr* stubs only care about parse success.
+// discarded — the cidrnetmask stub only cares about parse success.
 func parseCIDR(s string) (any, any, error) {
 	ip, ipnet, err := net.ParseCIDR(s)
 	return ip, ipnet, err
