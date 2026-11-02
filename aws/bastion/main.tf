@@ -36,13 +36,27 @@ resource "aws_security_group" "bastion_sg" {
   description = "Security group for bastion host"
   vpc_id      = var.vpc_id
 
-  ingress {
-    description = "SSH from admin networks"
-    from_port   = 22
-    to_port     = 22
-    protocol    = "tcp"
-    cidr_blocks = var.admin_cidrs
-  }
+  # SSH from admin networks. An empty var.admin_cidrs removes the rule, for
+  # a bastion reached only through SSM Session Manager, which needs no
+  # inbound rule (#908). The default stays 0.0.0.0/0, because a live
+  # bastion that loses the rule locks out key-pair and EC2 Instance Connect
+  # users on the next apply.
+  #
+  # Attribute syntax, not a dynamic block: with zero ingress blocks the
+  # provider does not manage ingress at all, so a live rule would stay.
+  # An explicit empty list removes it. The one rule below holds the same
+  # values the old block had, so existing plans do not change.
+  ingress = length(var.admin_cidrs) > 0 ? [{
+    description      = "SSH from admin networks"
+    from_port        = 22
+    to_port          = 22
+    protocol         = "tcp"
+    cidr_blocks      = var.admin_cidrs
+    ipv6_cidr_blocks = []
+    prefix_list_ids  = []
+    security_groups  = []
+    self             = false
+  }] : []
 
   egress {
     from_port   = 0
