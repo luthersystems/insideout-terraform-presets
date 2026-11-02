@@ -77,13 +77,23 @@ resource "aws_s3_bucket_public_access_block" "this" {
   restrict_public_buckets = true
 }
 
-# Server-side encryption (SSE-S3)
+# Server-side encryption. SSE-S3 (AES256) by default; SSE-KMS with the
+# caller's customer-managed key when var.kms_key_arn is set (#909).
+# Why opt-in: with SSE-KMS every reader (CloudFront origin access control,
+# app and Lambda roles) also needs kms:Decrypt on the key, and the preset
+# cannot edit the caller's key policy. Switching a live bucket makes new
+# objects unreadable to a reader without that grant. Objects already in
+# the bucket keep SSE-S3.
 resource "aws_s3_bucket_server_side_encryption_configuration" "this" {
   bucket = aws_s3_bucket.this.id
   rule {
     apply_server_side_encryption_by_default {
-      sse_algorithm = "AES256"
+      sse_algorithm     = var.kms_key_arn == null ? "AES256" : "aws:kms"
+      kms_master_key_id = var.kms_key_arn
     }
+    # The bucket key cuts KMS requests (and their cost) for each object.
+    # Null when SSE-S3 keeps the current plan unchanged.
+    bucket_key_enabled = var.kms_key_arn == null ? null : true
   }
 }
 

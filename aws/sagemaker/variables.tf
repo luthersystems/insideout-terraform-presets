@@ -99,6 +99,16 @@ variable "workspace_bucket" {
   }
 }
 
+variable "workspace_kms_key_arn" {
+  description = "ARN of a customer-managed KMS key for the workspace bucket. Null (default) keeps SSE-S3 (AES256). When set, the preset-managed bucket uses SSE-KMS with an S3 bucket key, and the execution role gets kms:Decrypt and kms:GenerateDataKey on the key. Use it also when a caller-supplied workspace_bucket is encrypted with the key. Must be a key ARN, not an alias, because the IAM grant matches the key ARN."
+  type        = string
+  default     = null
+  validation {
+    condition     = var.workspace_kms_key_arn == null ? true : can(regex("^arn:aws[a-z-]*:kms:[a-z0-9-]+:[0-9]{12}:key/.+$", var.workspace_kms_key_arn))
+    error_message = "workspace_kms_key_arn must be a KMS key ARN (arn:aws:kms:<region>:<account>:key/<id>)."
+  }
+}
+
 variable "workspace_bucket_force_destroy" {
   description = "Whether `force_destroy` is set on the preset-managed workspace bucket. Only meaningful when `workspace_bucket == null`. Default false matches AWS console behavior — `terraform destroy` fails on a non-empty bucket."
   type        = bool

@@ -163,10 +163,18 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "workspace" {
   count  = local.create_bucket ? 1 : 0
   bucket = aws_s3_bucket.workspace[0].id
 
+  # SSE-S3 (AES256) by default; SSE-KMS with the caller's customer-managed
+  # key when var.workspace_kms_key_arn is set (#909). Opt-in because a
+  # switch on a live workspace makes new objects unreadable to any reader
+  # without a key grant. The execution role gets its grant below.
   rule {
     apply_server_side_encryption_by_default {
-      sse_algorithm = "AES256"
+      sse_algorithm     = var.workspace_kms_key_arn == null ? "AES256" : "aws:kms"
+      kms_master_key_id = var.workspace_kms_key_arn
     }
+    # The bucket key cuts KMS requests (and their cost) for each object.
+    # Null when SSE-S3 keeps the current plan unchanged.
+    bucket_key_enabled = var.workspace_kms_key_arn == null ? null : true
   }
 }
 
@@ -257,6 +265,32 @@ resource "aws_iam_role_policy" "studio_workspace_access" {
         Resource = local.workspace_bucket_arn
       },
     ]
+  })
+}
+
+# KMS grant for an SSE-KMS workspace (#909). Studio reads and writes the
+# workspace bucket as the execution role, so with a customer-managed key the
+# role needs Decrypt and GenerateDataKey on it, or every object call fails
+# with AccessDenied. The grant also covers a caller-supplied bucket that is
+# encrypted with the key. A separate policy (not a statement added to
+# studio_workspace_access) keeps the plan of existing stacks unchanged. The
+# key policy must also allow the account's IAM principals (the default key
+# policy does).
+resource "aws_iam_role_policy" "studio_workspace_kms" {
+  count = var.workspace_kms_key_arn == null ? 0 : 1
+  name  = "${var.project}-sagemaker-workspace-kms"
+  role  = aws_iam_role.studio_execution.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      Action = [
+        "kms:Decrypt",
+        "kms:GenerateDataKey",
+      ]
+      Resource = var.workspace_kms_key_arn
+    }]
   })
 }
 

@@ -45,6 +45,16 @@ variable "enable_lifecycle" {
   default     = false
 }
 
+variable "kms_key_arn" {
+  description = "ARN of a customer-managed KMS key for SSE-KMS on the bucket. Null (default) keeps SSE-S3 (AES256). When set, every reader of the bucket (for example CloudFront origin access control or an app role) also needs kms:Decrypt on the key, which the caller grants in the key policy."
+  type        = string
+  default     = null
+  validation {
+    condition     = var.kms_key_arn == null ? true : can(regex("^arn:aws[a-z-]*:kms:[a-z0-9-]+:[0-9]{12}:(key|alias)/.+$", var.kms_key_arn))
+    error_message = "kms_key_arn must be a KMS key or alias ARN (arn:aws:kms:<region>:<account>:key/<id>)."
+  }
+}
+
 variable "tags" {
   description = "Extra tags"
   type        = map(string)
