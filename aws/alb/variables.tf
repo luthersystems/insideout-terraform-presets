@@ -28,6 +28,18 @@ variable "public_subnet_ids" {
   type        = list(string)
 }
 
+variable "internal" {
+  description = "Make the ALB internal (no public address) instead of internet-facing. Use it for a stack that is reached only through CloudFront, a VPN or a peered network. Changing it replaces the ALB. Default false keeps the current internet-facing ALB."
+  type        = bool
+  default     = false
+}
+
+variable "private_subnet_ids" {
+  description = "Private subnet IDs for an internal ALB (internal = true). Empty (default) uses public_subnet_ids. Ignored when the ALB is internet-facing."
+  type        = list(string)
+  default     = []
+}
+
 variable "allow_cidrs" {
   description = "CIDR blocks allowed to access the ALB (HTTP/HTTPS)"
   type        = list(string)
