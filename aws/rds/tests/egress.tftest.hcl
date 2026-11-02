@@ -55,3 +55,27 @@ run "rds_rejects_empty_egress_cidrs" {
 
   expect_failures = [var.egress_cidrs]
 }
+
+# The egress rule sets cidr_blocks, which takes IPv4 only; an IPv6 CIDR
+# would fail at apply time instead of at plan time.
+run "rds_rejects_ipv6_egress_cidr" {
+  command = plan
+
+  variables {
+    egress_cidrs = ["2001:db8::/32"]
+  }
+
+  expect_failures = [var.egress_cidrs]
+}
+
+# A CIDR with host bits set (10.0.0.1/16) is almost always a typo, and AWS
+# would store it as 10.0.0.0/16, so the plan would never settle.
+run "rds_rejects_host_bits_egress_cidr" {
+  command = plan
+
+  variables {
+    egress_cidrs = ["10.0.0.1/16"]
+  }
+
+  expect_failures = [var.egress_cidrs]
+}

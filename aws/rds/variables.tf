@@ -245,7 +245,13 @@ variable "egress_cidrs" {
   type        = list(string)
   default     = ["0.0.0.0/0"]
   validation {
-    condition     = length(var.egress_cidrs) > 0 && alltrue([for c in var.egress_cidrs : can(cidrhost(c, 0))])
-    error_message = "egress_cidrs must contain at least one valid CIDR block."
+    # IPv4 only (cidr_blocks takes no IPv6; cidrnetmask fails on IPv6),
+    # and each CIDR must be its network address: AWS stores 10.0.0.1/16 as
+    # 10.0.0.0/16, so the plan would never settle. The ternary keeps
+    # cidrhost from running on a value cidrnetmask already rejected.
+    condition = length(var.egress_cidrs) > 0 && alltrue([
+      for c in var.egress_cidrs : can(cidrnetmask(c)) ? cidrhost(c, 0) == split("/", c)[0] : false
+    ])
+    error_message = "egress_cidrs must contain at least one IPv4 CIDR block, each written as its network address (10.0.0.0/16, not 10.0.0.1/16)."
   }
 }
