@@ -84,6 +84,9 @@ resource "aws_s3_bucket_public_access_block" "this" {
 # cannot edit the caller's key policy. Switching a live bucket makes new
 # objects unreadable to a reader without that grant. Objects already in
 # the bucket keep SSE-S3.
+# The provider's region, for the KMS key region check below.
+data "aws_region" "current" {}
+
 resource "aws_s3_bucket_server_side_encryption_configuration" "this" {
   bucket = aws_s3_bucket.this.id
   rule {
@@ -96,15 +99,16 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "this" {
     bucket_key_enabled = var.kms_key_arn == null ? null : true
   }
 
-  # S3 uses only a KMS key in the bucket's own region. A key or alias from
-  # another region fails at apply time, after the bucket exists; this check
-  # fails the plan instead. Field 4 of a KMS ARN (key or alias) is the
-  # region. A validation cannot do it: it would need var.region, and
-  # cross-variable validations need Terraform 1.9.
+  # S3 uses only a KMS key in the bucket's own region. A key from another
+  # region fails at apply time, after the bucket exists; this check fails
+  # the plan instead. Field 4 of a KMS ARN is the region. It is compared
+  # with the provider's region (data.aws_region.current), where the bucket
+  # is created; var.region only names resources and can differ. A
+  # validation cannot do it, because it cannot read a data source.
   lifecycle {
     precondition {
-      condition     = var.kms_key_arn == null ? true : split(":", var.kms_key_arn)[3] == var.region
-      error_message = "kms_key_arn must be a KMS key or alias in the bucket's region (var.region)."
+      condition     = var.kms_key_arn == null ? true : split(":", var.kms_key_arn)[3] == data.aws_region.current.region
+      error_message = "kms_key_arn must be a KMS key or alias in the provider's region, where the bucket is created."
     }
   }
 }

@@ -1,4 +1,12 @@
-mock_provider "aws" {}
+mock_provider "aws" {
+  # The KMS region precondition reads the provider's region from
+  # data.aws_region.current, so the mock must give it a real value.
+  mock_data "aws_region" {
+    defaults = {
+      region = "us-east-1"
+    }
+  }
+}
 mock_provider "random" {}
 
 # Issue #909: opt-in customer-managed KMS key for the aws/s3 bucket.
@@ -95,4 +103,32 @@ run "s3_accepts_alias_in_same_region" {
     region      = "us-east-1"
     kms_key_arn = "arn:aws:kms:us-east-1:123456789012:alias/data"
   }
+}
+
+# The precondition compares with the provider's region, not var.region:
+# var.region only names resources, and the bucket is created in the
+# provider's region. A key in the provider's region passes even when
+# var.region says something else.
+run "s3_uses_provider_region_not_var_region" {
+  command = plan
+
+  variables {
+    project     = "test"
+    environment = "test"
+    region      = "eu-west-2"
+    kms_key_arn = "arn:aws:kms:us-east-1:123456789012:key/11111111-2222-3333-4444-555555555555"
+  }
+}
+
+run "s3_rejects_key_matching_only_var_region" {
+  command = plan
+
+  variables {
+    project     = "test"
+    environment = "test"
+    region      = "eu-west-2"
+    kms_key_arn = "arn:aws:kms:eu-west-2:123456789012:key/11111111-2222-3333-4444-555555555555"
+  }
+
+  expect_failures = [aws_s3_bucket_server_side_encryption_configuration.this]
 }
