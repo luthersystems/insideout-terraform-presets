@@ -9,7 +9,7 @@
 # accounts on every compose, so a fix that replaces a resource or changes
 # its network or access behaviour on the next apply is planned, not baselined
 # silently.
-AWS-0053 | aws/alb/main.tf | 2027-10-31 | luthersystems/insideout-terraform-presets#910 | on purpose: the preset is the stack's public entry point, so the ALB is internet-facing by default; set internal = true for a stack behind CloudFront or a VPN
+AWS-0053 | aws/alb/main.tf | 2027-10-31 | luthersystems/insideout-terraform-presets#910 | on purpose: the preset is the stack's public entry point, so the ALB is internet-facing by default; set internal = true for a stack reached only through a VPN or peering (not behind aws/cloudfront, a public custom origin)
 AWS-0054 | aws/alb/main.tf | 2027-10-31 | luthersystems/insideout-terraform-presets#910 | on purpose: with no certificate_arn there is no certificate for TLS, so HTTP forwards; with one, HTTP redirects to HTTPS
 AWS-0132 | aws/alb/main.tf | 2027-10-31 | luthersystems/insideout-terraform-presets#909 | on purpose: ELB delivers ALB access logs only to SSE-S3 buckets; a customer-managed KMS key would stop log delivery
 AWS-0132 | aws/s3/main.tf | 2027-01-31 | luthersystems/insideout-terraform-presets#909 | SSE-S3 stays the default: SSE-KMS needs kms:Decrypt grants for every reader (CloudFront OAC, app roles) on live buckets; set kms_key_arn to opt in

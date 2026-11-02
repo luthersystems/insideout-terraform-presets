@@ -29,7 +29,7 @@ variable "public_subnet_ids" {
 }
 
 variable "internal" {
-  description = "Make the ALB internal (no public address) instead of internet-facing. Use it for a stack that is reached only through CloudFront, a VPN or a peered network. Changing it replaces the ALB. Default false keeps the current internet-facing ALB."
+  description = "Make the ALB internal (no public address) instead of internet-facing. Use it for a stack that is reached only through a VPN or a peered network. Do NOT set it when aws/cloudfront fronts the ALB: that preset uses the ALB DNS name as a public custom origin, which CloudFront cannot reach on an internal ALB, so every request fails with 502. Changing it replaces the ALB. Default false keeps the current internet-facing ALB."
   type        = bool
   default     = false
 }

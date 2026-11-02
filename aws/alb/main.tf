@@ -143,7 +143,12 @@ resource "aws_s3_bucket_lifecycle_configuration" "alb_logs" {
 
 # The ALB is internet-facing by default: it is the public entry point of a
 # composed stack. var.internal makes it internal for a stack that is reached
-# only through CloudFront (VPC origin), a VPN or a peered network (#910).
+# only through a VPN or a peered network (#910). It does not suit a stack
+# where aws/cloudfront fronts the ALB: that preset uses the ALB DNS name as
+# a public custom origin (custom_origin_config), not a CloudFront VPC
+# origin, so CloudFront cannot reach an internal ALB and returns 502. The
+# ALB preset cannot see whether CloudFront is composed, so no precondition
+# guards this; the variable description warns instead.
 # An internal ALB uses private_subnet_ids when given, so it gets no address
 # in a public subnet; without them it falls back to public_subnet_ids, the
 # one input the composer wires today.
