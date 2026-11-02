@@ -28,6 +28,18 @@ variable "public_subnet_ids" {
   type        = list(string)
 }
 
+variable "internal" {
+  description = "Make the ALB internal (no public address) instead of internet-facing. Use it for a stack that is reached only through a VPN or a peered network. Do NOT set it when aws/cloudfront fronts the ALB: that preset uses the ALB DNS name as a public custom origin, which CloudFront cannot reach on an internal ALB, so every request fails with 502. Changing it replaces the ALB. Default false keeps the current internet-facing ALB."
+  type        = bool
+  default     = false
+}
+
+variable "private_subnet_ids" {
+  description = "Private subnet IDs for an internal ALB (internal = true). Empty (default) uses public_subnet_ids. Ignored when the ALB is internet-facing."
+  type        = list(string)
+  default     = []
+}
+
 variable "allow_cidrs" {
   description = "CIDR blocks allowed to access the ALB (HTTP/HTTPS)"
   type        = list(string)
@@ -100,4 +112,22 @@ variable "tags" {
   description = "Common resource tags"
   type        = map(string)
   default     = {}
+}
+
+variable "egress_cidrs" {
+  description = "CIDR blocks the security group may send traffic to. Default 0.0.0.0/0 keeps the current open egress. Set it, for example to the VPC CIDR, to narrow egress. Narrowing changes the network behaviour of a live stack on its next apply (the rule updates in place). Check first that every target is in those CIDRs (IP targets in a peered VPC or on-premises) and that no listener rule uses authenticate-oidc, which calls the IdP over the internet."
+  type        = list(string)
+  default     = ["0.0.0.0/0"]
+  validation {
+    # IPv4 only (cidr_blocks takes no IPv6), and each CIDR must be its
+    # network address: AWS stores 10.0.0.1/16 as 10.0.0.0/16, so the plan
+    # would never settle. The ternary keeps cidrhost from running on a value
+    # that is not an IPv4 CIDR. Only functions the composer's offline
+    # validator knows (pkg/composer/hcl_validation.go) are used, because it
+    # evaluates this rule at compose time too.
+    condition = length(var.egress_cidrs) > 0 && alltrue([
+      for c in var.egress_cidrs : can(regex("^[0-9]{1,3}(\\.[0-9]{1,3}){3}/[0-9]{1,2}$", c)) && can(cidrhost(c, 0)) ? cidrhost(c, 0) == regex("^[^/]+", c) : false
+    ])
+    error_message = "egress_cidrs must contain at least one IPv4 CIDR block, each written as its network address (10.0.0.0/16, not 10.0.0.1/16)."
+  }
 }

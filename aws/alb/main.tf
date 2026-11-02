@@ -47,12 +47,14 @@ resource "aws_security_group" "alb_sg" {
     cidr_blocks = var.allow_cidrs
   }
 
-  # Outbound
+  # Egress to var.egress_cidrs, 0.0.0.0/0 by default (#907). Opt-in
+  # because a narrower rule changes the network behaviour of a live stack
+  # on its next apply; the caller knows its targets, the preset does not.
   egress {
     from_port   = 0
     to_port     = 0
     protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
+    cidr_blocks = var.egress_cidrs
   }
 
   tags = merge(module.name.tags, { Name = "${module.name.prefix}-sg" }, var.tags)
@@ -139,14 +141,30 @@ resource "aws_s3_bucket_lifecycle_configuration" "alb_logs" {
   }
 }
 
-# Internet-facing ALB
+# The ALB is internet-facing by default: it is the public entry point of a
+# composed stack. var.internal makes it internal for a stack that is reached
+# only through a VPN or a peered network (#910). It does not suit a stack
+# where aws/cloudfront fronts the ALB: that preset uses the ALB DNS name as
+# a public custom origin (custom_origin_config), not a CloudFront VPC
+# origin, so CloudFront cannot reach an internal ALB and returns 502. The
+# ALB preset cannot see whether CloudFront is composed, so no precondition
+# guards this; the variable description warns instead.
+# An internal ALB uses private_subnet_ids when given, so it gets no address
+# in a public subnet; without them it falls back to public_subnet_ids, the
+# one input the composer wires today.
+locals {
+  alb_subnet_ids = var.internal && length(var.private_subnet_ids) > 0 ? var.private_subnet_ids : var.public_subnet_ids
+}
+
 resource "aws_lb" "alb" {
   # ALB names limited to 32 chars — use var.project
   name               = "${var.project}-alb"
   load_balancer_type = "application"
-  internal           = false
-  security_groups    = [aws_security_group.alb_sg.id]
-  subnets            = var.public_subnet_ids
+  # A change to internal replaces the ALB (new DNS name), which is why it
+  # is opt-in and defaults to the current internet-facing shape.
+  internal        = var.internal
+  security_groups = [aws_security_group.alb_sg.id]
+  subnets         = local.alb_subnet_ids
 
   enable_deletion_protection = var.enable_deletion_protection
 

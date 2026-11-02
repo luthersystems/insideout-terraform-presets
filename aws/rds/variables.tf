@@ -239,3 +239,21 @@ variable "monitoring_interval" {
     error_message = "monitoring_interval must be one of: 0, 1, 5, 10, 15, 30, 60."
   }
 }
+
+variable "egress_cidrs" {
+  description = "CIDR blocks the security group may send traffic to. Default 0.0.0.0/0 keeps the current open egress. Set it, for example to the VPC CIDR, to narrow egress. Narrowing changes the network behaviour of a live stack on its next apply (the rule updates in place). Check first that the database uses no extension that calls out (aws_s3, aws_lambda, dblink, postgres_fdw)."
+  type        = list(string)
+  default     = ["0.0.0.0/0"]
+  validation {
+    # IPv4 only (cidr_blocks takes no IPv6), and each CIDR must be its
+    # network address: AWS stores 10.0.0.1/16 as 10.0.0.0/16, so the plan
+    # would never settle. The ternary keeps cidrhost from running on a value
+    # that is not an IPv4 CIDR. Only functions the composer's offline
+    # validator knows (pkg/composer/hcl_validation.go) are used, because it
+    # evaluates this rule at compose time too.
+    condition = length(var.egress_cidrs) > 0 && alltrue([
+      for c in var.egress_cidrs : can(regex("^[0-9]{1,3}(\\.[0-9]{1,3}){3}/[0-9]{1,2}$", c)) && can(cidrhost(c, 0)) ? cidrhost(c, 0) == regex("^[^/]+", c) : false
+    ])
+    error_message = "egress_cidrs must contain at least one IPv4 CIDR block, each written as its network address (10.0.0.0/16, not 10.0.0.1/16)."
+  }
+}

@@ -159,13 +159,37 @@ resource "aws_s3_bucket_versioning" "workspace" {
   }
 }
 
+# The provider's region, for the KMS key region check below.
+data "aws_region" "current" {}
+
 resource "aws_s3_bucket_server_side_encryption_configuration" "workspace" {
   count  = local.create_bucket ? 1 : 0
   bucket = aws_s3_bucket.workspace[0].id
 
+  # SSE-S3 (AES256) by default; SSE-KMS with the caller's customer-managed
+  # key when var.workspace_kms_key_arn is set (#909). Opt-in because a
+  # switch on a live workspace makes new objects unreadable to any reader
+  # without a key grant. The execution role gets its grant below.
   rule {
     apply_server_side_encryption_by_default {
-      sse_algorithm = "AES256"
+      sse_algorithm     = var.workspace_kms_key_arn == null ? "AES256" : "aws:kms"
+      kms_master_key_id = var.workspace_kms_key_arn
+    }
+    # The bucket key cuts KMS requests (and their cost) for each object.
+    # Null when SSE-S3 keeps the current plan unchanged.
+    bucket_key_enabled = var.workspace_kms_key_arn == null ? null : true
+  }
+
+  # S3 uses only a KMS key in the bucket's own region. A key from another
+  # region fails at apply time, after the bucket exists; this check fails
+  # the plan instead. Field 4 of a KMS ARN is the region. It is compared
+  # with the provider's region (data.aws_region.current), where the bucket
+  # is created; var.region only names resources and can differ. A
+  # validation cannot do it, because it cannot read a data source.
+  lifecycle {
+    precondition {
+      condition     = var.workspace_kms_key_arn == null ? true : split(":", var.workspace_kms_key_arn)[3] == data.aws_region.current.region
+      error_message = "workspace_kms_key_arn must be a KMS key ARN in the provider's region, where the bucket is created."
     }
   }
 }
@@ -257,6 +281,32 @@ resource "aws_iam_role_policy" "studio_workspace_access" {
         Resource = local.workspace_bucket_arn
       },
     ]
+  })
+}
+
+# KMS grant for an SSE-KMS workspace (#909). Studio reads and writes the
+# workspace bucket as the execution role, so with a customer-managed key the
+# role needs Decrypt and GenerateDataKey on it, or every object call fails
+# with AccessDenied. The grant also covers a caller-supplied bucket that is
+# encrypted with the key. A separate policy (not a statement added to
+# studio_workspace_access) keeps the plan of existing stacks unchanged. The
+# key policy must also allow the account's IAM principals (the default key
+# policy does).
+resource "aws_iam_role_policy" "studio_workspace_kms" {
+  count = var.workspace_kms_key_arn == null ? 0 : 1
+  name  = "${var.project}-sagemaker-workspace-kms"
+  role  = aws_iam_role.studio_execution.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      Action = [
+        "kms:Decrypt",
+        "kms:GenerateDataKey",
+      ]
+      Resource = var.workspace_kms_key_arn
+    }]
   })
 }
 
@@ -465,6 +515,10 @@ resource "time_sleep" "inference_iam_propagation" {
     aws_iam_role_policy.inference_ecr_pull,
     aws_iam_role_policy.inference_model_data,
     aws_iam_role_policy_attachment.studio_managed,
+    # With an SSE-KMS workspace, a model artifact stored there is read
+    # through the key, so the KMS grant must also have propagated (#909).
+    # A zero-instance policy (no key) is tolerated, as above.
+    aws_iam_role_policy.studio_workspace_kms,
   ]
 }
 

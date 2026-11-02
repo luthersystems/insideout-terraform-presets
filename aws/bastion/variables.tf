@@ -45,7 +45,7 @@ variable "subnet_id" {
 }
 
 variable "admin_cidrs" {
-  description = "CIDR blocks allowed to SSH to the bastion (keep tight in real envs)"
+  description = "CIDR blocks allowed to SSH (port 22) to the bastion. Keep it tight in real environments. An empty list removes the SSH rule, for a bastion reached only through SSM Session Manager. Default 0.0.0.0/0 keeps the current open rule."
   type        = list(string)
   default     = ["0.0.0.0/0"]
   validation {

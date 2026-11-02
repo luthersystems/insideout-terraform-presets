@@ -7,6 +7,14 @@ on:
   merge_group:
   pull_request:
     branches: [main]
+  # Daily run on main (#882). The breakage in #881 came from outside the
+  # repo (an upstream module release), so push and PR triggers gave no
+  # signal until the next PR. terraform init against the live registries
+  # is the point of this run. A red run opens a ci-drift issue (job
+  # ci-drift below), and a green one closes it.
+  schedule:
+    - cron: "41 7 * * *"
+  workflow_dispatch:
 
 jobs:
   discover:
@@ -168,6 +176,9 @@ jobs:
 
       - name: Lint enrichgen override citation comments (#415)
         run: bash tests/lint-enrichgen-override-citations.sh
+
+      - name: Unit tests for the ci-drift issue script (#882)
+        run: node --test scripts/ci-drift.test.cjs
 
   # Validates phantom-computed-fields.txt against the live provider schema
   # pinned by schemas/providers.tf. Catches the failure mode where a
@@ -425,3 +436,37 @@ jobs:
             exit 1
           fi
           echo "All required CI jobs passed."
+
+  # Opens, refreshes or closes the ci-drift issue after a scheduled or
+  # manual run on main (#882). Not part of ci-gate: it reports on the gate,
+  # and it never runs on PRs. The logic is in scripts/ci-drift.cjs, where
+  # it has unit tests.
+  ci-drift:
+    needs: ci-gate
+    # !cancelled(), not always(): ci-gate runs even in a cancelled run and
+    # then reports failure, which would file a drift issue for a run that
+    # did not finish. A cancelled run must change nothing.
+    if: ${{ !cancelled() && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-latest
+    # One writer at a time: two runs that both see no open issue would each
+    # open one. GitHub keeps only one pending job per group, so a third run
+    # can replace a waiting one and that result is not recorded. That is
+    # fine: each run reads the issues again and acts on the newest result,
+    # so the next run sets the right state.
+    concurrency:
+      group: ci-drift-issue
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+
+      - name: Open, refresh or close the ci-drift issue
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3  # v9
+        env:
+          CI_GATE_RESULT: ${{ needs.ci-gate.result }}
+        with:
+          script: |
+            const run = require('./scripts/ci-drift.cjs');
+            await run({ github, context, core, result: process.env.CI_GATE_RESULT });
