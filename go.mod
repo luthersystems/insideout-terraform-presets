@@ -2,7 +2,7 @@ module github.com/luthersystems/insideout-terraform-presets
 
 go 1.26.0
 
-toolchain go1.26.10
+toolchain go1.26.11
 
 require (
 	cloud.google.com/go/aiplatform v1.126.0
