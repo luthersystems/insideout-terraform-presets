@@ -40,7 +40,7 @@ mkdir -p "$(dirname "$LOG_FILE")" 2>/dev/null || true
 
 TERRAFORM_VERSION=1.7.5     # presets CI pin (hashicorp/setup-terraform)
 GOLANGCI_VERSION=v2.13.2    # fleet pin (reliable CI golangci-lint-action)
-GO_VERSION=1.26.11          # this repo's go.mod toolchain line (CI uses go-version-file: go.mod)
+GO_VERSION=1.27.4           # this repo's go.mod toolchain line (CI uses go-version-file: go.mod)
 ARCH="$(dpkg --print-architecture)"   # auto-detect: amd64 or arm64
 
 log() {
