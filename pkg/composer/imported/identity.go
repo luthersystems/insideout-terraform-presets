@@ -25,7 +25,7 @@ const (
 	// attributes but at least one fetch failed. Reserved for future
 	// multi-call enrichers (e.g. bucket-ACL-plus-policy); current
 	// per-type enrichers marshal Attrs atomically and so never set
-	// Partial. TODO(#471): wire this when a multi-call enricher lands.
+	// Partial. A multi-call enricher sets it when one lands (see #471).
 	EnrichmentStatusPartial EnrichmentStatus = "partial"
 	// EnrichmentStatusFailed indicates no attributes could be populated
 	// (client unavailable, name underivable, fetch error, marshal

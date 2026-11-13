@@ -14,7 +14,7 @@
 # A live-apply integration suite is deliberately deferred: a Kendra index takes
 # ~30 minutes to provision and a DEVELOPER_EDITION index bills ~$1.125/hr for
 # the life of the test, so a live-apply test is expensive and slow relative to
-# the value it adds over this shape suite. TODO(#760): add an opt-in
+# the value it adds over this shape suite. TODO(#922): add an opt-in
 # integration.tftest.hcl (creds-gated, like aws/bedrock_agent) if a live
 # regression is ever needed.
 

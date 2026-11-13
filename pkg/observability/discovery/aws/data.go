@@ -104,7 +104,7 @@ func inspectDynamoDB(ctx context.Context, cfg aws.Config, action, filters string
 // only Project=<project>-tagged tables. Per-table errors log+skip;
 // ListTables / GetCallerIdentity errors abort.
 //
-// TODO: derive partition from region (arn:aws-us-gov:, arn:aws-cn:) when
+// TODO(#926): derive partition from region (arn:aws-us-gov:, arn:aws-cn:) when
 // GovCloud / China support arrives. Hardcoded to aws partition —
 // commercial-only today, mirrors the InsideOut backend's stance.
 //

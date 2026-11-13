@@ -574,7 +574,7 @@ func extractALBConfig(rawResult any) map[string]string {
 // report the actual count so drift fires when the live number of keys
 // diverges from the design choice.
 //
-// TODO(#1089): alias names do not 1:1 map to keys (an alias may point at
+// TODO(#927): alias names do not 1:1 map to keys (an alias may point at
 // an external key or be a reserved/AWS-managed alias). For a tighter count
 // we'd need a second SDK call to ListKeys and filter aliases whose
 // TargetKeyId is non-empty and project-scoped. Current shape is good
@@ -845,7 +845,7 @@ func extractBedrockConfig(rawResult any) map[string]string {
 // originPath — neither is directly exposed on DistributionSummary without
 // a GetDistributionConfig call.
 //
-// TODO(#1089): fan out GetDistributionConfig to surface DefaultTTL /
+// TODO(#927): fan out GetDistributionConfig to surface DefaultTTL /
 // OriginPath for design-vs-deployed comparison. Today we surface the
 // identity fields (distribution ID, domain, status) so the "deploy exists"
 // signal is trustworthy.
@@ -888,7 +888,7 @@ func extractCloudFrontConfig(rawResult any) map[string]string {
 // frontend fields (lib/stack/ir.ts:322-326): aws_sqs.type (Standard|FIFO)
 // and visibilityTimeout. Neither is available from ListQueues.
 //
-// TODO(#1089): fan out GetQueueAttributes for the first queue URL to
+// TODO(#927): fan out GetQueueAttributes for the first queue URL to
 // surface VisibilityTimeout + FifoQueue attribute. Current config reports
 // queue count only.
 func extractSQSConfig(rawResult any) map[string]string {
@@ -970,7 +970,7 @@ func extractCognitoConfig(rawResult any) map[string]string {
 // frontend fields (lib/stack/ir.ts:315): aws_dynamodb.type (billing mode) —
 // not returned by ListTables; would need DescribeTable per name.
 //
-// TODO(#1089): fan out DescribeTable to surface BillingModeSummary,
+// TODO(#927): fan out DescribeTable to surface BillingModeSummary,
 // ProvisionedThroughput, and SSEDescription. Today we surface drift
 // identity only (count + first-table name).
 func extractDynamoDBConfig(rawResult any) map[string]string {
@@ -1006,7 +1006,7 @@ func extractDynamoDBConfig(rawResult any) map[string]string {
 //   - enableServiceConnect: requires DescribeServices → ServiceConnectConfiguration,
 //     which is a per-service dispatch.
 //
-// TODO(#1089): extend the inspector's Include set and surface the four
+// TODO(#927): extend the inspector's Include set and surface the four
 // design fields so the design-vs-deployed card compares them directly.
 // Today we surface drift identity only (count + first-cluster name).
 func extractECSConfig(rawResult any) map[string]string {
@@ -1034,7 +1034,7 @@ func extractECSConfig(rawResult any) map[string]string {
 // (for endpoint access / version) plus DescribeNodegroup (for scaling /
 // instance type).
 //
-// TODO(#1089): fan out DescribeCluster + DescribeNodegroup to surface
+// TODO(#927): fan out DescribeCluster + DescribeNodegroup to surface
 // version, endpoint access, and node-group config so the design-vs-deployed
 // card can compare HA / visibility / sizing. Today we surface drift identity
 // only (count + first-cluster name).
@@ -1063,7 +1063,7 @@ func extractEKSConfig(rawResult any) map[string]string {
 // lacks that field; we could infer it by re-querying per-scope, but that
 // doubles the API calls for minimal drift value.
 //
-// TODO(#1089): fan out GetWebACL per id to surface the rule set and
+// TODO(#927): fan out GetWebACL per id to surface the rule set and
 // default action. Today we surface count + first-ACL name/id.
 func extractWAFConfig(rawResult any) map[string]string {
 	items := sliceFromEnvelope(rawResult, "WebACLs")
@@ -1147,7 +1147,7 @@ func extractCloudWatchLogsConfig(rawResult any) map[string]string {
 //
 // Identity fields come from the SDK-returned list-* response only; any
 // deeper field that would require a describe-* per-resource call is
-// flagged with a TODO(#1090) and left for a follow-up.
+// flagged with a TODO(#928) and left for a follow-up.
 
 // extractGCPComputeConfig extracts config from the list-instances response
 // (inspectGCPCompute → compute.InstancesClient.AggregatedList). Shape
@@ -1161,7 +1161,7 @@ func extractCloudWatchLogsConfig(rawResult any) map[string]string {
 // across every zone in the project, so we also surface a count.
 //
 // frontend field (lib/stack/ir.ts: gcp_compute has `machineType` + count).
-// TODO(#1090): when the UI decides to surface boot-disk size / service
+// TODO(#928): when the UI decides to surface boot-disk size / service
 // account, fan out to describe-instance per first instance — list-instances
 // does already include `disks[]` and `serviceAccounts[]` so both could be
 // surfaced directly without a second call.
@@ -1539,7 +1539,7 @@ func extractGCPPubSubConfig(rawResult any) map[string]string {
 // gcp_cloud_kms is a bare boolean in lib/stack/ir.ts — no designable
 // config. Emit drift identity: keyring count + first ring name.
 //
-// TODO(#1090 follow-up): surface `numKeys` by fanning out ListCryptoKeys
+// TODO(#928): surface `numKeys` by fanning out ListCryptoKeys
 // per key ring. Each extra call adds latency but would give the UI a
 // meaningful count-of-keys card. Current implementation reports key
 // RINGS only (kmspb.KeyRing has just {name, createTime}).
@@ -1606,7 +1606,7 @@ func extractGCPSecretManagerConfig(rawResult any) map[string]string {
 // CLOUD_ARMOR_EDGE / CLOUD_ARMOR_NETWORK). rules[] is included on the
 // list summary; surface the count as a drift signal.
 //
-// TODO(#1090 follow-up): fan out describe-policy per name to surface
+// TODO(#928): fan out describe-policy per name to surface
 // the rule set and default action. Current extractor surfaces drift
 // identity + rule count only.
 func extractGCPCloudArmorConfig(rawResult any) map[string]string {
@@ -1734,7 +1734,7 @@ func extractGCPVPCConfig(rawResult any) map[string]string {
 // defaultService (basename) + host-rule count so the LLM can answer
 // "how many domains are wired up?" without a second API call.
 //
-// TODO(#1090 follow-up): fan out list-backend-services to surface
+// TODO(#928): fan out list-backend-services to surface
 // protocol + scheme + ssl policy per URL map. Current extractor
 // surfaces URL-map identity only.
 func extractGCPLoadBalancerConfig(rawResult any) map[string]string {
@@ -1766,7 +1766,7 @@ func extractGCPLoadBalancerConfig(rawResult any) map[string]string {
 // frontend field (lib/stack/ir.ts:503-509): retentionDays. Retention
 // lives on log buckets (`_Default`, `_Required`, custom), which is a
 // DIFFERENT API (list-buckets, not list-logs) — logadmin.NewClient
-// doesn't surface it. TODO(#1090 follow-up): add a list-log-buckets
+// doesn't surface it. TODO(#928): add a list-log-buckets
 // action to inspectGCPLogging and fan out to surface retention.
 //
 // Current extractor emits drift identity only: logCount + first log name.

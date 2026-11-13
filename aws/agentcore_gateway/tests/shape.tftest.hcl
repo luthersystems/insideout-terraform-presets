@@ -16,7 +16,7 @@
 # check resource presence, count-gating, names, and wiring rather than fragile
 # deep attribute paths.
 #
-# TODO(#763): a live-apply integration.tftest.hcl is deliberately deferred —
+# TODO(#922): a live-apply integration.tftest.hcl is deliberately deferred —
 # AgentCore live-apply needs special account access and a live-apply test
 # against a churning provider family would be MORE fragile than this shape
 # suite, not less. Track separately; do not treat its absence as folklore.

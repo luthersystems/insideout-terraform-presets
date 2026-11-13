@@ -978,14 +978,14 @@ func DefaultWiring(selected map[ComponentKey]bool, k ComponentKey, comps *Compon
 		//                 contract — no Route 53 health-check semantics on
 		//                 the global edge).
 		//
-		// Deferred (no preset outputs yet — TODO(#584-followup)):
+		// Deferred (no preset outputs yet — TODO(#925)):
 		//   - API Gateway: needs aws/apigateway to expose
 		//     aws_apigatewayv2_domain_name.api[0].domain_name_configuration[0]
 		//     {target_domain_name,hosted_zone_id} as outputs. Today they are
 		//     internal to the preset and the count=var.domain_name!=null gate
 		//     makes the outputs themselves nullable, so even after adding
 		//     them the wiring needs to gate on the user supplying a domain
-		//     to apigateway. Filed as a follow-up.
+		//     to apigateway.
 		//   - Cognito: needs aws/cognito to manage an actual custom domain
 		//     (aws_cognito_user_pool_domain with `domain` instead of
 		//     `domain_prefix`) and surface its cloudfront_distribution_arn.
