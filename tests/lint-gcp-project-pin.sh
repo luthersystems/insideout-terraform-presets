@@ -43,7 +43,7 @@
 # for Debian/Ubuntu base images at gcp/bastion/main.tf, gcp/compute/main.tf)
 # legitimately reference a different project than var.project_id.
 #
-# TODO: extend the file glob to gcp/_shared/*/main.tf once the _shared
+# TODO(#929): extend the file glob to gcp/_shared/*/main.tf once the _shared
 # bucket carries non-fixture content (currently smoke placeholders only).
 
 set -euo pipefail

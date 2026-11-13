@@ -46,10 +46,10 @@ func TestTestTrafficPublicEndpoints_HasOutputKey(t *testing.T) {
 // shape: the OutputKey is consistent with the module's preset name.
 //
 // A future iteration will HCL-parse <module>/outputs.tf and assert
-// OutputKey is declared. Captured as a TODO inline so the gate is
-// visible to reviewers.
+// OutputKey is declared. The marker below names the issue, so the gap
+// stays visible to reviewers.
 func TestTestTrafficPublicEndpoints_HasMatchingOutput(t *testing.T) {
-	// TODO(#204): walk presets/<cloud>/<module>/outputs.tf via hcl/v2
+	// TODO(#924): walk presets/<cloud>/<module>/outputs.tf via hcl/v2
 	// and assert each OutputKey is a declared output. For now sanity-
 	// check the well-known shape so a typo here gets noticed in review.
 	for k, v := range TestTrafficPublicEndpoints {

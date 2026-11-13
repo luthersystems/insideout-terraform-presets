@@ -94,7 +94,7 @@ func TestMakeImportedResource_ResolvesAddressCollisionsWithinBatch(t *testing.T)
 		t.Errorf("collision suffix = %q (len=%d), want 8 hex chars", suffix, len(suffix))
 	}
 	for _, r := range suffix {
-		if !((r >= '0' && r <= '9') || (r >= 'a' && r <= 'f')) {
+		if (r < '0' || r > '9') && (r < 'a' || r > 'f') {
 			t.Errorf("collision suffix %q contains non-hex %q", suffix, r)
 			break
 		}

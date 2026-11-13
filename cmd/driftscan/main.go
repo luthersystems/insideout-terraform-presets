@@ -43,7 +43,7 @@ func loadAllowlist(path string) (map[string]bool, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }() // read only: a close error loses no data
 	sc := bufio.NewScanner(f)
 	ln := 0
 	for sc.Scan() {

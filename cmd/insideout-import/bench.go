@@ -160,7 +160,7 @@ Exit codes:
 	}
 
 	for _, line := range res.summaryLines() {
-		fmt.Fprintln(os.Stdout, line)
+		_, _ = fmt.Fprintln(os.Stdout, line)
 	}
 	return benchExitOK
 }

@@ -1808,7 +1808,7 @@ func parseBashArray(path, name string) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }() // read only: a close error loses no data
 
 	var out []string
 	scanner := bufio.NewScanner(f)

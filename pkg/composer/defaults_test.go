@@ -360,7 +360,7 @@ func TestCoerceToFieldType(t *testing.T) {
 				return
 			}
 			// Pointer comparisons need to deref to the underlying value.
-			if got.Kind() == reflect.Ptr {
+			if got.Kind() == reflect.Pointer {
 				assert.Equal(t, tc.want, got.Elem().Interface())
 			} else {
 				assert.Equal(t, tc.want, got.Interface())

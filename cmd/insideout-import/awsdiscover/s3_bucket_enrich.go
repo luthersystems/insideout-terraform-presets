@@ -463,8 +463,10 @@ func mapS3LifecycleRules(rules []s3types.LifecycleRule) []generated.AWSS3BucketL
 		}
 		// Status -> Enabled bool.
 		block.Enabled = generated.LiteralOf(r.Status == s3types.ExpirationStatusEnabled)
-		if r.Prefix != nil && *r.Prefix != "" {
-			block.Prefix = generated.LiteralOf(*r.Prefix)
+		// Old buckets still return the rule prefix only in this deprecated
+		// field, so discovery must read it to keep their rules.
+		if p := aws.ToString(r.Prefix); p != "" { //nolint:staticcheck // SA1019: see above
+			block.Prefix = generated.LiteralOf(p)
 		}
 		if r.AbortIncompleteMultipartUpload != nil && r.AbortIncompleteMultipartUpload.DaysAfterInitiation != nil {
 			block.AbortIncompleteMultipartUploadDays = generated.LiteralOf(float64(*r.AbortIncompleteMultipartUpload.DaysAfterInitiation))

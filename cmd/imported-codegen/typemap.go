@@ -17,12 +17,12 @@ import (
 // int64 instead. The set is small and explicit; misclassifications cause
 // regen churn but never lose information.
 func goScalar(t cty.Type, attrName string) (goType string, ok bool) {
-	switch {
-	case t == cty.String:
+	switch t {
+	case cty.String:
 		return "string", true
-	case t == cty.Bool:
+	case cty.Bool:
 		return "bool", true
-	case t == cty.Number:
+	case cty.Number:
 		if isIntegerField(attrName) {
 			return "int64", true
 		}

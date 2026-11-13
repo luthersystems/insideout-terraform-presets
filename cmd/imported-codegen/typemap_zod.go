@@ -58,12 +58,12 @@ func TSZodType(t cty.Type, attrName, parentTypeName string) (zod string, nestedT
 // at this layer, and Zod's z.number().int() refinement is unnecessary
 // for the expression-wrapped value shape.
 func zodScalar(t cty.Type) (string, bool) {
-	switch {
-	case t == cty.String:
+	switch t {
+	case cty.String:
 		return "z.string()", true
-	case t == cty.Bool:
+	case cty.Bool:
 		return "z.boolean()", true
-	case t == cty.Number:
+	case cty.Number:
 		return "z.number()", true
 	}
 	return "", false

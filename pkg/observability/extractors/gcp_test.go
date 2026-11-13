@@ -357,9 +357,9 @@ func TestExtractGCPCloudSQLConfig(t *testing.T) {
 		assert.NotContains(t, got, "highAvailability")
 	})
 
-	t.Run("BackupConfig_PendingIssue236", func(t *testing.T) {
+	t.Run("BackupConfig_PendingIssue928", func(t *testing.T) {
 		t.Parallel()
-		t.Logf("TODO #236: extractGCPCloudSQLConfig does not surface backupConfiguration.enabled; flip this assertion when the field is wired through.")
+		t.Logf("TODO(#928): extractGCPCloudSQLConfig does not surface backupConfiguration.enabled; flip this assertion when the field is wired through.")
 		// The current extractor reads availabilityType but does NOT
 		// surface backupConfiguration.enabled into the output.
 		rawEnabled := map[string]any{"items": []any{map[string]any{
@@ -486,9 +486,9 @@ func TestExtractGCPGCSConfig(t *testing.T) {
 		assert.Equal(t, "US", got["location"])
 	})
 
-	t.Run("LifecyclePolicy_PendingIssue236", func(t *testing.T) {
+	t.Run("LifecyclePolicy_PendingIssue928", func(t *testing.T) {
 		t.Parallel()
-		t.Logf("TODO #236: extractGCPGCSConfig does not surface lifecyclePolicy; the inspector pre-flattens away the lifecycle field. Flip when the inspector surface widens.")
+		t.Logf("TODO(#928): extractGCPGCSConfig does not surface lifecyclePolicy; the inspector pre-flattens away the lifecycle field. Flip when the inspector surface widens.")
 		rawWithLifecycle := []any{map[string]any{
 			"name":         "lc-bucket",
 			"location":     "us-east1",
@@ -863,13 +863,13 @@ func TestExtractGCPVPCConfig(t *testing.T) {
 		// Issue #236 spec calls for a `vpcMode=auto|custom` summary key
 		// — the current extractor surfaces only autoCreateSubnetworks
 		// directly. Confirm the alias key is NOT present so a future
-		// implementer of #236 has a failing assertion to flip.
+		// implementer (#928) has a failing assertion to flip.
 		require.NotContains(t, got, "vpcMode")
 	})
 
-	t.Run("IGWClassification_PendingIssue236", func(t *testing.T) {
+	t.Run("IGWClassification_PendingIssue928", func(t *testing.T) {
 		t.Parallel()
-		t.Logf("TODO #236: extractGCPVPCConfig does not classify Public/Private/Mixed; the inspector returns []computeapi.Network, not firewalls. Flip when the inspector surface widens.")
+		t.Logf("TODO(#928): extractGCPVPCConfig does not classify Public/Private/Mixed; the inspector returns []computeapi.Network, not firewalls. Flip when the inspector surface widens.")
 		raw := []any{map[string]any{
 			"name":                  "fw-vpc",
 			"autoCreateSubnetworks": false,

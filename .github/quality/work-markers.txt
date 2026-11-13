@@ -1,0 +1,8 @@
+# Work marker allowlist, read by the shared Quality workflow
+# (luthersystems/.github docs/quality-workflow.md). Only words that are not
+# deferred work belong here. Real work names an open issue inline: MARKER(#N).
+# path | text | expires | issue | reason
+cmd/driftscan/main.go | BUG | never | - | driftscan's output tag for a missing Required sub-attribute (BUG(missing-required)), printed and parsed as data.
+cmd/enrichgen/engine.go | TODO(enrichgen) | never | - | Text the generator writes into generated code for a field it cannot map; the generated file is reviewed, not this line.
+cmd/insideout-import/awsdiscover/cc_required_field_live_test.go | BUG | never | - | Test failure message naming a bug class, not deferred work.
+pkg/observability/inspect/proto_normalize_test.go | BUG | never | - | Describes a sentinel string a regression could return, not deferred work.

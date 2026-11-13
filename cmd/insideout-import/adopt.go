@@ -206,7 +206,9 @@ func readImportsFile(path string) ([]importPair, error) {
 		if err := validateAddress(e.Address); err != nil {
 			return nil, fmt.Errorf("entry %d: invalid address %q: %w", i, e.Address, err)
 		}
-		out = append(out, importPair{Address: e.Address, ImportID: e.ImportID})
+		// An explicit copy, not importPair(e): the --imports-file wire type
+		// and the internal type must be free to gain different fields.
+		out = append(out, importPair{Address: e.Address, ImportID: e.ImportID}) //nolint:staticcheck // S1016: see above
 	}
 	return out, nil
 }

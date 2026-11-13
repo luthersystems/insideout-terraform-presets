@@ -149,7 +149,7 @@ func (c *Client) ComputePresetDefaults(cfg Config, comps *Components, selected [
 	tagIndex := map[string]int{}
 	for i := 0; i < cfgType.NumField(); i++ {
 		ft := cfgType.Field(i)
-		if ft.Type.Kind() != reflect.Ptr || ft.Type.Elem().Kind() != reflect.Struct {
+		if ft.Type.Kind() != reflect.Pointer || ft.Type.Elem().Kind() != reflect.Struct {
 			continue
 		}
 		tag := jsonTagName(ft.Tag.Get("json"))
@@ -484,7 +484,7 @@ func overlayZero(dst, src reflect.Value) bool {
 		}
 		// Recurse into nested *struct (e.g. AWSBackups.EC2): a zero sub-field
 		// inside a non-nil dst inner *struct IS backfilled from src.
-		if df.Kind() == reflect.Ptr && df.Type().Elem().Kind() == reflect.Struct {
+		if df.Kind() == reflect.Pointer && df.Type().Elem().Kind() == reflect.Struct {
 			if sf.IsNil() {
 				continue
 			}
@@ -524,7 +524,7 @@ func overlayZero(dst, src reflect.Value) bool {
 // dst is the parallel *struct field on the output Config, already dereferenced
 // to its inner struct value. Returns true if at least one field landed.
 func overlayStructFromDefaults(src, dst reflect.Value, defaults map[string]any) bool {
-	srcNil := src.Kind() == reflect.Ptr && src.IsNil()
+	srcNil := src.Kind() == reflect.Pointer && src.IsNil()
 	var srcStruct reflect.Value
 	if !srcNil {
 		srcStruct = src.Elem()
@@ -565,7 +565,7 @@ func overlayStructFromDefaults(src, dst reflect.Value, defaults map[string]any) 
 // source type cannot be coerced into dst.
 func coerceToFieldType(src any, dst reflect.Type) (reflect.Value, bool) {
 	// Pointer destinations: produce *T from T (one level of indirection).
-	if dst.Kind() == reflect.Ptr {
+	if dst.Kind() == reflect.Pointer {
 		inner, ok := coerceToFieldType(src, dst.Elem())
 		if !ok {
 			return reflect.Value{}, false

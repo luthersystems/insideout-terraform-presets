@@ -187,7 +187,7 @@ func TestApplyAWSAssumeRoleTargetsRequestedRole(t *testing.T) {
 		captured, _ = url.ParseQuery(string(body))
 		// Minimal valid AssumeRole XML so Retrieve succeeds end-to-end.
 		w.Header().Set("Content-Type", "text/xml")
-		fmt.Fprint(w, `<AssumeRoleResponse xmlns="https://sts.amazonaws.com/doc/2011-06-15/">
+		_, _ = fmt.Fprint(w, `<AssumeRoleResponse xmlns="https://sts.amazonaws.com/doc/2011-06-15/">
   <AssumeRoleResult>
     <Credentials>
       <AccessKeyId>ASIASTUB</AccessKeyId>

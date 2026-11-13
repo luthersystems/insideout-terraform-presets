@@ -663,7 +663,7 @@ func progressf(w io.Writer, format string, args ...any) {
 	if w == nil {
 		return
 	}
-	fmt.Fprintf(w, format, args...)
+	_, _ = fmt.Fprintf(w, format, args...)
 }
 
 func filterSkippedResources(resources []imported.ImportedResource, skipped []OrphanImport) []imported.ImportedResource {

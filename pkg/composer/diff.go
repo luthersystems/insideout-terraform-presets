@@ -78,7 +78,7 @@ func isComponentField(f reflect.StructField) bool {
 	if tag == "" || !IsCloudPrefixed(tag) {
 		return false
 	}
-	return f.Type.Kind() == reflect.Ptr && f.Type.Elem().Kind() == reflect.Struct
+	return f.Type.Kind() == reflect.Pointer && f.Type.Elem().Kind() == reflect.Struct
 }
 
 // FormatValue returns a human-readable string representation of a reflect.Value.
@@ -87,7 +87,7 @@ func FormatValue(v reflect.Value) string {
 		return ""
 	}
 	switch v.Kind() {
-	case reflect.Ptr:
+	case reflect.Pointer:
 		if v.IsNil() {
 			return ""
 		}
@@ -303,7 +303,7 @@ func isComponentActive(v reflect.Value) bool {
 		return false
 	}
 	switch v.Kind() {
-	case reflect.Ptr:
+	case reflect.Pointer:
 		if v.IsNil() {
 			return false
 		}

@@ -256,7 +256,7 @@ func mapS3BucketLifecycleConfiguration(bucket string, out *s3.GetBucketLifecycle
 		// Legacy Prefix field — deprecated by AWS but still surfaces on
 		// old buckets. The new filter block is too rich to project
 		// faithfully; downstream consumers compare on rule.id + status.
-		if p := aws.ToString(r.Prefix); p != "" {
+		if p := aws.ToString(r.Prefix); p != "" { //nolint:staticcheck // SA1019: see above
 			rule.Prefix = generated.LiteralOf(p)
 		}
 		if r.AbortIncompleteMultipartUpload != nil {

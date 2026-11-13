@@ -44,7 +44,7 @@ import (
 // GetBucketVersioning enriches each returned bucket with its versioning
 // state (the same fan-out pattern inspectVPCWithIGW uses for IGW
 // attachments) so extractS3Config can surface aws_s3.versioning without a
-// second inspector round-trip (#712, TODO#1089).
+// second inspector round-trip (#712, reliable#1089).
 type s3BucketsClient interface {
 	ListBuckets(ctx context.Context, params *s3.ListBucketsInput, optFns ...func(*s3.Options)) (*s3.ListBucketsOutput, error)
 	GetBucketTagging(ctx context.Context, params *s3.GetBucketTaggingInput, optFns ...func(*s3.Options)) (*s3.GetBucketTaggingOutput, error)
@@ -138,7 +138,7 @@ func inspectS3(ctx context.Context, cfg aws.Config, action, filters string) (any
 //
 // Each returned bucket is then enriched with its versioning state via a
 // GetBucketVersioning fan-out (see enrichS3Versioning) so extractS3Config
-// can surface aws_s3.versioning (#712, TODO#1089).
+// can surface aws_s3.versioning (#712, reliable#1089).
 //
 // Mirrors the InsideOut backend's filterS3BucketsByProjectTag (aws_metrics.go:1233).
 func filterS3BucketsByProjectTag(ctx context.Context, client s3BucketsClient, project string) ([]bucketWithVersioning, error) {

@@ -161,7 +161,7 @@ func (o Options) progressf(format string, args ...any) {
 	if o.Stdout == nil {
 		return
 	}
-	fmt.Fprintf(o.Stdout, format, args...)
+	_, _ = fmt.Fprintf(o.Stdout, format, args...)
 }
 
 func (o Options) withDefaults() Options {
