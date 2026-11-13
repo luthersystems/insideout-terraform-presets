@@ -837,7 +837,7 @@ func progressf(w io.Writer, format string, args ...any) {
 	if w == nil {
 		return
 	}
-	fmt.Fprintf(w, format, args...)
+	_, _ = fmt.Fprintf(w, format, args...)
 }
 
 // emitUnresolvedAsWarnings is called when the loop detects a stable

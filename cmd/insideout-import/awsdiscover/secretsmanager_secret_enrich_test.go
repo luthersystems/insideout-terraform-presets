@@ -61,10 +61,10 @@ func TestSecretsmanagerSecretEnricher_ResourceType(t *testing.T) {
 
 func TestSecretsmanagerSecretEnricher_ImplementsByIDEnricher(t *testing.T) {
 	t.Parallel()
-	// Compile-time guarantee that the production constructor returns
-	// something satisfying both interfaces. Phase 2 contract: every new
-	// enricher must implement ByIDEnricher.
-	var _ AttributeEnricher = newSecretsManagerSecretEnricher()
+	// Compile-time guarantee that the enricher type satisfies ByIDEnricher.
+	// Phase 2 contract: every new enricher must implement it. The run-time
+	// check below covers what the constructor returns.
+	var _ ByIDEnricher = (*secretsmanagerSecretEnricher)(nil)
 	enr := newSecretsManagerSecretEnricher()
 	_, ok := enr.(ByIDEnricher)
 	assert.True(t, ok, "secretsmanagerSecretEnricher must implement ByIDEnricher per Phase 2 contract")

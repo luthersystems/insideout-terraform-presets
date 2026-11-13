@@ -2,7 +2,6 @@ package awsdiscover
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"testing"
 
@@ -252,7 +251,7 @@ func TestResourceExplorer2IndexEnricher_EnrichAndEnrichByIDProduceSameJSON(t *te
 
 	// Compare decoded structs rather than raw bytes (Go's map iteration
 	// order can shuffle the tag JSON without changing semantics).
-	var fromEnrich, fromByID json.RawMessage = ir.Attrs, raw
+	var fromEnrich, fromByID = ir.Attrs, raw
 	dEnrich, err := generated.UnmarshalAttrs("aws_resourceexplorer2_index", fromEnrich)
 	require.NoError(t, err)
 	dByID, err := generated.UnmarshalAttrs("aws_resourceexplorer2_index", fromByID)

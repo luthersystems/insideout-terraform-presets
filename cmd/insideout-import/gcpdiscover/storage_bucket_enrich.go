@@ -112,20 +112,12 @@ func (e storageBucketEnricher) fetchTyped(ctx context.Context, id *imported.Reso
 	return raw, nil
 }
 
-// bucketNameForEnrich pulls the bucket name from the identifiers
-// FromAsset / DiscoverByID populate. Bucket names are globally unique
-// in GCS so the import-ID slot is the bare name; we prefer that for
-// its unconditional shape, and fall back to parsing the asset_name
-// (//storage.googleapis.com/<name>) for safety against future shape
-// drift.
-func bucketNameForEnrich(ir *imported.ImportedResource) string {
-	return bucketNameForEnrichIdentity(&ir.Identity)
-}
-
-// bucketNameForEnrichIdentity is the identity-only counterpart used by
-// the EnrichByID path (and indirectly by bucketNameForEnrich). Keeping
-// the logic in one place means the two entry-points cannot disagree
-// about precedence.
+// bucketNameForEnrichIdentity pulls the bucket name from the identifiers
+// FromAsset / DiscoverByID populate, for the EnrichByID path. Bucket
+// names are globally unique in GCS so the import-ID slot is the bare
+// name; we prefer that for its unconditional shape, and fall back to
+// parsing the asset_name (//storage.googleapis.com/<name>) for safety
+// against future shape drift.
 func bucketNameForEnrichIdentity(id *imported.ResourceIdentity) string {
 	if id == nil {
 		return ""

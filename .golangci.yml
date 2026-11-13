@@ -1,8 +1,9 @@
 version: "2"
 
-# Used by the org's shared security workflow, which runs gosec through
-# golangci-lint (luthersystems/.github docs/security-workflow.md). Only
-# gosec reads this file today.
+# Used by the org's shared workflows from luthersystems/.github: the
+# Security workflow runs gosec through golangci-lint, and the Quality
+# workflow runs golangci-lint with the default linter set
+# (docs/security-workflow.md and docs/quality-workflow.md there).
 linters:
   exclusions:
     rules:
@@ -14,3 +15,11 @@ linters:
         linters:
           - gosec
         text: "G101|G204|G301|G304|G306|G703"
+      # ImportedResource.Attributes is deprecated in favour of Attrs, but
+      # this module still reads and writes it as the legacy fallback that
+      # consumers rely on. The deprecation note is for those consumers, so
+      # the uses here are not findings. Remove this rule with the field
+      # (luthersystems/insideout-terraform-presets#921).
+      - linters:
+          - staticcheck
+        text: 'SA1019: \(github\.com/luthersystems/insideout-terraform-presets/pkg/composer/imported\.ImportedResource\)\.Attributes is deprecated'

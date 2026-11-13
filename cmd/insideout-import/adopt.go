@@ -206,7 +206,7 @@ func readImportsFile(path string) ([]importPair, error) {
 		if err := validateAddress(e.Address); err != nil {
 			return nil, fmt.Errorf("entry %d: invalid address %q: %w", i, e.Address, err)
 		}
-		out = append(out, importPair{Address: e.Address, ImportID: e.ImportID})
+		out = append(out, importPair(e))
 	}
 	return out, nil
 }

@@ -131,7 +131,7 @@ func TestRegisteredTypes_SortedAndStable(t *testing.T) {
 	all := RegisteredTypes()
 	// Find our two — the slice may also contain real generated types
 	// once those land. Assert relative ordering only.
-	var ai, bi int = -1, -1
+	var ai, bi = -1, -1
 	for i, n := range all {
 		if n == a {
 			ai = i

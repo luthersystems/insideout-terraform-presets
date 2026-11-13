@@ -186,7 +186,7 @@ func normalizeLabel(hint string, maxLen int) string {
 		return ""
 	}
 
-	if c := out[0]; !(c >= 'a' && c <= 'z') {
+	if c := out[0]; c < 'a' || c > 'z' {
 		out = collisionPrefix + out
 	}
 
