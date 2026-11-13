@@ -4,6 +4,12 @@ version: "2"
 # Security workflow runs gosec through golangci-lint, and the Quality
 # workflow runs golangci-lint with the default linter set
 # (docs/security-workflow.md and docs/quality-workflow.md there).
+issues:
+  # Report every finding. The defaults (max-issues-per-linter: 50,
+  # max-same-issues: 3) hide repeats, so a run under-reports and "fix and
+  # re-run" never ends. Same setting as luthersystems/svc and elps.
+  max-issues-per-linter: 0
+  max-same-issues: 0
 linters:
   exclusions:
     rules:

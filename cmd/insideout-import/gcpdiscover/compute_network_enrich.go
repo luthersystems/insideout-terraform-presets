@@ -96,7 +96,8 @@ func (e computeNetworkEnricher) fetchTyped(ctx context.Context, id *imported.Res
 }
 
 // computeNetworkShortNameForEnrichIdentity pulls the short network name
-// from the Identity, for EnrichByID. The Discoverer's ImportID has the
+// from the Identity. fetchTyped calls it for both Enrich and EnrichByID.
+// The Discoverer's ImportID has the
 // projects/<p>/global/networks/<n> form; the existing name-parsing
 // helper in compute_network.go already handles every accepted shape
 // (asset name, self-link, projects/.../networks/..., or bare name).

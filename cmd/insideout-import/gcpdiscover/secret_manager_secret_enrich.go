@@ -93,8 +93,8 @@ func (e secretManagerSecretEnricher) fetchTyped(ctx context.Context, id *importe
 }
 
 // secretManagerSecretFullNameForEnrichIdentity derives the fully-qualified
-// "projects/<proj>/secrets/<short>" name required by Projects.Secrets.Get,
-// for EnrichByID.
+// "projects/<proj>/secrets/<short>" name required by Projects.Secrets.Get.
+// fetchTyped calls it for both Enrich and EnrichByID.
 func secretManagerSecretFullNameForEnrichIdentity(id *imported.ResourceIdentity, projectID string) string {
 	if id == nil {
 		return ""

@@ -597,9 +597,7 @@ Exit codes:
 	// summaryOut is the writer the post-discovery summary lines target. We
 	// derive it from the chosen format here so the rest of runDiscoverWithDeps
 	// can use a single fmt.Fprintf(summaryOut, ...) without re-checking the
-	// flag at every call site. The summary lines are for a person and the
-	// output files are already written, so a failed summary write is
-	// ignored (_, _ =) and does not change the exit code.
+	// flag at every call site.
 	var emitter progress.Emitter
 	summaryOut := os.Stdout
 	switch *progressFmt {
@@ -611,6 +609,12 @@ Exit codes:
 	default:
 		fmt.Fprintf(os.Stderr, "discover: --progress: unknown format %q (one of: json)\n", *progressFmt)
 		return discoverExitFatal
+	}
+	// The summary lines are for a person and the output files are already
+	// written, so a failed summary write is ignored and does not change the
+	// exit code.
+	summaryf := func(format string, args ...any) {
+		_, _ = fmt.Fprintf(summaryOut, format, args...)
 	}
 
 	types := splitCSV(*resourceTypes)
@@ -684,7 +688,7 @@ Exit codes:
 			// stdout) and continue.
 			fmt.Fprintf(os.Stderr, "discover: write summary.json: %v (continuing)\n", err)
 		} else {
-			_, _ = fmt.Fprintf(summaryOut, "wrote %s (%d importable + %d unsupported = %d total)\n",
+			summaryf("wrote %s (%d importable + %d unsupported = %d total)\n",
 				path, summary.Importable, summary.Unsupported, summary.Total)
 		}
 	}()
@@ -964,7 +968,7 @@ Exit codes:
 	}
 	summaryShouldEmit = true
 	summaryResources = resources
-	_, _ = fmt.Fprintf(summaryOut, "wrote %s (%d resource(s) discovered)\n", out, n)
+	summaryf("wrote %s (%d resource(s) discovered)\n", out, n)
 
 	// Empty-filter-match WARN (#364): if the operator passed a label/
 	// tag filter and zero resources came through, it's almost always a
@@ -1034,7 +1038,7 @@ Exit codes:
 				// match unsupported.json on disk; soft-failures
 				// above leave it at 0.
 				summaryUnsupportedCount = un
-				_, _ = fmt.Fprintf(summaryOut, "wrote %s (%d unsupported resource(s) enumerated)\n", uout, un)
+				summaryf("wrote %s (%d unsupported resource(s) enumerated)\n", uout, un)
 			}
 		}
 	}
@@ -1080,7 +1084,7 @@ Exit codes:
 			return discoverExitFatal
 		}
 		summaryResources = rev.Imported
-		_, _ = fmt.Fprintf(summaryOut, "reverse import SDK wrote %s (%d imported, %d add, %d change, %d destroy)\n",
+		summaryf("reverse import SDK wrote %s (%d imported, %d add, %d change, %d destroy)\n",
 			filepath.Join(*outputDir, "reverse-result.json"),
 			rev.PlanSummary.ImportCount,
 			rev.PlanSummary.AddCount,
@@ -1126,7 +1130,7 @@ Exit codes:
 		return discoverExitFatal
 	}
 	summaryResources = res.Resources
-	_, _ = fmt.Fprintf(summaryOut, "wrote %s (%d resource(s) with Attributes); generated HCL at %s\n", out, n, res.GeneratedPath)
+	summaryf("wrote %s (%d resource(s) with Attributes); generated HCL at %s\n", out, n, res.GeneratedPath)
 
 	if *noDriftFix {
 		return discoverExitOK
@@ -1151,7 +1155,7 @@ Exit codes:
 		fmt.Fprintln(os.Stderr, "discover: imported.json + generated.tf are on disk. Re-run with --no-driftfix to skip Stage 2c1 explicitly, or inspect the workdir to fix manually.")
 		return discoverExitFatal
 	}
-	_, _ = fmt.Fprintf(summaryOut, "drift fix converged after %d iteration(s); generated HCL at %s\n", dfRes.Iterations, dfRes.GeneratedPath)
+	summaryf("drift fix converged after %d iteration(s); generated HCL at %s\n", dfRes.Iterations, dfRes.GeneratedPath)
 
 	if *noDepChase {
 		return discoverExitOK
@@ -1263,9 +1267,9 @@ Exit codes:
 	if gpath, gn, gerr := writeGraphManifest(*outputDir, dcRes.Edges); gerr != nil {
 		fmt.Fprintf(os.Stderr, "discover: write graph.json: %v (continuing)\n", gerr)
 	} else {
-		_, _ = fmt.Fprintf(summaryOut, "wrote %s (%d dependency edge(s))\n", gpath, gn)
+		summaryf("wrote %s (%d dependency edge(s))\n", gpath, gn)
 	}
-	_, _ = fmt.Fprintf(summaryOut, "dep chase converged after %d iteration(s); added %d dependency resource(s); generated HCL at %s\n",
+	summaryf("dep chase converged after %d iteration(s); added %d dependency resource(s); generated HCL at %s\n",
 		dcRes.Iterations, len(dcRes.Added), dcRes.GeneratedPath)
 	return discoverExitOK
 }

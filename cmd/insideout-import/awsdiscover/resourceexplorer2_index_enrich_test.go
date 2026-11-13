@@ -251,10 +251,9 @@ func TestResourceExplorer2IndexEnricher_EnrichAndEnrichByIDProduceSameJSON(t *te
 
 	// Compare decoded structs rather than raw bytes (Go's map iteration
 	// order can shuffle the tag JSON without changing semantics).
-	var fromEnrich, fromByID = ir.Attrs, raw
-	dEnrich, err := generated.UnmarshalAttrs("aws_resourceexplorer2_index", fromEnrich)
+	dEnrich, err := generated.UnmarshalAttrs("aws_resourceexplorer2_index", ir.Attrs)
 	require.NoError(t, err)
-	dByID, err := generated.UnmarshalAttrs("aws_resourceexplorer2_index", fromByID)
+	dByID, err := generated.UnmarshalAttrs("aws_resourceexplorer2_index", raw)
 	require.NoError(t, err)
 	assert.Equal(t, dEnrich, dByID)
 }
