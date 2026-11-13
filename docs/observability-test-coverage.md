@@ -221,7 +221,7 @@ for them.
 | Layer | New tests | Status |
 |---|---|---|
 | `extractors/aws_test.go` | 113 subtests across 21 funcs | ✅ — qa-professor mutation-tested several extractors |
-| `extractors/gcp_test.go` | 111 subtests across 23 funcs | ✅ — 7 cases pinned as `*_PendingIssue236` for future implementers |
+| `extractors/gcp_test.go` | 111 subtests across 23 funcs | ✅ — 7 cases pinned as `*_PendingIssue928` for future implementers (#928) |
 | `discovery/aws/account_test.go` | 6 cases (happy + STS-down + IAM-aliases-down + IAM-summary-down + empty-aliases + unknown-action) | ✅ |
 | `discovery/aws/cloudwatchlogs_test.go` | 6 cases (substring-scoping + empty filter + API error + empty result + get-metrics-routing + unknown-action). Substring case exercises all four real preset naming shapes. | ✅ |
 | `discovery/aws/connect_info_test.go` | 9 cases (running/stopped/empty/mixed/multi-instance/region-prop/empty-id/non-state-fields) | ✅ |

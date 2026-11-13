@@ -736,7 +736,7 @@ func extractVPCConfig(rawResult any) map[string]string {
 // it uses get-apis, so we can only populate domainName from ApiEndpoint
 // (the auto-assigned *.execute-api.<region>.amazonaws.com endpoint) as a
 // best-effort drift signal. A second call to GetDomainNames would be
-// needed to surface the custom domain / ACM cert — tracked under #1089.
+// needed to surface the custom domain / ACM cert — TODO(#927).
 func extractAPIGatewayConfig(rawResult any) map[string]string {
 	items := sliceFromEnvelope(rawResult, "Items")
 	if len(items) == 0 {

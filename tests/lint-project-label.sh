@@ -39,6 +39,7 @@ LABEL_CAPABLE_GCP=(
   google_compute_global_address
   google_compute_global_forwarding_rule
   google_compute_instance
+  google_dns_managed_zone
   google_kms_crypto_key
   google_pubsub_subscription
   google_pubsub_topic

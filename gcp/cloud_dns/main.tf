@@ -16,14 +16,14 @@
 #     load-balancer IPs / Cloud Run service IPs / etc. with plain A / AAAA
 #     or CNAME entries via var.records.
 #
-# #593 wired this module into the composer, registered
-# google_dns_managed_zone and google_dns_record_set in
-# pkg/insideout-import/registry/registry.go (gcpDiscoverTypes) and added
-# the Cloud DNS inspector (pkg/observability/discovery/gcp/dns.go).
-# google_dns_managed_zone is still not in the allowlist of
-# tests/lint-project-label.sh, so the
-# `labels = merge({ project = var.project }, var.labels)` block on the
-# managed zone below is NOT CI-enforced. The label still propagates
+# #593 wired this module into the composer and added the Cloud DNS
+# inspector (pkg/observability/discovery/gcp/dns.go).
+# google_dns_managed_zone and google_dns_record_set are in
+# gcpCodegenOnlyTypes in pkg/insideout-import/registry/registry.go (typed
+# model and drift policy only). TODO(#931): wire the CAI discoverer so the
+# import wizard can discover them. google_dns_managed_zone is in
+# LABEL_CAPABLE_GCP, so tests/lint-project-label.sh enforces the
+# `labels = merge({ project = var.project }, var.labels)` block below. The label still propagates
 # the Project identity correctly at apply time, matching the convention
 # every other GCP preset follows.
 
