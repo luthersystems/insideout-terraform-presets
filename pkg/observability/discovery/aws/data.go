@@ -80,7 +80,7 @@ type dynamoDBTablesClient interface {
 // stsAccountClient resolves the caller's account id for ARN
 // construction. DynamoDB's ListTagsOfResource needs an ARN but
 // ListTables only returns names — we synthesize the ARN from
-// arn:aws:dynamodb:<region>:<account>:table/<name>.
+// arn:<partition>:dynamodb:<region>:<account>:table/<name>.
 //
 // Mirrors the InsideOut backend's stsAccountClient (aws_metrics.go:1301).
 type stsAccountClient interface {
@@ -104,9 +104,8 @@ func inspectDynamoDB(ctx context.Context, cfg aws.Config, action, filters string
 // only Project=<project>-tagged tables. Per-table errors log+skip;
 // ListTables / GetCallerIdentity errors abort.
 //
-// TODO(#926): derive partition from region (arn:aws-us-gov:, arn:aws-cn:) when
-// GovCloud / China support arrives. Hardcoded to aws partition —
-// commercial-only today, mirrors the InsideOut backend's stance.
+// The ARN partition comes from the region (partitionForRegion), so a
+// GovCloud or China table gets an ARN that ListTagsOfResource accepts.
 //
 // Mirrors the InsideOut backend's filterDynamoDBTablesByProjectTag (aws_metrics.go:1323).
 func filterDynamoDBTablesByProjectTag(ctx context.Context, client dynamoDBTablesClient, stsClient stsAccountClient, region, project string) ([]string, error) {
@@ -127,9 +126,10 @@ func filterDynamoDBTablesByProjectTag(ctx context.Context, client dynamoDBTables
 		return nil, fmt.Errorf("sts GetCallerIdentity (for dynamodb arn construction): %w", err)
 	}
 	account := aws.ToString(ident.Account)
+	partition := partitionForRegion(region)
 	matched := make([]string, 0, len(all))
 	for _, name := range all {
-		arn := fmt.Sprintf("arn:aws:dynamodb:%s:%s:table/%s", region, account, name)
+		arn := fmt.Sprintf("arn:%s:dynamodb:%s:%s:table/%s", partition, region, account, name)
 		tagsOut, err := client.ListTagsOfResource(ctx, &dynamodb.ListTagsOfResourceInput{ResourceArn: aws.String(arn)})
 		if err != nil {
 			log.Printf("[dynamodb ListTagsOfResource] skip table=%s: %v", name, err)
