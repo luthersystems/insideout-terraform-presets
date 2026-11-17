@@ -635,6 +635,32 @@ var configFieldValidators = []configFieldValidator{
 		},
 		normalize: normalizeDurationSeconds("AWSLambda.Timeout"),
 	},
+	// egress_cidrs opt-ins (#907): the preset's own validation rule decides,
+	// so the compose-time issue and the plan-time error agree.
+	egressCIDRsValidator("aws_alb.egressCidrs", KeyAWSALB, func(c *Config) []string {
+		if c.AWSALB == nil {
+			return nil
+		}
+		return c.AWSALB.EgressCIDRs
+	}),
+	egressCIDRsValidator("aws_rds.egressCidrs", KeyAWSRDS, func(c *Config) []string {
+		if c.AWSRDS == nil {
+			return nil
+		}
+		return c.AWSRDS.EgressCIDRs
+	}),
+	egressCIDRsValidator("aws_elasticache.egressCidrs", KeyAWSElastiCache, func(c *Config) []string {
+		if c.AWSElastiCache == nil {
+			return nil
+		}
+		return c.AWSElastiCache.EgressCIDRs
+	}),
+	egressCIDRsValidator("aws_msk.egressCidrs", KeyAWSMSK, func(c *Config) []string {
+		if c.AWSMSK == nil {
+			return nil
+		}
+		return c.AWSMSK.EgressCIDRs
+	}),
 	{
 		field:     "aws_api_gateway.certificateArn",
 		component: KeyAWSAPIGateway,
@@ -795,6 +821,40 @@ var validatorsByField = func() map[string]configFieldValidator {
 	}
 	return out
 }()
+
+// egressCIDRsValidator checks an EgressCIDRs field against the
+// egress_cidrs validation of its preset. It runs for any non-nil list, an
+// empty one too, because the mapper emits every non-nil list (see
+// setEgressCIDRs); checking only non-empty lists would let an empty one
+// reach terraform plan unflagged.
+func egressCIDRsValidator(field string, key ComponentKey, get func(*Config) []string) configFieldValidator {
+	return configFieldValidator{
+		field:     field,
+		component: key,
+		variable:  "egress_cidrs",
+		value: func(c *Config) (any, bool) {
+			if c == nil {
+				return nil, false
+			}
+			v := get(c)
+			if v == nil {
+				return nil, false
+			}
+			return v, true
+		},
+		normalize: normalizeTrimmedStrings,
+	}
+}
+
+// normalizeTrimmedStrings turns a []string field into the trimmed []any
+// the mapper emits, so Validate checks the value that reaches the preset.
+func normalizeTrimmedStrings(v any) (any, error) {
+	ss, ok := v.([]string)
+	if !ok {
+		return nil, fmt.Errorf("expected a list of strings, got %T", v)
+	}
+	return trimmedStrings(ss), nil
+}
 
 func issueValue(v any) string {
 	if s, ok := v.(string); ok {

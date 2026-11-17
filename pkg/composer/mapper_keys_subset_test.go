@@ -129,17 +129,10 @@ func kitchenSinkConfig() *Config {
 		OriginPath *string `json:"originPath,omitempty"`
 		CachePaths *string `json:"cachePaths,omitempty"` // DEPRECATED: use OriginPath
 	}{DefaultTtl: &ttl, OriginPath: &op}
-	cfg.AWSRDS = &struct {
-		CPUSize      string `json:"cpuSize,omitempty"`
-		ReadReplicas string `json:"readReplicas,omitempty"`
-		StorageSize  string `json:"storageSize,omitempty"`
-	}{CPUSize: "8 vCPU", ReadReplicas: "2 read replicas", StorageSize: "200GB"}
-	cfg.AWSElastiCache = &struct {
-		HA       *bool  `json:"ha,omitempty"`
-		Storage  string `json:"storageSize,omitempty"`
-		NodeSize string `json:"nodeSize,omitempty"`
-		Replicas string `json:"replicas,omitempty"`
-	}{HA: &t, Storage: "20GB", NodeSize: "8 vCPU", Replicas: "2 read replicas"}
+	vpcCIDR := []string{"10.1.0.0/16"}
+	cfg.AWSALB = &AWSALBConfig{EgressCIDRs: vpcCIDR}
+	cfg.AWSRDS = &AWSRDSConfig{CPUSize: "8 vCPU", ReadReplicas: "2 read replicas", StorageSize: "200GB", EgressCIDRs: vpcCIDR}
+	cfg.AWSElastiCache = &AWSElastiCacheConfig{HA: &t, Storage: "20GB", NodeSize: "8 vCPU", Replicas: "2 read replicas", EgressCIDRs: vpcCIDR}
 	cfg.AWSS3 = &struct {
 		Versioning *bool `json:"versioning,omitempty"`
 	}{Versioning: &t}
@@ -150,9 +143,7 @@ func kitchenSinkConfig() *Config {
 		Type              string `json:"type,omitempty"`
 		VisibilityTimeout string `json:"visibilityTimeout,omitempty"`
 	}{Type: "FIFO", VisibilityTimeout: "600"}
-	cfg.AWSMSK = &struct {
-		Retention string `json:"retentionPeriod,omitempty"`
-	}{Retention: "7 days"}
+	cfg.AWSMSK = &AWSMSKConfig{Retention: "7 days", EgressCIDRs: vpcCIDR}
 	cfg.AWSCloudWatchLogs = &struct {
 		RetentionDays int `json:"retentionDays,omitempty"`
 	}{RetentionDays: 90}

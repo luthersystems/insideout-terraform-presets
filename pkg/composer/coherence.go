@@ -327,7 +327,7 @@ func DeriveCrossComponentFields(comps *Components, cfg *Config) {
 func isOrphanStrippableKey(key ComponentKey) bool {
 	switch key {
 	case KeyAWSEC2, KeyAWSEKS, KeyAWSECS, KeyAWSVPC,
-		KeyAWSCloudfront, KeyAWSRDS, KeyAWSElastiCache,
+		KeyAWSALB, KeyAWSCloudfront, KeyAWSRDS, KeyAWSElastiCache,
 		KeyAWSS3, KeyAWSDynamoDB, KeyAWSSQS, KeyAWSMSK,
 		KeyAWSCloudWatchLogs, KeyAWSCloudWatchMonitoring,
 		KeyAWSCognito, KeyAWSLambda, KeyAWSAppRunner, KeyAWSSageMaker, KeyAWSCodeBuild, KeyAWSAPIGateway,

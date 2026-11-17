@@ -239,11 +239,7 @@ func awsKitchenSinkCfgBase() *Config {
 // (no-read-replicas) mapper branch for that field.
 func awsKitchenSinkCfgV2() *Config {
 	cfg := awsKitchenSinkCfgBase()
-	cfg.AWSRDS = &struct {
-		CPUSize      string `json:"cpuSize,omitempty"`
-		ReadReplicas string `json:"readReplicas,omitempty"`
-		StorageSize  string `json:"storageSize,omitempty"`
-	}{CPUSize: "db.m7i.2xlarge", StorageSize: "20"}
+	cfg.AWSRDS = &AWSRDSConfig{CPUSize: "db.m7i.2xlarge", StorageSize: "20"}
 	return cfg
 }
 
@@ -252,11 +248,7 @@ func awsKitchenSinkCfgV2() *Config {
 // read-replicas mapper branch (cfg.AWSRDS.ReadReplicas != "" in mapper.go).
 func awsKitchenSinkCfgWithReadReplicas() *Config {
 	cfg := awsKitchenSinkCfgBase()
-	cfg.AWSRDS = &struct {
-		CPUSize      string `json:"cpuSize,omitempty"`
-		ReadReplicas string `json:"readReplicas,omitempty"`
-		StorageSize  string `json:"storageSize,omitempty"`
-	}{CPUSize: "db.m7i.2xlarge", ReadReplicas: "2", StorageSize: "20"}
+	cfg.AWSRDS = &AWSRDSConfig{CPUSize: "db.m7i.2xlarge", ReadReplicas: "2", StorageSize: "20"}
 	return cfg
 }
 

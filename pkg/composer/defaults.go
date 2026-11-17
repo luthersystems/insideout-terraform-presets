@@ -540,6 +540,13 @@ func overlayStructFromDefaults(src, dst reflect.Value, defaults map[string]any) 
 		if !srcNil && !srcStruct.Field(i).IsZero() {
 			continue
 		}
+		// A field tagged composer:"nobackfill" is an opt-in whose preset
+		// default is not a choice to store: copying it into the caller's
+		// config would pin today's default on that stack (see the
+		// EgressCIDRs note in types.go, #907).
+		if ft.Tag.Get("composer") == "nobackfill" {
+			continue
+		}
 		tag := jsonTagName(ft.Tag.Get("json"))
 		if tag == "" {
 			continue

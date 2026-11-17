@@ -694,11 +694,7 @@ func TestBuildModuleValues_Postgres_RDSConfig(t *testing.T) {
 	// issue #131.
 
 	t.Run("ReadReplicas set emits read_replica_count (number)", func(t *testing.T) {
-		cfg := &Config{AWSRDS: &struct {
-			CPUSize      string `json:"cpuSize,omitempty"`
-			ReadReplicas string `json:"readReplicas,omitempty"`
-			StorageSize  string `json:"storageSize,omitempty"`
-		}{ReadReplicas: "2"}}
+		cfg := &Config{AWSRDS: &AWSRDSConfig{ReadReplicas: "2"}}
 		vals, err := m.BuildModuleValues(KeyAWSRDS, nil, cfg, "", "")
 		require.NoError(t, err)
 		assert.Equal(t, 2, vals["read_replica_count"])
@@ -707,11 +703,7 @@ func TestBuildModuleValues_Postgres_RDSConfig(t *testing.T) {
 	})
 
 	t.Run("ReadReplicas unset leaves read_replica_count unset", func(t *testing.T) {
-		cfg := &Config{AWSRDS: &struct {
-			CPUSize      string `json:"cpuSize,omitempty"`
-			ReadReplicas string `json:"readReplicas,omitempty"`
-			StorageSize  string `json:"storageSize,omitempty"`
-		}{CPUSize: "db.m7i.2xlarge"}}
+		cfg := &Config{AWSRDS: &AWSRDSConfig{CPUSize: "db.m7i.2xlarge"}}
 		vals, err := m.BuildModuleValues(KeyAWSRDS, nil, cfg, "", "")
 		require.NoError(t, err)
 		_, hasKey := vals["read_replica_count"]
@@ -719,11 +711,7 @@ func TestBuildModuleValues_Postgres_RDSConfig(t *testing.T) {
 	})
 
 	t.Run("CPUSize and StorageSize map to instance_class and allocated_storage", func(t *testing.T) {
-		cfg := &Config{AWSRDS: &struct {
-			CPUSize      string `json:"cpuSize,omitempty"`
-			ReadReplicas string `json:"readReplicas,omitempty"`
-			StorageSize  string `json:"storageSize,omitempty"`
-		}{CPUSize: "db.m7i.2xlarge", StorageSize: "20"}}
+		cfg := &Config{AWSRDS: &AWSRDSConfig{CPUSize: "db.m7i.2xlarge", StorageSize: "20"}}
 		vals, err := m.BuildModuleValues(KeyAWSRDS, nil, cfg, "", "")
 		require.NoError(t, err)
 		assert.Equal(t, "db.m7i.2xlarge", vals["instance_class"])
@@ -747,11 +735,7 @@ func TestBuildModuleValues_Postgres_RDSConfig(t *testing.T) {
 	// storage size". The mapper must auto-derive max_allocated_storage as
 	// max(allocated_storage*2, 1000).
 	t.Run("StorageSize 2TB triggers max_allocated_storage = 4000", func(t *testing.T) {
-		cfg := &Config{AWSRDS: &struct {
-			CPUSize      string `json:"cpuSize,omitempty"`
-			ReadReplicas string `json:"readReplicas,omitempty"`
-			StorageSize  string `json:"storageSize,omitempty"`
-		}{StorageSize: "2TB"}}
+		cfg := &Config{AWSRDS: &AWSRDSConfig{StorageSize: "2TB"}}
 		vals, err := m.BuildModuleValues(KeyAWSRDS, nil, cfg, "", "")
 		require.NoError(t, err)
 		assert.Equal(t, 2000, vals["allocated_storage"])
@@ -760,11 +744,7 @@ func TestBuildModuleValues_Postgres_RDSConfig(t *testing.T) {
 	})
 
 	t.Run("StorageSize unset leaves max_allocated_storage unset (module default applies)", func(t *testing.T) {
-		cfg := &Config{AWSRDS: &struct {
-			CPUSize      string `json:"cpuSize,omitempty"`
-			ReadReplicas string `json:"readReplicas,omitempty"`
-			StorageSize  string `json:"storageSize,omitempty"`
-		}{CPUSize: "db.m7i.2xlarge"}}
+		cfg := &Config{AWSRDS: &AWSRDSConfig{CPUSize: "db.m7i.2xlarge"}}
 		vals, err := m.BuildModuleValues(KeyAWSRDS, nil, cfg, "", "")
 		require.NoError(t, err)
 		_, hasMax := vals["max_allocated_storage"]
@@ -776,11 +756,7 @@ func TestBuildModuleValues_Postgres_RDSConfig(t *testing.T) {
 	// (e.g. max(gb*2+1, 1000) or max(gb*2, 999) would survive only the
 	// 20 / 2000 cases above).
 	t.Run("StorageSize 500GB sits exactly on the floor", func(t *testing.T) {
-		cfg := &Config{AWSRDS: &struct {
-			CPUSize      string `json:"cpuSize,omitempty"`
-			ReadReplicas string `json:"readReplicas,omitempty"`
-			StorageSize  string `json:"storageSize,omitempty"`
-		}{StorageSize: "500"}}
+		cfg := &Config{AWSRDS: &AWSRDSConfig{StorageSize: "500"}}
 		vals, err := m.BuildModuleValues(KeyAWSRDS, nil, cfg, "", "")
 		require.NoError(t, err)
 		assert.Equal(t, 500, vals["allocated_storage"])
@@ -789,11 +765,7 @@ func TestBuildModuleValues_Postgres_RDSConfig(t *testing.T) {
 	})
 
 	t.Run("StorageSize 501GB just above the floor", func(t *testing.T) {
-		cfg := &Config{AWSRDS: &struct {
-			CPUSize      string `json:"cpuSize,omitempty"`
-			ReadReplicas string `json:"readReplicas,omitempty"`
-			StorageSize  string `json:"storageSize,omitempty"`
-		}{StorageSize: "501"}}
+		cfg := &Config{AWSRDS: &AWSRDSConfig{StorageSize: "501"}}
 		vals, err := m.BuildModuleValues(KeyAWSRDS, nil, cfg, "", "")
 		require.NoError(t, err)
 		assert.Equal(t, 501, vals["allocated_storage"])

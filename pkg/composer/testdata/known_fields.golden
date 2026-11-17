@@ -1,3 +1,4 @@
+aws_alb.egressCidrs
 aws_api_gateway.certificateArn
 aws_cloudwatch_logs.retentionDays
 aws_cognito.mfaFactor
@@ -11,16 +12,19 @@ aws_eks.controlPlaneVisibility
 aws_eks.desiredSize
 aws_eks.maxSize
 aws_eks.minSize
+aws_elasticache.egressCidrs
 aws_elasticache.nodeSize
 aws_elasticache.replicas
 aws_kms.numKeys
 aws_lambda.memorySize
 aws_lambda.runtime
 aws_lambda.timeout
+aws_msk.egressCidrs
 aws_msk.retentionPeriod
 aws_opensearch.deploymentType
 aws_opensearch.storageSize
 aws_rds.cpuSize
+aws_rds.egressCidrs
 aws_rds.readReplicas
 aws_rds.storageSize
 aws_secretsmanager.numSecrets
