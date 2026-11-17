@@ -80,6 +80,10 @@ type Provider interface {
 	// as that type's resources finish discovering, carrying a running
 	// N-of-total type count (#699); a nil sink is byte-for-byte the
 	// pre-existing behavior.
+	//
+	// An error wrapping ErrPartialDiscovery comes with valid rows: the
+	// listing was incomplete (some parents could not be listed), so a
+	// resource missing from the rows is not known to be gone.
 	Discover(ctx context.Context, types []string, clients Clients, opts DiscoverOpts) ([]composerimported.ImportedResource, error)
 
 	// EnrichAttributes populates ir.Attrs in place for every

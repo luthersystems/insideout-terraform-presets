@@ -371,6 +371,12 @@ func productionDiscoverDeps() discoverDeps {
 			if vaErr != nil {
 				fmt.Fprintf(os.Stderr, "WARN: vpcaccess lister unavailable, vpc_access_connector won't be discovered: %v\n", vaErr)
 			}
+			// #931: record sets are listed per managed zone through
+			// the Cloud DNS API. Same nil-tolerant pattern.
+			dnsRecordSetLister, dnsErr := gcpdiscover.NewRealDNSRecordSetLister(ctx)
+			if dnsErr != nil {
+				fmt.Fprintf(os.Stderr, "WARN: dns lister unavailable, dns_record_set won't be discovered: %v\n", dnsErr)
+			}
 			opts := gcpdiscover.GCPDiscovererOpts{
 				SinkLister:                        sinkLister,
 				SQLUserLister:                     sqlUserLister,
@@ -382,6 +388,7 @@ func productionDiscoverDeps() discoverDeps {
 				DefaultSupportedIdpConfigLister:   defaultIdpConfigLister,
 				ServiceNetworkingConnectionLister: serviceNetworkingLister,
 				VPCAccessConnectorLister:          vpcAccessLister,
+				DNSRecordSetLister:                dnsRecordSetLister,
 			}
 			return gcpAggAdapter{d: gcpdiscover.NewGCPDiscoverer(s, gcpProjectID, opts)}, s.Close, nil
 		},
@@ -896,6 +903,14 @@ Exit codes:
 			Emitter:      emitter,
 		})
 		discCancel()
+		// A partial result (some parents could not be listed) keeps the
+		// CLI's soft-fail: the listers already printed a warning per
+		// failed parent, and the rows that were found are still useful.
+		var partial *gcpdiscover.PartialDiscoveryError
+		if errors.As(err, &partial) {
+			fmt.Fprintf(os.Stderr, "WARN: discover: %v\n", err)
+			err = nil
+		}
 		if err != nil {
 			if errors.Is(err, context.DeadlineExceeded) {
 				fmt.Fprintf(os.Stderr, "discover: stage %q exceeded budget of %v: %v\n", "discover", stageTimeoutDiscover, err)

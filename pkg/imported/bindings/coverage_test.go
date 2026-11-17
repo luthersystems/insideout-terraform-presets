@@ -242,6 +242,11 @@ var metricsBindingExempt = map[string]bool{
 	"google_secret_manager_secret_iam_member":    true,
 	"google_storage_bucket_iam_member":           true,
 
+	// --- GCP Cloud DNS record set (#931): Cloud DNS reports query
+	// metrics per managed zone, not per record set, so the binding lives
+	// on google_dns_managed_zone. ---
+	"google_dns_record_set": true,
+
 	// --- GCP Compute networking primitives (no per-resource metrics) ---
 	"google_compute_address":                 true,
 	"google_compute_backend_service":         true,

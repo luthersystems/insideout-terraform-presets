@@ -24,19 +24,21 @@ import (
 func TestAssetResultFromProto_FieldMapping(t *testing.T) {
 	t.Parallel()
 	in := &assetpb.ResourceSearchResult{
-		Name:      "//pubsub.googleapis.com/projects/real-proj/topics/io-events",
-		AssetType: "pubsub.googleapis.com/Topic",
-		Project:   "real-proj",
-		Location:  "us-central1",
-		Labels:    map[string]string{"project": "io-foo", "owner": "team-a"},
+		Name:        "//pubsub.googleapis.com/projects/real-proj/topics/io-events",
+		AssetType:   "pubsub.googleapis.com/Topic",
+		Project:     "real-proj",
+		Location:    "us-central1",
+		Labels:      map[string]string{"project": "io-foo", "owner": "team-a"},
+		DisplayName: "io-events-display",
 	}
 	got := assetResultFromProto(in)
 	want := gcpAssetResult{
-		Name:      "//pubsub.googleapis.com/projects/real-proj/topics/io-events",
-		AssetType: "pubsub.googleapis.com/Topic",
-		Project:   "real-proj",
-		Location:  "us-central1",
-		Labels:    map[string]string{"project": "io-foo", "owner": "team-a"},
+		Name:        "//pubsub.googleapis.com/projects/real-proj/topics/io-events",
+		AssetType:   "pubsub.googleapis.com/Topic",
+		Project:     "real-proj",
+		Location:    "us-central1",
+		Labels:      map[string]string{"project": "io-foo", "owner": "team-a"},
+		DisplayName: "io-events-display",
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("assetResultFromProto mismatch\n got: %+v\nwant: %+v", got, want)
@@ -53,7 +55,7 @@ func TestAssetResultFromProto_FieldMapping(t *testing.T) {
 func TestAssetResultFromProto_ZeroValueProtoYieldsZeroFields(t *testing.T) {
 	t.Parallel()
 	got := assetResultFromProto(&assetpb.ResourceSearchResult{})
-	if got.Name != "" || got.AssetType != "" || got.Project != "" || got.Location != "" || got.Labels != nil {
+	if got.Name != "" || got.AssetType != "" || got.Project != "" || got.Location != "" || got.Labels != nil || got.DisplayName != "" {
 		t.Errorf("zero-proto must produce zero result; got %+v", got)
 	}
 }
@@ -67,7 +69,7 @@ func TestAssetResultFromProto_ZeroValueProtoYieldsZeroFields(t *testing.T) {
 func TestAssetResultFromProto_NilProtoIsSafe(t *testing.T) {
 	t.Parallel()
 	got := assetResultFromProto(nil)
-	if got.Name != "" || got.AssetType != "" || got.Project != "" || got.Location != "" || got.Labels != nil {
+	if got.Name != "" || got.AssetType != "" || got.Project != "" || got.Location != "" || got.Labels != nil || got.DisplayName != "" {
 		t.Errorf("nil-proto must produce zero result; got %+v", got)
 	}
 }

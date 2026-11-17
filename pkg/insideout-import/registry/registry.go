@@ -348,6 +348,8 @@ var gcpDiscoverTypes = []string{
 	"google_compute_url_map",
 	"google_container_cluster",
 	"google_container_node_pool",
+	"google_dns_managed_zone",
+	"google_dns_record_set",
 	"google_firestore_database",
 	"google_identity_platform_config",
 	"google_identity_platform_default_supported_idp_config",
@@ -418,8 +420,6 @@ var gcpCodegenOnlyTypes = []string{
 	// hookup is the lower-priority follow-up per the codegen-only contract.
 	"google_clouddeploy_delivery_pipeline",
 	"google_clouddeploy_target",
-	"google_dns_managed_zone",
-	"google_dns_record_set",
 	// #608 — gcp/github_actions WIF preset (#605). WIF pool / provider /
 	// service-account IAM binding aren't in Cloud Asset Inventory's
 	// inventory (they live on the IAM v1 admin API surface), so the

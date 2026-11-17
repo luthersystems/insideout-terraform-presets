@@ -82,6 +82,9 @@ var expectedRegisteredTypes = map[string]bool{
 	"google_service_networking_connection":                  false,
 	"google_vpc_access_connector":                           false,
 	"google_compute_resource_policy":                        false,
+	// Cloud DNS (#931).
+	"google_dns_managed_zone": false,
+	"google_dns_record_set":   false,
 }
 
 func TestNewGCPDiscoverer_RegistersExpectedTypes(t *testing.T) {
@@ -766,6 +769,10 @@ var expectedScopeStyle = map[string]ScopeStyle{
 	"google_service_networking_connection":                  ScopeStyleNonCAI,
 	"google_vpc_access_connector":                           ScopeStyleNonCAI,
 	"google_compute_resource_policy":                        ScopeStyleNamePrefix,
+	// Cloud DNS (#931). Zones carry labels; record sets fan out over
+	// the zones through the DNS API (see dns_record_set.go).
+	"google_dns_managed_zone": ScopeStyleLabels,
+	"google_dns_record_set":   ScopeStyleNonCAI,
 }
 
 // TestScopeStyle_PinsPerTypeContract is the regression guard (#366).

@@ -8,9 +8,10 @@ package policy
 // per-field with security/reliability pillars set to mirror the AWS
 // shape.
 //
-// Bundle (#599): part of the DNS+cert mega-bundle. Codegen-only — see
-// gcpCodegenOnlyTypes. Record sets are not labeled in Cloud DNS, so
-// there is no label surface to curate.
+// Bundle (#599): part of the DNS+cert mega-bundle. The policy shipped
+// codegen-only first; #931 wired discovery (per managed zone through the
+// DNS API), so the type is now in gcpDiscoverTypes. Record sets are not
+// labeled in Cloud DNS, so there is no label surface to curate.
 var googleDNSRecordSetPolicy = Map{
 	// Identity ----------------------------------------------------------
 	"id": {

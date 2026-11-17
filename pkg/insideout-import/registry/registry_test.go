@@ -163,6 +163,8 @@ func TestSupportedDiscoverTypes_GCP_ReturnsCanonicalSortedList(t *testing.T) {
 		"google_compute_url_map",
 		"google_container_cluster",
 		"google_container_node_pool",
+		"google_dns_managed_zone",
+		"google_dns_record_set",
 		"google_firestore_database",
 		"google_identity_platform_config",
 		"google_identity_platform_default_supported_idp_config",

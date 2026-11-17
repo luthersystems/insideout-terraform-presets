@@ -12,6 +12,7 @@ import (
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/api/cloudkms/v1"
 	computev1 "google.golang.org/api/compute/v1"
+	dnsv1 "google.golang.org/api/dns/v1"
 	iamv1 "google.golang.org/api/iam/v1"
 	identitytoolkitv2 "google.golang.org/api/identitytoolkit/v2"
 	loggingv2 "google.golang.org/api/logging/v2"
@@ -255,7 +256,10 @@ type EnrichClients struct {
 	ServiceUsage      *serviceusagev1.Service
 	ServiceNetworking *servicenetworkingv1.APIService
 	VPCAccess         *vpcaccessv1.Service
-	ProjectID         string
+	// DNS backs google_dns_managed_zone (ManagedZones.Get) and
+	// google_dns_record_set (ResourceRecordSets.Get) (#931).
+	DNS       *dnsv1.Service
+	ProjectID string
 }
 
 // ErrEnrichClientUnavailable signals that the SDK client an enricher
