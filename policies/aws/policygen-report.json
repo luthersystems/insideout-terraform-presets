@@ -1,0 +1,455 @@
+{
+  "components": {
+    "aws_acm": {
+      "preset": "aws/acm",
+      "services": [
+        "acm"
+      ]
+    },
+    "aws_agentcore_gateway": {
+      "preset": "aws/agentcore_gateway",
+      "services": [
+        "bedrock-agentcore",
+        "cloudwatch",
+        "iam",
+        "lambda",
+        "sts"
+      ]
+    },
+    "aws_alb": {
+      "preset": "aws/alb",
+      "services": [
+        "cloudwatch",
+        "ec2",
+        "elasticloadbalancing",
+        "s3",
+        "sts"
+      ]
+    },
+    "aws_apigateway": {
+      "preset": "aws/apigateway",
+      "services": [
+        "apigateway",
+        "cloudwatch"
+      ]
+    },
+    "aws_apprunner": {
+      "preset": "aws/apprunner",
+      "services": [
+        "apprunner",
+        "ec2",
+        "iam",
+        "sts"
+      ]
+    },
+    "aws_backups": {
+      "preset": "aws/backups",
+      "services": [
+        "backup",
+        "iam"
+      ]
+    },
+    "aws_bastion": {
+      "preset": "aws/bastion",
+      "services": [
+        "cloudwatch",
+        "ec2",
+        "iam"
+      ]
+    },
+    "aws_bedrock": {
+      "preset": "aws/bedrock",
+      "services": [
+        "aoss",
+        "bedrock",
+        "iam",
+        "logs",
+        "s3vectors",
+        "sts"
+      ]
+    },
+    "aws_bedrock_agent": {
+      "preset": "aws/bedrock_agent",
+      "services": [
+        "bedrock",
+        "cloudwatch",
+        "iam",
+        "lambda",
+        "sts"
+      ]
+    },
+    "aws_cloudfront": {
+      "preset": "aws/cloudfront",
+      "services": [
+        "cloudfront",
+        "s3"
+      ]
+    },
+    "aws_cloudwatch_logs": {
+      "preset": "aws/cloudwatchlogs",
+      "services": [
+        "iam",
+        "logs"
+      ]
+    },
+    "aws_cloudwatch_monitoring": {
+      "preset": "aws/cloudwatchmonitoring",
+      "services": [
+        "cloudwatch",
+        "kms",
+        "sns",
+        "sts"
+      ]
+    },
+    "aws_codebuild": {
+      "preset": "aws/codebuild",
+      "services": [
+        "codebuild",
+        "iam",
+        "s3",
+        "sts"
+      ]
+    },
+    "aws_codepipeline": {
+      "preset": "aws/codepipeline",
+      "services": []
+    },
+    "aws_cognito": {
+      "preset": "aws/cognito",
+      "services": [
+        "cognito-idp"
+      ]
+    },
+    "aws_dynamodb": {
+      "preset": "aws/dynamodb",
+      "services": [
+        "cloudwatch",
+        "dynamodb"
+      ]
+    },
+    "aws_ec2": {
+      "preset": "aws/ec2",
+      "services": [
+        "cloudwatch",
+        "ec2",
+        "iam"
+      ]
+    },
+    "aws_ecs": {
+      "preset": "aws/ecs",
+      "services": [
+        "cloudwatch",
+        "ecs",
+        "servicediscovery"
+      ]
+    },
+    "aws_eks": {
+      "preset": "aws/eks",
+      "services": [
+        "autoscaling",
+        "ec2",
+        "eks",
+        "iam",
+        "kms",
+        "logs",
+        "ssm",
+        "sts"
+      ]
+    },
+    "aws_eks_nodegroup": {
+      "preset": "aws/eks_nodegroup",
+      "services": [
+        "autoscaling",
+        "cloudwatch",
+        "eks",
+        "iam"
+      ]
+    },
+    "aws_elasticache": {
+      "preset": "aws/elasticache",
+      "services": [
+        "cloudwatch",
+        "ec2",
+        "elasticache",
+        "logs"
+      ]
+    },
+    "aws_github_actions": {
+      "preset": "aws/githubactions",
+      "services": []
+    },
+    "aws_grafana": {
+      "preset": "aws/grafana",
+      "services": []
+    },
+    "aws_kendra": {
+      "preset": "aws/kendra",
+      "services": [
+        "cloudwatch",
+        "iam",
+        "kendra",
+        "sts"
+      ]
+    },
+    "aws_kms": {
+      "preset": "aws/kms",
+      "services": [
+        "kms"
+      ]
+    },
+    "aws_lambda": {
+      "preset": "aws/lambda",
+      "services": [
+        "cloudwatch",
+        "ec2",
+        "iam",
+        "lambda",
+        "logs"
+      ]
+    },
+    "aws_msk": {
+      "preset": "aws/msk",
+      "services": [
+        "cloudwatch",
+        "ec2",
+        "iam",
+        "kafka",
+        "logs"
+      ]
+    },
+    "aws_opensearch": {
+      "preset": "aws/opensearch",
+      "services": [
+        "aoss",
+        "cloudwatch",
+        "ec2",
+        "es",
+        "iam",
+        "logs",
+        "sts"
+      ]
+    },
+    "aws_rds": {
+      "preset": "aws/rds",
+      "services": [
+        "cloudwatch",
+        "ec2",
+        "iam",
+        "rds"
+      ]
+    },
+    "aws_route53": {
+      "preset": "aws/route53",
+      "services": [
+        "route53"
+      ]
+    },
+    "aws_s3": {
+      "preset": "aws/s3",
+      "services": [
+        "s3"
+      ]
+    },
+    "aws_sagemaker": {
+      "preset": "aws/sagemaker",
+      "services": [
+        "cloudwatch",
+        "iam",
+        "s3",
+        "sagemaker",
+        "sts"
+      ]
+    },
+    "aws_secretsmanager": {
+      "preset": "aws/secretsmanager",
+      "services": [
+        "secretsmanager"
+      ]
+    },
+    "aws_sqs": {
+      "preset": "aws/sqs",
+      "services": [
+        "cloudwatch",
+        "sqs"
+      ]
+    },
+    "aws_vpc": {
+      "preset": "aws/vpc",
+      "services": [
+        "ec2",
+        "elasticache",
+        "iam",
+        "logs",
+        "rds",
+        "redshift",
+        "sts"
+      ]
+    },
+    "aws_waf": {
+      "preset": "aws/waf",
+      "services": [
+        "wafv2"
+      ]
+    }
+  },
+  "import_services": [
+    "acm",
+    "aoss",
+    "apigateway",
+    "application-autoscaling",
+    "apprunner",
+    "athena",
+    "autoscaling",
+    "backup",
+    "bedrock",
+    "bedrock-agentcore",
+    "cloudfront",
+    "cloudtrail",
+    "cloudwatch",
+    "codebuild",
+    "codedeploy",
+    "codepipeline",
+    "cognito-idp",
+    "dynamodb",
+    "ec2",
+    "ecs",
+    "eks",
+    "elasticache",
+    "elasticfilesystem",
+    "elasticloadbalancing",
+    "es",
+    "events",
+    "glue",
+    "iam",
+    "kafka",
+    "kendra",
+    "kinesis",
+    "kms",
+    "lambda",
+    "logs",
+    "rds",
+    "resource-explorer-2",
+    "route53",
+    "s3",
+    "s3vectors",
+    "sagemaker",
+    "secretsmanager",
+    "servicediscovery",
+    "sns",
+    "sqs",
+    "ssm",
+    "states",
+    "wafv2"
+  ],
+  "deploy_services": [
+    "acm",
+    "aoss",
+    "apigateway",
+    "application-autoscaling",
+    "apprunner",
+    "athena",
+    "autoscaling",
+    "backup",
+    "bedrock",
+    "bedrock-agentcore",
+    "cloudfront",
+    "cloudtrail",
+    "cloudwatch",
+    "codebuild",
+    "codedeploy",
+    "codepipeline",
+    "cognito-idp",
+    "dynamodb",
+    "ec2",
+    "ecs",
+    "eks",
+    "elasticache",
+    "elasticfilesystem",
+    "elasticloadbalancing",
+    "es",
+    "events",
+    "glue",
+    "iam",
+    "kafka",
+    "kendra",
+    "kinesis",
+    "kms",
+    "lambda",
+    "logs",
+    "rds",
+    "redshift",
+    "resource-explorer-2",
+    "route53",
+    "s3",
+    "s3vectors",
+    "sagemaker",
+    "secretsmanager",
+    "servicediscovery",
+    "sns",
+    "sqs",
+    "ssm",
+    "states",
+    "sts",
+    "wafv2"
+  ],
+  "boundary_extra_services": [
+    "cloudformation",
+    "codecommit",
+    "ec2messages",
+    "ecr",
+    "eks-auth",
+    "elastic-inference",
+    "fsx",
+    "redshift-data",
+    "servicecatalog",
+    "shield",
+    "ssmmessages",
+    "storagegateway",
+    "tag",
+    "timestream",
+    "waf-regional",
+    "xray"
+  ],
+  "pass_role_principals": [
+    "backup.amazonaws.com",
+    "bedrock-agentcore.amazonaws.com",
+    "bedrock.amazonaws.com",
+    "build.apprunner.amazonaws.com",
+    "codebuild.amazonaws.com",
+    "ec2.amazonaws.com",
+    "eks-fargate-pods.amazonaws.com",
+    "eks.amazonaws.com",
+    "kendra.amazonaws.com",
+    "lambda.amazonaws.com",
+    "monitoring.rds.amazonaws.com",
+    "pods.eks.amazonaws.com",
+    "sagemaker.amazonaws.com",
+    "tasks.apprunner.amazonaws.com",
+    "vpc-flow-logs.amazonaws.com"
+  ],
+  "managed_policies": [
+    "AWSXRayDaemonWriteAccess",
+    "AmazonEC2ContainerRegistryPullOnly",
+    "AmazonEC2ContainerRegistryReadOnly",
+    "AmazonEKSBlockStoragePolicy",
+    "AmazonEKSClusterPolicy",
+    "AmazonEKSComputePolicy",
+    "AmazonEKSFargatePodExecutionRolePolicy",
+    "AmazonEKSLoadBalancingPolicy",
+    "AmazonEKSLocalOutpostClusterPolicy",
+    "AmazonEKSNetworkingPolicy",
+    "AmazonEKSWorkerNodeMinimalPolicy",
+    "AmazonEKSWorkerNodePolicy",
+    "AmazonEKS_CNI_Policy",
+    "AmazonSSMManagedInstanceCore",
+    "AmazonSageMakerFullAccess",
+    "CloudWatchAgentServerPolicy",
+    "service-role/AWSAppRunnerServicePolicyForECRAccess",
+    "service-role/AWSBackupServiceRolePolicyForBackup",
+    "service-role/AWSBackupServiceRolePolicyForRestores",
+    "service-role/AWSLambdaBasicExecutionRole",
+    "service-role/AWSLambdaVPCAccessExecutionRole",
+    "service-role/AmazonEBSCSIDriverPolicy",
+    "service-role/AmazonRDSEnhancedMonitoringRole"
+  ]
+}
