@@ -12,11 +12,11 @@
 | cloudwatchlogs | describe-log-groups, get-metrics |
 | cognito | list-user-pools, get-metrics |
 | cost-explorer | get-cost-summary, get-cost-forecast, get-cost-by-tag |
-| dynamodb | list-tables, get-metrics |
+| dynamodb | list-tables, describe-tables, get-metrics |
 | ebs | describe-volumes, describe-snapshots |
 | ec2 | describe-instances, describe-vpcs, describe-subnets, describe-security-groups, get-metrics |
-| ecs | list-clusters, list-services, describe-services, get-metrics |
-| eks | list-clusters, describe-cluster, list-nodes, get-metrics |
+| ecs | list-clusters, describe-clusters, list-services, describe-services, get-metrics |
+| eks | list-clusters, describe-clusters, describe-cluster, list-nodes, get-metrics |
 | elasticache | describe-cache-clusters, describe-replication-groups, get-metrics |
 | kendra | list-indices, list-data-sources, get-metrics |
 | kms | list-keys, list-aliases, get-metrics |
@@ -28,6 +28,6 @@
 | s3 | list-buckets, get-metrics |
 | sagemaker | list-domains, describe-domain, list-user-profiles, list-endpoints, get-metrics |
 | secretsmanager | list-secrets, get-metrics |
-| sqs | list-queues, get-metrics |
+| sqs | list-queues, describe-queues, get-metrics |
 | vpc | describe-nat-gateways, get-metrics |
 | waf | list-web-acls, get-metrics |

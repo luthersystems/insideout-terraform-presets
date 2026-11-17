@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"sort"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/apigatewayv2"
@@ -246,6 +247,7 @@ func filterELBv2ARNsByProjectTag(ctx context.Context, client elbv2TagsAPI, arns 
 type wafv2WebACLsClient interface {
 	ListWebACLs(ctx context.Context, params *wafv2.ListWebACLsInput, optFns ...func(*wafv2.Options)) (*wafv2.ListWebACLsOutput, error)
 	ListTagsForResource(ctx context.Context, params *wafv2.ListTagsForResourceInput, optFns ...func(*wafv2.Options)) (*wafv2.ListTagsForResourceOutput, error)
+	GetWebACL(ctx context.Context, params *wafv2.GetWebACLInput, optFns ...func(*wafv2.Options)) (*wafv2.GetWebACLOutput, error)
 }
 
 func inspectWAF(ctx context.Context, cfg aws.Config, action, filters string) (any, error) {
@@ -258,20 +260,26 @@ func inspectWAF(ctx context.Context, cfg aws.Config, action, filters string) (an
 		// CLOUDFRONT ACLs protect CloudFront distributions and only
 		// exist in us-east-1. Query both and merge so a CF-fronted ACL
 		// isn't invisible.
-		regional, err := filterWAFWebACLsByScope(ctx, wafv2.NewFromConfig(cfg), wafv2types.ScopeRegional, project)
+		regionalClient := wafv2.NewFromConfig(cfg)
+		regional, err := filterWAFWebACLsByScope(ctx, regionalClient, wafv2types.ScopeRegional, project)
 		if err != nil {
 			return nil, err
 		}
 		cfCfg := cfg
 		cfCfg.Region = "us-east-1"
-		cloudfrontScoped, cfErr := filterWAFWebACLsByScope(ctx, wafv2.NewFromConfig(cfCfg), wafv2types.ScopeCloudfront, project)
+		cfClient := wafv2.NewFromConfig(cfCfg)
+		cloudfrontScoped, cfErr := filterWAFWebACLsByScope(ctx, cfClient, wafv2types.ScopeCloudfront, project)
 		if cfErr != nil {
 			// CLOUDFRONT failure (e.g. insufficient us-east-1 IAM)
 			// degrades gracefully — drop CF-scoped, keep regional.
 			log.Printf("[wafv2] CloudFront-scoped WAF query failed (continuing with regional only): %v", cfErr)
 			cloudfrontScoped = nil
 		}
-		return append(regional, cloudfrontScoped...), nil
+		// GetWebACL needs the ACL's own scope and, for CLOUDFRONT, the
+		// us-east-1 client, so each half is described with the client
+		// that listed it.
+		acls := describeWAFWebACLs(ctx, regionalClient, wafv2types.ScopeRegional, regional)
+		return append(acls, describeWAFWebACLs(ctx, cfClient, wafv2types.ScopeCloudfront, cloudfrontScoped)...), nil
 	case "get-metrics":
 		return metricsRouted("waf")
 	default:
@@ -313,6 +321,64 @@ func filterWAFWebACLsByScope(ctx context.Context, client wafv2WebACLsClient, sco
 		}
 	}
 	return matched, nil
+}
+
+// wafWebACL is one row of the waf list-web-acls result: the SDK summary
+// (embedded, so the JSON keeps the pre-#927 shape) plus the scope and
+// the config that only GetWebACL returns: the default action and the
+// rule names, in priority order (#927). WebACLSummary carries neither.
+//
+// The config fields are omitted from the JSON when GetWebACL was skipped
+// (past configFanOutLimit for that scope) or failed.
+type wafWebACL struct {
+	wafv2types.WebACLSummary
+	Scope         wafv2types.Scope `json:"Scope"`
+	DefaultAction *string          `json:"DefaultAction,omitempty"`
+	RuleNames     []string         `json:"RuleNames,omitempty"`
+	RuleCount     *int             `json:"RuleCount,omitempty"`
+}
+
+// describeWAFWebACLs wraps each summary in a wafWebACL and reads the
+// config of the first configFanOutLimit ACLs of the scope with
+// GetWebACL. A failed call is logged and that ACL comes back
+// summary-only; it never fails the list.
+func describeWAFWebACLs(ctx context.Context, client wafv2WebACLsClient, scope wafv2types.Scope, acls []wafv2types.WebACLSummary) []wafWebACL {
+	out := make([]wafWebACL, 0, len(acls))
+	for i, a := range acls {
+		row := wafWebACL{WebACLSummary: a, Scope: scope}
+		if i < configFanOutLimit {
+			getOut, err := client.GetWebACL(ctx, &wafv2.GetWebACLInput{Id: a.Id, Name: a.Name, Scope: scope})
+			switch {
+			case err != nil:
+				log.Printf("[wafv2 GetWebACL] id=%s scope=%s: %v (config omitted)", aws.ToString(a.Id), scope, err)
+			case getOut.WebACL != nil:
+				readWAFWebACLConfig(getOut.WebACL, &row)
+			}
+		}
+		out = append(out, row)
+	}
+	return out
+}
+
+func readWAFWebACLConfig(acl *wafv2types.WebACL, row *wafWebACL) {
+	if da := acl.DefaultAction; da != nil {
+		switch {
+		case da.Block != nil:
+			row.DefaultAction = aws.String("BLOCK")
+		case da.Allow != nil:
+			row.DefaultAction = aws.String("ALLOW")
+		}
+	}
+	rules := make([]wafv2types.Rule, len(acl.Rules))
+	copy(rules, acl.Rules)
+	sort.SliceStable(rules, func(i, j int) bool { return rules[i].Priority < rules[j].Priority })
+	for _, r := range rules {
+		if name := aws.ToString(r.Name); name != "" {
+			row.RuleNames = append(row.RuleNames, name)
+		}
+	}
+	n := len(acl.Rules)
+	row.RuleCount = &n
 }
 
 // --- CloudFront ---
@@ -396,21 +462,21 @@ func filterCloudFrontDistributionsByProjectTag(ctx context.Context, client cloud
 
 // --- API Gateway (v2) ---
 
+// apiGatewayClient is the subset of the apigatewayv2 SDK the get-apis
+// action uses. Narrowed so tests can inject a fake.
+type apiGatewayClient interface {
+	GetApis(ctx context.Context, params *apigatewayv2.GetApisInput, optFns ...func(*apigatewayv2.Options)) (*apigatewayv2.GetApisOutput, error)
+	GetDomainNames(ctx context.Context, params *apigatewayv2.GetDomainNamesInput, optFns ...func(*apigatewayv2.Options)) (*apigatewayv2.GetDomainNamesOutput, error)
+	GetApiMappings(ctx context.Context, params *apigatewayv2.GetApiMappingsInput, optFns ...func(*apigatewayv2.Options)) (*apigatewayv2.GetApiMappingsOutput, error)
+}
+
 func inspectAPIGateway(ctx context.Context, cfg aws.Config, action, filters string) (any, error) {
 	client := apigatewayv2.NewFromConfig(cfg)
 	project := filter.Project(filters)
 
 	switch action {
 	case "get-apis":
-		out, err := client.GetApis(ctx, &apigatewayv2.GetApisInput{})
-		if err != nil {
-			return nil, err
-		}
-		// API Gateway v2 inlines Tags as map[string]string.
-		if project != "" {
-			return filter.Match(toSliceOfMaps(out.Items), project, "Tags", filter.FormatMap), nil
-		}
-		return nilSliceToEmpty(out.Items), nil
+		return listAPIGatewayAPIs(ctx, client, project)
 	case "get-domain-names":
 		out, err := client.GetDomainNames(ctx, &apigatewayv2.GetDomainNamesInput{})
 		if err != nil {
@@ -424,5 +490,101 @@ func inspectAPIGateway(ctx context.Context, cfg aws.Config, action, filters stri
 		return metricsRouted("apigateway")
 	default:
 		return nil, unsupportedActionError("apigateway", action)
+	}
+}
+
+// listAPIGatewayAPIs returns the project's APIs (GetApis), each as a
+// JSON-shaped map so the custom domain can be attached to it (#927).
+//
+// The aws_apigateway design config is a custom domain name and its ACM
+// certificate, and neither is on the Api record: an Api only knows its
+// generated execute-api endpoint. The domain lives on a DomainName
+// resource, linked to the API by an ApiMapping. So after GetApis this
+// lists the domain names (one GetDomainNames call), keeps the project's
+// (by Project tag, the same filter the APIs get), and for the first
+// configFanOutLimit of them calls GetApiMappings to find which API each
+// serves. The matched API gets CustomDomainName and CertificateArn.
+//
+// The domain lookup is best effort: a failed GetDomainNames or
+// GetApiMappings call is logged and the APIs come back without the
+// domain fields, as before #927. A GetApis failure still fails the call.
+func listAPIGatewayAPIs(ctx context.Context, client apiGatewayClient, project string) ([]map[string]any, error) {
+	out, err := client.GetApis(ctx, &apigatewayv2.GetApisInput{})
+	if err != nil {
+		return nil, err
+	}
+	var apis []map[string]any
+	if project != "" {
+		// API Gateway v2 inlines Tags as map[string]string.
+		apis = filter.Match(toSliceOfMaps(out.Items), project, "Tags", filter.FormatMap)
+	} else {
+		apis = toSliceOfMaps(out.Items)
+	}
+	if apis == nil {
+		apis = []map[string]any{}
+	}
+	if len(apis) == 0 {
+		return apis, nil
+	}
+	attachAPIGatewayCustomDomains(ctx, client, project, apis)
+	return apis, nil
+}
+
+func attachAPIGatewayCustomDomains(ctx context.Context, client apiGatewayClient, project string, apis []map[string]any) {
+	domOut, err := client.GetDomainNames(ctx, &apigatewayv2.GetDomainNamesInput{})
+	if err != nil {
+		log.Printf("[apigatewayv2 GetDomainNames] project=%s: %v (custom domains omitted)", project, err)
+		return
+	}
+	domains := domOut.Items
+	if project != "" {
+		domains = domains[:0:0]
+		for _, d := range domOut.Items {
+			if d.Tags["Project"] == project {
+				domains = append(domains, d)
+			}
+		}
+	}
+	byID := make(map[string]map[string]any, len(apis))
+	for _, a := range apis {
+		if id := getString(a, "ApiId"); id != "" {
+			byID[id] = a
+		}
+	}
+	for i, d := range domains {
+		if i >= configFanOutLimit {
+			break
+		}
+		name := aws.ToString(d.DomainName)
+		if name == "" {
+			continue
+		}
+		mapOut, err := client.GetApiMappings(ctx, &apigatewayv2.GetApiMappingsInput{DomainName: aws.String(name)})
+		if err != nil {
+			log.Printf("[apigatewayv2 GetApiMappings] domain=%s: %v (custom domain omitted)", name, err)
+			continue
+		}
+		var certARN string
+		for _, c := range d.DomainNameConfigurations {
+			if arn := aws.ToString(c.CertificateArn); arn != "" {
+				certARN = arn
+				break
+			}
+		}
+		for _, m := range mapOut.Items {
+			api, ok := byID[aws.ToString(m.ApiId)]
+			if !ok {
+				continue
+			}
+			if _, done := api["CustomDomainName"]; done {
+				// An API served on several domains keeps the first one
+				// found; the design config names a single domain.
+				continue
+			}
+			api["CustomDomainName"] = name
+			if certARN != "" {
+				api["CertificateArn"] = certARN
+			}
+		}
 	}
 }

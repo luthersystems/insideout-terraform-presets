@@ -169,6 +169,26 @@ type fakeEKSClient struct {
 	describeClusterOut *eks.DescribeClusterOutput
 	describeClusterErr error
 	describeByName     map[string]*eks.DescribeClusterOutput
+	// Node-group fakes for the list-clusters config fan-out (#927).
+	describeCalls     int
+	nodegroupsByName  map[string][]string
+	listNodegroupsErr error
+	nodegroupByName   map[string]*ekstypes.Nodegroup
+	nodegroupErr      error
+}
+
+func (f *fakeEKSClient) ListNodegroups(_ context.Context, in *eks.ListNodegroupsInput, _ ...func(*eks.Options)) (*eks.ListNodegroupsOutput, error) {
+	if f.listNodegroupsErr != nil {
+		return nil, f.listNodegroupsErr
+	}
+	return &eks.ListNodegroupsOutput{Nodegroups: f.nodegroupsByName[aws.ToString(in.ClusterName)]}, nil
+}
+
+func (f *fakeEKSClient) DescribeNodegroup(_ context.Context, in *eks.DescribeNodegroupInput, _ ...func(*eks.Options)) (*eks.DescribeNodegroupOutput, error) {
+	if f.nodegroupErr != nil {
+		return nil, f.nodegroupErr
+	}
+	return &eks.DescribeNodegroupOutput{Nodegroup: f.nodegroupByName[aws.ToString(in.NodegroupName)]}, nil
 }
 
 func (f *fakeEKSClient) ListClusters(_ context.Context, _ *eks.ListClustersInput, _ ...func(*eks.Options)) (*eks.ListClustersOutput, error) {
@@ -182,6 +202,7 @@ func (f *fakeEKSClient) ListClusters(_ context.Context, _ *eks.ListClustersInput
 }
 
 func (f *fakeEKSClient) DescribeCluster(_ context.Context, in *eks.DescribeClusterInput, _ ...func(*eks.Options)) (*eks.DescribeClusterOutput, error) {
+	f.describeCalls++
 	if f.describeClusterErr != nil {
 		return nil, f.describeClusterErr
 	}

@@ -117,3 +117,16 @@ func nilSliceToEmpty[T any](s []T) []T {
 	}
 	return s
 }
+
+// configFanOutLimit bounds how many resources one list action describes
+// to read their config (#927). The list actions (list-web-acls,
+// get-apis) and the describe actions (describe-queues, describe-tables,
+// EKS and ECS describe-clusters) start from identity only, so
+// each config read is one more API call per resource. A project stack holds one to three of
+// each, so ten covers every stack the presets compose, while a shared
+// account with hundreds of queues or tables cannot turn one panel load
+// into hundreds of calls (API throttling, and the caller's request time
+// budget). Resources past the limit come back identity-only, exactly as
+// before the fan-out, and the config extractors read only the resources
+// that carry config.
+const configFanOutLimit = 10

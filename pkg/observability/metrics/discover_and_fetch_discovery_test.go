@@ -262,3 +262,23 @@ func TestMetricDefinitions_KMSAndSMExcluded(t *testing.T) {
 	assert.Equal(t, "AWS/EC2", ec2Obs.Namespace)
 	assert.Equal(t, "InstanceId", ec2Obs.DimensionName)
 }
+
+// TestExtractors_ConfigFanOutRowShapes pins the row shapes the WAF, ECS
+// and API Gateway inspectors return since #927 (their object rows gain
+// config fields next to their identity). The dimension values must come
+// out the same as from the old identity-only shapes. The rows are written here as the JSON the
+// inspector types marshal to.
+func TestExtractors_ConfigFanOutRowShapes(t *testing.T) {
+	t.Parallel()
+	wafRows := []map[string]any{{"Id": "acl-1", "Name": "acl", "Scope": "REGIONAL", "DefaultAction": "ALLOW"}}
+	assert.Equal(t, []string{"acl-1"}, extractWAFWebACLIDs(any(wafRows)))
+
+	ecsRows := []map[string]any{
+		{"ClusterName": "named", "ServiceConnectEnabled": true},
+		{"ClusterArn": "arn:aws:ecs:eu-west-2:111:cluster/arn-only"},
+	}
+	assert.Equal(t, []string{"named", "arn-only"}, extractECSClusterNames(any(ecsRows)))
+
+	apiRows := []map[string]any{{"ApiId": "api-1", "CustomDomainName": "api.example.com"}}
+	assert.Equal(t, []string{"api-1"}, extractAPIGatewayIDs(any(apiRows)))
+}
