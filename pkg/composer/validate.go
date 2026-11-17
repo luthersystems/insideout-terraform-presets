@@ -146,6 +146,13 @@ func ValidateAll(
 		cloud = comps.Cloud
 	}
 	all = append(all, ValidateAWSVPCNATConsistency(cloud, comps, cfg)...)
+	// The Route 53 alias check needs the selected components; the composed
+	// module blocks name them (a dry run with no blocks skips it).
+	selected := make(map[ComponentKey]bool, len(blocks))
+	for _, b := range blocks {
+		selected[ComponentKey(b.Name)] = true
+	}
+	all = append(all, ValidateRoute53Aliases(selected, cfg)...)
 	return dedupeAndSortIssues(all)
 }
 

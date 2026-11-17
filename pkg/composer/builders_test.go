@@ -146,37 +146,43 @@ func configWithGCPGKE(in gcpGKECfgInput) *Config {
 // awsCognitoCfgInput mirrors the subset of Config.AWSCognito fields exercised
 // by mapper / validator tests.
 type awsCognitoCfgInput struct {
-	SignInType      string
-	MFARequired     *bool
-	MFAFactor       string
-	SMSSNSCallerArn string
-	SMSExternalID   string
-	EmailSourceArn  string
+	SignInType                 string
+	MFARequired                *bool
+	MFAFactor                  string
+	SMSSNSCallerArn            string
+	SMSExternalID              string
+	EmailSourceArn             string
+	CustomDomain               string
+	CustomDomainCertificateArn string
 }
 
 // configWithAWSCognito returns *Config with AWSCognito populated from input.
 func configWithAWSCognito(in awsCognitoCfgInput) *Config {
 	return &Config{
 		AWSCognito: &struct {
-			SignInType      string `json:"signInType,omitempty"`
-			MFARequired     *bool  `json:"mfaRequired,omitempty"`
-			MFAFactor       string `json:"mfaFactor,omitempty"`
-			SMSSNSCallerArn string `json:"smsSnsCallerArn,omitempty"`
-			SMSExternalID   string `json:"smsExternalId,omitempty"`
-			EmailSourceArn  string `json:"emailSourceArn,omitempty"`
-			Okta            *struct {
+			SignInType                 string `json:"signInType,omitempty"`
+			MFARequired                *bool  `json:"mfaRequired,omitempty"`
+			MFAFactor                  string `json:"mfaFactor,omitempty"`
+			SMSSNSCallerArn            string `json:"smsSnsCallerArn,omitempty"`
+			SMSExternalID              string `json:"smsExternalId,omitempty"`
+			EmailSourceArn             string `json:"emailSourceArn,omitempty"`
+			CustomDomain               string `json:"customDomain,omitempty"`
+			CustomDomainCertificateArn string `json:"customDomainCertificateArn,omitempty"`
+			Okta                       *struct {
 				SelfSignupAllowed *bool `json:"selfSignupAllowed,omitempty"`
 			} `json:"okta,omitempty"`
 			Auth0 *struct {
 				MFARequired *bool `json:"mfaRequired,omitempty"`
 			} `json:"auth0,omitempty"`
 		}{
-			SignInType:      in.SignInType,
-			MFARequired:     in.MFARequired,
-			MFAFactor:       in.MFAFactor,
-			SMSSNSCallerArn: in.SMSSNSCallerArn,
-			SMSExternalID:   in.SMSExternalID,
-			EmailSourceArn:  in.EmailSourceArn,
+			SignInType:                 in.SignInType,
+			MFARequired:                in.MFARequired,
+			MFAFactor:                  in.MFAFactor,
+			SMSSNSCallerArn:            in.SMSSNSCallerArn,
+			SMSExternalID:              in.SMSExternalID,
+			EmailSourceArn:             in.EmailSourceArn,
+			CustomDomain:               in.CustomDomain,
+			CustomDomainCertificateArn: in.CustomDomainCertificateArn,
 		},
 	}
 }

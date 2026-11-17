@@ -659,6 +659,19 @@ func (m DefaultMapper) BuildModuleValues(
 			if v := strings.TrimSpace(cfg.AWSCognito.EmailSourceArn); v != "" {
 				vals["email_source_arn"] = v
 			}
+			// Hosted UI custom domain (#925). Unset keeps the preset's
+			// null defaults, so only the prefix domain is created. DNS
+			// names are case-insensitive, but the preset accepts only a
+			// lowercase name without a trailing dot, so normalise it here
+			// the same way the Route 53 alias wiring does (aliasRecordName);
+			// otherwise "Auth.Example.com" would get its alias wired and
+			// then fail the plan in aws/cognito.
+			if v := normalizeDNSName(cfg.AWSCognito.CustomDomain); v != "" {
+				vals["custom_domain"] = v
+			}
+			if v := strings.TrimSpace(cfg.AWSCognito.CustomDomainCertificateArn); v != "" {
+				vals["custom_domain_certificate_arn"] = v
+			}
 		}
 
 	case KeyAWSAPIGateway:

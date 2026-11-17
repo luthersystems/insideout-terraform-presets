@@ -1077,6 +1077,36 @@ func TestBuildModuleValues_AWSCognito_MFAFactor(t *testing.T) {
 		assert.ErrorContains(t, err, `expected "totp", "sms", or "email"`)
 	})
 
+	// #925: the hosted UI custom domain passes through only when set.
+	t.Run("custom domain passes through", func(t *testing.T) {
+		cfg := configWithAWSCognito(awsCognitoCfgInput{
+			CustomDomain:               " auth.example.com ",
+			CustomDomainCertificateArn: "arn:aws:acm:us-east-1:123456789012:certificate/abc",
+		})
+		vals, err := m.BuildModuleValues(KeyAWSCognito, nil, cfg, "", "")
+		require.NoError(t, err)
+		assert.Equal(t, "auth.example.com", vals["custom_domain"])
+		assert.Equal(t, "arn:aws:acm:us-east-1:123456789012:certificate/abc", vals["custom_domain_certificate_arn"])
+
+		vals, err = m.BuildModuleValues(KeyAWSCognito, nil, configWithAWSCognito(awsCognitoCfgInput{}), "", "")
+		require.NoError(t, err)
+		_, has := vals["custom_domain"]
+		assert.False(t, has, "unset custom_domain must not be emitted")
+	})
+
+	// The preset accepts only a lowercase name without a trailing dot, and
+	// the Route 53 alias wiring compares names case-insensitively, so the
+	// mapper must pass the same normalised name the alias was wired for.
+	t.Run("custom domain is lowercased", func(t *testing.T) {
+		cfg := configWithAWSCognito(awsCognitoCfgInput{
+			CustomDomain:               " Auth.Example.COM. ",
+			CustomDomainCertificateArn: "arn:aws:acm:us-east-1:123456789012:certificate/abc",
+		})
+		vals, err := m.BuildModuleValues(KeyAWSCognito, nil, cfg, "", "")
+		require.NoError(t, err)
+		assert.Equal(t, "auth.example.com", vals["custom_domain"])
+	})
+
 	// #923: SMS and Email factors pass through with their inputs.
 	t.Run("sms factor passes role and external id", func(t *testing.T) {
 		cfg := configWithAWSCognito(awsCognitoCfgInput{

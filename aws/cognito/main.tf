@@ -218,3 +218,25 @@ resource "aws_cognito_user_pool_domain" "this" {
   domain       = local.domain_prefix
   user_pool_id = aws_cognito_user_pool.this.id
 }
+
+# Optional custom domain for the hosted UI (e.g. https://auth.example.com),
+# added beside the prefix domain above rather than replacing it, so a live
+# stack keeps its prefix domain and issuer URL when this is turned on (#925).
+# Cognito serves a custom domain from a CloudFront distribution it owns, so
+# the certificate must be an ACM certificate in us-east-1, and the DNS
+# record for var.custom_domain must be an alias to the distribution (see
+# the custom_domain_cloudfront_* outputs; the composer wires it into
+# aws/route53 when both are in the stack).
+resource "aws_cognito_user_pool_domain" "custom" {
+  count           = var.custom_domain != null ? 1 : 0
+  domain          = var.custom_domain
+  certificate_arn = var.custom_domain_certificate_arn
+  user_pool_id    = aws_cognito_user_pool.this.id
+
+  lifecycle {
+    precondition {
+      condition     = var.custom_domain_certificate_arn != null
+      error_message = "custom_domain needs custom_domain_certificate_arn: an ACM certificate in us-east-1 that covers the domain."
+    }
+  }
+}
