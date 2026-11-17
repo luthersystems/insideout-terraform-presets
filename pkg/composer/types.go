@@ -207,7 +207,12 @@ type Config struct {
 		SignInType  string `json:"signInType,omitempty"`
 		MFARequired *bool  `json:"mfaRequired,omitempty"`
 		MFAFactor   string `json:"mfaFactor,omitempty"`
-		Okta        *struct {
+		// SMS and Email MFA inputs (#923). The preset fails at plan with a
+		// clear message when the chosen factor's inputs are missing.
+		SMSSNSCallerArn string `json:"smsSnsCallerArn,omitempty"`
+		SMSExternalID   string `json:"smsExternalId,omitempty"`
+		EmailSourceArn  string `json:"emailSourceArn,omitempty"`
+		Okta            *struct {
 			SelfSignupAllowed *bool `json:"selfSignupAllowed,omitempty"`
 		} `json:"okta,omitempty"`
 		Auth0 *struct {

@@ -34,6 +34,11 @@ locals {
   oidc_idp_names = [for p in nonsensitive(var.oidc_identity_providers) : p.name]
   saml_idp_names = [for p in var.saml_identity_providers : p.name]
   all_idp_names  = concat(local.oidc_idp_names, local.saml_idp_names)
+
+  # Which MFA factor block to emit (only when MFA is on).
+  mfa_totp  = var.mfa_required && var.mfa_factor == "totp"
+  mfa_sms   = var.mfa_required && var.mfa_factor == "sms"
+  mfa_email = var.mfa_required && var.mfa_factor == "email"
 }
 
 # -----------------------------------------------------------------------------
@@ -47,16 +52,54 @@ resource "aws_cognito_user_pool" "this" {
   alias_attributes         = local.alias_attributes
   mfa_configuration        = var.mfa_required ? "ON" : "OFF"
 
-  # MFA factor — required when mfa_configuration = "ON". TOTP is the only
-  # factor that needs no extra wiring (SMS needs SNS origination identity,
-  # Email needs SES domain). #208.
-  # TODO(#923): when SMS / Email factors are added to the variable's allowed
-  # set, add the corresponding `dynamic "sms_configuration"` /
-  # `dynamic "email_mfa_configuration"` blocks here, gated on the factor.
+  # Email MFA is only offered on the Essentials and Plus feature plans, so
+  # pin the tier when that factor is chosen. Otherwise leave it null: the
+  # attribute is Optional+Computed, so null keeps whatever tier a live pool
+  # already has and plans no change (#923).
+  user_pool_tier = local.mfa_email ? var.user_pool_tier : null
+
+  # MFA factor — AWS rejects mfa_configuration = "ON" without a factor
+  # sub-block (#208). Exactly one block below is emitted, matching
+  # var.mfa_factor. TOTP needs no other wiring; SMS and Email need the
+  # inputs checked by the preconditions further down (#923).
   dynamic "software_token_mfa_configuration" {
-    for_each = var.mfa_required && var.mfa_factor == "totp" ? [1] : []
+    for_each = local.mfa_totp ? [1] : []
     content {
       enabled = true
+    }
+  }
+
+  # SMS: Cognito sends codes through SNS by assuming a role the caller
+  # supplies. We take the role as input instead of creating it here because
+  # SMS also needs account-level SNS setup that Terraform cannot do (leaving
+  # the SNS SMS sandbox, spend limits, an origination number in some
+  # countries). Whoever does that setup owns the role; creating IAM here
+  # would also widen the deploy role's IAM permissions for every stack.
+  dynamic "sms_configuration" {
+    for_each = local.mfa_sms ? [1] : []
+    content {
+      sns_caller_arn = var.sms_sns_caller_arn
+      external_id    = var.sms_external_id
+      sns_region     = var.sms_sns_region
+    }
+  }
+
+  # Email: Cognito can only send MFA codes when it sends mail through the
+  # caller's own SES identity (DEVELOPER mode), not its built-in sender.
+  dynamic "email_mfa_configuration" {
+    for_each = local.mfa_email ? [1] : []
+    content {
+      subject = "${var.project} sign-in code"
+      message = "Your sign-in code is {####}"
+    }
+  }
+
+  dynamic "email_configuration" {
+    for_each = local.mfa_email ? [1] : []
+    content {
+      email_sending_account = "DEVELOPER"
+      source_arn            = var.email_source_arn
+      from_email_address    = var.email_from_address
     }
   }
 
@@ -73,6 +116,25 @@ resource "aws_cognito_user_pool" "this" {
   }
 
   tags = merge(module.name.tags, var.tags)
+
+  # Fail at plan, not at apply, when a factor is chosen without the inputs
+  # it needs. Each condition is a ternary so a null input never reaches
+  # trimspace()/regex() (Terraform does not short-circuit ||).
+  lifecycle {
+    precondition {
+      condition     = local.mfa_sms ? (var.sms_sns_caller_arn == null ? false : can(regex("^arn:aws[a-z-]*:iam::[0-9]{12}:role/.+$", var.sms_sns_caller_arn))) : true
+      error_message = "mfa_factor = \"sms\" needs sms_sns_caller_arn: the ARN of an IAM role that Cognito assumes to publish SMS through SNS."
+    }
+    precondition {
+      condition     = local.mfa_sms ? (var.sms_external_id == null ? false : length(trimspace(var.sms_external_id)) > 0) : true
+      error_message = "mfa_factor = \"sms\" needs sms_external_id: the sts:ExternalId the SNS caller role's trust policy requires."
+    }
+    precondition {
+      condition     = local.mfa_email ? (var.email_source_arn == null ? false : can(regex("^arn:aws[a-z-]*:ses:[a-z0-9-]+:[0-9]{12}:identity/.+$", var.email_source_arn))) : true
+      error_message = "mfa_factor = \"email\" needs email_source_arn: the ARN of a verified SES identity (Cognito sends email MFA codes only through your own SES)."
+    }
+  }
+
   # NOTE: domain drifts on refresh but is Computed-only, so
   # lifecycle.ignore_changes has no effect. Suppression must happen at the
   # drift-check level — see sandbox-infrastructure-template#93.

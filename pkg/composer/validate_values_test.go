@@ -113,7 +113,7 @@ func TestValidate_AWSCognitoMFAFactor_InvalidEnum(t *testing.T) {
 	got, ok := byField["aws_cognito.mfaFactor"]
 	require.True(t, ok, "expected an issue on aws_cognito.mfaFactor; got %+v", issues)
 	require.Equal(t, "invalid_enum", got.Code)
-	require.ElementsMatch(t, []string{"totp"}, got.Allowed,
+	require.ElementsMatch(t, []string{"totp", "sms", "email"}, got.Allowed,
 		"invalid_enum issues must carry the Allowed set so the AI corrector can suggest the legal value")
 	// Pin Reason and Suggestion so a mutation that empties either field — and
 	// thereby breaks the AI-corrector contract — is caught at compose time.

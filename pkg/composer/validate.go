@@ -590,7 +590,7 @@ var configFieldValidators = []configFieldValidator{
 			return c.AWSCognito.MFAFactor, true
 		},
 		normalize: normalizeCognitoMFAFactor,
-		allowed:   []string{"totp"},
+		allowed:   []string{"totp", "sms", "email"},
 		code:      "invalid_enum",
 	},
 	{
