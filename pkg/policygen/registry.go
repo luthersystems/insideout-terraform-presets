@@ -67,7 +67,7 @@ func scanRegistry(key string, a *acc, seen map[string]bool) error {
 	if err != nil {
 		return err
 	}
-	defer os.RemoveAll(dir)
+	defer func() { _ = os.RemoveAll(dir) }()                                                      // best effort: a leftover temp clone does no harm
 	cmd := exec.Command("git", "clone", "--quiet", "--depth", "1", "--branch", "v"+ver, url, dir) //nolint:gosec // url and tag are built from a validated registry key
 	if out, err := cmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("clone %s v%s: %v: %s", url, ver, err, out)
