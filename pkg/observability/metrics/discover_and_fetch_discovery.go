@@ -300,10 +300,15 @@ func extractNATGatewayIDs(raw any) []string {
 	return ids
 }
 
+// extractS3BucketNames reads the bucket names from s3 list-buckets. The
+// inspector wraps each SDK Bucket with a Versioning flag
+// (bucketWithVersioning in discovery/aws), a type this package cannot
+// name, so anything other than the bare SDK slice is read by its JSON
+// "Name".
 func extractS3BucketNames(raw any) []string {
 	buckets, ok := raw.([]s3types.Bucket)
 	if !ok {
-		return nil
+		return extractStringFieldViaJSON(raw, "Name")
 	}
 	names := make([]string, 0, len(buckets))
 	for _, b := range buckets {
