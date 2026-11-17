@@ -128,3 +128,24 @@ func TestBackfillImportedAttrsFromPlanSkipsSensitivePlanValues(t *testing.T) {
 		t.Fatalf("Attrs changed despite only sensitive missing fields: %s", got[0].Attrs)
 	}
 }
+
+// TestWrapPlanAttrValue pins the typed Attrs wire shape reliable's backfill
+// relies on: leaves become Values, objects and lists keep their shape, and
+// the result decodes into the generated model.
+func TestWrapPlanAttrValue(t *testing.T) {
+	got, err := json.Marshal(map[string]any{
+		"bucket":     WrapPlanAttrValue("a"),
+		"tags":       WrapPlanAttrValue(map[string]any{"Project": "demo"}),
+		"versioning": WrapPlanAttrValue([]any{map[string]any{"enabled": true, "mfa_delete": nil}}),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	const want = `{"bucket":{"literal":"a"},"tags":{"Project":{"literal":"demo"}},"versioning":[{"enabled":{"literal":true},"mfa_delete":{"null":true}}]}`
+	if string(got) != want {
+		t.Fatalf("got %s, want %s", got, want)
+	}
+	if _, err := generated.UnmarshalAttrs("aws_s3_bucket", got); err != nil {
+		t.Fatalf("typed model rejects the wrapped value: %v", err)
+	}
+}

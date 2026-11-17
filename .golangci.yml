@@ -24,7 +24,10 @@ linters:
       # ImportedResource.Attributes is deprecated in favour of Attrs, but
       # this module still reads and writes it as the legacy fallback that
       # consumers rely on. The deprecation note is for those consumers, so
-      # the uses here are not findings. Remove this rule with the field
+      # the uses here are not findings. Why the field still exists and the
+      # ordered steps to remove it are in its doc comment in
+      # pkg/composer/imported/resource.go. Remove this rule in the last of
+      # those steps, with the field
       # (luthersystems/insideout-terraform-presets#921).
       - linters:
           - staticcheck
