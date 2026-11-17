@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Static analysis: every `resource "google_*"` block in `gcp/**/main.tf`
-# (and `observability.tf`) MUST set `project = var.project_id`, and every
+# Static analysis: every `resource "google_*"` block in `gcp/<module>/main.tf`
+# and `gcp/_shared/<name>/main.tf` (and their `observability.tf`) MUST set `project = var.project_id`, and every
 # `module "<name>"` block in those files MUST pass
 # `project_id = var.project_id`. Resource types whose Google provider
 # schema does not accept a `project` attribute are listed in
@@ -43,8 +43,11 @@
 # for Debian/Ubuntu base images at gcp/bastion/main.tf, gcp/compute/main.tf)
 # legitimately reference a different project than var.project_id.
 #
-# TODO(#929): extend the file glob to gcp/_shared/*/main.tf once the _shared
-# bucket carries non-fixture content (currently smoke placeholders only).
+# Shared helpers (#203, #929): gcp/_shared/<name>/ modules ride along inside
+# every GCP stack that uses them, so a google_* resource there would hit the
+# same wrong-project fallback. They are scanned from the start, so the first
+# real shared module is covered the day it lands. Today the bucket holds
+# only the _smoke placeholder, which has no google_* resources.
 
 set -euo pipefail
 
@@ -84,7 +87,8 @@ echo "=== Checking GCP resources and modules for project = var.project_id pin (#
 echo
 
 any_fail=0
-for f in "$REPO_ROOT"/gcp/*/main.tf "$REPO_ROOT"/gcp/*/observability.tf; do
+for f in "$REPO_ROOT"/gcp/*/main.tf "$REPO_ROOT"/gcp/*/observability.tf \
+         "$REPO_ROOT"/gcp/_shared/*/main.tf "$REPO_ROOT"/gcp/_shared/*/observability.tf; do
   [ -f "$f" ] || continue
   awk -v exempt_pattern="$exempt_pattern" '
     BEGIN { mode=""; failed=0 }
