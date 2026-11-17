@@ -129,6 +129,26 @@ variable "domain_prefix" {
   }
 }
 
+variable "custom_domain" {
+  description = "Optional custom domain for the hosted UI, e.g. auth.example.com. Added beside the prefix domain. Needs custom_domain_certificate_arn, and its parent domain must already resolve in DNS (a Cognito requirement)."
+  type        = string
+  default     = null
+  validation {
+    condition     = var.custom_domain == null ? true : can(regex("^([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\\.)+[a-z]{2,63}$", var.custom_domain))
+    error_message = "custom_domain must be null or a lowercase fully qualified domain name such as auth.example.com."
+  }
+}
+
+variable "custom_domain_certificate_arn" {
+  description = "ACM certificate ARN for custom_domain. Must be in us-east-1, because Cognito serves custom domains through CloudFront."
+  type        = string
+  default     = null
+  validation {
+    condition     = var.custom_domain_certificate_arn == null ? true : can(regex("^arn:aws(-[a-z0-9]+)?:acm:us-east-1:[0-9]{12}:certificate/.+$", var.custom_domain_certificate_arn))
+    error_message = "custom_domain_certificate_arn must be null or an ACM certificate ARN in us-east-1 (Cognito custom domains are served through CloudFront)."
+  }
+}
+
 # ---------------- Federated Identity Providers ----------------
 
 variable "oidc_identity_providers" {

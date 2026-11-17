@@ -1,7 +1,9 @@
 package composer
 
 import (
+	"fmt"
 	"slices"
+	"strconv"
 	"strings"
 )
 
@@ -754,7 +756,18 @@ func resourceRef(selected map[ComponentKey]bool) string {
 // `selected` map must carry KeyAWS*-prefixed keys; ComposeStack rejects
 // purely-legacy SelectedKeys at entry, and Components.Normalize promotes
 // legacy struct fields before this function is reached.
+//
+// DefaultWiring has no Config, so it leaves out the wiring that depends on
+// what the caller configured (today: the Route 53 aliases for the API
+// Gateway and Cognito custom domains, #925). ComposeStack uses
+// DefaultWiringForConfig.
 func DefaultWiring(selected map[ComponentKey]bool, k ComponentKey, comps *Components) WiredInputs {
+	return DefaultWiringForConfig(selected, k, comps, nil)
+}
+
+// DefaultWiringForConfig is DefaultWiring plus the wiring that needs the
+// caller's Config. A nil cfg gives the same result as DefaultWiring.
+func DefaultWiringForConfig(selected map[ComponentKey]bool, k ComponentKey, comps *Components, cfg *Config) WiredInputs {
 	wi := WiredInputs{RawHCL: map[string]string{}}
 
 	hasVPC := selected[KeyAWSVPC]
@@ -966,8 +979,8 @@ func DefaultWiring(selected map[ComponentKey]bool, k ComponentKey, comps *Compon
 	case KeyAWSRoute53:
 		// Auto-emit alias records for in-stack endpoints (issue #584).
 		//
-		// Today's auto-aliases cover the two consumers whose presets already
-		// expose the (dns_name, zone_id) pair the alias-target shape needs:
+		// Auto-aliases cover the consumers whose presets expose the
+		// (dns_name, zone_id) pair the alias-target shape needs:
 		//
 		//   - ALB:        module.aws_alb.alb_dns_name + .alb_zone_id, alias
 		//                 at the apex ("") with evaluate_target_health=true.
@@ -977,50 +990,44 @@ func DefaultWiring(selected map[ComponentKey]bool, k ComponentKey, comps *Compon
 		//                 evaluate_target_health must be false (CloudFront
 		//                 contract — no Route 53 health-check semantics on
 		//                 the global edge).
+		//   - API Gateway (#925): module.aws_apigateway.target_domain_name +
+		//                 .hosted_zone_id (the custom domain's regional
+		//                 endpoint); evaluate_target_health=false.
+		//   - Cognito (#925): module.aws_cognito.custom_domain_cloudfront_
+		//                 distribution + _zone_id (Cognito serves a custom
+		//                 domain from its own CloudFront distribution);
+		//                 evaluate_target_health=false (CloudFront contract).
 		//
-		// Deferred (no preset outputs yet — TODO(#925)):
-		//   - API Gateway: needs aws/apigateway to expose
-		//     aws_apigatewayv2_domain_name.api[0].domain_name_configuration[0]
-		//     {target_domain_name,hosted_zone_id} as outputs. Today they are
-		//     internal to the preset and the count=var.domain_name!=null gate
-		//     makes the outputs themselves nullable, so even after adding
-		//     them the wiring needs to gate on the user supplying a domain
-		//     to apigateway.
-		//   - Cognito: needs aws/cognito to manage an actual custom domain
-		//     (aws_cognito_user_pool_domain with `domain` instead of
-		//     `domain_prefix`) and surface its cloudfront_distribution_arn.
-		//     The current preset only manages the hosted UI prefix.
+		// API Gateway and Cognito have no endpoint to alias unless the user
+		// gave them a custom domain (their outputs are null otherwise, and a
+		// null alias target fails the apply). So their entries are emitted
+		// only when cfg names that domain AND it lies inside the Route 53
+		// zone; the record name is the domain relative to the zone, the same
+		// form the ALB ("") and CloudFront ("cdn") entries use.
 		//
-		// The aliases HCL is emitted as a list literal of objects. Only
-		// emitted when at least one consumer is selected — leaving
-		// var.aliases at its preset default of `[]` when route53 is
-		// composed standalone (test contract: wiring stays inert when only
-		// one side is selected).
-		var aliasEntries []string
-		if hasALB {
-			aliasEntries = append(aliasEntries, `    {
-      name                   = ""
-      target_dns_name        = `+albRef(selected)+`.alb_dns_name
-      target_zone_id         = `+albRef(selected)+`.alb_zone_id
-      type                   = "A"
-      evaluate_target_health = true
-    }`)
-		}
-		if selected[KeyAWSCloudfront] {
-			// Z2FDTNDATAQYW2 is the documented global hosted-zone ID for
-			// every CloudFront distribution. evaluate_target_health must
-			// remain false for CloudFront alias targets.
-			aliasEntries = append(aliasEntries, `    {
-      name                   = "cdn"
-      target_dns_name        = `+WireRef(KeyAWSCloudfront, "domain_name")+`
-      target_zone_id         = "Z2FDTNDATAQYW2"
-      type                   = "A"
-      evaluate_target_health = false
-    }`)
-		}
-		if len(aliasEntries) > 0 {
-			wi.RawHCL["aliases"] = "[\n" + strings.Join(aliasEntries, ",\n") + ",\n  ]"
+		// Their entries go to the separate `dependent_aliases` input, not
+		// `aliases`: Terraform orders every instance of a for_each after
+		// every value it reads, so an `aliases` list holding the Cognito
+		// target would make the apex ALB record wait for Cognito's custom
+		// domain, while Cognito cannot create that domain until its parent
+		// (often the apex) resolves to an A record. Keeping ALB and
+		// CloudFront in `aliases` also keeps their resource addresses on
+		// live stacks.
+		//
+		// Each list is emitted as a list literal of objects, and only when
+		// it has an entry — leaving the preset default of `[]` when route53
+		// is composed standalone (test contract: wiring stays inert when
+		// only one side is selected). route53Aliases drops a custom-domain
+		// alias whose name another alias uses; ValidateRoute53Aliases
+		// reports it.
+		base, dependent, _ := route53Aliases(selected, cfg)
+		if len(base) > 0 {
+			wi.RawHCL["aliases"] = route53AliasListHCL(base)
 			wi.Names = append(wi.Names, "aliases")
+		}
+		if len(dependent) > 0 {
+			wi.RawHCL["dependent_aliases"] = route53AliasListHCL(dependent)
+			wi.Names = append(wi.Names, "dependent_aliases")
 		}
 		// Auto-inject ACM DNS-01 validation records when aws/acm is in the
 		// stack (issue #593). ACM's validation_records output is a list of
@@ -1416,4 +1423,199 @@ func boolToHCL(b bool) string {
 		return "true"
 	}
 	return "false"
+}
+
+// route53Alias is one alias record the composer wires into aws/route53.
+type route53Alias struct {
+	component ComponentKey
+	// field is the Config field that chose the record name, for issues;
+	// empty for the fixed ALB and CloudFront names.
+	field string
+	// domain is the custom domain the user gave, for issues.
+	domain string
+	name   string
+	target string // HCL expression for target_dns_name
+	zone   string // HCL expression for target_zone_id
+	health bool
+}
+
+// route53Aliases returns the alias records for a stack with Route 53:
+// base goes to var.aliases (ALB, CloudFront) and dependent to
+// var.dependent_aliases (API Gateway and Cognito custom domains, #925).
+//
+// aws/route53 keys its records by name and type, and Route 53 holds one
+// record set per name and type, so two entries with one name fail the
+// plan or the apply. The ALB ("") and CloudFront ("cdn") entries predate
+// the custom-domain ones and live stacks have them, so they always win: a
+// custom domain whose record name is already taken gets no alias, and an
+// issue that names both components.
+func route53Aliases(selected map[ComponentKey]bool, cfg *Config) (base, dependent []route53Alias, issues []ValidationIssue) {
+	if selected[KeyAWSALB] {
+		ref := albRef(selected)
+		base = append(base, route53Alias{
+			component: KeyAWSALB, name: "",
+			target: ref + ".alb_dns_name", zone: ref + ".alb_zone_id", health: true,
+		})
+	}
+	if selected[KeyAWSCloudfront] {
+		// Z2FDTNDATAQYW2 is the documented global hosted-zone ID for
+		// every CloudFront distribution. evaluate_target_health must
+		// remain false for CloudFront alias targets.
+		base = append(base, route53Alias{
+			component: KeyAWSCloudfront, name: "cdn",
+			target: WireRef(KeyAWSCloudfront, "domain_name"), zone: `"Z2FDTNDATAQYW2"`,
+		})
+	}
+	if cfg == nil || cfg.AWSRoute53 == nil {
+		return base, dependent, nil
+	}
+	zone := cfg.AWSRoute53.DomainName
+
+	var custom []route53Alias
+	if selected[KeyAWSAPIGateway] && cfg.AWSAPIGateway != nil {
+		custom = append(custom, route53Alias{
+			component: KeyAWSAPIGateway, field: "aws_api_gateway.domainName",
+			domain: cfg.AWSAPIGateway.DomainName,
+			target: WireRef(KeyAWSAPIGateway, "target_domain_name"),
+			zone:   WireRef(KeyAWSAPIGateway, "hosted_zone_id"),
+		})
+	}
+	if selected[KeyAWSCognito] && cfg.AWSCognito != nil {
+		custom = append(custom, route53Alias{
+			component: KeyAWSCognito, field: "aws_cognito.customDomain",
+			domain: cfg.AWSCognito.CustomDomain,
+			target: WireRef(KeyAWSCognito, "custom_domain_cloudfront_distribution"),
+			zone:   WireRef(KeyAWSCognito, "custom_domain_cloudfront_zone_id"),
+		})
+	}
+	for _, a := range custom {
+		name, ok := aliasRecordName(a.domain, zone)
+		if !ok {
+			continue
+		}
+		a.name = name
+		if owner, taken := aliasNameOwner(name, base, dependent); taken {
+			issues = append(issues, ValidationIssue{
+				Field: a.field,
+				Value: a.domain,
+				Code:  "aws_route53_alias_name_conflict",
+				Reason: fmt.Sprintf("%s custom domain %q needs the Route 53 record %s in zone %q, which the %s alias "+
+					"already uses; Route 53 holds one A record per name, so the composer did not add the %s alias",
+					a.component, a.domain, displayRecordName(name), zone, owner.component, a.component),
+				Suggestion: fmt.Sprintf("give %s a custom domain whose record name %s does not use", a.component, owner.component),
+			})
+			continue
+		}
+		dependent = append(dependent, a)
+	}
+	return base, dependent, issues
+}
+
+// aliasNameOwner returns the alias that already uses name, if any.
+func aliasNameOwner(name string, lists ...[]route53Alias) (route53Alias, bool) {
+	for _, l := range lists {
+		for _, a := range l {
+			if a.name == name {
+				return a, true
+			}
+		}
+	}
+	return route53Alias{}, false
+}
+
+// displayRecordName shows a record name readably in issues, where the
+// apex's empty name would otherwise be invisible.
+func displayRecordName(name string) string {
+	if name == "" {
+		return "at the zone apex"
+	}
+	return strconv.Quote(name)
+}
+
+// route53AliasListHCL renders aliases as the HCL list literal the
+// aws/route53 aliases and dependent_aliases variables take.
+func route53AliasListHCL(aliases []route53Alias) string {
+	entries := make([]string, 0, len(aliases))
+	for _, a := range aliases {
+		entries = append(entries, `    {
+      name                   = `+strconv.Quote(a.name)+`
+      target_dns_name        = `+a.target+`
+      target_zone_id         = `+a.zone+`
+      type                   = "A"
+      evaluate_target_health = `+boolToHCL(a.health)+`
+    }`)
+	}
+	return "[\n" + strings.Join(entries, ",\n") + ",\n  ]"
+}
+
+// ValidateRoute53Aliases reports the problems with the alias records the
+// composer wires into aws/route53 (#925). It is a no-op unless Route 53 is
+// selected. Like ValidateAWSVPCNATConsistency, its issues are warnings: the
+// compose still succeeds unless the caller sets StrictValidate.
+//
+//   - aws_route53_alias_name_conflict: an API Gateway or Cognito custom
+//     domain needs a record name another alias in the stack already uses.
+//     The composer leaves that alias out, so the plan does not fail on a
+//     duplicate key.
+//   - aws_cognito_custom_domain_parent_unresolved: Cognito creates a custom
+//     domain only when its parent domain (example.com for
+//     auth.example.com) already resolves to an A record. When no alias in
+//     the stack covers the parent, that record must exist before the
+//     apply, or Cognito rejects the domain.
+func ValidateRoute53Aliases(selected map[ComponentKey]bool, cfg *Config) []ValidationIssue {
+	if !selected[KeyAWSRoute53] {
+		return nil
+	}
+	base, dependent, issues := route53Aliases(selected, cfg)
+	for _, a := range dependent {
+		if a.component != KeyAWSCognito {
+			continue
+		}
+		parent := ""
+		if _, rest, ok := strings.Cut(normalizeDNSName(a.domain), "."); ok {
+			parent = rest
+		}
+		if pname, ok := aliasRecordName(parent, cfg.AWSRoute53.DomainName); ok {
+			if _, covered := aliasNameOwner(pname, base, dependent); covered {
+				continue
+			}
+		}
+		issues = append(issues, ValidationIssue{
+			Field: a.field,
+			Value: a.domain,
+			Code:  "aws_cognito_custom_domain_parent_unresolved",
+			Reason: fmt.Sprintf("Cognito creates the custom domain %q only when its parent domain %q already resolves "+
+				"to an A record, and no alias in this stack creates one; the apply fails unless that record exists",
+				a.domain, parent),
+			Suggestion: fmt.Sprintf("create an A record for %q before the apply, add an ALB so the composer aliases "+
+				"the zone apex, or pick a custom domain whose parent is the zone apex", parent),
+		})
+	}
+	return issues
+}
+
+// aliasRecordName returns the Route 53 record name for domain inside zone,
+// relative to the zone ("" for the apex), and false when either is empty
+// or domain is not in zone. A record outside the zone cannot be created
+// there, so the caller emits no alias for it (#925).
+func aliasRecordName(domain, zone string) (string, bool) {
+	d := normalizeDNSName(domain)
+	z := normalizeDNSName(zone)
+	if d == "" || z == "" {
+		return "", false
+	}
+	if d == z {
+		return "", true
+	}
+	if rel, ok := strings.CutSuffix(d, "."+z); ok {
+		return rel, true
+	}
+	return "", false
+}
+
+// normalizeDNSName returns name trimmed, lowercased and without a trailing
+// dot. DNS names are case-insensitive and the trailing dot is optional, so
+// this is the one form the composer compares and passes to presets.
+func normalizeDNSName(name string) string {
+	return strings.TrimSuffix(strings.ToLower(strings.TrimSpace(name)), ".")
 }

@@ -20,6 +20,10 @@ terraform {
 #                      endpoint (ALB, CloudFront, API Gateway, etc.). Alias
 #                      records have no TTL and require the target's hosted
 #                      zone ID.
+#   - `var.dependent_aliases` — alias records whose targets other components
+#                      create and that may need DNS first (API Gateway and
+#                      Cognito custom domains). Kept in their own resource so
+#                      the records in `var.aliases` do not wait for them.
 #
 # Scoping (issue #140 v1):
 #   - DNSSEC, cross-account delegation, vanity domain registration, and
@@ -93,6 +97,13 @@ locals {
     for a in var.aliases :
     "${a.name}-${try(a.type, "A")}" => a
   }
+
+  # Same keying for the aliases whose targets other components create
+  # (see aws_route53_record.dependent_aliases below).
+  dependent_aliases_map = {
+    for a in var.dependent_aliases :
+    "${a.name}-${try(a.type, "A")}" => a
+  }
 }
 
 # -----------------------------------------------------------------------------
@@ -130,6 +141,43 @@ resource "aws_route53_record" "aliases" {
     name                   = each.value.target_dns_name
     zone_id                = each.value.target_zone_id
     evaluate_target_health = try(each.value.evaluate_target_health, false)
+  }
+
+  # aws_route53_record is not taggable; see note above.
+}
+
+# -----------------------------------------------------------------------------
+# Dependent alias records (API Gateway / Cognito custom domains)
+# -----------------------------------------------------------------------------
+# A separate variable and resource, not more entries in var.aliases, because
+# Terraform orders a resource after every value its for_each reads. If these
+# targets were in var.aliases, every alias, the apex ALB record included,
+# would wait for the API Gateway and Cognito custom domains to be created.
+# Cognito cannot create a custom domain until its parent domain resolves to
+# an A record, which is often that apex ALB record: the two would wait on
+# each other and the first apply would fail. Here only these records wait.
+#
+# Route 53 holds one record set per (name, type), so a name used in both
+# variables would fail at apply. The precondition fails the plan instead,
+# with a clear message.
+resource "aws_route53_record" "dependent_aliases" {
+  for_each = local.dependent_aliases_map
+
+  zone_id = local.zone_id
+  name    = each.value.name
+  type    = try(each.value.type, "A")
+
+  alias {
+    name                   = each.value.target_dns_name
+    zone_id                = each.value.target_zone_id
+    evaluate_target_health = try(each.value.evaluate_target_health, false)
+  }
+
+  lifecycle {
+    precondition {
+      condition     = !contains(keys(local.aliases_map), each.key)
+      error_message = "dependent_aliases entry ${each.key} uses the same name and type as an entry in aliases; Route 53 allows one record set per name and type."
+    }
   }
 
   # aws_route53_record is not taggable; see note above.

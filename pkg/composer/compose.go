@@ -267,7 +267,7 @@ func (c *Client) composeSingleImpl(opts ComposeSingleOpts) (*ComposeSingleResult
 	for _, k := range expanded {
 		selected[k] = true
 	}
-	wired := DefaultWiring(selected, opts.Key, opts.Comps)
+	wired := DefaultWiringForConfig(selected, opts.Key, opts.Comps, opts.Cfg)
 
 	files := Files{}
 	maps.Copy(files, rebasePresetFiles(leaf, moduleDir))
@@ -564,7 +564,7 @@ func (c *Client) composeStackImpl(opts ComposeStackOpts) (*ComposeStackResult, e
 			return nil, err
 		}
 		maybeInjectGCPProjectID(cloud, opts.GCPProjectID, vals)
-		wired := DefaultWiring(selected, k, opts.Comps)
+		wired := DefaultWiringForConfig(selected, k, opts.Comps, opts.Cfg)
 
 		// Drop wired RawHCL entries that don't match a variable
 		// declared by the preset. The post-switch observability wiring
@@ -830,6 +830,7 @@ func (c *Client) composeStackImpl(opts ComposeStackOpts) (*ComposeStackResult, e
 	issues = append(issues, ValidateComposedRoot(files)...)
 	issues = append(issues, ValidateGCPProjectID(cloud, opts.GCPProjectID)...)
 	issues = append(issues, ValidateAWSVPCNATConsistency(cloud, opts.Comps, opts.Cfg)...)
+	issues = append(issues, ValidateRoute53Aliases(selected, opts.Cfg)...)
 
 	return &ComposeStackResult{
 		Files:         files,

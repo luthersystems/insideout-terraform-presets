@@ -165,6 +165,41 @@ variable "aliases" {
   }
 }
 
+variable "dependent_aliases" {
+  description = <<-EOT
+    Alias records whose targets are created by other components that may
+    themselves need DNS first, such as an API Gateway or Cognito custom
+    domain. Same shape and rules as `aliases`. They are kept apart so the
+    records in `aliases` (the apex ALB record in particular) do not wait
+    for those components: Cognito cannot create a custom domain until its
+    parent domain resolves to an A record. A name and type must not appear
+    in both variables.
+  EOT
+  type = list(object({
+    name                   = string
+    target_dns_name        = string
+    target_zone_id         = string
+    type                   = optional(string, "A")
+    evaluate_target_health = optional(bool, false)
+  }))
+  default = []
+
+  validation {
+    condition     = alltrue([for a in var.dependent_aliases : contains(["A", "AAAA"], a.type)])
+    error_message = "dependent_aliases[*].type must be A or AAAA (Route 53 alias records are restricted to these two types)."
+  }
+
+  validation {
+    condition     = alltrue([for a in var.dependent_aliases : length(trimspace(a.target_dns_name)) > 0])
+    error_message = "Each dependent_aliases entry must specify a non-empty target_dns_name."
+  }
+
+  validation {
+    condition     = alltrue([for a in var.dependent_aliases : can(regex("^Z[A-Z0-9]{1,31}$", a.target_zone_id))])
+    error_message = "Each dependent_aliases[*].target_zone_id must look like a Route 53 hosted-zone ID."
+  }
+}
+
 variable "tags" {
   description = "Common resource tags. Applied to the hosted zone (the only taggable Route 53 resource in this module)."
   type        = map(string)

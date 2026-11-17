@@ -19,17 +19,19 @@ output "name_servers" {
 }
 
 output "record_fqdns" {
-  description = "Map of record-key (\"<name>-<type>\") -> resolved FQDN, covering both plain records and aliases. Lets downstream callers reference the record without rebuilding the FQDN."
+  description = "Map of record-key (\"<name>-<type>\") -> resolved FQDN, covering plain records, aliases and dependent aliases. Lets downstream callers reference the record without rebuilding the FQDN."
   value = merge(
     { for k, r in aws_route53_record.records : k => r.fqdn },
     { for k, r in aws_route53_record.aliases : k => r.fqdn },
+    { for k, r in aws_route53_record.dependent_aliases : k => r.fqdn },
   )
 }
 
 output "record_names" {
-  description = "List of all record short-names managed by this module (across both plain and alias records). Useful for assertions / discovery."
+  description = "List of all record short-names managed by this module (plain, alias and dependent alias records). Useful for assertions / discovery."
   value = sort(concat(
     [for r in aws_route53_record.records : r.name],
     [for r in aws_route53_record.aliases : r.name],
+    [for r in aws_route53_record.dependent_aliases : r.name],
   ))
 }

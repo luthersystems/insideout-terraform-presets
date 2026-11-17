@@ -212,7 +212,12 @@ type Config struct {
 		SMSSNSCallerArn string `json:"smsSnsCallerArn,omitempty"`
 		SMSExternalID   string `json:"smsExternalId,omitempty"`
 		EmailSourceArn  string `json:"emailSourceArn,omitempty"`
-		Okta            *struct {
+		// Optional hosted UI custom domain and its us-east-1 ACM
+		// certificate (#925). With Route 53 in the stack and the domain in
+		// its zone, the composer adds the alias record for it.
+		CustomDomain               string `json:"customDomain,omitempty"`
+		CustomDomainCertificateArn string `json:"customDomainCertificateArn,omitempty"`
+		Okta                       *struct {
 			SelfSignupAllowed *bool `json:"selfSignupAllowed,omitempty"`
 		} `json:"okta,omitempty"`
 		Auth0 *struct {
