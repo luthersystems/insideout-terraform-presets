@@ -57,6 +57,9 @@ type Options struct {
 type ComponentReport struct {
 	Preset   string   `json:"preset"`
 	Services []string `json:"services"`
+	// RolesWithoutBoundary must take the workload boundary before the
+	// scoped policy can deploy this component (#147 step 2).
+	RolesWithoutBoundary []string `json:"roles_without_boundary,omitempty"`
 }
 
 // Report is the generator's full input after mapping, kept beside the
@@ -142,12 +145,14 @@ func Scan(opts Options) (Report, error) {
 			}
 			a.merge(rs)
 		}
-		for _, src := range s.RemoteSources {
+		full := a.result()
+		// Check the merged scan, so a remote module that a registry
+		// module calls is caught too.
+		for _, src := range full.RemoteSources {
 			if !allowedRemoteSources[strings.SplitN(src, "?", 2)[0]] {
 				badRemote[src] = true
 			}
 		}
-		full := a.result()
 		svcs := map[string]bool{}
 		addTypes(full.Types, svcs)
 		for svc := range svcs {
@@ -159,7 +164,7 @@ func Scan(opts Options) (Report, error) {
 		for _, m := range full.ManagedPolicies {
 			managed[m] = true
 		}
-		r.Components[k] = ComponentReport{Preset: dir, Services: keys(svcs)}
+		r.Components[k] = ComponentReport{Preset: dir, Services: keys(svcs), RolesWithoutBoundary: full.RolesWithoutBoundary}
 	}
 
 	if opts.IncludeImported {
@@ -264,7 +269,6 @@ var star = []string{"*"}
 // condition the deploy role could create an admin role and use it (#935).
 var roleWriteActions = []string{
 	"iam:AttachRolePolicy",
-	"iam:CreateRole",
 	"iam:DeleteRolePolicy",
 	"iam:DetachRolePolicy",
 	"iam:PutRolePermissionsBoundary",
@@ -317,8 +321,16 @@ func writePolicy(r Report) Document {
 		{Sid: "StackServices", Effect: "Allow", Action: serviceWildcards(r.DeployServices), Resource: star},
 		{Sid: "CallerIdentity", Effect: "Allow", Action: []string{"sts:GetCallerIdentity"}, Resource: star},
 		{Sid: "IAMRead", Effect: "Allow", Action: []string{"iam:Get*", "iam:List*"}, Resource: star},
-		{Sid: "RoleWritesOnlyWithWorkloadBoundary", Effect: "Allow", Action: roleWriteActions, Resource: star,
+		{Sid: "CreateRoleOnlyWithWorkloadBoundary", Effect: "Allow", Action: []string{"iam:CreateRole"}, Resource: star,
 			Condition: eq("iam:PermissionsBoundary", PlaceholderWorkloadBoundaryARN)},
+		// The other role writes also need the Project tag, so the deploy
+		// role can not put the boundary on a customer's role and then
+		// change that role's policies.
+		{Sid: "RoleWritesOnlyOnProjectRolesWithWorkloadBoundary", Effect: "Allow", Action: roleWriteActions, Resource: star,
+			Condition: map[string]map[string]any{"StringEquals": {
+				"iam:PermissionsBoundary": PlaceholderWorkloadBoundaryARN,
+				"aws:ResourceTag/Project": PlaceholderProject,
+			}}},
 		{Sid: "CreateRoleOnlyTaggedForProject", Effect: "Deny", Action: []string{"iam:CreateRole"}, Resource: star,
 			Condition: map[string]map[string]any{"StringNotEquals": {"aws:RequestTag/Project": PlaceholderProject}}},
 		{Sid: "ProjectRolesOnly", Effect: "Allow", Action: projectRoleActions, Resource: star,
