@@ -467,6 +467,11 @@ func (m DefaultMapper) BuildModuleValues(
 		if _, ok := vals["subnet_id"]; !ok {
 			vals["subnet_id"] = ""
 		}
+		// admin_cidrs only when the caller opted in (#908): nil keeps the
+		// preset's open SSH rule, an empty list removes it (SSM only).
+		if cfg != nil && cfg.AWSBastion != nil && cfg.AWSBastion.AdminCIDRs != nil {
+			vals["admin_cidrs"] = trimmedStrings(*cfg.AWSBastion.AdminCIDRs)
+		}
 
 	case KeyAWSRDS:
 		// RDS requires VPC + private subnets; stub for preview.

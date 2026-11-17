@@ -131,6 +131,8 @@ func kitchenSinkConfig() *Config {
 	}{DefaultTtl: &ttl, OriginPath: &op}
 	vpcCIDR := []string{"10.1.0.0/16"}
 	cfg.AWSALB = &AWSALBConfig{EgressCIDRs: vpcCIDR}
+	adminCIDRs := []string{"203.0.113.0/24"}
+	cfg.AWSBastion = &AWSBastionConfig{AdminCIDRs: &adminCIDRs}
 	cfg.AWSRDS = &AWSRDSConfig{CPUSize: "8 vCPU", ReadReplicas: "2 read replicas", StorageSize: "200GB", EgressCIDRs: vpcCIDR}
 	cfg.AWSElastiCache = &AWSElastiCacheConfig{HA: &t, Storage: "20GB", NodeSize: "8 vCPU", Replicas: "2 read replicas", EgressCIDRs: vpcCIDR}
 	cfg.AWSS3 = &struct {

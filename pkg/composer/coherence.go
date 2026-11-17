@@ -321,12 +321,20 @@ func DeriveCrossComponentFields(comps *Components, cfg *Config) {
 // component sub-block on Config that participates in the orphan strip. The
 // list mirrors the *struct sub-fields of Config with cloud-prefixed json
 // tags. KeyAWSEKSNodeGroup (driven by KeyAWSEKS auto-include) and pure
-// non-config components (KeyAWSALB / KeyAWSGrafana / KeyAWSWAF /
-// KeySplunk / KeyDatadog / KeyGitHubActions etc.) are NOT in scope —
-// there is no cfg.<key> sub-block to strip.
+// non-config components (KeyAWSGrafana / KeyAWSWAF / KeySplunk /
+// KeyDatadog / KeyGitHubActions etc.) are NOT in scope — there is no
+// cfg.<key> sub-block to strip.
+//
+// KeyAWSALB and KeyAWSBastion used to be pure non-config components too.
+// They are in the switch now because Config gained cfg.AWSALB (#907) and
+// cfg.AWSBastion (#908): left behind after the ALB or bastion is removed,
+// those blocks would keep stale settings (such as narrowed CIDRs) that
+// silently come back if the component is added again.
+// TestStripOrphanConfig_KeyCoverage_ConfigSubFieldsHaveKeysAndSwitches
+// fails when a Config sub-block is missing here.
 func isOrphanStrippableKey(key ComponentKey) bool {
 	switch key {
-	case KeyAWSEC2, KeyAWSEKS, KeyAWSECS, KeyAWSVPC,
+	case KeyAWSEC2, KeyAWSEKS, KeyAWSECS, KeyAWSVPC, KeyAWSBastion,
 		KeyAWSALB, KeyAWSCloudfront, KeyAWSRDS, KeyAWSElastiCache,
 		KeyAWSS3, KeyAWSDynamoDB, KeyAWSSQS, KeyAWSMSK,
 		KeyAWSCloudWatchLogs, KeyAWSCloudWatchMonitoring,
