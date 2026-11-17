@@ -282,3 +282,24 @@ func TestExtractors_ConfigFanOutRowShapes(t *testing.T) {
 	apiRows := []map[string]any{{"ApiId": "api-1", "CustomDomainName": "api.example.com"}}
 	assert.Equal(t, []string{"api-1"}, extractAPIGatewayIDs(any(apiRows)))
 }
+
+// TestExtractS3BucketNames_VersionedRows pins the S3 discovery row shape.
+// filterS3BucketsByProjectTag returns the SDK Bucket wrapped with a
+// Versioning flag, not []s3types.Bucket, so a type assertion on the bare
+// SDK slice found no buckets and S3 metrics were never fetched. The local
+// type mirrors discovery/aws's unexported bucketWithVersioning.
+func TestExtractS3BucketNames_VersionedRows(t *testing.T) {
+	t.Parallel()
+	type bucketWithVersioning struct {
+		s3types.Bucket
+		Versioning *bool `json:"Versioning,omitempty"`
+	}
+	on := true
+	rows := []bucketWithVersioning{
+		{Bucket: s3types.Bucket{Name: aws.String("demo-a")}, Versioning: &on},
+		{Bucket: s3types.Bucket{Name: aws.String("demo-b")}},
+	}
+	assert.Equal(t, []string{"demo-a", "demo-b"}, extractS3BucketNames(any(rows)))
+	assert.Equal(t, []string{"demo-c"},
+		extractS3BucketNames(any([]s3types.Bucket{{Name: aws.String("demo-c")}})), "bare SDK slice")
+}
