@@ -16,10 +16,10 @@
 # check resource presence, count-gating, names, and wiring rather than fragile
 # deep attribute paths.
 #
-# TODO(#922): a live-apply integration.tftest.hcl is deliberately deferred —
-# AgentCore live-apply needs special account access and a live-apply test
-# against a churning provider family would be MORE fragile than this shape
-# suite, not less. Track separately; do not treat its absence as folklore.
+# The live-apply proof lives in tests/integration.tftest.hcl. It is opt-in and
+# CI skips it, because it needs credentials for an account with Bedrock
+# AgentCore access. This shape suite stays the CI gate: it needs no account
+# and does not break when the churning AgentCore API changes underneath it.
 
 mock_provider "aws" {
   mock_data "aws_caller_identity" {
