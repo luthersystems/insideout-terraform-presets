@@ -321,6 +321,48 @@ func NewEnrichClients(cfg aws.Config, accountID string) EnrichClients {
 // error. Mirrors gcpdiscover.ErrEnrichClientUnavailable.
 var ErrEnrichClientUnavailable = errors.New("enrich: required SDK client unavailable on EnrichClients")
 
+// PartialEnrichError is returned by an enricher that wrote ir.Attrs but
+// had one or more of its secondary fetches fail (issue #932). Some
+// enrichers build one resource from several API calls: the S3 bucket
+// enricher reads encryption, policy, tags and more with one call each,
+// and the DynamoDB table enricher adds PITR, TTL and tags to
+// DescribeTable. When the main call works but a secondary one fails,
+// the payload is still useful, so it is kept; this error tells
+// EnrichAttributes to stamp EnrichmentStatusPartial instead of Full, so
+// a consumer can tell a payload with missing blocks from a complete one.
+//
+// A "not configured" answer (for example NoSuchBucketPolicy) is not a
+// failure and must not be reported here: the block is absent because
+// the resource has none.
+//
+// Unwrap exposes the sub-fetch errors, so a throttled sub-fetch makes
+// enrichWithRetry run the whole enricher again for a complete result.
+type PartialEnrichError struct {
+	// Errs holds one error per failed secondary fetch, in call order.
+	Errs []error
+}
+
+func (e *PartialEnrichError) Error() string {
+	msgs := make([]string, len(e.Errs))
+	for i, err := range e.Errs {
+		msgs[i] = err.Error()
+	}
+	return "partial enrichment: " + strings.Join(msgs, "; ")
+}
+
+// Unwrap returns the sub-fetch errors for errors.Is / errors.As.
+func (e *PartialEnrichError) Unwrap() []error { return e.Errs }
+
+// partialEnrichErr returns nil when no secondary fetch failed and a
+// *PartialEnrichError otherwise. It returns a plain nil, never a typed
+// nil pointer, so callers can compare the result with nil.
+func partialEnrichErr(errs []error) error {
+	if len(errs) == 0 {
+		return nil
+	}
+	return &PartialEnrichError{Errs: errs}
+}
+
 // isThrottleError reports whether err is an AWS rate-limit / throttling
 // signal. It unwraps to a smithy.APIError (the same pattern isAPIErrorCode
 // uses — see sdkonly_helpers.go) and matches the documented throttle
@@ -481,8 +523,12 @@ type EnrichAttrOpts struct {
 //
 // Every enriched resource has its Identity.EnrichmentStatus /
 // EnrichErrors stamped: EnrichmentStatusFull on success,
-// EnrichmentStatusFailed (with the error text in EnrichErrors) on any
-// failure including the two downgraded kinds. This gives callers a
+// EnrichmentStatusPartial (Attrs kept, one EnrichErrors entry per
+// failed secondary fetch) when the enricher returns a
+// *PartialEnrichError, and EnrichmentStatusFailed (with the error text
+// in EnrichErrors) on any other failure including the two downgraded
+// kinds. A partial resource gets an ItemFound plus a ServiceWarn and is
+// not part of the returned error, because its payload is usable. This gives callers a
 // machine-readable per-resource signal that does not depend on
 // inspecting the returned joined error or on the absence of Attrs.
 //
@@ -613,14 +659,23 @@ func (a *AWSDiscoverer) EnrichAttributes(ctx context.Context, irs []imported.Imp
 		curType = irs[i].Identity.Type
 		curFound++
 		err := results[pos]
+		var partial *PartialEnrichError
 		switch {
 		case err == nil:
-			// Per-type enrichers marshal Attrs atomically today, so a
-			// nil return means Full. The Partial state is reserved for
-			// a future multi-call enricher (see issue #471).
 			irs[i].Identity.EnrichmentStatus = imported.EnrichmentStatusFull
 			irs[i].Identity.EnrichErrors = nil
 			emitter.ItemFound(enrichServiceSlug, irs[i].Identity.Region, irs[i].Identity.Type, irs[i].Identity.ImportID)
+		case errors.As(err, &partial):
+			// Checked before the sentinel cases: a sub-fetch error can
+			// itself wrap ErrNotFound, but the resource still has a
+			// usable payload, so it is Partial, not Failed (#932).
+			irs[i].Identity.EnrichmentStatus = imported.EnrichmentStatusPartial
+			irs[i].Identity.EnrichErrors = make([]string, 0, len(partial.Errs))
+			for _, subErr := range partial.Errs {
+				irs[i].Identity.EnrichErrors = append(irs[i].Identity.EnrichErrors, subErr.Error())
+			}
+			emitter.ItemFound(enrichServiceSlug, irs[i].Identity.Region, irs[i].Identity.Type, irs[i].Identity.ImportID)
+			emitter.ServiceWarn(enrichServiceSlug, "", fmt.Sprintf("%s/%s: %v", irs[i].Identity.Type, irs[i].Identity.Address, err))
 		case errors.Is(err, ErrEnrichClientUnavailable):
 			// Client-side configuration failure — surface as a warn
 			// but don't accumulate as an error. Mirrors the GCP-side

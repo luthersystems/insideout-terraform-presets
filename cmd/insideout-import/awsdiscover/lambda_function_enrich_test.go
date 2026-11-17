@@ -168,8 +168,30 @@ func TestLambdaFunctionEnricher_FetchFailureKeepsCCPayload(t *testing.T) {
 		},
 	}
 	ir := &imported.ImportedResource{Identity: imported.ResourceIdentity{ImportID: "my-fn"}}
-	require.NoError(t, enr.Enrich(context.Background(), ir, EnrichClients{Lambda: &lambda.Client{}}))
+	err := enr.Enrich(context.Background(), ir, EnrichClients{Lambda: &lambda.Client{}})
+	var partial *PartialEnrichError
+	require.ErrorAs(t, err, &partial, "a GetFunction failure must be reported as a partial result (#932)")
+	require.Len(t, partial.Errs, 1)
+	assert.Contains(t, partial.Errs[0].Error(), "GetFunction throttled")
 	assert.JSONEq(t, string(cc), string(ir.Attrs), "a GetFunction failure must not discard the CC payload")
+}
+
+// TestLambdaFunctionEnricher_EnrichByID_FetchFailureKeepsCCPayload pins
+// that the by-ID path, which has no status channel, still returns the
+// CC payload without an error when GetFunction fails.
+func TestLambdaFunctionEnricher_EnrichByID_FetchFailureKeepsCCPayload(t *testing.T) {
+	t.Parallel()
+	cc := ccPayload(t)
+	enr := lambdaFunctionEnricher{
+		inner: &fakeInnerEnricher{attrs: cc, supportByID: true},
+		fetch: func(context.Context, *lambda.Client, string, string) (*lambdaCodeInfo, error) {
+			return nil, errors.New("GetFunction throttled")
+		},
+	}
+	raw, err := enr.EnrichByID(context.Background(),
+		&imported.ResourceIdentity{ImportID: "my-fn"}, EnrichClients{Lambda: &lambda.Client{}})
+	require.NoError(t, err)
+	assert.JSONEq(t, string(cc), string(raw))
 }
 
 func TestLambdaFunctionEnricher_EnrichByID(t *testing.T) {

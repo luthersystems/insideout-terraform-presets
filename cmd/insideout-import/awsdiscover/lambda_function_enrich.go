@@ -85,16 +85,20 @@ func (lambdaFunctionEnricher) ResourceType() string { return lambdaFunctionTFTyp
 // skipped (image_uri is best-effort, not load-bearing for the schema).
 // A GetFunction failure is likewise non-fatal — the CC payload is kept
 // and the overlay skipped — because the resource is already enriched.
+// It is still a failed fetch, so Enrich returns a *PartialEnrichError
+// and EnrichAttributes stamps the resource Partial: its package_type /
+// image_uri are missing, not absent (#932).
 func (e lambdaFunctionEnricher) Enrich(ctx context.Context, ir *imported.ImportedResource, c EnrichClients) error {
 	if err := e.inner.Enrich(ctx, ir, c); err != nil {
 		return err
 	}
 	patched, err := e.overlayCode(ctx, &ir.Identity, ir.Attrs, c)
-	if err != nil {
+	var partial *PartialEnrichError
+	if err != nil && !errors.As(err, &partial) {
 		return err
 	}
 	ir.Attrs = patched
-	return nil
+	return err
 }
 
 // EnrichByID delegates to the inner enricher's ByIDEnricher
@@ -114,13 +118,24 @@ func (e lambdaFunctionEnricher) EnrichByID(ctx context.Context, identity *import
 	if err != nil {
 		return nil, err
 	}
-	return e.overlayCode(ctx, identity, raw, c)
+	patched, err := e.overlayCode(ctx, identity, raw, c)
+	var partial *PartialEnrichError
+	if errors.As(err, &partial) {
+		// The ByIDEnricher contract returns only the payload and has
+		// no status field, so a failed GetFunction keeps the CC
+		// payload, as it did before #932.
+		return patched, nil
+	}
+	return patched, err
 }
 
 // overlayCode patches the GetFunction-sourced code attributes into
 // attrs. It is a no-op (returns attrs unchanged) when the Lambda client
 // is unavailable, when attrs is empty, or when GetFunction fails — the
-// overlay is best-effort and must never discard the CC payload.
+// overlay is best-effort and must never discard the CC payload. A
+// GetFunction failure returns attrs together with a
+// *PartialEnrichError, so the caller can keep the payload and still
+// report the failed call.
 func (e lambdaFunctionEnricher) overlayCode(ctx context.Context, id *imported.ResourceIdentity, attrs json.RawMessage, c EnrichClients) (json.RawMessage, error) {
 	if c.Lambda == nil || len(attrs) == 0 {
 		return attrs, nil
@@ -134,8 +149,10 @@ func (e lambdaFunctionEnricher) overlayCode(ctx context.Context, id *imported.Re
 		// Best-effort: a GetFunction failure leaves the CC payload
 		// intact. ErrNotFound here would be surprising (the CC enricher
 		// already resolved the function) so it is treated like any
-		// other transient failure — skipped, not propagated.
-		return attrs, nil
+		// other failed sub-fetch — reported as partial, not fatal.
+		return attrs, &PartialEnrichError{Errs: []error{
+			fmt.Errorf("%s: get function %q: %w", lambdaFunctionTFType, name, err),
+		}}
 	}
 	if info == nil {
 		return attrs, nil

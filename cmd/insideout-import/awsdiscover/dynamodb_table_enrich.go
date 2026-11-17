@@ -63,8 +63,9 @@ type dynamodbTableEnricher struct {
 	fetch func(ctx context.Context, c *dynamodb.Client, tableName string) (*dynamotypes.TableDescription, error)
 
 	// fetchPITR / fetchTTL / fetchTags are the overlay-source hooks.
-	// All three are best-effort: a fetch error logs a warn and the
-	// corresponding TF block is omitted from the payload.
+	// All three are best-effort: a fetch error omits the corresponding
+	// TF block from the payload, and Enrich returns a
+	// *PartialEnrichError so the resource is stamped Partial.
 	fetchPITR func(ctx context.Context, c *dynamodb.Client, tableName string) (*dynamotypes.PointInTimeRecoveryDescription, error)
 	fetchTTL  func(ctx context.Context, c *dynamodb.Client, tableName string) (*dynamotypes.TimeToLiveDescription, error)
 	fetchTags func(ctx context.Context, c *dynamodb.Client, tableArn string) ([]dynamotypes.Tag, error)
@@ -85,9 +86,10 @@ func (dynamodbTableEnricher) ResourceType() string { return dynamodbTableTFType 
 // the table identified by ir.Identity. Returns ErrEnrichClientUnavailable
 // if EnrichClients.DynamoDB is nil; any other error reflects a real
 // DynamoDB API failure on the load-bearing DescribeTable call. PITR /
-// TTL / Tags failures are downgraded to a per-resource fmt.Errorf join
-// surfaced by the caller via the standard error-aggregation path; the
-// resource is still emitted with whatever sub-resources succeeded.
+// TTL / Tags failures do not stop the enrich: ir.Attrs is still written
+// with whatever succeeded, and Enrich returns a *PartialEnrichError
+// naming each failed call, so EnrichAttributes stamps
+// EnrichmentStatusPartial (#932).
 func (e dynamodbTableEnricher) Enrich(ctx context.Context, ir *imported.ImportedResource, c EnrichClients) error {
 	if c.DynamoDB == nil {
 		return ErrEnrichClientUnavailable
@@ -120,16 +122,27 @@ func (e dynamodbTableEnricher) Enrich(ctx context.Context, ir *imported.Imported
 
 	typed := mapDynamodbTable(table, c.AccountID)
 
+	// subErrs collects the overlay calls that failed. The block of a
+	// failed call is omitted, as when it is not configured, but the
+	// failure is reported so the resource is Partial, not Full.
+	var subErrs []error
+
 	// Overlay: point_in_time_recovery — DescribeContinuousBackups.
 	// Soft-fail; absent block is the TF default.
-	if pitr, perr := e.fetchPITR(ctx, c.DynamoDB, name); perr == nil && pitr != nil {
+	pitr, perr := e.fetchPITR(ctx, c.DynamoDB, name)
+	if perr != nil {
+		subErrs = append(subErrs, fmt.Errorf("dynamodb_table: describe continuous backups %q: %w", name, perr))
+	} else if pitr != nil {
 		typed.PointInTimeRecovery = []generated.AWSDynamodbTablePointInTimeRecovery{{
 			Enabled: generated.LiteralOf(pitr.PointInTimeRecoveryStatus == dynamotypes.PointInTimeRecoveryStatusEnabled),
 		}}
 	}
 
 	// Overlay: ttl — DescribeTimeToLive. Soft-fail.
-	if ttl, terr := e.fetchTTL(ctx, c.DynamoDB, name); terr == nil && ttl != nil {
+	ttl, terr := e.fetchTTL(ctx, c.DynamoDB, name)
+	if terr != nil {
+		subErrs = append(subErrs, fmt.Errorf("dynamodb_table: describe time to live %q: %w", name, terr))
+	} else if ttl != nil {
 		blk := generated.AWSDynamodbTableTTL{
 			Enabled: generated.LiteralOf(ttl.TimeToLiveStatus == dynamotypes.TimeToLiveStatusEnabled),
 		}
@@ -143,7 +156,10 @@ func (e dynamodbTableEnricher) Enrich(ctx context.Context, ir *imported.Imported
 	// ARN we just stamped on NativeIDs (the SDK's tagging endpoint
 	// is ARN-keyed, not table-name-keyed).
 	if arn := strings.TrimSpace(ir.Identity.NativeIDs["arn"]); arn != "" {
-		if tags, terr := e.fetchTags(ctx, c.DynamoDB, arn); terr == nil && len(tags) > 0 {
+		tags, gerr := e.fetchTags(ctx, c.DynamoDB, arn)
+		if gerr != nil {
+			subErrs = append(subErrs, fmt.Errorf("dynamodb_table: list tags %q: %w", arn, gerr))
+		} else if len(tags) > 0 {
 			m := map[string]*generated.Value[string]{}
 			for _, t := range tags {
 				if t.Key != nil {
@@ -161,7 +177,7 @@ func (e dynamodbTableEnricher) Enrich(ctx context.Context, ir *imported.Imported
 		return fmt.Errorf("dynamodb_table: marshal Attrs: %w", err)
 	}
 	ir.Attrs = raw
-	return nil
+	return partialEnrichErr(subErrs)
 }
 
 // dynamodbTableNameForEnrich pulls the table name from the identifiers

@@ -448,6 +448,61 @@ func TestEnrichAttributes_StampsEnrichmentStatusFull(t *testing.T) {
 	assert.Empty(t, irs[0].Identity.EnrichErrors)
 }
 
+// TestEnrichAttributes_StampsEnrichmentStatusPartial pins the #932
+// contract: an enricher that writes Attrs and returns a
+// *PartialEnrichError is stamped Partial, with one EnrichErrors entry
+// per failed sub-fetch. The resource keeps its Attrs, gets an
+// ItemFound plus a ServiceWarn, and is not part of the returned batch
+// error. A sub-fetch error that wraps ErrNotFound must still give
+// Partial, not the Failed of the not-found arm.
+func TestEnrichAttributes_StampsEnrichmentStatusPartial(t *testing.T) {
+	t.Parallel()
+	enr := &fakeEnricher{
+		tfType: "aws_s3_bucket",
+		result: func(ir *imported.ImportedResource) error {
+			ir.Attrs = json.RawMessage(`{"bucket":"b"}`)
+			return partialEnrichErr([]error{
+				errors.New("GetBucketPolicy: AccessDenied"),
+				fmt.Errorf("GetBucketTagging: %w", ErrNotFound),
+			})
+		},
+	}
+	a := &AWSDiscoverer{byTypeEnricher: map[string]AttributeEnricher{"aws_s3_bucket": enr}}
+
+	rec := &recordingEmitter{}
+	irs := []imported.ImportedResource{
+		{Identity: imported.ResourceIdentity{Type: "aws_s3_bucket", ImportID: "b", Address: "aws_s3_bucket.b"}},
+	}
+	require.NoError(t, a.EnrichAttributes(context.Background(), irs, EnrichClients{S3: &s3.Client{}}, rec),
+		"a partial result has a usable payload and must not fail the batch")
+
+	assert.Equal(t, imported.EnrichmentStatusPartial, irs[0].Identity.EnrichmentStatus)
+	assert.Equal(t, []string{
+		"GetBucketPolicy: AccessDenied",
+		"GetBucketTagging: resource not found",
+	}, irs[0].Identity.EnrichErrors)
+	assert.JSONEq(t, `{"bucket":"b"}`, string(irs[0].Attrs), "the partial payload must be kept")
+
+	events := rec.snapshot()
+	require.Len(t, filterEvents(events, "item_found"), 1, "a partial resource is still found")
+	warns := filterEvents(events, "service_warn")
+	require.Len(t, warns, 1)
+	assert.Contains(t, warns[0].Message, "aws_s3_bucket.b")
+	assert.Contains(t, warns[0].Message, "GetBucketPolicy")
+}
+
+func TestPartialEnrichErr(t *testing.T) {
+	t.Parallel()
+	assert.NoError(t, partialEnrichErr(nil), "no failed sub-fetch must give a plain nil error")
+
+	sub := errors.New("boom")
+	err := partialEnrichErr([]error{sub})
+	var partial *PartialEnrichError
+	require.ErrorAs(t, err, &partial)
+	assert.ErrorIs(t, err, sub, "Unwrap must expose the sub-fetch errors")
+	assert.Equal(t, "partial enrichment: boom", err.Error())
+}
+
 func TestEnrichAttributes_EmitsItemFoundOnSuccess(t *testing.T) {
 	t.Parallel()
 	enr := &fakeEnricher{tfType: "aws_dynamodb_table"}
