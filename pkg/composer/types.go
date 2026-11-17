@@ -169,6 +169,10 @@ type Config struct {
 	// Every field is opt-in: nil keeps the preset default.
 	AWSALB *AWSALBConfig `json:"aws_alb,omitempty"`
 
+	// AWSBastion carries the caller-supplied config for the aws/bastion
+	// preset. Every field is opt-in: nil keeps the preset default.
+	AWSBastion *AWSBastionConfig `json:"aws_bastion,omitempty"`
+
 	AWSRDS *AWSRDSConfig `json:"aws_rds,omitempty"`
 
 	AWSElastiCache *AWSElastiCacheConfig `json:"aws_elasticache,omitempty"`
@@ -656,6 +660,26 @@ type AWSALBConfig struct {
 	// that no listener rule uses authenticate-oidc, which calls the IdP
 	// over the internet.
 	EgressCIDRs []string `json:"egressCidrs,omitempty" composer:"nobackfill"`
+}
+
+// AWSBastionConfig is the caller-facing config for the aws/bastion preset
+// (#908).
+type AWSBastionConfig struct {
+	// AdminCIDRs maps to admin_cidrs, the networks the bastion's security
+	// group admits on SSH (port 22). The preset default stays 0.0.0.0/0,
+	// because removing the rule on a running bastion locks out key-pair
+	// and EC2 Instance Connect users on the next apply.
+	//
+	// It is a pointer to a slice because the empty list is a choice of its
+	// own: a pointer to an empty list emits admin_cidrs = [], which
+	// removes the SSH rule for a bastion reached only through SSM Session
+	// Manager (its intended access path; the instance profile already has
+	// AmazonSSMManagedInstanceCore). Nil keeps the default. A plain slice
+	// could not tell the two apart after a JSON round trip, since
+	// omitempty drops an empty slice.
+	//
+	// composer:"nobackfill": see the EgressCIDRs note above.
+	AdminCIDRs *[]string `json:"adminCidrs,omitempty" composer:"nobackfill"`
 }
 
 // AWSRDSConfig is the caller-facing config for the aws/rds preset. It was

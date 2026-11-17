@@ -662,6 +662,20 @@ var configFieldValidators = []configFieldValidator{
 		return c.AWSMSK.EgressCIDRs
 	}),
 	{
+		// admin_cidrs opt-in (#908). An empty list is valid: it is the
+		// SSM-only bastion with no SSH rule.
+		field:     "aws_bastion.adminCidrs",
+		component: KeyAWSBastion,
+		variable:  "admin_cidrs",
+		value: func(c *Config) (any, bool) {
+			if c == nil || c.AWSBastion == nil || c.AWSBastion.AdminCIDRs == nil {
+				return nil, false
+			}
+			return *c.AWSBastion.AdminCIDRs, true
+		},
+		normalize: normalizeTrimmedStrings,
+	},
+	{
 		field:     "aws_api_gateway.certificateArn",
 		component: KeyAWSAPIGateway,
 		variable:  "certificate_arn",

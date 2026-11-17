@@ -18,9 +18,9 @@ mock_provider "aws" {
 }
 
 # Issue #908: the bastion's SSH ingress. The default must stay open to
-# admin_cidrs (0.0.0.0/0): the composer does not set it, and removing the
-# rule on a live bastion locks out key-pair and EC2 Instance Connect
-# users on the next apply. admin_cidrs = [] is the opt-in for an
+# admin_cidrs (0.0.0.0/0): the composer sets it only when the caller opts
+# in (aws_bastion.adminCidrs), and removing the rule on a live bastion
+# locks out key-pair and EC2 Instance Connect users on the next apply. admin_cidrs = [] is the opt-in for an
 # SSM-only bastion with no inbound rule at all.
 
 run "bastion_default_keeps_ssh_ingress" {
@@ -79,4 +79,36 @@ run "bastion_tight_admin_cidrs" {
     condition     = one(aws_security_group.bastion_sg.ingress).cidr_blocks == tolist(["203.0.113.0/24"])
     error_message = "admin_cidrs must pass through to the SSH ingress rule."
   }
+}
+
+# admin_cidrs feeds cidr_blocks, which takes IPv4 network addresses only:
+# an IPv6 CIDR fails at apply, and a CIDR with host bits never settles.
+run "bastion_rejects_ipv6_admin_cidr" {
+  command = plan
+
+  variables {
+    project     = "test"
+    region      = "us-east-1"
+    environment = "test"
+    vpc_id      = "vpc-12345"
+    subnet_id   = "subnet-aaa"
+    admin_cidrs = ["2001:db8::/32"]
+  }
+
+  expect_failures = [var.admin_cidrs]
+}
+
+run "bastion_rejects_admin_cidr_with_host_bits" {
+  command = plan
+
+  variables {
+    project     = "test"
+    region      = "us-east-1"
+    environment = "test"
+    vpc_id      = "vpc-12345"
+    subnet_id   = "subnet-aaa"
+    admin_cidrs = ["203.0.113.7/24"]
+  }
+
+  expect_failures = [var.admin_cidrs]
 }
