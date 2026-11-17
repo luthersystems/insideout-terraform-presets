@@ -106,6 +106,17 @@ variable "s3_bucket_arn" {
   }
 }
 
+variable "s3_kms_key_arn" {
+  description = "ARN of the customer-managed KMS key that encrypts the source bucket (SSE-KMS). When set, the data-source role also gets kms:Decrypt on the key, without which the connector cannot read the bucket's objects. Null (default) for an SSE-S3 bucket. In a composed stack DefaultWiring supplies it from module.aws_s3.kms_key_arn. The key policy must let IAM policies in the account grant access (the default key policy does)."
+  type        = string
+  default     = null
+
+  validation {
+    condition     = var.s3_kms_key_arn == null ? true : can(regex("^arn:aws[a-z-]*:kms:[a-z0-9-]+:[0-9]{12}:(key|alias)/.+$", var.s3_kms_key_arn))
+    error_message = "s3_kms_key_arn must be null or a KMS key or alias ARN (arn:aws:kms:<region>:<account>:key/<id>)."
+  }
+}
+
 variable "s3_crawl_schedule" {
   description = "Optional cron schedule (e.g. \"cron(0 6 * * ? *)\") for the S3 connector's periodic re-crawl. When null the connector only syncs on-demand."
   type        = string

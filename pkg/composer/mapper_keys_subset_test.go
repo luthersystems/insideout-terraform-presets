@@ -135,9 +135,7 @@ func kitchenSinkConfig() *Config {
 	cfg.AWSBastion = &AWSBastionConfig{AdminCIDRs: &adminCIDRs}
 	cfg.AWSRDS = &AWSRDSConfig{CPUSize: "8 vCPU", ReadReplicas: "2 read replicas", StorageSize: "200GB", EgressCIDRs: vpcCIDR}
 	cfg.AWSElastiCache = &AWSElastiCacheConfig{HA: &t, Storage: "20GB", NodeSize: "8 vCPU", Replicas: "2 read replicas", EgressCIDRs: vpcCIDR}
-	cfg.AWSS3 = &struct {
-		Versioning *bool `json:"versioning,omitempty"`
-	}{Versioning: &t}
+	cfg.AWSS3 = &AWSS3Config{Versioning: &t, KMSKeyARN: "arn:aws:kms:us-east-1:123456789012:key/11111111-2222-3333-4444-555555555555"}
 	cfg.AWSDynamoDB = &struct {
 		Type string `json:"type,omitempty"`
 	}{Type: "On demand"}
@@ -247,6 +245,7 @@ func kitchenSinkConfig() *Config {
 	cfg.AWSSageMaker = &AWSSageMakerConfig{
 		NetworkMode:               "VpcOnly",
 		WorkspaceBucket:           "kitchen-sink-ml-bucket",
+		WorkspaceKMSKeyARN:        "arn:aws:kms:us-east-1:123456789012:key/11111111-2222-3333-4444-555555555555",
 		StudioUsers:               []string{"alice"},
 		SageMakerManagedPolicyARN: "arn:aws:iam::123456789012:policy/MyScopedSagemaker",
 		EnableInference:           &t,

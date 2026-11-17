@@ -256,9 +256,11 @@ resource "aws_iam_role_policy" "data_source" {
   name = "${var.project}-kendra-s3-source"
   role = aws_iam_role.data_source[0].id
 
+  # concat keeps the three base statements first and in place; the KMS
+  # grant for an SSE-KMS source bucket (#909) is appended only when set.
   policy = jsonencode({
     Version = "2012-10-17"
-    Statement = [
+    Statement = concat([
       {
         Sid      = "ReadSourceObjects"
         Effect   = "Allow"
@@ -280,11 +282,36 @@ resource "aws_iam_role_policy" "data_source" {
         ]
         Resource = aws_kendra_index.this.arn
       },
-    ]
+    ], local.s3_kms_key_statements)
   })
 }
 
 locals {
+  # kms:Decrypt for an SSE-KMS source bucket (#909). An IAM policy matches a
+  # KMS key by its key ARN only, so for an alias ARN the grant names the
+  # keys of that account and region, and the kms:ResourceAliases condition
+  # narrows it to the key the alias points to.
+  s3_kms_is_alias = var.s3_kms_key_arn == null ? false : strcontains(var.s3_kms_key_arn, ":alias/")
+  s3_kms_key_statements = concat(
+    var.s3_kms_key_arn != null && !local.s3_kms_is_alias ? [{
+      Sid      = "DecryptSourceObjects"
+      Effect   = "Allow"
+      Action   = ["kms:Decrypt"]
+      Resource = var.s3_kms_key_arn
+    }] : [],
+    local.s3_kms_is_alias ? [{
+      Sid      = "DecryptSourceObjects"
+      Effect   = "Allow"
+      Action   = ["kms:Decrypt"]
+      Resource = "${split(":alias/", var.s3_kms_key_arn)[0]}:key/*"
+      Condition = {
+        "ForAnyValue:StringEquals" = {
+          "kms:ResourceAliases" = "alias/${split(":alias/", var.s3_kms_key_arn)[1]}"
+        }
+      }
+    }] : [],
+  )
+
   # Prefer an explicitly-wired bucket ARN; otherwise derive it from the bucket
   # name. In a composed stack DefaultWiring supplies both bucket_name and
   # bucket_arn from the aws_s3 module, but a single-module caller may pass only

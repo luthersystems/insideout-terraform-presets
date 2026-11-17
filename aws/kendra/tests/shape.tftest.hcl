@@ -401,3 +401,70 @@ run "enable_s3_data_source_false_overrides_name" {
     error_message = "enable_s3_data_source=false must suppress the data-source access policy."
   }
 }
+
+# --- SSE-KMS source bucket (#909) -------------------------------------------
+#
+# A source bucket encrypted with a customer-managed key is unreadable to the
+# connector without kms:Decrypt. The grant is appended after the three base
+# statements, so their positions (asserted above) do not move.
+
+run "s3_kms_key_grants_decrypt" {
+  command = apply
+
+  variables {
+    s3_bucket_name = "iotkdr-docs"
+    s3_bucket_arn  = "arn:aws:s3:::iotkdr-docs"
+    s3_kms_key_arn = "arn:aws:kms:us-east-1:111111111111:key/11111111-2222-3333-4444-555555555555"
+  }
+
+  assert {
+    condition     = length(jsondecode(aws_iam_role_policy.data_source[0].policy).Statement) == 4
+    error_message = "The KMS grant must be added after the three base statements."
+  }
+
+  assert {
+    condition     = jsondecode(aws_iam_role_policy.data_source[0].policy).Statement[3].Action == ["kms:Decrypt"] && jsondecode(aws_iam_role_policy.data_source[0].policy).Statement[3].Resource == "arn:aws:kms:us-east-1:111111111111:key/11111111-2222-3333-4444-555555555555"
+    error_message = "With s3_kms_key_arn set, the data-source role must get kms:Decrypt on that key."
+  }
+}
+
+run "no_s3_kms_key_no_decrypt" {
+  command = apply
+
+  variables {
+    s3_bucket_name = "iotkdr-docs"
+    s3_bucket_arn  = "arn:aws:s3:::iotkdr-docs"
+  }
+
+  assert {
+    condition     = length(jsondecode(aws_iam_role_policy.data_source[0].policy).Statement) == 3
+    error_message = "With no s3_kms_key_arn, the data-source policy must not change."
+  }
+}
+
+run "s3_kms_alias_grants_decrypt_by_alias" {
+  command = apply
+
+  variables {
+    s3_bucket_name = "iotkdr-docs"
+    s3_bucket_arn  = "arn:aws:s3:::iotkdr-docs"
+    s3_kms_key_arn = "arn:aws:kms:us-east-1:111111111111:alias/data"
+  }
+
+  # IAM matches a KMS key by its key ARN only, so an alias grant names the
+  # account's keys and narrows them with kms:ResourceAliases.
+  assert {
+    condition     = jsondecode(aws_iam_role_policy.data_source[0].policy).Statement[3].Resource == "arn:aws:kms:us-east-1:111111111111:key/*" && jsondecode(aws_iam_role_policy.data_source[0].policy).Statement[3].Condition["ForAnyValue:StringEquals"]["kms:ResourceAliases"] == "alias/data"
+    error_message = "With an alias ARN, kms:Decrypt must be granted on the account's keys with a kms:ResourceAliases condition."
+  }
+}
+
+run "rejects_bad_s3_kms_key_arn" {
+  command = plan
+
+  variables {
+    s3_kms_key_arn = "not-an-arn"
+  }
+
+  expect_failures = [var.s3_kms_key_arn]
+}

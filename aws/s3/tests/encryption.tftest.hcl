@@ -10,8 +10,8 @@ mock_provider "aws" {
 mock_provider "random" {}
 
 # Issue #909: opt-in customer-managed KMS key for the aws/s3 bucket.
-# The default must stay SSE-S3 (AES256): the composer does not set
-# kms_key_arn, and SSE-KMS on a live bucket makes new objects unreadable
+# The default must stay SSE-S3 (AES256): the composer sets kms_key_arn
+# only when the caller opts in (aws_s3.kmsKeyArn), and SSE-KMS on a live bucket makes new objects unreadable
 # to every reader without a kms:Decrypt grant (CloudFront OAC, app roles).
 
 run "s3_default_is_sse_s3" {
@@ -131,4 +131,35 @@ run "s3_rejects_key_matching_only_var_region" {
   }
 
   expect_failures = [aws_s3_bucket_server_side_encryption_configuration.this]
+}
+
+# The kms_key_arn output passes the caller's key or alias ARN to the
+# readers the composer wires (aws/bedrock, aws/kendra), for their grants.
+run "s3_kms_key_output_passes_through" {
+  command = plan
+
+  variables {
+    project     = "test"
+    environment = "test"
+    kms_key_arn = "arn:aws:kms:us-east-1:123456789012:alias/data"
+  }
+
+  assert {
+    condition     = output.kms_key_arn == "arn:aws:kms:us-east-1:123456789012:alias/data"
+    error_message = "kms_key_arn output must be the caller's kms_key_arn."
+  }
+}
+
+run "s3_kms_key_output_null_by_default" {
+  command = plan
+
+  variables {
+    project     = "test"
+    environment = "test"
+  }
+
+  assert {
+    condition     = output.kms_key_arn == null
+    error_message = "With SSE-S3 the kms_key_arn output must be null, so readers get no KMS grant."
+  }
 }

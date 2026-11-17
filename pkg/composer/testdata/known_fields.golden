@@ -28,6 +28,8 @@ aws_rds.cpuSize
 aws_rds.egressCidrs
 aws_rds.readReplicas
 aws_rds.storageSize
+aws_s3.kmsKeyArn
+aws_sagemaker.workspaceKmsKeyArn
 aws_secretsmanager.numSecrets
 aws_sqs.type
 aws_sqs.visibilityTimeout

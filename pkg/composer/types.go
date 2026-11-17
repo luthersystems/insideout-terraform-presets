@@ -177,9 +177,7 @@ type Config struct {
 
 	AWSElastiCache *AWSElastiCacheConfig `json:"aws_elasticache,omitempty"`
 
-	AWSS3 *struct {
-		Versioning *bool `json:"versioning,omitempty"`
-	} `json:"aws_s3,omitempty"`
+	AWSS3 *AWSS3Config `json:"aws_s3,omitempty"`
 
 	AWSDynamoDB *struct {
 		Type string `json:"type,omitempty"`
@@ -717,6 +715,26 @@ type AWSMSKConfig struct {
 	EgressCIDRs []string `json:"egressCidrs,omitempty" composer:"nobackfill"`
 }
 
+// AWSS3Config is the caller-facing config for the aws/s3 preset. It was an
+// inline struct until #909; it is named now so later fields do not change
+// the type of Config.AWSS3 again.
+type AWSS3Config struct {
+	Versioning *bool `json:"versioning,omitempty"`
+
+	// KMSKeyARN maps to kms_key_arn (#909): a customer-managed KMS key or
+	// alias ARN, in the stack's region, that switches the bucket from
+	// SSE-S3 to SSE-KMS with an S3 bucket key. Empty keeps SSE-S3, the
+	// default, because on a live bucket every reader without kms:Decrypt
+	// on the key loses access to new objects. The composer grants
+	// kms:Decrypt to the readers it wires (the aws/bedrock knowledge base
+	// role and the aws/kendra data-source role). Any other reader, such as
+	// an app role or a CloudFront origin access control in another stack,
+	// needs the grant from the caller, and the key policy must let IAM
+	// policies in the account grant access (the default key policy does);
+	// the preset cannot edit the caller's key policy.
+	KMSKeyARN string `json:"kmsKeyArn,omitempty"`
+}
+
 // AWSSageMakerConfig is the caller-facing config for the aws/sagemaker
 // Studio preset (#615). Named (not inline) so callers can construct it
 // without re-typing the anonymous struct shape at every site, and so
@@ -734,8 +752,14 @@ type AWSSageMakerConfig struct {
 	NetworkMode                 string   `json:"networkMode,omitempty"`
 	WorkspaceBucket             string   `json:"workspaceBucket,omitempty"`
 	WorkspaceBucketForceDestroy *bool    `json:"workspaceBucketForceDestroy,omitempty"`
-	StudioUsers                 []string `json:"studioUsers,omitempty"`
-	SageMakerManagedPolicyARN   string   `json:"sagemakerManagedPolicyArn,omitempty"`
+	// WorkspaceKMSKeyARN maps to workspace_kms_key_arn (#909): a
+	// customer-managed KMS key ARN (not an alias) for the workspace bucket.
+	// The preset then uses SSE-KMS with a bucket key and grants the Studio
+	// execution role kms:Decrypt and kms:GenerateDataKey on the key. Empty
+	// keeps SSE-S3, the default for live workspace buckets.
+	WorkspaceKMSKeyARN        string   `json:"workspaceKmsKeyArn,omitempty"`
+	StudioUsers               []string `json:"studioUsers,omitempty"`
+	SageMakerManagedPolicyARN string   `json:"sagemakerManagedPolicyArn,omitempty"`
 
 	// Real-time inference endpoint (#761). When EnableInference is set, the
 	// preset adds an aws_sagemaker_model + endpoint-configuration + endpoint

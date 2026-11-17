@@ -39,6 +39,16 @@ variable "s3_bucket_arn" {
   default     = null
 }
 
+variable "s3_kms_key_arn" {
+  type        = string
+  description = "ARN of the customer-managed KMS key that encrypts the s3_bucket_arn bucket (SSE-KMS). When set, the role also gets kms:Decrypt on the key, without which it cannot read the bucket's objects. Null (default) for an SSE-S3 bucket. In a composed stack DefaultWiring supplies it from module.aws_s3.kms_key_arn. The key policy must let IAM policies in the account grant access (the default key policy does)."
+  default     = null
+  validation {
+    condition     = var.s3_kms_key_arn == null ? true : can(regex("^arn:aws[a-z-]*:kms:[a-z0-9-]+:[0-9]{12}:(key|alias)/.+$", var.s3_kms_key_arn))
+    error_message = "s3_kms_key_arn must be null or a KMS key or alias ARN (arn:aws:kms:<region>:<account>:key/<id>)."
+  }
+}
+
 variable "opensearch_collection_arn" {
   type        = string
   description = "ARN of the OpenSearch Serverless (AOSS) collection that backs the Bedrock Knowledge Base vector store. Managed-domain ARNs are not supported by Bedrock. Optional — set it for the Knowledge Base use case (the role grants aoss:APIAccessAll on this collection). Leave null for plain model-invocation use; the AOSS policy statement is then omitted entirely."
