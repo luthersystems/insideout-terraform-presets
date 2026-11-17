@@ -165,18 +165,13 @@ type Config struct {
 		CachePaths *string `json:"cachePaths,omitempty"` // DEPRECATED: use OriginPath
 	} `json:"aws_cloudfront,omitempty"`
 
-	AWSRDS *struct {
-		CPUSize      string `json:"cpuSize,omitempty"`
-		ReadReplicas string `json:"readReplicas,omitempty"`
-		StorageSize  string `json:"storageSize,omitempty"`
-	} `json:"aws_rds,omitempty"`
+	// AWSALB carries the caller-supplied config for the aws/alb preset.
+	// Every field is opt-in: nil keeps the preset default.
+	AWSALB *AWSALBConfig `json:"aws_alb,omitempty"`
 
-	AWSElastiCache *struct {
-		HA       *bool  `json:"ha,omitempty"`
-		Storage  string `json:"storageSize,omitempty"`
-		NodeSize string `json:"nodeSize,omitempty"`
-		Replicas string `json:"replicas,omitempty"`
-	} `json:"aws_elasticache,omitempty"`
+	AWSRDS *AWSRDSConfig `json:"aws_rds,omitempty"`
+
+	AWSElastiCache *AWSElastiCacheConfig `json:"aws_elasticache,omitempty"`
 
 	AWSS3 *struct {
 		Versioning *bool `json:"versioning,omitempty"`
@@ -191,9 +186,7 @@ type Config struct {
 		VisibilityTimeout string `json:"visibilityTimeout,omitempty"`
 	} `json:"aws_sqs,omitempty"`
 
-	AWSMSK *struct {
-		Retention string `json:"retentionPeriod,omitempty"`
-	} `json:"aws_msk,omitempty"`
+	AWSMSK *AWSMSKConfig `json:"aws_msk,omitempty"`
 
 	AWSCloudWatchLogs *struct {
 		RetentionDays int `json:"retentionDays,omitempty"`
@@ -637,6 +630,67 @@ type AWSAppRunnerConfig struct {
 	SubnetIDs              []string          `json:"subnetIds,omitempty"`
 	CustomDomainName       string            `json:"customDomainName,omitempty"`
 	EnableWWWSubdomain     *bool             `json:"enableWwwSubdomain,omitempty"`
+}
+
+// EgressCIDRs, on the configs below, narrows the egress rule of the
+// preset's security group (#907). The preset default is open egress
+// (0.0.0.0/0), and it stays the default: narrowing changes the network
+// behaviour of a running stack on its next apply, so only a caller who
+// knows the stack's traffic may opt in. Nil keeps the default; any
+// non-nil value, an empty list included, is emitted as egress_cidrs and
+// checked against the preset's own validation (at least one IPv4 network
+// address). A stack composed with the default aws/vpc can pass its CIDR,
+// 10.1.0.0/16, to keep the traffic inside the VPC.
+//
+// The composer:"nobackfill" tag keeps ComputePresetDefaults from copying
+// the preset default into the caller's config. A copied ["0.0.0.0/0"]
+// would be stored as if the user had chosen open egress, and a later
+// tighter preset default would never reach that stack.
+
+// AWSALBConfig is the caller-facing config for the aws/alb preset. Named
+// (not inline) so a field added later does not change the type of
+// Config.AWSALB, which would break every caller's struct literal.
+type AWSALBConfig struct {
+	// EgressCIDRs maps to egress_cidrs. Check first that every target is
+	// inside these CIDRs (IP targets in a peered VPC or on premises) and
+	// that no listener rule uses authenticate-oidc, which calls the IdP
+	// over the internet.
+	EgressCIDRs []string `json:"egressCidrs,omitempty" composer:"nobackfill"`
+}
+
+// AWSRDSConfig is the caller-facing config for the aws/rds preset. It was
+// an inline struct until #907; it is named now so later fields do not
+// change the type of Config.AWSRDS again.
+type AWSRDSConfig struct {
+	CPUSize      string `json:"cpuSize,omitempty"`
+	ReadReplicas string `json:"readReplicas,omitempty"`
+	StorageSize  string `json:"storageSize,omitempty"`
+	// EgressCIDRs maps to egress_cidrs. Check first that the database uses
+	// no extension that calls out (aws_s3, aws_lambda, dblink,
+	// postgres_fdw).
+	EgressCIDRs []string `json:"egressCidrs,omitempty" composer:"nobackfill"`
+}
+
+// AWSElastiCacheConfig is the caller-facing config for the
+// aws/elasticache preset. Named for the same reason as AWSRDSConfig.
+type AWSElastiCacheConfig struct {
+	HA       *bool  `json:"ha,omitempty"`
+	Storage  string `json:"storageSize,omitempty"`
+	NodeSize string `json:"nodeSize,omitempty"`
+	Replicas string `json:"replicas,omitempty"`
+	// EgressCIDRs maps to egress_cidrs. Replication stays inside the cache
+	// subnets, so the VPC CIDR is enough for the nodes.
+	EgressCIDRs []string `json:"egressCidrs,omitempty" composer:"nobackfill"`
+}
+
+// AWSMSKConfig is the caller-facing config for the aws/msk preset. Named
+// for the same reason as AWSRDSConfig.
+type AWSMSKConfig struct {
+	Retention string `json:"retentionPeriod,omitempty"`
+	// EgressCIDRs maps to egress_cidrs. When narrowed, the preset also
+	// admits its own security group, so broker-to-broker traffic keeps
+	// working.
+	EgressCIDRs []string `json:"egressCidrs,omitempty" composer:"nobackfill"`
 }
 
 // AWSSageMakerConfig is the caller-facing config for the aws/sagemaker

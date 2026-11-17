@@ -1,0 +1,7 @@
+# API break gate overrides (luthersystems/.github quality.yml, api-break).
+# surface | symbol | expires (YYYY-MM-DD) | issue | reason
+# A row waives one intended break until the next release, whose notes list
+# it; then delete the row.
+go | pkg/composer.Config.AWSElastiCache | 2027-02-17 | luthersystems/insideout-terraform-presets#907 | inline struct named AWSElastiCacheConfig to add EgressCIDRs; the JSON shape is unchanged; callers replace a &struct{...}{...} literal with &composer.AWSElastiCacheConfig{...}
+go | pkg/composer.Config.AWSMSK | 2027-02-17 | luthersystems/insideout-terraform-presets#907 | inline struct named AWSMSKConfig to add EgressCIDRs; the JSON shape is unchanged; callers replace a &struct{...}{...} literal with &composer.AWSMSKConfig{...}
+go | pkg/composer.Config.AWSRDS | 2027-02-17 | luthersystems/insideout-terraform-presets#907 | inline struct named AWSRDSConfig to add EgressCIDRs; the JSON shape is unchanged; callers replace a &struct{...}{...} literal with &composer.AWSRDSConfig{...}

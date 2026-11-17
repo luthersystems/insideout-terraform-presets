@@ -56,22 +56,13 @@ func openSearchCfg(storage string) *Config {
 
 func elasticacheCfg(nodeSize, storage, replicas string) *Config {
 	return &Config{
-		AWSElastiCache: &struct {
-			HA       *bool  `json:"ha,omitempty"`
-			Storage  string `json:"storageSize,omitempty"`
-			NodeSize string `json:"nodeSize,omitempty"`
-			Replicas string `json:"replicas,omitempty"`
-		}{NodeSize: nodeSize, Storage: storage, Replicas: replicas},
+		AWSElastiCache: &AWSElastiCacheConfig{NodeSize: nodeSize, Storage: storage, Replicas: replicas},
 	}
 }
 
 func rdsCfg(cpu, replicas, storage string) *Config {
 	return &Config{
-		AWSRDS: &struct {
-			CPUSize      string `json:"cpuSize,omitempty"`
-			ReadReplicas string `json:"readReplicas,omitempty"`
-			StorageSize  string `json:"storageSize,omitempty"`
-		}{CPUSize: cpu, ReadReplicas: replicas, StorageSize: storage},
+		AWSRDS: &AWSRDSConfig{CPUSize: cpu, ReadReplicas: replicas, StorageSize: storage},
 	}
 }
 
@@ -94,9 +85,7 @@ func cloudfrontCfg(ttl, originPath string) *Config {
 
 func mskCfg(retention string) *Config {
 	return &Config{
-		AWSMSK: &struct {
-			Retention string `json:"retentionPeriod,omitempty"`
-		}{Retention: retention},
+		AWSMSK: &AWSMSKConfig{Retention: retention},
 	}
 }
 

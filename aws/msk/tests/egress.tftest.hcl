@@ -1,8 +1,9 @@
 mock_provider "aws" {}
 # Issue #907: opt-in narrow egress for the msk security group. The default
-# must stay 0.0.0.0/0: the composer does not set egress_cidrs, and a
-# narrower rule changes the network behaviour of live stacks on their
-# next apply. egress_cidrs (for example the VPC CIDR) is the opt-in.
+# must stay 0.0.0.0/0: the composer sets egress_cidrs only when the
+# caller opts in (aws_msk.egressCidrs), and a narrower rule changes the
+# network behaviour of live stacks on their next apply. egress_cidrs (for
+# example the VPC CIDR) is the opt-in.
 
 variables {
   project     = "test"

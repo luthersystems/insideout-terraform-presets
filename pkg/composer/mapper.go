@@ -455,6 +455,9 @@ func (m DefaultMapper) BuildModuleValues(
 		if _, ok := vals["public_subnet_ids"]; !ok {
 			vals["public_subnet_ids"] = []any{}
 		}
+		if cfg != nil && cfg.AWSALB != nil {
+			setEgressCIDRs(vals, cfg.AWSALB.EgressCIDRs)
+		}
 
 	case KeyAWSBastion:
 		// Bastion on a public subnet; stub for preview.
@@ -509,6 +512,7 @@ func (m DefaultMapper) BuildModuleValues(
 					vals["max_allocated_storage"] = max(gb*2, 1000)
 				}
 			}
+			setEgressCIDRs(vals, cfg.AWSRDS.EgressCIDRs)
 		}
 
 	case KeyAWSCloudfront:
@@ -562,6 +566,7 @@ func (m DefaultMapper) BuildModuleValues(
 				}
 				vals["replicas"] = n
 			}
+			setEgressCIDRs(vals, cfg.AWSElastiCache.EgressCIDRs)
 		}
 
 	case KeyAWSS3:
@@ -609,12 +614,15 @@ func (m DefaultMapper) BuildModuleValues(
 		// retention_period, which the module never declared, and against
 		// a hardcoded log.retention.hours = 168 that ignored the value
 		// regardless).
-		if cfg != nil && cfg.AWSMSK != nil && cfg.AWSMSK.Retention != "" {
-			hrs, err := parseRetentionHours(cfg.AWSMSK.Retention, "AWSMSK.Retention")
-			if err != nil {
-				return nil, err
+		if cfg != nil && cfg.AWSMSK != nil {
+			if cfg.AWSMSK.Retention != "" {
+				hrs, err := parseRetentionHours(cfg.AWSMSK.Retention, "AWSMSK.Retention")
+				if err != nil {
+					return nil, err
+				}
+				vals["retention_hours"] = hrs
 			}
-			vals["retention_hours"] = hrs
+			setEgressCIDRs(vals, cfg.AWSMSK.EgressCIDRs)
 		}
 
 	case KeyAWSCloudWatchLogs:
@@ -2219,6 +2227,30 @@ func nonEmptyTrimmed(in []string) []any {
 			continue
 		}
 		out = append(out, t)
+	}
+	return out
+}
+
+// setEgressCIDRs emits egress_cidrs only when the caller set the field
+// (#907). Nil leaves the variable out, so the preset default (open egress)
+// applies to every stack that did not opt in. A non-nil list is emitted as
+// given, trimmed: an empty or malformed list then fails the preset's
+// validation (at compose time through Validate, at plan time otherwise)
+// instead of being dropped and silently keeping open egress.
+func setEgressCIDRs(vals map[string]any, cidrs []string) {
+	if cidrs == nil {
+		return
+	}
+	vals["egress_cidrs"] = trimmedStrings(cidrs)
+}
+
+// trimmedStrings trims each string and keeps every entry, empty ones too,
+// so that the preset validation sees what the caller sent. The result is
+// []any for HCL list emission; it is non-nil even when the input is empty.
+func trimmedStrings(in []string) []any {
+	out := make([]any, 0, len(in))
+	for _, s := range in {
+		out = append(out, strings.TrimSpace(s))
 	}
 	return out
 }

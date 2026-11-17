@@ -869,11 +869,7 @@ func TestComposeStack_TFVarsMatchVariables(t *testing.T) {
 	}
 	cfg := &Config{
 		Region: "us-west-2",
-		AWSRDS: &struct {
-			CPUSize      string `json:"cpuSize,omitempty"`
-			ReadReplicas string `json:"readReplicas,omitempty"`
-			StorageSize  string `json:"storageSize,omitempty"`
-		}{CPUSize: "db.m7i.large", StorageSize: "20"},
+		AWSRDS: &AWSRDSConfig{CPUSize: "db.m7i.large", StorageSize: "20"},
 		AWSSQS: &struct {
 			Type              string `json:"type,omitempty"`
 			VisibilityTimeout string `json:"visibilityTimeout,omitempty"`
@@ -954,11 +950,7 @@ func TestComposeStack_TerraformInit(t *testing.T) {
 	comps := &Components{}
 	cfg := &Config{
 		Region: "us-east-1",
-		AWSRDS: &struct {
-			CPUSize      string `json:"cpuSize,omitempty"`
-			ReadReplicas string `json:"readReplicas,omitempty"`
-			StorageSize  string `json:"storageSize,omitempty"`
-		}{CPUSize: "db.m7i.large", StorageSize: "20"},
+		AWSRDS: &AWSRDSConfig{CPUSize: "db.m7i.large", StorageSize: "20"},
 		AWSCloudWatchLogs: &struct {
 			RetentionDays int `json:"retentionDays,omitempty"`
 		}{RetentionDays: 90},
@@ -1600,11 +1592,7 @@ func TestComposeStack_OutputsTF_KitchenSink(t *testing.T) {
 
 	cfg := &Config{
 		Region: "us-east-1",
-		AWSRDS: &struct {
-			CPUSize      string `json:"cpuSize,omitempty"`
-			ReadReplicas string `json:"readReplicas,omitempty"`
-			StorageSize  string `json:"storageSize,omitempty"`
-		}{CPUSize: "db.m7i.large", StorageSize: "20"},
+		AWSRDS: &AWSRDSConfig{CPUSize: "db.m7i.large", StorageSize: "20"},
 	}
 
 	c := newTestClient()
