@@ -38,6 +38,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/bedrockagentcorecontrol v1.53.1
 	github.com/aws/aws-sdk-go-v2/service/cloudcontrol v1.32.3
 	github.com/aws/aws-sdk-go-v2/service/cloudfront v1.67.3
+	github.com/aws/aws-sdk-go-v2/service/cloudtrail v1.58.3
 	github.com/aws/aws-sdk-go-v2/service/cloudwatch v1.66.2
 	github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs v1.81.0
 	github.com/aws/aws-sdk-go-v2/service/cognitoidentityprovider v1.67.3

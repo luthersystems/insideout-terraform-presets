@@ -1,0 +1,137 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "ProvisioningServicesFullAccess",
+      "Effect": "Allow",
+      "Action": [
+        "acm:*",
+        "apigateway:*",
+        "apprunner:*",
+        "backup:*",
+        "bedrock:*",
+        "bedrock-agentcore:*",
+        "cloudfront:*",
+        "cloudwatch:*",
+        "codebuild:*",
+        "codepipeline:*",
+        "cognito-idp:*",
+        "dynamodb:*",
+        "ec2:*",
+        "ecs:*",
+        "eks:*",
+        "elasticache:*",
+        "elasticloadbalancing:*",
+        "es:*",
+        "grafana:*",
+        "kafka:*",
+        "kendra:*",
+        "kms:*",
+        "lambda:*",
+        "logs:*",
+        "rds:*",
+        "route53:*",
+        "s3:*",
+        "sagemaker:*",
+        "secretsmanager:*",
+        "sqs:*",
+        "wafv2:*"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "TransitiveApplyServices",
+      "Effect": "Allow",
+      "Action": [
+        "application-autoscaling:*",
+        "autoscaling:*",
+        "ecr:*",
+        "elasticfilesystem:*",
+        "events:*",
+        "resource-groups:*",
+        "servicequotas:GetServiceQuota",
+        "servicequotas:ListServiceQuotas",
+        "sns:*",
+        "tag:GetResources",
+        "tag:TagResources",
+        "tag:UntagResources"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "STSAndCallerIdentity",
+      "Effect": "Allow",
+      "Action": [
+        "sts:AssumeRole",
+        "sts:GetCallerIdentity",
+        "sts:TagSession"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "IAMForServiceRoles",
+      "Effect": "Allow",
+      "Action": [
+        "iam:AddRoleToInstanceProfile",
+        "iam:AttachRolePolicy",
+        "iam:CreateInstanceProfile",
+        "iam:CreateOpenIDConnectProvider",
+        "iam:CreatePolicy",
+        "iam:CreatePolicyVersion",
+        "iam:CreateRole",
+        "iam:CreateServiceLinkedRole",
+        "iam:DeleteInstanceProfile",
+        "iam:DeleteOpenIDConnectProvider",
+        "iam:DeletePolicy",
+        "iam:DeletePolicyVersion",
+        "iam:DeleteRole",
+        "iam:DeleteRolePolicy",
+        "iam:DetachRolePolicy",
+        "iam:GetInstanceProfile",
+        "iam:GetOpenIDConnectProvider",
+        "iam:GetPolicy",
+        "iam:GetPolicyVersion",
+        "iam:GetRole",
+        "iam:GetRolePolicy",
+        "iam:ListAttachedRolePolicies",
+        "iam:ListInstanceProfilesForRole",
+        "iam:ListPolicyVersions",
+        "iam:ListRolePolicies",
+        "iam:ListRoleTags",
+        "iam:PutRolePolicy",
+        "iam:RemoveRoleFromInstanceProfile",
+        "iam:TagInstanceProfile",
+        "iam:TagOpenIDConnectProvider",
+        "iam:TagPolicy",
+        "iam:TagRole",
+        "iam:UntagRole",
+        "iam:UpdateOpenIDConnectProviderThumbprint"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "IAMPassRoleToProvisioningServicesOnly",
+      "Effect": "Allow",
+      "Action": "iam:PassRole",
+      "Resource": "*",
+      "Condition": {
+        "StringEquals": {
+          "iam:PassedToService": [
+            "apprunner.amazonaws.com",
+            "backup.amazonaws.com",
+            "codebuild.amazonaws.com",
+            "codepipeline.amazonaws.com",
+            "ec2.amazonaws.com",
+            "ecs-tasks.amazonaws.com",
+            "eks.amazonaws.com",
+            "grafana.amazonaws.com",
+            "lambda.amazonaws.com",
+            "monitoring.rds.amazonaws.com",
+            "rds.amazonaws.com",
+            "sagemaker.amazonaws.com"
+          ]
+        }
+      }
+    }
+  ]
+}
