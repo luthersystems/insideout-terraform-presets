@@ -11,7 +11,7 @@ type TestTrafficPublicOutput struct {
 	// module (e.g. "alb_dns_name" for the aws_alb module). The
 	// composer namespaces it with the component prefix at compose time
 	// (so the root output is "aws_alb_alb_dns_name" — drift-tested by
-	// TestTestTrafficPublicEndpoints_OutputsExist).
+	// TestTestTrafficPublicEndpoints_HasMatchingOutput).
 	OutputKey string
 
 	// Scheme is the URL scheme to prepend when the output is a bare
