@@ -104,10 +104,12 @@ var AWSIAMActions = map[ComponentKey][]string{
 	KeyAWSMSK:                  {"kafka:CreateClusterV2"},
 	KeyAWSCloudWatchLogs:       {"logs:CreateLogGroup"},
 	KeyAWSCloudWatchMonitoring: {"cloudwatch:PutMetricAlarm", "kms:CreateAlias", "kms:CreateKey"}, // kms: the module's key for the alarms SNS topic (see aws/cloudwatchmonitoring/main.tf)
-	KeyAWSGrafana:              {"grafana:CreateWorkspace"},
-	KeyAWSCognito:              {"cognito-idp:CreateUserPool"},
-	KeyAWSBackups:              {"backup:CreateBackupPlan", "backup:CreateBackupVault"},
-	KeyAWSGitHubActions:        {"iam:CreateOpenIDConnectProvider"},
+	// Grafana, GitHub Actions and CodePipeline: placeholder presets that
+	// create nothing, so the preflight checks nothing for them (#936).
+	KeyAWSGrafana:       nil,
+	KeyAWSCognito:       {"cognito-idp:CreateUserPool"},
+	KeyAWSBackups:       {"backup:CreateBackupPlan", "backup:CreateBackupVault"},
+	KeyAWSGitHubActions: nil,
 	// CodeBuild (#619). Project CREATE + the inline service-role
 	// policies the preset attaches (logs:CreateLogGroup for the build's
 	// CloudWatch Logs group, optional S3 bucket setup when enable_s3_logs
@@ -127,7 +129,7 @@ var AWSIAMActions = map[ComponentKey][]string{
 		"s3:PutBucketVersioning",
 		"s3:PutEncryptionConfiguration",
 	},
-	KeyAWSCodePipeline: {"codepipeline:CreatePipeline"},
+	KeyAWSCodePipeline: nil, // placeholder preset (#936)
 	// route53:CreateHostedZone covers the create_zone=true path; the data-
 	// lookup path (create_zone=false) needs only route53:GetHostedZone, which
 	// is implied by the create capability. Record-set CRUD is covered by
