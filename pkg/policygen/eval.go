@@ -38,19 +38,24 @@ func Allows(req Request, docs ...Document) bool {
 	return allowed
 }
 
-func wildMatch(pattern, s string) bool {
-	// IAM wildcards are * and ?; path.Match also treats / and [ specially,
-	// so escape [ and use a / free form by replacing / with a rune that
-	// can not occur in ARNs or actions.
+// wildMatch matches an IAM wildcard pattern (* and ?). Actions match without
+// case, as in IAM; resource ARNs match with case, as in IAM, so a test can
+// not pass on a Deny that real IAM would not apply.
+func wildMatch(pattern, s string, foldCase bool) bool {
+	if foldCase {
+		pattern, s = strings.ToLower(pattern), strings.ToLower(s)
+	}
+	// path.Match also treats / and [ specially, so escape [ and replace /
+	// with a byte that can not occur in ARNs or actions.
 	p := strings.ReplaceAll(strings.ReplaceAll(pattern, "[", `\[`), "/", "\x00")
-	ok, _ := path.Match(strings.ToLower(p), strings.ToLower(strings.ReplaceAll(s, "/", "\x00")))
+	ok, _ := path.Match(p, strings.ReplaceAll(s, "/", "\x00"))
 	return ok
 }
 
 func statementMatches(s Statement, req Request) bool {
 	match := false
 	for _, a := range s.Action {
-		if wildMatch(a, req.Action) {
+		if wildMatch(a, req.Action, true) {
 			match = true
 			break
 		}
@@ -62,7 +67,7 @@ func statementMatches(s Statement, req Request) bool {
 	for _, r := range s.Resource {
 		// A request with no named resource ("*") matches only statements
 		// on every resource, as the IAM simulator does by default.
-		if r == "*" || (req.Resource != "*" && wildMatch(r, req.Resource)) {
+		if r == "*" || (req.Resource != "*" && wildMatch(r, req.Resource, false)) {
 			match = true
 			break
 		}

@@ -30,6 +30,12 @@ type ModuleScan struct {
 	RegistrySources []string `json:"registry_sources,omitempty"`
 	// RemoteSources are the other remote module sources it calls (git URLs).
 	RemoteSources []string `json:"remote_sources,omitempty"`
+	// RolesWithoutBoundary are the aws_iam_role resources ("dir/name") that
+	// set no permissions_boundary. The scoped deploy policy refuses to
+	// create them, so each must take the workload boundary before a project
+	// can opt in (#147 step 2). A registry module that has the argument but
+	// gets no value from the preset is not listed here.
+	RolesWithoutBoundary []string `json:"roles_without_boundary,omitempty"`
 }
 
 var (
@@ -53,11 +59,11 @@ func ScanModule(fsys fs.FS, dir string) (ModuleScan, error) {
 }
 
 type acc struct {
-	types, managed, principals, registry, remote map[string]bool
+	types, managed, principals, registry, remote, unbounded map[string]bool
 }
 
 func newAcc() *acc {
-	return &acc{map[string]bool{}, map[string]bool{}, map[string]bool{}, map[string]bool{}, map[string]bool{}}
+	return &acc{map[string]bool{}, map[string]bool{}, map[string]bool{}, map[string]bool{}, map[string]bool{}, map[string]bool{}}
 }
 
 func keys(m map[string]bool) []string {
@@ -71,11 +77,12 @@ func keys(m map[string]bool) []string {
 
 func (a *acc) result() ModuleScan {
 	return ModuleScan{
-		Types:           keys(a.types),
-		ManagedPolicies: keys(a.managed),
-		Principals:      keys(a.principals),
-		RegistrySources: keys(a.registry),
-		RemoteSources:   keys(a.remote),
+		Types:                keys(a.types),
+		ManagedPolicies:      keys(a.managed),
+		Principals:           keys(a.principals),
+		RegistrySources:      keys(a.registry),
+		RemoteSources:        keys(a.remote),
+		RolesWithoutBoundary: keys(a.unbounded),
 	}
 }
 
@@ -88,6 +95,10 @@ func scanDir(fsys fs.FS, dir string, a *acc, seen map[string]bool) error {
 	if err != nil {
 		return fmt.Errorf("read module %s: %w", dir, err)
 	}
+	// A trust policy may name a policy document in another file of the
+	// same module, so documents and trust texts are resolved per module.
+	m := &moduleText{docs: map[string]string{}}
+	var locals []string
 	for _, e := range entries {
 		if e.IsDir() || !strings.HasSuffix(e.Name(), ".tf") {
 			continue
@@ -97,22 +108,43 @@ func scanDir(fsys fs.FS, dir string, a *acc, seen map[string]bool) error {
 		if err != nil {
 			return err
 		}
-		locals, err := scanFile(p, src, a)
+		l, err := scanFile(p, src, a, m)
 		if err != nil {
 			return err
 		}
-		for _, l := range locals {
-			if err := scanDir(fsys, path.Join(dir, l), a, seen); err != nil {
-				return err
+		locals = append(locals, l...)
+	}
+	// A trust policy is jsonencode()d inline or read from a policy document
+	// data source; follow the reference so its principals count.
+	for _, t := range m.trusts {
+		for _, mm := range principalRE.FindAllStringSubmatch(t, -1) {
+			a.principals[mm[1]] = true
+		}
+		for _, ref := range policyDocRefRE.FindAllStringSubmatch(t, -1) {
+			for _, mm := range principalRE.FindAllStringSubmatch(m.docs[ref[1]], -1) {
+				a.principals[mm[1]] = true
 			}
+		}
+	}
+	for _, l := range locals {
+		if err := scanDir(fsys, path.Join(dir, l), a, seen); err != nil {
+			return err
 		}
 	}
 	return nil
 }
 
-// scanFile records one file's types, policies, principals and module
-// sources, and returns the local module paths it calls.
-func scanFile(name string, src []byte, a *acc) ([]string, error) {
+// moduleText holds one module's policy documents (by data source name) and
+// role trust policy texts.
+type moduleText struct {
+	docs   map[string]string
+	trusts []string
+}
+
+// scanFile records one file's types, policies and module sources, adds its
+// policy documents and trust texts to m, and returns the local module paths
+// it calls.
+func scanFile(name string, src []byte, a *acc, m *moduleText) ([]string, error) {
 	f, diags := hclsyntax.ParseConfig(src, name, hcl.InitialPos)
 	if diags.HasErrors() {
 		return nil, fmt.Errorf("parse %s: %s", name, diags.Error())
@@ -124,8 +156,6 @@ func scanFile(name string, src []byte, a *acc) ([]string, error) {
 		a.managed[m[1]] = true
 	}
 
-	docs := map[string]string{} // aws_iam_policy_document name -> source text
-	var trustTexts []string
 	var locals []string
 	for _, b := range body.Blocks {
 		switch b.Type {
@@ -135,11 +165,14 @@ func scanFile(name string, src []byte, a *acc) ([]string, error) {
 			}
 			a.types[b.Labels[0]] = true
 			if b.Type == "data" && b.Labels[0] == "aws_iam_policy_document" && len(b.Labels) > 1 {
-				docs[b.Labels[1]] = text(b.Range())
+				m.docs[b.Labels[1]] = text(b.Range())
 			}
 			if b.Type == "resource" && b.Labels[0] == "aws_iam_role" {
 				if attr, ok := b.Body.Attributes["assume_role_policy"]; ok {
-					trustTexts = append(trustTexts, text(attr.Expr.Range()))
+					m.trusts = append(m.trusts, text(attr.Expr.Range()))
+				}
+				if _, ok := b.Body.Attributes["permissions_boundary"]; !ok && len(b.Labels) > 1 {
+					a.unbounded[path.Dir(name)+"/"+b.Labels[1]] = true
 				}
 			}
 		case "module":
@@ -153,18 +186,6 @@ func scanFile(name string, src []byte, a *acc) ([]string, error) {
 				a.registry[src+"@"+ver] = true
 			default:
 				a.remote[src] = true
-			}
-		}
-	}
-	// A trust policy is jsonencode()d inline or read from a policy document
-	// data source; follow the reference so its principals count.
-	for _, t := range trustTexts {
-		for _, m := range principalRE.FindAllStringSubmatch(t, -1) {
-			a.principals[m[1]] = true
-		}
-		for _, ref := range policyDocRefRE.FindAllStringSubmatch(t, -1) {
-			for _, m := range principalRE.FindAllStringSubmatch(docs[ref[1]], -1) {
-				a.principals[m[1]] = true
 			}
 		}
 	}
@@ -199,5 +220,8 @@ func (a *acc) merge(b ModuleScan) {
 	}
 	for _, s := range b.RemoteSources {
 		a.remote[s] = true
+	}
+	for _, s := range b.RolesWithoutBoundary {
+		a.unbounded[s] = true
 	}
 }

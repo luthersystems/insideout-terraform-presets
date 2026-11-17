@@ -7,6 +7,7 @@ import (
 	"sort"
 	"strings"
 	"testing"
+	"testing/fstest"
 
 	terraformpresets "github.com/luthersystems/insideout-terraform-presets"
 	"github.com/luthersystems/insideout-terraform-presets/pkg/composer"
@@ -145,7 +146,12 @@ func TestRoleEscalationDenied(t *testing.T) {
 		{"pass another project's role", Request{"iam:PassRole", "*", notProject}, false},
 		{"pass a role to a service no preset uses", Request{"iam:PassRole", "*", otherService}, false},
 		{"remove a boundary", Request{"iam:DeleteRolePermissionsBoundary", "*", withBoundary}, false},
-		{"edit another role with boundary", Request{"iam:AttachRolePolicy", "arn:aws:iam::111122223333:role/" + "x", withBoundary}, true},
+		{"edit a customer role after giving it the boundary", Request{"iam:DetachRolePolicy", "arn:aws:iam::111122223333:role/customer", func() map[string]string {
+			c := preflightContext(p)
+			c["aws:ResourceTag/Project"] = "customer"
+			return c
+		}()}, false},
+		{"edit a project role with boundary", Request{"iam:AttachRolePolicy", "arn:aws:iam::111122223333:role/" + "x", withBoundary}, true},
 		{"edit the deploy role", Request{"iam:AttachRolePolicy", PlaceholderDeployRoleARN, withBoundary}, false},
 		{"edit the deploy policy", Request{"iam:CreatePolicyVersion", "arn:aws:iam::111122223333:policy/insideout-write", nil}, false},
 		{"assume any role", Request{"sts:AssumeRole", "*", withBoundary}, false},
@@ -258,4 +264,35 @@ func TestAllowsConditions(t *testing.T) {
 	assert.False(t, Allows(Request{"ec2:RunInstances", "*", map[string]string{"ec2:Region": "c"}}, doc))
 	assert.False(t, Allows(Request{"kms:Encrypt", "*", map[string]string{"kms:x": "y"}}, doc), "unknown operator never matches")
 	assert.False(t, Allows(Request{"sqs:SendMessage", "*", nil}, doc))
+}
+
+// TestScanTrustAcrossFiles: a role's trust document may live in another file
+// of the module; its principal must still count, or PassRole to that service
+// would be denied.
+func TestScanTrustAcrossFiles(t *testing.T) {
+	fsys := fstest.MapFS{
+		"m/main.tf": {Data: []byte(`
+resource "aws_iam_role" "r" {
+  assume_role_policy = data.aws_iam_policy_document.trust.json
+}
+resource "aws_iam_role" "b" {
+  assume_role_policy   = "{}"
+  permissions_boundary = var.boundary
+}
+`)},
+		"m/data.tf": {Data: []byte(`
+data "aws_iam_policy_document" "trust" {
+  statement {
+    principals {
+      type        = "Service"
+      identifiers = ["lambda.amazonaws.com"]
+    }
+  }
+}
+`)},
+	}
+	s, err := ScanModule(fsys, "m")
+	require.NoError(t, err)
+	assert.Equal(t, []string{"lambda.amazonaws.com"}, s.Principals)
+	assert.Equal(t, []string{"m/r"}, s.RolesWithoutBoundary)
 }

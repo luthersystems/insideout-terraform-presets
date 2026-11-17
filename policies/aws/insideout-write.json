@@ -79,11 +79,25 @@
       ]
     },
     {
-      "Sid": "RoleWritesOnlyWithWorkloadBoundary",
+      "Sid": "CreateRoleOnlyWithWorkloadBoundary",
+      "Effect": "Allow",
+      "Action": [
+        "iam:CreateRole"
+      ],
+      "Resource": [
+        "*"
+      ],
+      "Condition": {
+        "StringEquals": {
+          "iam:PermissionsBoundary": "${workload_boundary_arn}"
+        }
+      }
+    },
+    {
+      "Sid": "RoleWritesOnlyOnProjectRolesWithWorkloadBoundary",
       "Effect": "Allow",
       "Action": [
         "iam:AttachRolePolicy",
-        "iam:CreateRole",
         "iam:DeleteRolePolicy",
         "iam:DetachRolePolicy",
         "iam:PutRolePermissionsBoundary",
@@ -94,6 +108,7 @@
       ],
       "Condition": {
         "StringEquals": {
+          "aws:ResourceTag/Project": "${project}",
           "iam:PermissionsBoundary": "${workload_boundary_arn}"
         }
       }
