@@ -1515,9 +1515,12 @@ func extractCloudWatchLogsConfig(rawResult any) map[string]string {
 // — e.g. `machineType`, `currentNodeCount`, `memorySizeGb`. The existing
 // getString / getFloat64 / boolStr helpers work unchanged on this shape.
 //
-// Identity fields come from the SDK-returned list-* response only; any
-// deeper field that would require a describe-* per-resource call is
-// flagged with a TODO(#928) and left for a follow-up.
+// Most fields come from the SDK-returned list-* response. Where a field
+// lives on a neighbouring resource (firewalls for a VPC, backend
+// services for a URL map, crypto keys for a key ring, ...), the
+// inspector joins it onto the list result (#928) and the extractor reads
+// it from there. Such joined fields are left out when the extra call
+// failed, so each extractor emits them only when present.
 
 // extractGCPComputeConfig extracts config from the list-instances response
 // (inspectGCPCompute → compute.InstancesClient.AggregatedList). Shape
@@ -1531,10 +1534,11 @@ func extractCloudWatchLogsConfig(rawResult any) map[string]string {
 // across every zone in the project, so we also surface a count.
 //
 // frontend field (lib/stack/ir.ts: gcp_compute has `machineType` + count).
-// TODO(#928): when the UI decides to surface boot-disk size / service
-// account, fan out to describe-instance per first instance — list-instances
-// does already include `disks[]` and `serviceAccounts[]` so both could be
-// surfaced directly without a second call.
+//
+// list-instances already carries `disks[]` and `serviceAccounts[]`, so
+// the boot disk size (diskSizeGb, the composer's gcp_compute.diskSizeGb)
+// and the attached service account's email (serviceAccount) need no
+// second call (#928).
 func extractGCPComputeConfig(rawResult any) map[string]string {
 	items := sliceFromEnvelope(rawResult, "instances")
 	if len(items) == 0 {
@@ -1556,7 +1560,46 @@ func extractGCPComputeConfig(rawResult any) map[string]string {
 	if v := getString(first, "status"); v != "" {
 		cfg["status"] = v
 	}
+	if v := gcpBootDiskSizeGb(first); v != "" {
+		cfg["diskSizeGb"] = v
+	}
+	if sas := toSliceOfMaps(first["serviceAccounts"]); len(sas) > 0 {
+		if v := getString(sas[0], "email"); v != "" {
+			cfg["serviceAccount"] = v
+		}
+	}
 	return cfg
+}
+
+// gcpBootDiskSizeGb returns the size of the instance's boot disk (the
+// disks[] entry with boot=true) as a whole-number string, or "" when
+// there is none. protojson writes int64 fields as JSON strings, so the
+// size arrives as "50" in production and as a number in hand-written
+// fixtures; both are accepted.
+func gcpBootDiskSizeGb(instance map[string]any) string {
+	for _, d := range toSliceOfMaps(instance["disks"]) {
+		if b, _ := d["boot"].(bool); !b {
+			continue
+		}
+		return gcpIntString(d, "diskSizeGb")
+	}
+	return ""
+}
+
+// gcpIntString reads a whole-number field that may be a JSON number
+// (encoding/json, int32 under protojson) or a JSON string (int64 under
+// protojson) and returns it as a base-10 string. Returns "" when the
+// key is missing or not a whole number.
+func gcpIntString(m map[string]any, key string) string {
+	switch v := m[key].(type) {
+	case float64:
+		return strconv.FormatFloat(v, 'f', 0, 64)
+	case string:
+		if _, err := strconv.ParseInt(v, 10, 64); err == nil {
+			return v
+		}
+	}
+	return ""
 }
 
 // extractGCPGKEConfig extracts config from the list-clusters response
@@ -1759,6 +1802,12 @@ func extractGCPMemorystoreConfig(rawResult any) map[string]string {
 // availabilityType encodes HA: "REGIONAL" = highly available, "ZONAL" =
 // single zone. Emit `highAvailability: "Yes"|"No"` to match the bool
 // shape of the design-time field.
+//
+// backupEnabled ("Yes"|"No") comes from settings.backupConfiguration
+// (#928). The SQL Admin SDK tags `enabled` omitempty, so a disabled
+// backup arrives as a backupConfiguration object without `enabled`;
+// that reads as "No". With no backupConfiguration at all the field is
+// left out, since nothing was reported.
 func extractGCPCloudSQLConfig(rawResult any) map[string]string {
 	items := sliceFromEnvelope(rawResult, "items")
 	if len(items) == 0 {
@@ -1796,14 +1845,23 @@ func extractGCPCloudSQLConfig(rawResult any) map[string]string {
 		case "ZONAL":
 			cfg["highAvailability"] = "No"
 		}
+		if bc := toMap(settings["backupConfiguration"]); bc != nil {
+			if b, _ := bc["enabled"].(bool); b {
+				cfg["backupEnabled"] = "Yes"
+			} else {
+				cfg["backupEnabled"] = "No"
+			}
+		}
 	}
 	return cfg
 }
 
 // extractGCPGCSConfig extracts config from the list-buckets response. The
-// inspector (inspectGCPGCS) PRE-FLATTENS each bucket to a 5-key map:
+// inspector (inspectGCPGCS) PRE-FLATTENS each bucket to a 6-key map:
 //
-//	[ { name, location, storageClass, created, versioning } ]
+//	[ { name, location, storageClass, created, versioning,
+//	    lifecycle: { rule: [ { action: {type, storageClass},
+//	                           condition: {age, ...} } ] } } ]
 //
 // — so this extractor is the simplest of the bundle: no proto parsing
 // required, straight field lookups.
@@ -1817,6 +1875,12 @@ func extractGCPCloudSQLConfig(rawResult any) map[string]string {
 // Multi-bucket nuance (same as extractS3Config): versioning is per-bucket,
 // so we only surface it when there is exactly ONE bucket; multiple buckets
 // omit it rather than claim a single value across the set (#712).
+//
+// lifecyclePolicy follows the same single-bucket rule (#928). It is a
+// short summary of the rules, e.g. "Delete(age=30d)" or
+// "SetStorageClass:NEARLINE(age=90d); Delete(age=365d)", and "none" when
+// the bucket has no rules. It is left out when the envelope carries no
+// lifecycle key (an older inspector).
 func extractGCPGCSConfig(rawResult any) map[string]string {
 	items := sliceFromEnvelope(rawResult, "buckets")
 	if len(items) == 0 {
@@ -1841,8 +1905,54 @@ func extractGCPGCSConfig(rawResult any) map[string]string {
 				cfg["versioning"] = strconv.FormatBool(b)
 			}
 		}
+		if lc := toMap(first["lifecycle"]); lc != nil {
+			cfg["lifecyclePolicy"] = gcsLifecycleSummary(toSliceOfMaps(lc["rule"]))
+		}
 	}
 	return cfg
+}
+
+// gcsLifecycleSummary renders GCS lifecycle rules as one short string,
+// in rule order: "<action>[:<storageClass>](<conditions>)" joined by
+// "; ". Conditions are written in a fixed order so the same rules always
+// give the same string, which keeps drift comparison stable.
+func gcsLifecycleSummary(rules []map[string]any) string {
+	if len(rules) == 0 {
+		return "none"
+	}
+	parts := make([]string, 0, len(rules))
+	for _, r := range rules {
+		action := toMap(r["action"])
+		part := getString(action, "type")
+		if sc := getString(action, "storageClass"); sc != "" {
+			part += ":" + sc
+		}
+		cond := toMap(r["condition"])
+		var conds []string
+		if v := gcpIntString(cond, "age"); v != "" {
+			conds = append(conds, "age="+v+"d")
+		}
+		if v := gcpIntString(cond, "numNewerVersions"); v != "" {
+			conds = append(conds, "numNewerVersions="+v)
+		}
+		if v := gcpIntString(cond, "daysSinceNoncurrentTime"); v != "" {
+			conds = append(conds, "daysSinceNoncurrent="+v+"d")
+		}
+		if classes, ok := cond["matchesStorageClass"].([]any); ok && len(classes) > 0 {
+			names := make([]string, 0, len(classes))
+			for _, c := range classes {
+				if s, ok := c.(string); ok {
+					names = append(names, s)
+				}
+			}
+			conds = append(conds, "matchesStorageClass="+strings.Join(names, "|"))
+		}
+		if len(conds) > 0 {
+			part += "(" + strings.Join(conds, ",") + ")"
+		}
+		parts = append(parts, part)
+	}
+	return strings.Join(parts, "; ")
 }
 
 // extractGCPFirestoreConfig extracts config from the list-collections
@@ -1902,17 +2012,20 @@ func extractGCPPubSubConfig(rawResult any) map[string]string {
 
 // extractGCPCloudKMSConfig extracts config from the list-keyrings response
 // (inspectGCPKMS → kms.NewKeyManagementClient.ListKeyRings, default
-// location "global"). Shape (after JSON round-trip of []*kmspb.KeyRing):
+// location "global"). Shape (the inspector's protojson-shaped key rings,
+// each with the numKeys it counted):
 //
-//	[ { name, createTime } ]
+//	[ { name, createTime, numKeys } ]
 //
 // gcp_cloud_kms is a bare boolean in lib/stack/ir.ts — no designable
 // config. Emit drift identity: keyring count + first ring name.
 //
-// TODO(#928): surface `numKeys` by fanning out ListCryptoKeys
-// per key ring. Each extra call adds latency but would give the UI a
-// meaningful count-of-keys card. Current implementation reports key
-// RINGS only (kmspb.KeyRing has just {name, createTime}).
+// numKeys (the key the aws_kms extractor uses too) is the total number
+// of crypto keys across the rings. kmspb.KeyRing has only {name,
+// createTime}, so the inspector counts each ring's keys with
+// ListCryptoKeys and adds numKeys to the ring (#928). If any ring lacks
+// numKeys (its count failed or it was past the fan-out cap), the total
+// is unknown and the field is left out rather than under-reported.
 func extractGCPCloudKMSConfig(rawResult any) map[string]string {
 	items := sliceFromEnvelope(rawResult, "keyRings")
 	if len(items) == 0 {
@@ -1924,6 +2037,18 @@ func extractGCPCloudKMSConfig(rawResult any) map[string]string {
 	first := items[0]
 	if v := gcpResourceBasename(getString(first, "name")); v != "" {
 		cfg["keyringName"] = v
+	}
+	total, counted := 0.0, true
+	for _, ring := range items {
+		n, ok := getFloat64(ring, "numKeys")
+		if !ok {
+			counted = false
+			break
+		}
+		total += n
+	}
+	if counted {
+		cfg["numKeys"] = strconv.FormatFloat(total, 'f', 0, 64)
 	}
 	return cfg
 }
@@ -1974,11 +2099,12 @@ func extractGCPSecretManagerConfig(rawResult any) map[string]string {
 // gcp_cloud_armor is a bare boolean in lib/stack/ir.ts — no designable
 // config. Emit policyCount + first policy name + type (CLOUD_ARMOR /
 // CLOUD_ARMOR_EDGE / CLOUD_ARMOR_NETWORK). rules[] is included on the
-// list summary; surface the count as a drift signal.
+// list summary (the inspector describes any policy listed without its
+// rules, #928); surface the count as a drift signal.
 //
-// TODO(#928): fan out describe-policy per name to surface
-// the rule set and default action. Current extractor surfaces drift
-// identity + rule count only.
+// defaultAction is the action of the default rule, the one at the
+// lowest priority (2147483647) that every policy has: "allow" or
+// "deny(403)" etc. It answers "does this policy block by default?".
 func extractGCPCloudArmorConfig(rawResult any) map[string]string {
 	items := sliceFromEnvelope(rawResult, "items")
 	if len(items) == 0 {
@@ -1996,9 +2122,22 @@ func extractGCPCloudArmorConfig(rawResult any) map[string]string {
 	}
 	if rules := toSliceOfMaps(first["rules"]); len(rules) > 0 {
 		cfg["ruleCount"] = strconv.Itoa(len(rules))
+		for _, r := range rules {
+			if gcpIntString(r, "priority") == cloudArmorDefaultRulePriority {
+				if v := getString(r, "action"); v != "" {
+					cfg["defaultAction"] = v
+				}
+				break
+			}
+		}
 	}
 	return cfg
 }
+
+// cloudArmorDefaultRulePriority is the priority of a Cloud Armor
+// policy's default rule (the largest int32). GCP creates this rule with
+// every policy and it cannot be removed, only changed.
+const cloudArmorDefaultRulePriority = "2147483647"
 
 // extractGCPIdentityPlatformConfig extracts config from the list-tenants
 // response (inspectGCPIdentityPlatform →
@@ -2050,21 +2189,33 @@ func extractGCPIdentityPlatformConfig(rawResult any) map[string]string {
 }
 
 // extractGCPVPCConfig extracts config from the list-networks response
-// (inspectGCPVPC → computeapi.Service.Networks.List). Shape (after JSON
-// round-trip of []*computeapi.Network):
+// (inspectGCPVPC → computeapi.Service.Networks.List). Shape (the
+// inspector's networks as JSON maps, with the firewall join added):
 //
 //	[ { name, autoCreateSubnetworks, routingConfig: {routingMode},
-//	    subnetworks: [ <url>... ], id } ]
+//	    subnetworks: [ <url>... ], id, IPv4Range,
+//	    publicIngressFirewalls: [ <firewall name>... ] } ]
 //
 // gcp_vpc is a bare boolean in lib/stack/ir.ts — no designable config.
-// Unlike AWS (where extractVPCConfig surfaces public/private via a
-// second describe-internet-gateways call), GCP networks don't have a
-// trivial public/private flip — IGW-equivalent is per-subnetwork and
-// per-firewall. Emit drift identity: networkCount + first name +
-// autoCreateSubnetworks + routingMode + subnetwork count.
+// Emit drift identity: networkCount + first name + autoCreateSubnetworks
+// + routingMode + subnetwork count.
 //
 // The subnetworks[] array on the Network summary is a list of resource
 // URLs (not full subnet objects); surface the count as a drift signal.
+//
+// vpcMode is a one-word summary of the first network's subnet mode:
+// "auto" (autoCreateSubnetworks), "legacy" (a pre-subnet network with an
+// IPv4Range) or "custom". The Compute SDK tags autoCreateSubnetworks
+// omitempty, so a custom-mode network arrives without the key at all;
+// vpcMode still reports it.
+//
+// deploymentType mirrors extractVPCConfig's AWS key: "public",
+// "private" or "mixed" across every network. Where AWS asks "is an
+// internet gateway attached?", GCP asks "does a firewall rule admit
+// traffic from anywhere?" — the inspector joins that onto each network
+// as publicIngressFirewalls (#928). Networks without that key (the
+// firewall call failed) are not classified, and with none classified
+// the field is left out so drift does not fire on missing data.
 func extractGCPVPCConfig(rawResult any) map[string]string {
 	items := sliceFromEnvelope(rawResult, "items")
 	if len(items) == 0 {
@@ -2088,25 +2239,62 @@ func extractGCPVPCConfig(rawResult any) map[string]string {
 	if subs, ok := first["subnetworks"].([]any); ok {
 		cfg["subnetworkCount"] = strconv.Itoa(len(subs))
 	}
+	switch {
+	case first["autoCreateSubnetworks"] == true:
+		cfg["vpcMode"] = "auto"
+	case getString(first, "IPv4Range") != "":
+		cfg["vpcMode"] = "legacy"
+	default:
+		cfg["vpcMode"] = "custom"
+	}
+
+	publicCount, privateCount := 0, 0
+	for _, n := range items {
+		fws, ok := n["publicIngressFirewalls"].([]any)
+		if !ok {
+			continue
+		}
+		if len(fws) > 0 {
+			publicCount++
+		} else {
+			privateCount++
+		}
+	}
+	switch {
+	case publicCount > 0 && privateCount == 0:
+		cfg["deploymentType"] = "public"
+	case privateCount > 0 && publicCount == 0:
+		cfg["deploymentType"] = "private"
+	case publicCount > 0 && privateCount > 0:
+		cfg["deploymentType"] = "mixed"
+	}
 	return cfg
 }
 
 // extractGCPLoadBalancerConfig extracts config from the list-url-maps
 // response (inspectGCPLoadBalancer →
-// computeapi.Service.UrlMaps.List). Shape (after JSON round-trip of
-// []*computeapi.UrlMap):
+// computeapi.Service.UrlMaps.List). Shape (the inspector's URL maps as
+// JSON maps, with the backend-service and HTTPS-proxy joins added):
 //
 //	[ { name, defaultService, hostRules: [ ... ], pathMatchers: [ ... ],
-//	    id, creationTimestamp } ]
+//	    id, creationTimestamp, defaultServiceProtocol,
+//	    defaultServiceLoadBalancingScheme, httpsProxyCount,
+//	    sslPolicies: [ ... ] } ]
 //
 // gcp_loadbalancer is a bare boolean in lib/stack/ir.ts — no designable
 // config. Emit drift identity: urlMapCount + first map name +
 // defaultService (basename) + host-rule count so the LLM can answer
 // "how many domains are wired up?" without a second API call.
 //
-// TODO(#928): fan out list-backend-services to surface
-// protocol + scheme + ssl policy per URL map. Current extractor
-// surfaces URL-map identity only.
+// The inspector joins the backend service and HTTPS proxies onto each
+// URL map (#928), so for the first map this also emits:
+//   - protocol and loadBalancingScheme of its default backend service
+//     (e.g. "HTTPS", "EXTERNAL_MANAGED"); absent when the default is a
+//     backend bucket or the backend-services call failed.
+//   - sslPolicy: the name of the SSL policy on its HTTPS proxy, or
+//     "default" when an HTTPS proxy uses GCP's default policy. Absent
+//     for an HTTP-only map (no HTTPS proxy) or when the proxies call
+//     failed.
 func extractGCPLoadBalancerConfig(rawResult any) map[string]string {
 	items := sliceFromEnvelope(rawResult, "items")
 	if len(items) == 0 {
@@ -2125,22 +2313,45 @@ func extractGCPLoadBalancerConfig(rawResult any) map[string]string {
 	if hrs, ok := first["hostRules"].([]any); ok {
 		cfg["hostRuleCount"] = strconv.Itoa(len(hrs))
 	}
+	if v := getString(first, "defaultServiceProtocol"); v != "" {
+		cfg["protocol"] = v
+	}
+	if v := getString(first, "defaultServiceLoadBalancingScheme"); v != "" {
+		cfg["loadBalancingScheme"] = v
+	}
+	if n, ok := getFloat64(first, "httpsProxyCount"); ok && n > 0 {
+		cfg["sslPolicy"] = "default"
+		if policies, ok := first["sslPolicies"].([]any); ok && len(policies) > 0 {
+			if s, ok := policies[0].(string); ok && s != "" {
+				cfg["sslPolicy"] = gcpResourceBasename(s)
+			}
+		}
+	}
 	return cfg
 }
 
-// extractGCPCloudLoggingConfig extracts config from the list-logs
-// response (inspectGCPLogging → logadmin.NewClient.Logs). Inspector
-// returns []string of log names. Envelope key for fixture round-trips:
-// "logs".
+// extractGCPCloudLoggingConfig extracts config from either Cloud
+// Logging action:
 //
-// frontend field (lib/stack/ir.ts:503-509): retentionDays. Retention
-// lives on log buckets (`_Default`, `_Required`, custom), which is a
-// DIFFERENT API (list-buckets, not list-logs) — logadmin.NewClient
-// doesn't surface it. TODO(#928): add a list-log-buckets
-// action to inspectGCPLogging and fan out to surface retention.
+//   - list-logs (the panel default, inspectGCPLogging →
+//     logadmin.NewClient.Logs): []string of log names, envelope key
+//     "logs". Emits drift identity: logCount + first log name.
+//   - list-log-buckets (#928, Config API ListBuckets): []LogBucket,
+//     protojson-shaped `{name, retentionDays, lifecycleState, ...}`,
+//     envelope key "buckets". Retention lives on log buckets, not
+//     logs, so this is the shape that carries it. Emits
+//     logBucketCount and retentionDays of the `_Default` bucket, the
+//     bucket that holds the project's logs unless a sink routes them
+//     elsewhere.
 //
-// Current extractor emits drift identity only: logCount + first log name.
+// frontend field (lib/stack/ir.ts:503-509): retentionDays. Note that
+// the gcp/cloud_logging preset's retention_days sets the lifecycle age
+// of the GCS archive bucket its sink writes to, not a log bucket's
+// retention, so the two only match when both are left at 30 days.
 func extractGCPCloudLoggingConfig(rawResult any) map[string]string {
+	if buckets := sliceFromEnvelope(rawResult, "buckets"); len(buckets) > 0 {
+		return gcpLogBucketsConfig(buckets)
+	}
 	names := stringSliceFromEnvelope(rawResult, "logs")
 	if len(names) == 0 {
 		return nil
@@ -2150,6 +2361,24 @@ func extractGCPCloudLoggingConfig(rawResult any) map[string]string {
 	}
 	if names[0] != "" {
 		cfg["logName"] = names[0]
+	}
+	return cfg
+}
+
+// gcpLogBucketsConfig is the list-log-buckets half of
+// extractGCPCloudLoggingConfig.
+func gcpLogBucketsConfig(buckets []map[string]any) map[string]string {
+	cfg := map[string]string{
+		"logBucketCount": strconv.Itoa(len(buckets)),
+	}
+	for _, b := range buckets {
+		if gcpResourceBasename(getString(b, "name")) != "_Default" {
+			continue
+		}
+		if v := gcpIntString(b, "retentionDays"); v != "" {
+			cfg["retentionDays"] = v
+		}
+		break
 	}
 	return cfg
 }

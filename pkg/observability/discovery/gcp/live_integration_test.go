@@ -306,7 +306,9 @@ func TestLive_InspectVPC(t *testing.T) {
 		action   string
 		wantType any
 	}{
-		{"list-networks", []*computeapi.Network(nil)},
+		// Networks come back as maps so the firewall join can add
+		// publicIngressFirewalls (#928).
+		{"list-networks", []map[string]any(nil)},
 		{"list-subnets", []*computeapi.Subnetwork(nil)},
 		{"list-firewalls", []*computeapi.Firewall(nil)},
 		{"list-routes", []*computeapi.Route(nil)},
@@ -335,7 +337,9 @@ func TestLive_InspectLoadBalancer(t *testing.T) {
 		wantType any
 	}{
 		{"list-backend-services", []*computeapi.BackendService(nil)},
-		{"list-url-maps", []*computeapi.UrlMap(nil)},
+		// URL maps come back as maps so the backend-service and HTTPS
+		// proxy joins can add their fields (#928).
+		{"list-url-maps", []map[string]any(nil)},
 		{"list-target-http-proxies", []*computeapi.TargetHttpProxy(nil)},
 		{"list-target-https-proxies", []*computeapi.TargetHttpsProxy(nil)},
 		{"list-forwarding-rules", []*computeapi.ForwardingRule(nil)},

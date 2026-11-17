@@ -3,6 +3,8 @@ package gcp
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -34,7 +36,8 @@ func fakeStorageREST(t *testing.T, handler http.HandlerFunc) (*httptest.Server, 
 const listBucketsResponse = `{
   "kind": "storage#buckets",
   "items": [
-    {"name": "bkt-a", "location": "US", "storageClass": "STANDARD", "timeCreated": "2024-01-01T00:00:00Z", "versioning": {"enabled": true}, "labels": {"project": "io-foo"}},
+    {"name": "bkt-a", "location": "US", "storageClass": "STANDARD", "timeCreated": "2024-01-01T00:00:00Z", "versioning": {"enabled": true}, "labels": {"project": "io-foo"},
+     "lifecycle": {"rule": [{"action": {"type": "SetStorageClass", "storageClass": "NEARLINE"}, "condition": {"age": 30, "matchesStorageClass": ["STANDARD"]}}, {"action": {"type": "Delete"}, "condition": {"age": 365}}]}},
     {"name": "bkt-b", "location": "EU", "storageClass": "NEARLINE", "timeCreated": "2024-01-02T00:00:00Z", "labels": {"project": "io-bar"}},
     {"name": "bkt-c", "location": "ASIA", "storageClass": "STANDARD", "timeCreated": "2024-01-03T00:00:00Z"},
     {"name": "bkt-d", "location": "US", "storageClass": "STANDARD", "timeCreated": "2024-01-04T00:00:00Z", "versioning": {"enabled": false}, "labels": {"project": "io-baz"}}
@@ -69,6 +72,18 @@ func TestInspectGCS_ListBuckets_AllReturned(t *testing.T) {
 	// encoding/json default. #712.
 	assert.Equal(t, "bkt-d", buckets[3]["name"])
 	assert.Equal(t, false, buckets[3]["versioning"])
+
+	// lifecycle is carried through in the JSON API's shape (#928) so
+	// extractGCPGCSConfig can report lifecyclePolicy. A bucket with no
+	// rules still gets lifecycle.rule = [], never null.
+	raw, err := json.Marshal(buckets[0]["lifecycle"])
+	require.NoError(t, err)
+	assert.JSONEq(t, `{"rule":[
+		{"action":{"type":"SetStorageClass","storageClass":"NEARLINE"},"condition":{"age":30,"matchesStorageClass":["STANDARD"]}},
+		{"action":{"type":"Delete"},"condition":{"age":365}}]}`, string(raw))
+	raw, err = json.Marshal(buckets[1]["lifecycle"])
+	require.NoError(t, err)
+	assert.JSONEq(t, `{"rule":[]}`, string(raw))
 }
 
 func TestInspectGCS_ListBuckets_FiltersByProject(t *testing.T) {
@@ -214,4 +229,61 @@ func TestInspectKMS_ListKeys_NoMatches_EmptySlice(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "[]", string(b),
 		"empty KMS list-keys must marshal as [] not null (#256)")
+}
+
+// TestKeyRingsWithKeyCounts pins the list-keyrings numKeys enrichment
+// (#928): each ring gets its ListCryptoKeys count, a failed count leaves
+// numKeys out without failing the call, and only the first
+// kmsKeyCountFanOutCap rings are counted.
+func TestKeyRingsWithKeyCounts(t *testing.T) {
+	t.Parallel()
+
+	t.Run("CountsAndFailure", func(t *testing.T) {
+		t.Parallel()
+		rings := []*kmspb.KeyRing{
+			{Name: "projects/p/locations/global/keyRings/a"},
+			{Name: "projects/p/locations/global/keyRings/b"},
+		}
+		var asked []string
+		got := keyRingsWithKeyCounts(context.Background(), rings, func(_ context.Context, parent string) (int, error) {
+			asked = append(asked, parent)
+			if parent == rings[1].Name {
+				return 0, errors.New("permission denied")
+			}
+			return 3, nil
+		})
+		require.Len(t, got, 2)
+		assert.Equal(t, []string{rings[0].Name, rings[1].Name}, asked, "ListCryptoKeys runs with the ring as parent")
+		assert.Equal(t, rings[0].Name, got[0]["name"], "ring keeps its protojson-shaped fields")
+		assert.Equal(t, 3, got[0]["numKeys"])
+		assert.NotContains(t, got[1], "numKeys", "a failed count must leave numKeys out, not report 0")
+	})
+
+	t.Run("FanOutCap", func(t *testing.T) {
+		t.Parallel()
+		rings := make([]*kmspb.KeyRing, kmsKeyCountFanOutCap+2)
+		for i := range rings {
+			rings[i] = &kmspb.KeyRing{Name: fmt.Sprintf("projects/p/locations/global/keyRings/r%d", i)}
+		}
+		calls := 0
+		got := keyRingsWithKeyCounts(context.Background(), rings, func(context.Context, string) (int, error) {
+			calls++
+			return 1, nil
+		})
+		require.Len(t, got, len(rings), "rings past the cap are still returned")
+		assert.Equal(t, kmsKeyCountFanOutCap, calls)
+		assert.Contains(t, got[kmsKeyCountFanOutCap-1], "numKeys")
+		assert.NotContains(t, got[kmsKeyCountFanOutCap], "numKeys")
+	})
+
+	t.Run("Empty_MarshalsAsArray", func(t *testing.T) {
+		t.Parallel()
+		got := keyRingsWithKeyCounts(context.Background(), nil, func(context.Context, string) (int, error) {
+			t.Fatal("no ring, no count")
+			return 0, nil
+		})
+		b, err := json.Marshal(got)
+		require.NoError(t, err)
+		assert.Equal(t, "[]", string(b), "empty list-keyrings must marshal as [] not null (#255)")
+	})
 }

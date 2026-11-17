@@ -114,3 +114,20 @@ func drainAggregatedIterator[Pair, T any](
 	}
 	return out, nil
 }
+
+// countIterator drains an iterator and returns how many items it held.
+// Used by enrichment fan-outs that only need a count (for example the
+// number of keys in a KMS key ring), so no item slice is kept.
+func countIterator[T any](it gcpIterator[T]) (int, error) {
+	n := 0
+	for {
+		_, err := it.Next()
+		if err == iterator.Done {
+			return n, nil
+		}
+		if err != nil {
+			return 0, err
+		}
+		n++
+	}
+}

@@ -3,6 +3,7 @@ package gcp
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -38,15 +39,70 @@ const networksListResponse = `{
   ]
 }`
 
+// firewallsListResponse: net-a has one rule open to the internet (plus
+// rules that must NOT count: internal source, disabled, deny, egress);
+// net-b has none.
+const firewallsListResponse = `{
+  "kind": "compute#firewallList",
+  "items": [
+    {"name":"allow-http","network":"https://www.googleapis.com/compute/v1/projects/demo-proj/global/networks/net-a","direction":"INGRESS","sourceRanges":["0.0.0.0/0"],"allowed":[{"IPProtocol":"tcp","ports":["80"]}]},
+    {"name":"allow-internal","network":"projects/demo-proj/global/networks/net-b","direction":"INGRESS","sourceRanges":["10.0.0.0/8"],"allowed":[{"IPProtocol":"all"}]},
+    {"name":"disabled-open","network":"projects/demo-proj/global/networks/net-b","sourceRanges":["0.0.0.0/0"],"allowed":[{"IPProtocol":"all"}],"disabled":true},
+    {"name":"deny-all","network":"projects/demo-proj/global/networks/net-b","direction":"INGRESS","sourceRanges":["0.0.0.0/0"],"denied":[{"IPProtocol":"all"}]},
+    {"name":"egress-open","network":"projects/demo-proj/global/networks/net-b","direction":"EGRESS","destinationRanges":["0.0.0.0/0"],"allowed":[{"IPProtocol":"all"}]}
+  ]
+}`
+
 func TestInspectVPC_ListNetworks(t *testing.T) {
 	t.Parallel()
 	var capturedFilter string
 	srv, opts := fakeComputeAPIREST(t, func(w http.ResponseWriter, r *http.Request) {
-		if !strings.Contains(r.URL.Path, "/networks") {
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case strings.HasSuffix(r.URL.Path, "/global/networks"):
+			capturedFilter = r.URL.Query().Get("filter")
+			_, _ = w.Write([]byte(networksListResponse))
+		case strings.HasSuffix(r.URL.Path, "/global/firewalls"):
+			_, _ = w.Write([]byte(firewallsListResponse))
+		default:
 			http.Error(w, "unexpected path: "+r.URL.Path, http.StatusInternalServerError)
+		}
+	})
+	defer srv.Close()
+
+	got, err := inspectVPC(context.Background(), "demo-proj", "list-networks", "", opts...)
+	require.NoError(t, err)
+
+	nets, ok := got.([]map[string]any)
+	require.True(t, ok, "expected []map[string]any, got %T", got)
+	require.Len(t, nets, 2)
+	// No project filter passed; filter param should be empty.
+	assert.Empty(t, capturedFilter)
+
+	// Network fields keep the Compute JSON shape the extractor reads.
+	assert.Equal(t, "net-b", nets[1]["name"])
+	assert.Equal(t, true, nets[1]["autoCreateSubnetworks"])
+	// The firewall join (#928): only the enabled INGRESS allow rule from
+	// 0.0.0.0/0 counts; net-b is explicitly private ([] not null).
+	b, err := json.Marshal(nets[0]["publicIngressFirewalls"])
+	require.NoError(t, err)
+	assert.Equal(t, `["allow-http"]`, string(b))
+	b, err = json.Marshal(nets[1]["publicIngressFirewalls"])
+	require.NoError(t, err)
+	assert.Equal(t, `[]`, string(b))
+}
+
+// TestInspectVPC_ListNetworks_FirewallFailureIsNonFatal: a failed
+// firewalls.list must not fail list-networks; the networks come back
+// without publicIngressFirewalls so the extractor skips the
+// classification instead of calling them private (#928).
+func TestInspectVPC_ListNetworks_FirewallFailureIsNonFatal(t *testing.T) {
+	t.Parallel()
+	srv, opts := fakeComputeAPIREST(t, func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/global/firewalls") {
+			http.Error(w, "permission denied", http.StatusForbidden)
 			return
 		}
-		capturedFilter = r.URL.Query().Get("filter")
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(networksListResponse))
 	})
@@ -54,12 +110,107 @@ func TestInspectVPC_ListNetworks(t *testing.T) {
 
 	got, err := inspectVPC(context.Background(), "demo-proj", "list-networks", "", opts...)
 	require.NoError(t, err)
+	nets, ok := got.([]map[string]any)
+	require.True(t, ok)
+	require.Len(t, nets, 2)
+	for _, n := range nets {
+		assert.NotContains(t, n, "publicIngressFirewalls")
+	}
+}
 
-	nets, ok := got.([]*computeapi.Network)
-	require.True(t, ok, "expected []*Network, got %T", got)
-	assert.Len(t, nets, 2)
-	// No project filter passed; filter param should be empty.
-	assert.Empty(t, capturedFilter)
+func TestInspectVPC_ListNetworks_Empty_MarshalsAsArray(t *testing.T) {
+	t.Parallel()
+	srv, opts := fakeComputeAPIREST(t, func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{}`))
+	})
+	defer srv.Close()
+
+	got, err := inspectVPC(context.Background(), "demo-proj", "list-networks", "", opts...)
+	require.NoError(t, err)
+	require.NotNil(t, got)
+	b, err := json.Marshal(got)
+	require.NoError(t, err)
+	assert.Equal(t, "[]", string(b), "empty list-networks must marshal as [] not null (#255)")
+}
+
+// TestInspectLoadBalancer_ListUrlMaps_JoinsBackendsAndProxies pins the
+// #928 join: the default backend service's protocol and scheme, and the
+// SSL policies of the HTTPS proxies that point at each map. Both joins
+// read one project-wide list each, with no labels filter (regime (a)).
+func TestInspectLoadBalancer_ListUrlMaps_JoinsBackendsAndProxies(t *testing.T) {
+	t.Parallel()
+	var filters []string
+	srv, opts := fakeComputeAPIREST(t, func(w http.ResponseWriter, r *http.Request) {
+		filters = append(filters, r.URL.Query().Get("filter"))
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case strings.HasSuffix(r.URL.Path, "/global/urlMaps"):
+			_, _ = w.Write([]byte(`{"items":[
+				{"name":"um-a","defaultService":"https://www.googleapis.com/compute/v1/projects/demo-proj/global/backendServices/bs-a"},
+				{"name":"um-b","defaultService":"https://www.googleapis.com/compute/v1/projects/demo-proj/global/backendBuckets/bb-b"}]}`))
+		case strings.HasSuffix(r.URL.Path, "/global/backendServices"):
+			_, _ = w.Write([]byte(`{"items":[
+				{"name":"bs-a","protocol":"HTTPS","loadBalancingScheme":"EXTERNAL_MANAGED"},
+				{"name":"bb-b","protocol":"HTTP","loadBalancingScheme":"EXTERNAL"}]}`))
+		case strings.HasSuffix(r.URL.Path, "/global/targetHttpsProxies"):
+			_, _ = w.Write([]byte(`{"items":[
+				{"name":"px-a","urlMap":"https://www.googleapis.com/compute/v1/projects/demo-proj/global/urlMaps/um-a","sslPolicy":"https://www.googleapis.com/compute/v1/projects/demo-proj/global/sslPolicies/modern"}]}`))
+		default:
+			http.Error(w, "unexpected path: "+r.URL.Path, http.StatusInternalServerError)
+		}
+	})
+	defer srv.Close()
+
+	got, err := inspectLoadBalancer(context.Background(), "demo-proj", "list-url-maps", `{"project":"io-foo"}`, opts...)
+	require.NoError(t, err)
+	maps, ok := got.([]map[string]any)
+	require.True(t, ok, "expected []map[string]any, got %T", got)
+	require.Len(t, maps, 2)
+
+	assert.Equal(t, "um-a", maps[0]["name"])
+	assert.Equal(t, "HTTPS", maps[0]["defaultServiceProtocol"])
+	assert.Equal(t, "EXTERNAL_MANAGED", maps[0]["defaultServiceLoadBalancingScheme"])
+	assert.Equal(t, 1, maps[0]["httpsProxyCount"])
+	assert.Equal(t, []string{"https://www.googleapis.com/compute/v1/projects/demo-proj/global/sslPolicies/modern"}, maps[0]["sslPolicies"])
+
+	// um-b's default is a backend BUCKET: a backend service that happens
+	// to share its name must not be joined. No HTTPS proxy → count 0, [].
+	assert.NotContains(t, maps[1], "defaultServiceProtocol")
+	assert.Equal(t, 0, maps[1]["httpsProxyCount"])
+	b, err := json.Marshal(maps[1]["sslPolicies"])
+	require.NoError(t, err)
+	assert.Equal(t, "[]", string(b))
+
+	for _, f := range filters {
+		assert.Empty(t, f, "url maps, backend services and HTTPS proxies reject labels filters (#245)")
+	}
+}
+
+// TestInspectLoadBalancer_ListUrlMaps_JoinFailuresAreNonFatal: when the
+// backend-services and proxies calls fail, the URL maps still come back,
+// without the keys those calls would have filled in (#928).
+func TestInspectLoadBalancer_ListUrlMaps_JoinFailuresAreNonFatal(t *testing.T) {
+	t.Parallel()
+	srv, opts := fakeComputeAPIREST(t, func(w http.ResponseWriter, r *http.Request) {
+		if !strings.HasSuffix(r.URL.Path, "/global/urlMaps") {
+			http.Error(w, "permission denied", http.StatusForbidden)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"items":[{"name":"um-a","defaultService":"projects/demo-proj/global/backendServices/bs-a"}]}`))
+	})
+	defer srv.Close()
+
+	got, err := inspectLoadBalancer(context.Background(), "demo-proj", "list-url-maps", "", opts...)
+	require.NoError(t, err)
+	maps, ok := got.([]map[string]any)
+	require.True(t, ok)
+	require.Len(t, maps, 1)
+	assert.Equal(t, "um-a", maps[0]["name"])
+	for _, k := range []string{"defaultServiceProtocol", "defaultServiceLoadBalancingScheme", "httpsProxyCount", "sslPolicies"} {
+		assert.NotContains(t, maps[0], k)
+	}
 }
 
 // TestInspectVPC_ListNetworks_NoServerSideLabelsFilter pins #245:
@@ -263,8 +414,13 @@ func TestInspectCloudArmor_ListPolicies_AppliesFilter(t *testing.T) {
 	t.Parallel()
 	var capturedFilter string
 	srv, opts := fakeComputeAPIREST(t, func(w http.ResponseWriter, r *http.Request) {
-		capturedFilter = r.URL.Query().Get("filter")
 		w.Header().Set("Content-Type", "application/json")
+		if !strings.HasSuffix(r.URL.Path, "/global/securityPolicies") {
+			// describe fan-out for the rule-less policy below.
+			_, _ = w.Write([]byte(`{"name":"policy-a"}`))
+			return
+		}
+		capturedFilter = r.URL.Query().Get("filter")
 		_, _ = w.Write([]byte(`{"items":[{"name":"policy-a"}]}`))
 	})
 	defer srv.Close()
@@ -407,4 +563,87 @@ func TestInspectCloudCDN_ListBackendServices_NoMatches_EmptySlice(t *testing.T) 
 	require.NoError(t, err)
 	assert.Equal(t, "[]", string(b),
 		"empty Cloud CDN list-backend-services-cdn must marshal as [] not null (#256)")
+}
+
+// TestInspectCloudArmor_ListPolicies_DescribesRulelessPolicies pins the
+// #928 fan-out: a policy listed with its rules is returned as listed; one
+// listed without rules is described with get; a failed get keeps the
+// listed policy and does not fail the call.
+func TestInspectCloudArmor_ListPolicies_DescribesRulelessPolicies(t *testing.T) {
+	t.Parallel()
+	var gets []string
+	srv, opts := fakeComputeAPIREST(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case strings.HasSuffix(r.URL.Path, "/global/securityPolicies"):
+			_, _ = w.Write([]byte(`{"items":[
+				{"name":"listed","rules":[{"priority":2147483647,"action":"allow"}]},
+				{"name":"bare"},
+				{"name":"broken"}]}`))
+		case strings.HasSuffix(r.URL.Path, "/securityPolicies/bare"):
+			gets = append(gets, "bare")
+			_, _ = w.Write([]byte(`{"name":"bare","rules":[{"priority":1000,"action":"allow"},{"priority":2147483647,"action":"deny(403)"}]}`))
+		case strings.HasSuffix(r.URL.Path, "/securityPolicies/broken"):
+			gets = append(gets, "broken")
+			http.Error(w, "boom", http.StatusForbidden)
+		default:
+			http.Error(w, "unexpected path: "+r.URL.Path, http.StatusInternalServerError)
+		}
+	})
+	defer srv.Close()
+
+	got, err := inspectCloudArmor(context.Background(), "demo-proj", "list-policies", "", opts...)
+	require.NoError(t, err)
+	policies, ok := got.([]*computeapi.SecurityPolicy)
+	require.True(t, ok, "expected []*SecurityPolicy, got %T", got)
+	require.Len(t, policies, 3)
+	assert.ElementsMatch(t, []string{"bare", "broken"}, gets, "only rule-less policies are described")
+	assert.Len(t, policies[0].Rules, 1)
+	assert.Len(t, policies[1].Rules, 2)
+	assert.Equal(t, "deny(403)", policies[1].Rules[1].Action)
+	assert.Equal(t, "broken", policies[2].Name)
+	assert.Empty(t, policies[2].Rules)
+}
+
+func TestWithPolicyRules_CapAndEmpty(t *testing.T) {
+	t.Parallel()
+	policies := make([]*computeapi.SecurityPolicy, cloudArmorDescribeCap+3)
+	for i := range policies {
+		policies[i] = &computeapi.SecurityPolicy{Name: fmt.Sprintf("p%d", i)}
+	}
+	calls := 0
+	got := withPolicyRules(context.Background(), policies, func(_ context.Context, name string) (*computeapi.SecurityPolicy, error) {
+		calls++
+		return &computeapi.SecurityPolicy{Name: name, Rules: []*computeapi.SecurityPolicyRule{{Priority: 2147483647, Action: "allow"}}}, nil
+	})
+	assert.Equal(t, cloudArmorDescribeCap, calls, "describe fan-out is bounded")
+	require.Len(t, got, len(policies), "policies past the cap are still returned")
+	assert.Len(t, got[cloudArmorDescribeCap-1].Rules, 1)
+	assert.Empty(t, got[cloudArmorDescribeCap].Rules)
+
+	empty := withPolicyRules(context.Background(), nil, nil)
+	b, err := json.Marshal(empty)
+	require.NoError(t, err)
+	assert.Equal(t, "[]", string(b), "empty list-policies must marshal as [] not null (#255)")
+}
+
+func TestIsPublicIngressFirewall(t *testing.T) {
+	t.Parallel()
+	allow := []*computeapi.FirewallAllowed{{IPProtocol: "tcp"}}
+	cases := []struct {
+		name string
+		fw   *computeapi.Firewall
+		want bool
+	}{
+		{"open ipv4", &computeapi.Firewall{SourceRanges: []string{"0.0.0.0/0"}, Allowed: allow}, true},
+		{"open ipv6", &computeapi.Firewall{Direction: "INGRESS", SourceRanges: []string{"::/0"}, Allowed: allow}, true},
+		{"internal only", &computeapi.Firewall{SourceRanges: []string{"10.0.0.0/8"}, Allowed: allow}, false},
+		{"disabled", &computeapi.Firewall{SourceRanges: []string{"0.0.0.0/0"}, Allowed: allow, Disabled: true}, false},
+		{"deny rule", &computeapi.Firewall{SourceRanges: []string{"0.0.0.0/0"}, Denied: []*computeapi.FirewallDenied{{IPProtocol: "all"}}}, false},
+		{"egress", &computeapi.Firewall{Direction: "EGRESS", SourceRanges: []string{"0.0.0.0/0"}, Allowed: allow}, false},
+		{"nil", nil, false},
+	}
+	for _, tc := range cases {
+		assert.Equal(t, tc.want, isPublicIngressFirewall(tc.fw), tc.name)
+	}
 }

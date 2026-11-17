@@ -6,10 +6,11 @@
 //   - inspectGCPCloudMonitoring  — the InsideOut backend gcp_metrics.go:831
 //   - inspectGCPPubSub           — the InsideOut backend gcp_inspect.go:1144
 //
-// Cloud Logging logs and Cloud Monitoring alert policies have no
-// labels.project filter — Cloud Logging returns log NAMES (strings)
-// and AlertPolicy has no labels field in the monitoring v3 API. Both
-// are scoped by parent project at the API level.
+// Cloud Logging logs and log buckets and Cloud Monitoring alert
+// policies have no labels.project filter — Cloud Logging returns log
+// NAMES (strings) and LogBucket protos, and AlertPolicy has no labels
+// field in the monitoring v3 API. All are scoped by parent project at
+// the API level.
 //
 // Pub/Sub topics and subscriptions DO carry labels — both are
 // post-filtered against the project label.
@@ -20,6 +21,8 @@ import (
 	"context"
 	"fmt"
 
+	logging "cloud.google.com/go/logging/apiv2"
+	"cloud.google.com/go/logging/apiv2/loggingpb"
 	"cloud.google.com/go/logging/logadmin"
 	monitoring "cloud.google.com/go/monitoring/apiv3/v2"
 	"cloud.google.com/go/monitoring/apiv3/v2/monitoringpb"
@@ -31,15 +34,33 @@ import (
 )
 
 func inspectLogging(ctx context.Context, projectID, action, _ string, opts ...option.ClientOption) (any, error) {
-	client, err := logadmin.NewClient(ctx, projectID, opts...)
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = client.Close() }()
-
 	switch action {
 	case "list-logs":
+		client, err := logadmin.NewClient(ctx, projectID, opts...)
+		if err != nil {
+			return nil, err
+		}
+		defer func() { _ = client.Close() }()
 		return drainIterator(client.Logs(ctx), nil)
+
+	case "list-log-buckets":
+		// Retention lives on log buckets (_Default, _Required and any
+		// user bucket), not on logs, and logadmin does not expose
+		// buckets — so this action uses the Config API (#928).
+		// `locations/-` lists buckets in every location. Log buckets
+		// carry no user labels, so there is no project filter; they are
+		// scoped by the parent project.
+		client, err := logging.NewConfigClient(ctx, opts...)
+		if err != nil {
+			return nil, err
+		}
+		defer func() { _ = client.Close() }()
+		return drainIterator(
+			client.ListBuckets(ctx, &loggingpb.ListBucketsRequest{
+				Parent: fmt.Sprintf("projects/%s/locations/-", projectID),
+			}),
+			nil,
+		)
 
 	default:
 		return nil, unsupportedActionError("Cloud Logging", action, observability.GCPServiceActions["cloudlogging"])
