@@ -356,7 +356,7 @@ var extractorExpectedFieldCount = map[string]int{
 	"gcp_secret_manager":    3,
 	"gcp_cloud_armor":       4,
 	"gcp_identity_platform": 6,
-	"gcp_vpc":               5,
+	"gcp_vpc":               6, // + vpcMode (#928)
 	"gcp_loadbalancer":      4,
 	"gcp_cloud_logging":     2,
 	"gcp_cloud_build":       5,

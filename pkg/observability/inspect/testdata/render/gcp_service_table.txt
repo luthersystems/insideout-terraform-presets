@@ -11,7 +11,7 @@
 | clouddns | list-managed-zones, list-record-sets |
 | cloudfunctions | list-functions, get-metrics |
 | cloudkms | list-keyrings, list-keys, get-metrics |
-| cloudlogging | list-logs |
+| cloudlogging | list-logs, list-log-buckets |
 | cloudmonitoring | list-alert-policies |
 | cloudrun | list-services, describe-service, get-metrics |
 | cloudsql | list-instances, describe-instance, get-metrics |

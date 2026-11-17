@@ -181,7 +181,7 @@ var GCPServiceActions = map[string][]string{
 	"cloudkms":         {"list-keyrings", "list-keys", "get-metrics"},
 	"secretmanager":    {"list-secrets", "get-metrics"},
 	"pubsub":           {"list-topics", "list-subscriptions", "get-metrics"},
-	"cloudlogging":     {"list-logs"},
+	"cloudlogging":     {"list-logs", "list-log-buckets"},
 	"loadbalancer":     {"list-backend-services", "list-url-maps", "list-target-http-proxies", "list-target-https-proxies", "list-forwarding-rules", "get-metrics"},
 	"memorystore":      {"list-instances", "describe-instance", "get-metrics"},
 	"cloudarmor":       {"list-policies", "describe-policy", "get-metrics"},

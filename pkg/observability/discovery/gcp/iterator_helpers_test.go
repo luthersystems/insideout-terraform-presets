@@ -288,3 +288,17 @@ func TestDrainAggregatedIterator_PropagatesError(t *testing.T) {
 	)
 	assert.ErrorIs(t, err, sentinel)
 }
+
+func TestCountIterator(t *testing.T) {
+	t.Parallel()
+	n, err := countIterator(&fixedIterator[int]{items: []int{1, 2, 3}})
+	require.NoError(t, err)
+	assert.Equal(t, 3, n)
+
+	n, err = countIterator(&emptyIterator[int]{})
+	require.NoError(t, err)
+	assert.Equal(t, 0, n)
+
+	_, err = countIterator(&fixedIterator[int]{err: errors.New("boom")})
+	require.Error(t, err)
+}

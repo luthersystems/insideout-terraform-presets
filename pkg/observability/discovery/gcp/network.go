@@ -23,6 +23,7 @@ package gcp
 import (
 	"context"
 	"fmt"
+	"log"
 
 	apigateway "cloud.google.com/go/apigateway/apiv1"
 	"cloud.google.com/go/apigateway/apiv1/apigatewaypb"
@@ -77,7 +78,17 @@ func inspectVPC(ctx context.Context, projectID, action, filters string, opts ...
 		if err != nil {
 			return nil, err
 		}
-		return resp.Items, nil
+		// A network alone cannot say whether it is reachable from the
+		// internet: in GCP that is decided by its ingress firewall
+		// rules. Join the project's firewalls onto each network so
+		// extractGCPVPCConfig can classify public/private/mixed (#928).
+		// A firewall-list failure is not fatal: the networks still
+		// come back, just without the classification.
+		fws, fwErr := listAllFirewalls(ctx, svc, projectID)
+		if fwErr != nil {
+			log.Printf("[discovery/gcp vpc] list-networks: firewalls.list failed (non-fatal, networks returned without publicIngressFirewalls): %v", fwErr)
+		}
+		return networksWithIngress(resp.Items, fws, fwErr == nil), nil
 
 	case "list-subnets":
 		// Regime (a) — Subnetwork has no Labels field; drop filter;
@@ -146,7 +157,31 @@ func inspectLoadBalancer(ctx context.Context, projectID, action, filters string,
 		if err != nil {
 			return nil, err
 		}
-		return resp.Items, nil
+		// A URL map only names its backend; the protocol and scheme
+		// live on the backend service and the SSL policy on the HTTPS
+		// proxy that points at the map. Fetch both lists once for the
+		// whole project (two calls, however many URL maps there are)
+		// and join them in memory, so extractGCPLoadBalancerConfig can
+		// report them (#928). Either call may fail on its own; the URL
+		// maps still come back, just without the fields that call
+		// would have filled in. Like list-backend-services and
+		// list-target-https-proxies, each call reads the first page
+		// only (up to 500 items).
+		var backends []*computeapi.BackendService
+		bsResp, bsErr := svc.BackendServices.List(projectID).Context(ctx).Do()
+		if bsErr != nil {
+			log.Printf("[discovery/gcp loadbalancer] list-url-maps: backendServices.list failed (non-fatal, protocol/scheme omitted): %v", bsErr)
+		} else {
+			backends = bsResp.Items
+		}
+		var proxies []*computeapi.TargetHttpsProxy
+		pxResp, pxErr := svc.TargetHttpsProxies.List(projectID).Context(ctx).Do()
+		if pxErr != nil {
+			log.Printf("[discovery/gcp loadbalancer] list-url-maps: targetHttpsProxies.list failed (non-fatal, sslPolicy omitted): %v", pxErr)
+		} else {
+			proxies = pxResp.Items
+		}
+		return urlMapsWithBackends(resp.Items, backends, bsErr == nil, proxies, pxErr == nil), nil
 
 	case "list-target-http-proxies":
 		// Regime (a) — TargetHttpProxy has no Labels field; drop
@@ -203,7 +238,9 @@ func inspectCloudArmor(ctx context.Context, projectID, action, filters string, o
 		if err != nil {
 			return nil, err
 		}
-		return resp.Items, nil
+		return withPolicyRules(ctx, resp.Items, func(ctx context.Context, name string) (*computeapi.SecurityPolicy, error) {
+			return svc.SecurityPolicies.Get(projectID, name).Context(ctx).Do()
+		}), nil
 
 	case "describe-policy":
 		fm := parseFilterMap(filters)

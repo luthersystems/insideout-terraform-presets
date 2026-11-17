@@ -5,12 +5,11 @@
 //
 // Style mirrors the AWS counterpart (aws_test.go): each top-level
 // TestExtractGCP<Name>Config exercises happy path + nil/empty + envelope
-// variants + any branch logic the extractor actually implements. Where
-// the issue spec asks for a branch the source code does NOT yet
-// implement (e.g. GCS lifecycle policy, VPC IGW classification, VPC
-// auto-mode keyed as `vpcMode`), the test asserts the CURRENT behaviour
-// (the field is simply absent) so future implementation work has a
-// failing assertion to flip.
+// variants + any branch logic the extractor actually implements,
+// including the fields the inspector joins onto list results (#928:
+// boot disk, service account, numKeys, Cloud Armor default action, LB
+// backend protocol/scheme/SSL policy, log-bucket retention, Cloud SQL
+// backups, GCS lifecycle, VPC mode and public/private classification).
 package extractors
 
 import (
@@ -57,6 +56,48 @@ func TestExtractGCPComputeConfig(t *testing.T) {
 		assert.Equal(t, "1", got["instanceCount"])
 		assert.Equal(t, "vm-1", got["instanceName"])
 		assert.Equal(t, "RUNNING", got["status"])
+	})
+
+	t.Run("BootDiskAndServiceAccount", func(t *testing.T) {
+		t.Parallel()
+		// protojson writes int64 diskSizeGb as a string; the boot disk
+		// is the one with boot=true, wherever it sits in disks[] (#928).
+		raw := []any{map[string]any{
+			"name": "vm-1",
+			"disks": []any{
+				map[string]any{"boot": false, "diskSizeGb": "500"},
+				map[string]any{"boot": true, "diskSizeGb": "50"},
+			},
+			"serviceAccounts": []any{
+				map[string]any{"email": "vm-sa@demo.iam.gserviceaccount.com", "scopes": []any{"https://www.googleapis.com/auth/cloud-platform"}},
+			},
+		}}
+		got := extractGCPComputeConfig(raw)
+		require.NotNil(t, got)
+		assert.Equal(t, "50", got["diskSizeGb"])
+		assert.Equal(t, "vm-sa@demo.iam.gserviceaccount.com", got["serviceAccount"])
+	})
+
+	t.Run("BootDiskNumericSize", func(t *testing.T) {
+		t.Parallel()
+		raw := []any{map[string]any{
+			"name":  "vm-1",
+			"disks": []any{map[string]any{"boot": true, "diskSizeGb": float64(20)}},
+		}}
+		got := extractGCPComputeConfig(raw)
+		assert.Equal(t, "20", got["diskSizeGb"])
+	})
+
+	t.Run("NoBootDiskNoServiceAccount", func(t *testing.T) {
+		t.Parallel()
+		raw := []any{map[string]any{
+			"name":            "vm-1",
+			"disks":           []any{map[string]any{"boot": false, "diskSizeGb": "100"}},
+			"serviceAccounts": []any{},
+		}}
+		got := extractGCPComputeConfig(raw)
+		assert.NotContains(t, got, "diskSizeGb")
+		assert.NotContains(t, got, "serviceAccount")
 	})
 
 	t.Run("BasenameOnURLs", func(t *testing.T) {
@@ -357,11 +398,8 @@ func TestExtractGCPCloudSQLConfig(t *testing.T) {
 		assert.NotContains(t, got, "highAvailability")
 	})
 
-	t.Run("BackupConfig_PendingIssue928", func(t *testing.T) {
+	t.Run("BackupConfig", func(t *testing.T) {
 		t.Parallel()
-		t.Logf("TODO(#928): extractGCPCloudSQLConfig does not surface backupConfiguration.enabled; flip this assertion when the field is wired through.")
-		// The current extractor reads availabilityType but does NOT
-		// surface backupConfiguration.enabled into the output.
 		rawEnabled := map[string]any{"items": []any{map[string]any{
 			"settings": map[string]any{
 				"backupConfiguration": map[string]any{"enabled": true},
@@ -369,7 +407,7 @@ func TestExtractGCPCloudSQLConfig(t *testing.T) {
 			},
 		}}}
 		gotEnabled := extractGCPCloudSQLConfig(rawEnabled)
-		require.NotContains(t, gotEnabled, "backupEnabled")
+		assert.Equal(t, "Yes", gotEnabled["backupEnabled"])
 
 		rawDisabled := map[string]any{"items": []any{map[string]any{
 			"settings": map[string]any{
@@ -378,7 +416,22 @@ func TestExtractGCPCloudSQLConfig(t *testing.T) {
 			},
 		}}}
 		gotDisabled := extractGCPCloudSQLConfig(rawDisabled)
-		assert.NotContains(t, gotDisabled, "backupEnabled")
+		assert.Equal(t, "No", gotDisabled["backupEnabled"])
+
+		// The SQL Admin SDK omits `enabled` when it is false, so a
+		// backupConfiguration without the key is a disabled backup.
+		rawOmitted := map[string]any{"items": []any{map[string]any{
+			"settings": map[string]any{
+				"backupConfiguration": map[string]any{"startTime": "03:00"},
+			},
+		}}}
+		assert.Equal(t, "No", extractGCPCloudSQLConfig(rawOmitted)["backupEnabled"])
+
+		// No backupConfiguration at all: nothing reported, field absent.
+		rawAbsent := map[string]any{"items": []any{map[string]any{
+			"settings": map[string]any{"tier": "db-f1-micro"},
+		}}}
+		assert.NotContains(t, extractGCPCloudSQLConfig(rawAbsent), "backupEnabled")
 	})
 
 	t.Run("DirectSlice", func(t *testing.T) {
@@ -486,9 +539,8 @@ func TestExtractGCPGCSConfig(t *testing.T) {
 		assert.Equal(t, "US", got["location"])
 	})
 
-	t.Run("LifecyclePolicy_PendingIssue928", func(t *testing.T) {
+	t.Run("LifecyclePolicy", func(t *testing.T) {
 		t.Parallel()
-		t.Logf("TODO(#928): extractGCPGCSConfig does not surface lifecyclePolicy; the inspector pre-flattens away the lifecycle field. Flip when the inspector surface widens.")
 		rawWithLifecycle := []any{map[string]any{
 			"name":         "lc-bucket",
 			"location":     "us-east1",
@@ -496,7 +548,39 @@ func TestExtractGCPGCSConfig(t *testing.T) {
 			"lifecycle":    map[string]any{"rule": []any{map[string]any{"action": map[string]any{"type": "Delete"}}}},
 		}}
 		got := extractGCPGCSConfig(rawWithLifecycle)
-		require.NotContains(t, got, "lifecyclePolicy")
+		assert.Equal(t, "Delete", got["lifecyclePolicy"])
+
+		rawRules := []any{map[string]any{
+			"name": "lc-bucket",
+			"lifecycle": map[string]any{"rule": []any{
+				map[string]any{
+					"action":    map[string]any{"type": "SetStorageClass", "storageClass": "NEARLINE"},
+					"condition": map[string]any{"age": float64(90), "matchesStorageClass": []any{"STANDARD"}},
+				},
+				map[string]any{
+					"action":    map[string]any{"type": "Delete"},
+					"condition": map[string]any{"age": float64(365), "numNewerVersions": float64(3), "daysSinceNoncurrentTime": float64(7)},
+				},
+			}},
+		}}
+		assert.Equal(t,
+			"SetStorageClass:NEARLINE(age=90d,matchesStorageClass=STANDARD); Delete(age=365d,numNewerVersions=3,daysSinceNoncurrent=7d)",
+			extractGCPGCSConfig(rawRules)["lifecyclePolicy"])
+
+		// The inspector always sends lifecycle.rule; an empty list means
+		// the bucket has no lifecycle rules.
+		rawNone := []any{map[string]any{
+			"name":      "plain-bucket",
+			"lifecycle": map[string]any{"rule": []any{}},
+		}}
+		assert.Equal(t, "none", extractGCPGCSConfig(rawNone)["lifecyclePolicy"])
+
+		// Per-bucket setting: omitted for multiple buckets, like versioning.
+		rawMulti := []any{
+			map[string]any{"name": "a", "lifecycle": map[string]any{"rule": []any{}}},
+			map[string]any{"name": "b", "lifecycle": map[string]any{"rule": []any{}}},
+		}
+		assert.NotContains(t, extractGCPGCSConfig(rawMulti), "lifecyclePolicy")
 
 		rawAbsent := []any{map[string]any{
 			"name":         "plain-bucket",
@@ -633,6 +717,31 @@ func TestExtractGCPCloudKMSConfig(t *testing.T) {
 		got := extractGCPCloudKMSConfig(raw)
 		assert.Equal(t, "3", got["keyringCount"])
 		assert.Equal(t, "a", got["keyringName"])
+		// No ring carries numKeys (an older inspector): no total.
+		assert.NotContains(t, got, "numKeys")
+	})
+
+	t.Run("NumKeys", func(t *testing.T) {
+		t.Parallel()
+		// The inspector counts each ring's crypto keys (#928); the
+		// extractor reports the total across rings.
+		raw := []any{
+			map[string]any{"name": "projects/p/locations/global/keyRings/a", "numKeys": float64(2)},
+			map[string]any{"name": "projects/p/locations/global/keyRings/b", "numKeys": float64(0)},
+			map[string]any{"name": "projects/p/locations/global/keyRings/c", "numKeys": float64(1)},
+		}
+		assert.Equal(t, "3", extractGCPCloudKMSConfig(raw)["numKeys"])
+	})
+
+	t.Run("NumKeysPartial_Omitted", func(t *testing.T) {
+		t.Parallel()
+		// One ring could not be counted (call failed or past the
+		// fan-out cap): the total is unknown, so it is not reported.
+		raw := []any{
+			map[string]any{"name": "projects/p/locations/global/keyRings/a", "numKeys": float64(2)},
+			map[string]any{"name": "projects/p/locations/global/keyRings/b"},
+		}
+		assert.NotContains(t, extractGCPCloudKMSConfig(raw), "numKeys")
 	})
 
 	t.Run("Envelope", func(t *testing.T) {
@@ -724,6 +833,23 @@ func TestExtractGCPCloudArmorConfig(t *testing.T) {
 		assert.Equal(t, "demo-policy", got["policyName"])
 		assert.Equal(t, "CLOUD_ARMOR", got["policyType"])
 		assert.Equal(t, "2", got["ruleCount"])
+		// No rule at the default priority in this fixture.
+		assert.NotContains(t, got, "defaultAction")
+	})
+
+	t.Run("DefaultAction", func(t *testing.T) {
+		t.Parallel()
+		// The default rule sits at priority 2147483647 (#928).
+		raw := []any{map[string]any{
+			"name": "demo-policy",
+			"rules": []any{
+				map[string]any{"priority": float64(1000), "action": "allow"},
+				map[string]any{"priority": float64(2147483647), "action": "deny(403)"},
+			},
+		}}
+		got := extractGCPCloudArmorConfig(raw)
+		assert.Equal(t, "2", got["ruleCount"])
+		assert.Equal(t, "deny(403)", got["defaultAction"])
 	})
 
 	t.Run("EdgePolicy", func(t *testing.T) {
@@ -860,27 +986,37 @@ func TestExtractGCPVPCConfig(t *testing.T) {
 		got := extractGCPVPCConfig(raw)
 		assert.Equal(t, "Yes", got["autoCreateSubnetworks"]) // auto mode
 		assert.Equal(t, "GLOBAL", got["routingMode"])
-		// Issue #236 spec calls for a `vpcMode=auto|custom` summary key
-		// — the current extractor surfaces only autoCreateSubnetworks
-		// directly. Confirm the alias key is NOT present so a future
-		// implementer (#928) has a failing assertion to flip.
-		require.NotContains(t, got, "vpcMode")
+		assert.Equal(t, "auto", got["vpcMode"])
 	})
 
-	t.Run("IGWClassification_PendingIssue928", func(t *testing.T) {
+	t.Run("VPCMode", func(t *testing.T) {
 		t.Parallel()
-		t.Logf("TODO(#928): extractGCPVPCConfig does not classify Public/Private/Mixed; the inspector returns []computeapi.Network, not firewalls. Flip when the inspector surface widens.")
-		raw := []any{map[string]any{
-			"name":                  "fw-vpc",
-			"autoCreateSubnetworks": false,
-			"firewalls": []any{
-				map[string]any{"sourceRanges": []any{"0.0.0.0/0"}},
-				map[string]any{"sourceRanges": []any{"10.0.0.0/8"}},
-			},
-		}}
-		got := extractGCPVPCConfig(raw)
-		require.NotContains(t, got, "igwClassification")
-		require.NotContains(t, got, "internetExposure")
+		// The Compute SDK omits autoCreateSubnetworks when false, so a
+		// custom-mode network has no such key; vpcMode still says custom.
+		custom := extractGCPVPCConfig([]any{map[string]any{"name": "c"}})
+		assert.Equal(t, "custom", custom["vpcMode"])
+		assert.NotContains(t, custom, "autoCreateSubnetworks")
+
+		legacy := extractGCPVPCConfig([]any{map[string]any{"name": "l", "IPv4Range": "10.240.0.0/16"}})
+		assert.Equal(t, "legacy", legacy["vpcMode"])
+	})
+
+	t.Run("DeploymentTypeClassification", func(t *testing.T) {
+		t.Parallel()
+		// The inspector joins publicIngressFirewalls onto each network:
+		// the firewall rules that admit 0.0.0.0/0 (or ::/0).
+		public := map[string]any{"name": "pub", "publicIngressFirewalls": []any{"allow-http"}}
+		private := map[string]any{"name": "priv", "publicIngressFirewalls": []any{}}
+		unknown := map[string]any{"name": "unknown"}
+
+		assert.Equal(t, "public", extractGCPVPCConfig([]any{public})["deploymentType"])
+		assert.Equal(t, "private", extractGCPVPCConfig([]any{private})["deploymentType"])
+		assert.Equal(t, "mixed", extractGCPVPCConfig([]any{public, private})["deploymentType"])
+		// Networks the inspector could not classify are skipped...
+		assert.Equal(t, "private", extractGCPVPCConfig([]any{private, unknown})["deploymentType"])
+		// ...and with none classified the field is absent, so drift does
+		// not fire on data that was never fetched.
+		assert.NotContains(t, extractGCPVPCConfig([]any{unknown}), "deploymentType")
 	})
 
 	t.Run("NoSubnetworks", func(t *testing.T) {
@@ -928,6 +1064,43 @@ func TestExtractGCPLoadBalancerConfig(t *testing.T) {
 		assert.Equal(t, "demo-urlmap", got["urlMapName"])
 		assert.Equal(t, "demo-backend", got["defaultService"]) // basename
 		assert.Equal(t, "2", got["hostRuleCount"])
+		// No joined backend / proxy data in this fixture.
+		assert.NotContains(t, got, "protocol")
+		assert.NotContains(t, got, "loadBalancingScheme")
+		assert.NotContains(t, got, "sslPolicy")
+	})
+
+	t.Run("BackendAndSSLPolicy", func(t *testing.T) {
+		t.Parallel()
+		// Fields the inspector joins on from backendServices.list and
+		// targetHttpsProxies.list (#928).
+		raw := []any{map[string]any{
+			"name":                              "demo-urlmap",
+			"defaultService":                    "projects/demo/global/backendServices/demo-backend",
+			"defaultServiceProtocol":            "HTTPS",
+			"defaultServiceLoadBalancingScheme": "EXTERNAL_MANAGED",
+			"httpsProxyCount":                   float64(1),
+			"sslPolicies":                       []any{"https://www.googleapis.com/compute/v1/projects/demo/global/sslPolicies/modern-tls"},
+		}}
+		got := extractGCPLoadBalancerConfig(raw)
+		assert.Equal(t, "HTTPS", got["protocol"])
+		assert.Equal(t, "EXTERNAL_MANAGED", got["loadBalancingScheme"])
+		assert.Equal(t, "modern-tls", got["sslPolicy"])
+	})
+
+	t.Run("SSLPolicyDefaultAndHTTPOnly", func(t *testing.T) {
+		t.Parallel()
+		// An HTTPS proxy without an SSL policy uses GCP's default one.
+		withDefault := []any{map[string]any{
+			"name": "m", "httpsProxyCount": float64(1), "sslPolicies": []any{},
+		}}
+		assert.Equal(t, "default", extractGCPLoadBalancerConfig(withDefault)["sslPolicy"])
+
+		// No HTTPS proxy: an HTTP-only map has no SSL policy to report.
+		httpOnly := []any{map[string]any{
+			"name": "m", "httpsProxyCount": float64(0), "sslPolicies": []any{},
+		}}
+		assert.NotContains(t, extractGCPLoadBalancerConfig(httpOnly), "sslPolicy")
 	})
 
 	t.Run("NoHostRules", func(t *testing.T) {
@@ -976,6 +1149,27 @@ func TestExtractGCPCloudLoggingConfig(t *testing.T) {
 		got := extractGCPCloudLoggingConfig(raw)
 		assert.Equal(t, "1", got["logCount"])
 		assert.Equal(t, "projects/p/logs/x", got["logName"])
+	})
+
+	t.Run("LogBuckets", func(t *testing.T) {
+		t.Parallel()
+		// list-log-buckets shape (#928): retention comes from _Default.
+		raw := []any{
+			map[string]any{"name": "projects/demo/locations/global/buckets/_Required", "retentionDays": float64(400)},
+			map[string]any{"name": "projects/demo/locations/global/buckets/_Default", "retentionDays": float64(90)},
+		}
+		got := extractGCPCloudLoggingConfig(raw)
+		require.NotNil(t, got)
+		assert.Equal(t, "2", got["logBucketCount"])
+		assert.Equal(t, "90", got["retentionDays"])
+		assert.NotContains(t, got, "logCount")
+
+		env := map[string]any{"buckets": []any{
+			map[string]any{"name": "projects/demo/locations/global/buckets/custom", "retentionDays": float64(7)},
+		}}
+		gotEnv := extractGCPCloudLoggingConfig(env)
+		assert.Equal(t, "1", gotEnv["logBucketCount"])
+		assert.NotContains(t, gotEnv, "retentionDays", "only the _Default bucket's retention is reported")
 	})
 
 	t.Run("EmptyName", func(t *testing.T) {

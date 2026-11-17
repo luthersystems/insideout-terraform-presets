@@ -25,6 +25,9 @@ import (
 	"fmt"
 	"regexp"
 
+	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/proto"
+
 	"github.com/luthersystems/insideout-terraform-presets/pkg/observability"
 )
 
@@ -174,4 +177,22 @@ func gcpLabelMatches(labels map[string]string, key, want string) bool {
 		return false
 	}
 	return labels[key] == want
+}
+
+// protoToMap converts a proto message to map[string]any through
+// protojson, giving lowerCamelCase keys and named enums. Enrichment
+// helpers use it when they must add a field to a proto list result: a
+// bare proto is normalized by the inspect layer, but a struct that
+// wraps one is not, so the inspector builds the normalized map itself.
+// Returns an empty map (never nil) if marshalling fails.
+func protoToMap(msg proto.Message) map[string]any {
+	b, err := protojson.Marshal(msg)
+	if err != nil {
+		return map[string]any{}
+	}
+	m := map[string]any{}
+	if err := json.Unmarshal(b, &m); err != nil {
+		return map[string]any{}
+	}
+	return m
 }

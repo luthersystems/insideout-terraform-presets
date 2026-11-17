@@ -221,7 +221,8 @@ for them.
 | Layer | New tests | Status |
 |---|---|---|
 | `extractors/aws_test.go` | 113 subtests across 21 funcs | ✅ — qa-professor mutation-tested several extractors |
-| `extractors/gcp_test.go` | 111 subtests across 23 funcs | ✅ — 7 cases pinned as `*_PendingIssue928` for future implementers (#928) |
+| `extractors/gcp_test.go` | 115 subtests across 22 funcs | ✅ — includes the fields the GCP inspectors join onto list results (#928): Compute boot disk + service account, KMS `numKeys`, Cloud Armor `defaultAction`, LB `protocol` / `loadBalancingScheme` / `sslPolicy`, log-bucket `retentionDays`, Cloud SQL `backupEnabled`, GCS `lifecyclePolicy`, VPC `vpcMode` + `deploymentType` |
+| `discovery/gcp/{network,storage,ops,iterator_helpers}_test.go` (#928 joins) | firewall join (public/private, firewall-call failure), URL-map backend + HTTPS-proxy join (and join failures), Cloud Armor describe fan-out (cap, failed get), KMS key counts (cap, failed count), GCS lifecycle passthrough, list-log-buckets empty state | ✅ — every extra call degrades instead of failing the inspection; empty results marshal as `[]` |
 | `discovery/aws/account_test.go` | 6 cases (happy + STS-down + IAM-aliases-down + IAM-summary-down + empty-aliases + unknown-action) | ✅ |
 | `discovery/aws/cloudwatchlogs_test.go` | 6 cases (substring-scoping + empty filter + API error + empty result + get-metrics-routing + unknown-action). Substring case exercises all four real preset naming shapes. | ✅ |
 | `discovery/aws/connect_info_test.go` | 9 cases (running/stopped/empty/mixed/multi-instance/region-prop/empty-id/non-state-fields) | ✅ |

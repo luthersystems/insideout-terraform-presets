@@ -5,11 +5,14 @@ import (
 	"encoding/json"
 	"testing"
 
+	"cloud.google.com/go/logging/apiv2/loggingpb"
 	"cloud.google.com/go/monitoring/apiv3/v2/monitoringpb"
 	"cloud.google.com/go/pubsub/v2/apiv1/pubsubpb"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/api/option"
+
+	"github.com/luthersystems/insideout-terraform-presets/pkg/observability"
 )
 
 // Cloud Logging, Cloud Monitoring, and Pub/Sub all use gRPC clients.
@@ -121,4 +124,22 @@ func TestInspectPubSub_ListSubscriptions_NoMatches_EmptySlice(t *testing.T) {
 func TestIdentityPlatformMaxTenantsConstant(t *testing.T) {
 	t.Parallel()
 	assert.Equal(t, 1000, identityPlatformMaxTenants)
+}
+
+// TestInspectLogging_ListLogBuckets_NoMatches_EmptySlice pins the
+// empty-state contract for the list-log-buckets action (#928, #255).
+func TestInspectLogging_ListLogBuckets_NoMatches_EmptySlice(t *testing.T) {
+	t.Parallel()
+	got, err := drainIterator(&emptyIterator[*loggingpb.LogBucket]{}, nil)
+	require.NoError(t, err)
+	require.NotNil(t, got)
+	b, err := json.Marshal(got)
+	require.NoError(t, err)
+	assert.Equal(t, "[]", string(b),
+		"empty Cloud Logging list-log-buckets must marshal as [] not null (#255)")
+}
+
+func TestInspectLogging_ListLogBucketsIsRegistered(t *testing.T) {
+	t.Parallel()
+	assert.Contains(t, observability.GCPServiceActions["cloudlogging"], "list-log-buckets")
 }
