@@ -147,11 +147,12 @@ resource "aws_s3_bucket_lifecycle_configuration" "alb_logs" {
 # where aws/cloudfront fronts the ALB: that preset uses the ALB DNS name as
 # a public custom origin (custom_origin_config), not a CloudFront VPC
 # origin, so CloudFront cannot reach an internal ALB and returns 502. The
-# ALB preset cannot see whether CloudFront is composed, so no precondition
-# guards this; the variable description warns instead.
-# An internal ALB uses private_subnet_ids when given, so it gets no address
-# in a public subnet; without them it falls back to public_subnet_ids, the
-# one input the composer wires today.
+# ALB preset cannot see whether CloudFront is composed, so the composer
+# guards this: it refuses aws_alb.internal = true with aws/cloudfront in
+# the stack, and the variable description warns direct callers.
+# An internal ALB uses private_subnet_ids when given (the composer wires
+# them from aws/vpc), so it gets no address in a public subnet; without
+# them (a VPC with only public subnets) it falls back to public_subnet_ids.
 locals {
   alb_subnet_ids = var.internal && length(var.private_subnet_ids) > 0 ? var.private_subnet_ids : var.public_subnet_ids
 }

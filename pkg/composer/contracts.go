@@ -789,7 +789,13 @@ func DefaultWiringForConfig(selected map[ComponentKey]bool, k ComponentKey, comp
 			vpc := vpcRef(selected)
 			wi.RawHCL["vpc_id"] = vpc + ".vpc_id"
 			wi.RawHCL["public_subnet_ids"] = vpc + ".public_subnet_ids"
-			wi.Names = append(wi.Names, "vpc_id", "public_subnet_ids")
+			// Used only by an internal ALB (Config.AWSALB.Internal, #910),
+			// so it gets no address in a public subnet; the preset ignores
+			// it for the default internet-facing ALB, and falls back to the
+			// public subnets when the list is empty (a Public VPC). Wired
+			// unconditionally because DefaultWiring does not see Config.
+			wi.RawHCL["private_subnet_ids"] = vpc + ".private_subnet_ids"
+			wi.Names = append(wi.Names, "vpc_id", "public_subnet_ids", "private_subnet_ids")
 		}
 
 	case KeyAWSEKS:
