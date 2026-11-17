@@ -312,7 +312,7 @@ func writeJSON(path string, rep *iamaudit.Report) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(path, append(data, '\n'), 0o600)
+	return os.WriteFile(path, append(data, '\n'), 0o600) // #nosec G703 -- the operator names the -json output file
 }
 
 // awsSources builds the s3 or lookup source with the default credential
