@@ -151,7 +151,7 @@ func backfillResourceAttrs(resource *imported.ImportedResource, tfType string, v
 	changed := false
 	for key, value := range values {
 		if _, ok := typed[key]; !ok {
-			rawValue, err := json.Marshal(wrapPlanAttrValue(value))
+			rawValue, err := json.Marshal(WrapPlanAttrValue(value))
 			if err != nil {
 				return false, fmt.Errorf("resource %q: marshal plan value %q: %w", resource.Identity.Address, key, err)
 			}
@@ -211,20 +211,31 @@ func cloneRawObject(in map[string]json.RawMessage) map[string]json.RawMessage {
 	return out
 }
 
-func wrapPlanAttrValue(value any) any {
+// WrapPlanAttrValue converts a plain attribute value (as JSON decodes it)
+// to the typed Attrs wire shape of pkg/composer/imported/generated: each
+// leaf becomes a Value ({"literal": v}, or {"null": true} for nil), and
+// objects and lists keep their shape, which is how nested blocks and map
+// attributes are encoded. It does not check the result against a typed
+// model; callers pass it to generated.UnmarshalAttrs for that.
+//
+// It is exported so the wire shape has one owner: reliable's backfill of
+// stored imported rows from Attributes to Attrs (insideout-devtools import
+// attrs-backfill, presets#921 step 2) and its chat edit path call it
+// instead of keeping a copy.
+func WrapPlanAttrValue(value any) any {
 	switch v := value.(type) {
 	case nil:
 		return map[string]any{"null": true}
 	case map[string]any:
 		out := make(map[string]any, len(v))
 		for key, child := range v {
-			out[key] = wrapPlanAttrValue(child)
+			out[key] = WrapPlanAttrValue(child)
 		}
 		return out
 	case []any:
 		out := make([]any, 0, len(v))
 		for _, child := range v {
-			out = append(out, wrapPlanAttrValue(child))
+			out = append(out, WrapPlanAttrValue(child))
 		}
 		return out
 	default:

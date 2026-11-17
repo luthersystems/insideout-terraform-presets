@@ -36,9 +36,47 @@ type ImportedResource struct {
 	// Attributes is the legacy desired provider attributes as an opaque
 	// bag (Phase 1 / wire-compatible shape).
 	//
-	// Deprecated: Use Attrs as the canonical desired-state payload.
-	// Attributes is retained only as a legacy fallback for consumers that
-	// have not adopted typed Attrs.
+	// Deprecated: Use Attrs, the typed desired-state payload. New code must
+	// read Attrs first and must not add new readers or writers of
+	// Attributes. The field stays only until the removal steps below are
+	// done (luthersystems/insideout-terraform-presets#921).
+	//
+	// Why it still exists: reliable has persisted ImportedResource rows
+	// that were written before typed Attrs existed, so for those rows
+	// Attributes is the only copy of the desired state. reliable's
+	// internal/agentapi/imported_attrs.go and its devtools
+	// (internal/devtools/session_imported.go) fall back to it when Attrs is
+	// empty, and reliable's chat edit path
+	// (internal/agentapi/chat_v2_imported_persist.go) still writes it. In
+	// this module the writers are genconfig's extractAttributes
+	// (cmd/insideout-import/genconfig/attributes.go), which fills
+	// Attributes for every resource but Attrs only when the type has a
+	// generated typed model, and reverseimport's backfillResourceAttrs
+	// (pkg/reverseimport/plan_attrs.go), which mirrors values it adds to
+	// Attrs. The AWS and GCP attribute enrichers write only Attrs. A few
+	// composer paths still read only Attributes, not Attrs:
+	// DiffImportedResources (imported_diff.go), the wiring graph's RawExpr
+	// edges (wiring_graph.go) and the re-import conflict check
+	// (evaluateReimportConflict in imported_authz_validate.go). The others
+	// (emit, required-field and provenance checks, the import ID region
+	// lookup, pkg/imported's agent context) read Attrs first and fall back
+	// to Attributes.
+	//
+	// Path to removal, in order:
+	//
+	//  1. Stop new writes here. Every writer must set Attrs first, which
+	//     needs a typed model for every type genconfig can produce. Not done
+	//     yet: genconfig still writes only Attributes for types without one.
+	//  2. reliable backfills or migrates its persisted rows to Attrs, stops
+	//     writing Attributes in its chat edit path, and drops its fallback
+	//     reads.
+	//  3. Confirm ui-core does not read the field. As of #921 it has no
+	//     direct reads; it only carries ImportedResource through JSON and
+	//     calls composer functions that read it, so it is clear once step 4
+	//     ports those functions to Attrs.
+	//  4. Port the Attributes-only composer readers above to Attrs, then
+	//     remove this field, its fallback paths in this module, and the
+	//     SA1019 exclusion for it in .golangci.yml.
 	Attributes map[string]any `json:"attributes,omitempty"`
 
 	// FieldEdits is audit/conflict metadata for changes made via the model
