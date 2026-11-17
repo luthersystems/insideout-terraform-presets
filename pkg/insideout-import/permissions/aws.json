@@ -619,8 +619,18 @@
     },
     {
       "service": "dynamodb",
+      "iam_action": "dynamodb:DescribeContinuousBackups",
+      "purpose": "aws_dynamodb_table enricher (#932): DescribeContinuousBackups reads point-in-time recovery; without it the table is stamped Partial"
+    },
+    {
+      "service": "dynamodb",
       "iam_action": "dynamodb:DescribeTable",
       "purpose": "resolve a single table by name in DiscoverByID"
+    },
+    {
+      "service": "dynamodb",
+      "iam_action": "dynamodb:DescribeTimeToLive",
+      "purpose": "aws_dynamodb_table enricher (#932): DescribeTimeToLive reads the ttl block; without it the table is stamped Partial"
     },
     {
       "service": "dynamodb",
@@ -1559,8 +1569,53 @@
     },
     {
       "service": "s3",
+      "iam_action": "s3:GetBucketCORS",
+      "purpose": "aws_s3_bucket enricher (#932): GetBucketCors reads cors_rule; without it the bucket is stamped Partial"
+    },
+    {
+      "service": "s3",
+      "iam_action": "s3:GetBucketLocation",
+      "purpose": "post-discover GetBucketLocation finds each bucket's home region so it is enriched against the right regional endpoint"
+    },
+    {
+      "service": "s3",
+      "iam_action": "s3:GetBucketLogging",
+      "purpose": "aws_s3_bucket enricher (#932): GetBucketLogging reads the logging block; without it the bucket is stamped Partial"
+    },
+    {
+      "service": "s3",
+      "iam_action": "s3:GetBucketObjectLockConfiguration",
+      "purpose": "aws_s3_bucket enricher (#932): GetObjectLockConfiguration reads object_lock_configuration; without it the bucket is stamped Partial"
+    },
+    {
+      "service": "s3",
+      "iam_action": "s3:GetBucketPolicy",
+      "purpose": "aws_s3_bucket enricher (#932): GetBucketPolicy reads the inline policy; without it the bucket is stamped Partial"
+    },
+    {
+      "service": "s3",
       "iam_action": "s3:GetBucketTagging",
       "purpose": "fetch bucket tags for tag selectors and Identity.Tags"
+    },
+    {
+      "service": "s3",
+      "iam_action": "s3:GetBucketVersioning",
+      "purpose": "aws_s3_bucket enricher (#932): GetBucketVersioning reads the versioning block; without it the bucket is stamped Partial"
+    },
+    {
+      "service": "s3",
+      "iam_action": "s3:GetBucketWebsite",
+      "purpose": "aws_s3_bucket enricher (#932): GetBucketWebsite reads the website block; without it the bucket is stamped Partial"
+    },
+    {
+      "service": "s3",
+      "iam_action": "s3:GetEncryptionConfiguration",
+      "purpose": "aws_s3_bucket enricher (#932): GetBucketEncryption reads server_side_encryption_configuration; without it the bucket is stamped Partial"
+    },
+    {
+      "service": "s3",
+      "iam_action": "s3:GetLifecycleConfiguration",
+      "purpose": "aws_s3_bucket enricher (#932): GetBucketLifecycleConfiguration reads lifecycle_rule; without it the bucket is stamped Partial"
     },
     {
       "service": "s3",
@@ -1571,6 +1626,11 @@
       "service": "s3",
       "iam_action": "s3:ListAllMyBuckets",
       "purpose": "list buckets account-globally (ListBuckets)"
+    },
+    {
+      "service": "s3",
+      "iam_action": "s3:ListBucket",
+      "purpose": "aws_s3_bucket enricher: HeadBucket (bucket existence and region) is authorized by s3:ListBucket; HeadBucket has no IAM action of its own"
     },
     {
       "service": "s3_bucket_lifecycle_configuration",

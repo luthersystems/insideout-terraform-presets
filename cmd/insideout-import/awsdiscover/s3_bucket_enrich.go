@@ -34,7 +34,8 @@ const s3BucketTFType = "aws_s3_bucket"
 // without spinning up a fake HTTP server. The load-bearing call is
 // HeadBucket: if the bucket does not exist or we can't see it,
 // nothing else matters and Enrich fails fast. Every other Get*
-// failure is downgraded — we emit whatever succeeded.
+// failure is downgraded — we emit whatever succeeded, and Enrich
+// returns a *PartialEnrichError so the resource is stamped Partial.
 //
 // **Soft-fail discipline**: per the issue's "more specific about
 // which error codes mean 'not configured'" guidance, we use
@@ -45,9 +46,10 @@ const s3BucketTFType = "aws_s3_bucket"
 // NoSuchWebsiteConfiguration, ObjectLockConfigurationNotFoundError)
 // from real failures (AccessDenied, ThrottlingException, service
 // outage). The two are handled identically at the typed-payload
-// level (the block is omitted), but the distinction is preserved so
-// future work could route real failures through a per-resource warn
-// list. Today both shapes downgrade silently.
+// level (the block is omitted). The distinction matters for the
+// status: "not configured" is a complete answer, while a real failure
+// is reported through *PartialEnrichError, so EnrichAttributes stamps
+// EnrichmentStatusPartial with the failed calls in EnrichErrors (#932).
 //
 // **#490 follow-up**: the issue's "Alternative" section notes that
 // the Cloud Control unified enricher (#490) could collapse this
@@ -90,8 +92,9 @@ type s3BucketEnricher struct {
 	// (response, nil) when the sub-resource is configured, (nil, nil)
 	// when the service-native "not set" code is observed, and (nil,
 	// err) for any other failure. The Enrich path treats both nil
-	// responses and real errors as "block omitted" — see soft-fail
-	// discipline note above for the rationale. Each takes the bucket's
+	// responses and real errors as "block omitted", and reports the
+	// real errors as a partial result — see soft-fail discipline note
+	// above for the rationale. Each takes the bucket's
 	// recorded `region` for the same per-call override reason as
 	// fetchHead: an overlay Get* against the wrong region 301s too.
 	fetchEncryption func(ctx context.Context, c *s3.Client, region, bucket string) (*s3types.ServerSideEncryptionConfiguration, error)
@@ -131,7 +134,8 @@ func (s3BucketEnricher) ResourceType() string { return s3BucketTFType }
 // on the load-bearing HeadBucket call. Per-block overlay failures
 // (encryption / versioning / lifecycle / logging / cors / policy /
 // website / tags / object_lock) are downgraded to omitted blocks —
-// the resource is still emitted with whatever succeeded.
+// the resource is still emitted with whatever succeeded, and Enrich
+// returns a *PartialEnrichError naming each failed call (#932).
 func (e s3BucketEnricher) Enrich(ctx context.Context, ir *imported.ImportedResource, c EnrichClients) error {
 	if c.S3 == nil {
 		return ErrEnrichClientUnavailable
@@ -142,7 +146,7 @@ func (e s3BucketEnricher) Enrich(ctx context.Context, ir *imported.ImportedResou
 			ir.Identity.Address, ir.Identity.ImportID, ir.Identity.NameHint)
 	}
 
-	typed, err := e.fetchAndMap(ctx, c.S3, s3BucketRegionForEnrich(&ir.Identity), bucket)
+	typed, subErrs, err := e.fetchAndMap(ctx, c.S3, s3BucketRegionForEnrich(&ir.Identity), bucket)
 	if err != nil {
 		return err
 	}
@@ -180,7 +184,7 @@ func (e s3BucketEnricher) Enrich(ctx context.Context, ir *imported.ImportedResou
 		return fmt.Errorf("s3_bucket: marshal Attrs: %w", err)
 	}
 	ir.Attrs = raw
-	return nil
+	return partialEnrichErr(subErrs)
 }
 
 // EnrichByID fetches the typed AWSS3Bucket payload for the bucket
@@ -191,6 +195,10 @@ func (e s3BucketEnricher) Enrich(ctx context.Context, ir *imported.ImportedResou
 // region that Enrich stamps onto NativeIDs is intentionally NOT
 // stamped here, since the per-IR drift refresh path expects the
 // identity to be authoritative input, not a destination.
+//
+// Failed overlay calls are not reported here: the ByIDEnricher contract
+// returns only the payload and has no status field, so a block whose
+// call failed is omitted, as it was before #932.
 func (e s3BucketEnricher) EnrichByID(ctx context.Context, identity *imported.ResourceIdentity, c EnrichClients) (json.RawMessage, error) {
 	if c.S3 == nil {
 		return nil, ErrEnrichClientUnavailable
@@ -203,7 +211,7 @@ func (e s3BucketEnricher) EnrichByID(ctx context.Context, identity *imported.Res
 		return nil, fmt.Errorf("s3_bucket: cannot derive bucket name from Identity (Address=%q ImportID=%q NameHint=%q)",
 			identity.Address, identity.ImportID, identity.NameHint)
 	}
-	typed, err := e.fetchAndMap(ctx, c.S3, s3BucketRegionForEnrich(identity), bucket)
+	typed, _, err := e.fetchAndMap(ctx, c.S3, s3BucketRegionForEnrich(identity), bucket)
 	if err != nil {
 		return nil, err
 	}
@@ -217,13 +225,14 @@ func (e s3BucketEnricher) EnrichByID(ctx context.Context, identity *imported.Res
 // fetchAndMap issues the HeadBucket existence probe + all overlays
 // and returns the populated typed struct. Shared between Enrich and
 // EnrichByID so the SDK-call layout lives in one place. HeadBucket
-// failures are propagated; overlay failures are downgraded.
+// failures are returned as err; overlay failures omit their block and
+// are returned in subErrs, one per failed call.
 //
 // For standard S3 buckets, the ARN is deterministic from the name
 // (`arn:aws:s3:::<bucket>`), so we synthesize it whenever
 // HeadBucket doesn't return one (HeadBucket's BucketArn field is
 // directory-bucket-only).
-func (e s3BucketEnricher) fetchAndMap(ctx context.Context, c *s3.Client, region, bucket string) (*generated.AWSS3Bucket, error) {
+func (e s3BucketEnricher) fetchAndMap(ctx context.Context, c *s3.Client, region, bucket string) (typed *generated.AWSS3Bucket, subErrs []error, err error) {
 	head, err := e.fetchHead(ctx, c, region, bucket)
 	if err != nil {
 		// HeadBucket surfaces a not-found bucket as a generic 404 with
@@ -233,15 +242,29 @@ func (e s3BucketEnricher) fetchAndMap(ctx context.Context, c *s3.Client, region,
 		// deleted bucket from a real API failure.
 		var notFound *s3types.NotFound
 		if errors.As(err, &notFound) || isS3NotSetError(err, "NotFound", "NoSuchBucket") {
-			return nil, fmt.Errorf("s3_bucket %q: %w", bucket, ErrNotFound)
+			return nil, nil, fmt.Errorf("s3_bucket %q: %w", bucket, ErrNotFound)
 		}
-		return nil, fmt.Errorf("s3_bucket: head %q: %w", bucket, err)
+		return nil, nil, fmt.Errorf("s3_bucket: head %q: %w", bucket, err)
 	}
 
-	typed := mapS3Bucket(bucket, head)
+	typed = mapS3Bucket(bucket, head)
+
+	// fail records a failed overlay call. Its block stays omitted, as
+	// when it is not configured, but the caller reports it as Partial.
+	// notSetCodes are the call's "not configured" codes: the production
+	// fetchers already map them to (nil, nil), but a hook may pass one
+	// through, and it is a complete answer, not a failure.
+	fail := func(call string, ferr error, notSetCodes ...string) {
+		if isS3NotSetError(ferr, notSetCodes...) {
+			return
+		}
+		subErrs = append(subErrs, fmt.Errorf("s3_bucket: %s %q: %w", call, bucket, ferr))
+	}
 
 	// Encryption — GetBucketEncryption. Soft-fail.
-	if sse, ferr := e.fetchEncryption(ctx, c, region, bucket); ferr == nil && sse != nil {
+	if sse, ferr := e.fetchEncryption(ctx, c, region, bucket); ferr != nil {
+		fail("GetBucketEncryption", ferr, "ServerSideEncryptionConfigurationNotFoundError", "NoSuchEncryptionConfiguration")
+	} else if sse != nil {
 		if block := mapS3SSE(sse); block != nil {
 			typed.ServerSideEncryptionConfiguration = []generated.AWSS3BucketServerSideEncryptionConfigurationNested{*block}
 		}
@@ -250,43 +273,57 @@ func (e s3BucketEnricher) fetchAndMap(ctx context.Context, c *s3.Client, region,
 	// Versioning — GetBucketVersioning. Soft-fail. Absent when Status
 	// and MFADelete are both empty (matches the bucket-versioning
 	// sub-resource "never configured" semantic from sdkonly_s3.go).
-	if v, ferr := e.fetchVersioning(ctx, c, region, bucket); ferr == nil && v != nil {
+	if v, ferr := e.fetchVersioning(ctx, c, region, bucket); ferr != nil {
+		fail("GetBucketVersioning", ferr)
+	} else if v != nil {
 		if block := mapS3Versioning(v); block != nil {
 			typed.Versioning = []generated.AWSS3BucketVersioningNested{*block}
 		}
 	}
 
 	// Lifecycle — GetBucketLifecycleConfiguration. Soft-fail.
-	if rules, ferr := e.fetchLifecycle(ctx, c, region, bucket); ferr == nil && len(rules) > 0 {
+	if rules, ferr := e.fetchLifecycle(ctx, c, region, bucket); ferr != nil {
+		fail("GetBucketLifecycleConfiguration", ferr, "NoSuchLifecycleConfiguration")
+	} else if len(rules) > 0 {
 		typed.LifecycleRule = mapS3LifecycleRules(rules)
 	}
 
 	// Logging — GetBucketLogging. Soft-fail.
-	if lg, ferr := e.fetchLogging(ctx, c, region, bucket); ferr == nil && lg != nil {
+	if lg, ferr := e.fetchLogging(ctx, c, region, bucket); ferr != nil {
+		fail("GetBucketLogging", ferr)
+	} else if lg != nil {
 		if block := mapS3Logging(lg); block != nil {
 			typed.Logging = []generated.AWSS3BucketLogging{*block}
 		}
 	}
 
 	// CORS — GetBucketCors. Soft-fail.
-	if rules, ferr := e.fetchCors(ctx, c, region, bucket); ferr == nil && len(rules) > 0 {
+	if rules, ferr := e.fetchCors(ctx, c, region, bucket); ferr != nil {
+		fail("GetBucketCors", ferr, "NoSuchCORSConfiguration")
+	} else if len(rules) > 0 {
 		typed.CorsRule = mapS3CorsRules(rules)
 	}
 
 	// Policy — GetBucketPolicy. Soft-fail.
-	if p, ferr := e.fetchPolicy(ctx, c, region, bucket); ferr == nil && p != nil && *p != "" {
+	if p, ferr := e.fetchPolicy(ctx, c, region, bucket); ferr != nil {
+		fail("GetBucketPolicy", ferr, "NoSuchBucketPolicy")
+	} else if p != nil && *p != "" {
 		typed.Policy = generated.LiteralOf(*p)
 	}
 
 	// Website — GetBucketWebsite. Soft-fail.
-	if w, ferr := e.fetchWebsite(ctx, c, region, bucket); ferr == nil && w != nil {
+	if w, ferr := e.fetchWebsite(ctx, c, region, bucket); ferr != nil {
+		fail("GetBucketWebsite", ferr, "NoSuchWebsiteConfiguration")
+	} else if w != nil {
 		if block := mapS3Website(w); block != nil {
 			typed.Website = []generated.AWSS3BucketWebsite{*block}
 		}
 	}
 
 	// Tags — GetBucketTagging. Soft-fail.
-	if tags, ferr := e.fetchTags(ctx, c, region, bucket); ferr == nil && len(tags) > 0 {
+	if tags, ferr := e.fetchTags(ctx, c, region, bucket); ferr != nil {
+		fail("GetBucketTagging", ferr, "NoSuchTagSet")
+	} else if len(tags) > 0 {
 		m := map[string]*generated.Value[string]{}
 		for _, t := range tags {
 			if t.Key != nil {
@@ -302,7 +339,9 @@ func (e s3BucketEnricher) fetchAndMap(ctx context.Context, c *s3.Client, region,
 	// mirrors `object_lock_enabled` (top-level bool) since the SDK's
 	// ObjectLockEnabled enum is the only reliable signal — HeadBucket
 	// does not surface it.
-	if ol, ferr := e.fetchObjectLock(ctx, c, region, bucket); ferr == nil && ol != nil {
+	if ol, ferr := e.fetchObjectLock(ctx, c, region, bucket); ferr != nil {
+		fail("GetObjectLockConfiguration", ferr, "ObjectLockConfigurationNotFoundError")
+	} else if ol != nil {
 		if block := mapS3ObjectLock(ol); block != nil {
 			typed.ObjectLockConfiguration = []generated.AWSS3BucketObjectLockConfiguration{*block}
 		}
@@ -311,7 +350,7 @@ func (e s3BucketEnricher) fetchAndMap(ctx context.Context, c *s3.Client, region,
 		}
 	}
 
-	return typed, nil
+	return typed, subErrs, nil
 }
 
 // s3BucketNameForEnrich pulls the bucket name from the identifiers

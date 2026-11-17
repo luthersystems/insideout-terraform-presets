@@ -915,7 +915,8 @@ func TestS3BucketEnricher_ObjectLockOverlay(t *testing.T) {
 // TestS3BucketEnricher_OverlaysSoftFailOnError exercises the
 // soft-fail discipline: every overlay error (real or service-native
 // "not configured") must downgrade to an absent block; only the
-// load-bearing HeadBucket failure is fatal.
+// load-bearing HeadBucket failure is fatal. Real errors are reported
+// as a partial result; "not configured" is not.
 func TestS3BucketEnricher_OverlaysSoftFailOnError(t *testing.T) {
 	t.Parallel()
 	apiErr := errors.New("AccessDeniedException")
@@ -953,8 +954,17 @@ func TestS3BucketEnricher_OverlaysSoftFailOnError(t *testing.T) {
 	ir := &imported.ImportedResource{
 		Identity: imported.ResourceIdentity{Type: "aws_s3_bucket", NameHint: "x"},
 	}
-	require.NoError(t, enr.Enrich(context.Background(), ir, EnrichClients{S3: &s3.Client{}}),
-		"overlay errors must be downgraded; only head failure is fatal")
+	err := enr.Enrich(context.Background(), ir, EnrichClients{S3: &s3.Client{}})
+	// Every real overlay error is reported as a partial result (#932);
+	// the policy hook's "not configured" code is not a failure, so 8 of
+	// the 9 overlays are listed.
+	var partial *PartialEnrichError
+	require.ErrorAs(t, err, &partial, "overlay errors must be a partial result; only head failure is fatal")
+	require.Len(t, partial.Errs, 8)
+	for _, sub := range partial.Errs {
+		assert.ErrorIs(t, sub, apiErr)
+		assert.NotContains(t, sub.Error(), "GetBucketPolicy")
+	}
 	require.NotEmpty(t, ir.Attrs)
 	b := decodeS3BucketAttrs(t, ir)
 	assert.Empty(t, b.ServerSideEncryptionConfiguration)

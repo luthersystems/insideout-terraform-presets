@@ -339,9 +339,10 @@ func TestDynamoDBTableEnricher_OverlaysPITRTTLTags(t *testing.T) {
 
 func TestDynamoDBTableEnricher_OverlaysSoftFailOnError(t *testing.T) {
 	t.Parallel()
-	// PITR / TTL / Tags errors must NOT cause Enrich to fail — the
+	// PITR / TTL / Tags errors must NOT discard the payload — the
 	// core DescribeTable mapping is the load-bearing call; the
-	// overlays are best-effort.
+	// overlays are best-effort and their failures are reported as a
+	// partial result.
 	table := &dynamotypes.TableDescription{
 		TableName: aws.String("t"),
 		TableArn:  aws.String("arn:aws:dynamodb:us-east-1:012345678901:table/t"),
@@ -366,8 +367,15 @@ func TestDynamoDBTableEnricher_OverlaysSoftFailOnError(t *testing.T) {
 	ir := &imported.ImportedResource{
 		Identity: imported.ResourceIdentity{Type: "aws_dynamodb_table", NameHint: "t"},
 	}
-	require.NoError(t, enr.Enrich(context.Background(), ir, EnrichClients{DynamoDB: &dynamodb.Client{}}),
-		"overlay-source errors must be downgraded; only describe failure is fatal")
+	err := enr.Enrich(context.Background(), ir, EnrichClients{DynamoDB: &dynamodb.Client{}})
+	// Overlay failures do not stop the enrich: Attrs is written and the
+	// failures come back as a *PartialEnrichError, one per call (#932).
+	var partial *PartialEnrichError
+	require.ErrorAs(t, err, &partial, "overlay-source errors must be a partial result; only describe failure is fatal")
+	require.Len(t, partial.Errs, 3)
+	assert.Contains(t, partial.Errs[0].Error(), "continuous backups")
+	assert.Contains(t, partial.Errs[1].Error(), "time to live")
+	assert.Contains(t, partial.Errs[2].Error(), "list tags")
 	require.NotEmpty(t, ir.Attrs)
 	tbl := decodeAttrs(t, ir)
 	assert.Empty(t, tbl.PointInTimeRecovery)

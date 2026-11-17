@@ -22,10 +22,14 @@ const (
 	// attribute it knows how to fetch. The IR's Attrs is authoritative.
 	EnrichmentStatusFull EnrichmentStatus = "full"
 	// EnrichmentStatusPartial indicates the enricher populated some
-	// attributes but at least one fetch failed. Reserved for future
-	// multi-call enrichers (e.g. bucket-ACL-plus-policy); current
-	// per-type enrichers marshal Attrs atomically and so never set
-	// Partial. TODO(#932): set it in the first multi-call enricher.
+	// attributes but at least one fetch failed. Enrichers that build a
+	// resource from several API calls (aws_s3_bucket's per-block Get*
+	// overlays, aws_dynamodb_table's PITR / TTL / tags overlays,
+	// aws_lambda_function's GetFunction code overlay) keep the payload
+	// when a secondary call fails and report the failure, so the AWS
+	// orchestrator stamps Partial with one EnrichErrors entry per failed
+	// call (#932). The Attrs are usable but may lack those blocks; a
+	// consumer should warn rather than treat them as authoritative.
 	EnrichmentStatusPartial EnrichmentStatus = "partial"
 	// EnrichmentStatusFailed indicates no attributes could be populated
 	// (client unavailable, name underivable, fetch error, marshal
@@ -140,7 +144,9 @@ type ResourceIdentity struct {
 	// without grep-ing the enricher's warn log. Added for issue #471.
 	EnrichmentStatus EnrichmentStatus `json:"enrichment_status,omitempty"`
 	// EnrichErrors carries the per-attribute (or per-pass) error
-	// messages when EnrichmentStatus != Full. Nil when Full or Unknown.
+	// messages when EnrichmentStatus != Full: one per failed secondary
+	// fetch when Partial, the failure text when Failed. Nil when Full
+	// or Unknown.
 	// Verbose enough for triage but PII-free — error messages from the
 	// cloud SDK pass through verbatim (no auth tokens, no full URLs
 	// beyond the resource identifier).
