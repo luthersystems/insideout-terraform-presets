@@ -1,0 +1,131 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "StackServices",
+      "Effect": "Allow",
+      "Action": [
+        "acm:*",
+        "aoss:*",
+        "apigateway:*",
+        "application-autoscaling:*",
+        "apprunner:*",
+        "athena:*",
+        "autoscaling:*",
+        "backup:*",
+        "bedrock-agentcore:*",
+        "bedrock:*",
+        "cloudformation:*",
+        "cloudfront:*",
+        "cloudtrail:*",
+        "cloudwatch:*",
+        "codebuild:*",
+        "codecommit:*",
+        "codedeploy:*",
+        "codepipeline:*",
+        "cognito-idp:*",
+        "dynamodb:*",
+        "ec2:*",
+        "ec2messages:*",
+        "ecr:*",
+        "ecs:*",
+        "eks-auth:*",
+        "eks:*",
+        "elastic-inference:*",
+        "elasticache:*",
+        "elasticfilesystem:*",
+        "elasticloadbalancing:*",
+        "es:*",
+        "events:*",
+        "fsx:*",
+        "glue:*",
+        "kafka:*",
+        "kendra:*",
+        "kinesis:*",
+        "kms:*",
+        "lambda:*",
+        "logs:*",
+        "rds:*",
+        "redshift-data:*",
+        "redshift:*",
+        "resource-explorer-2:*",
+        "route53:*",
+        "s3:*",
+        "s3vectors:*",
+        "sagemaker:*",
+        "secretsmanager:*",
+        "servicecatalog:*",
+        "servicediscovery:*",
+        "shield:*",
+        "sns:*",
+        "sqs:*",
+        "ssm:*",
+        "ssmmessages:*",
+        "states:*",
+        "storagegateway:*",
+        "tag:*",
+        "timestream:*",
+        "waf-regional:*",
+        "wafv2:*",
+        "xray:*"
+      ],
+      "Resource": [
+        "*"
+      ]
+    },
+    {
+      "Sid": "CallerIdentity",
+      "Effect": "Allow",
+      "Action": [
+        "sts:GetCallerIdentity"
+      ],
+      "Resource": [
+        "*"
+      ]
+    },
+    {
+      "Sid": "IAMReadAndServiceLinkedRoles",
+      "Effect": "Allow",
+      "Action": [
+        "iam:CreateServiceLinkedRole",
+        "iam:Get*",
+        "iam:List*"
+      ],
+      "Resource": [
+        "*"
+      ]
+    },
+    {
+      "Sid": "PassProjectRolesToStackServices",
+      "Effect": "Allow",
+      "Action": [
+        "iam:PassRole"
+      ],
+      "Resource": [
+        "*"
+      ],
+      "Condition": {
+        "StringEquals": {
+          "aws:ResourceTag/Project": "${project}",
+          "iam:PassedToService": [
+            "backup.amazonaws.com",
+            "bedrock-agentcore.amazonaws.com",
+            "bedrock.amazonaws.com",
+            "build.apprunner.amazonaws.com",
+            "codebuild.amazonaws.com",
+            "ec2.amazonaws.com",
+            "eks-fargate-pods.amazonaws.com",
+            "eks.amazonaws.com",
+            "kendra.amazonaws.com",
+            "lambda.amazonaws.com",
+            "monitoring.rds.amazonaws.com",
+            "pods.eks.amazonaws.com",
+            "sagemaker.amazonaws.com",
+            "tasks.apprunner.amazonaws.com",
+            "vpc-flow-logs.amazonaws.com"
+          ]
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,242 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "StackServices",
+      "Effect": "Allow",
+      "Action": [
+        "acm:*",
+        "aoss:*",
+        "apigateway:*",
+        "application-autoscaling:*",
+        "apprunner:*",
+        "athena:*",
+        "autoscaling:*",
+        "backup:*",
+        "bedrock-agentcore:*",
+        "bedrock:*",
+        "cloudfront:*",
+        "cloudtrail:*",
+        "cloudwatch:*",
+        "codebuild:*",
+        "codedeploy:*",
+        "codepipeline:*",
+        "cognito-idp:*",
+        "dynamodb:*",
+        "ec2:*",
+        "ecs:*",
+        "eks:*",
+        "elasticache:*",
+        "elasticfilesystem:*",
+        "elasticloadbalancing:*",
+        "es:*",
+        "events:*",
+        "glue:*",
+        "kafka:*",
+        "kendra:*",
+        "kinesis:*",
+        "kms:*",
+        "lambda:*",
+        "logs:*",
+        "rds:*",
+        "redshift:*",
+        "resource-explorer-2:*",
+        "route53:*",
+        "s3:*",
+        "s3vectors:*",
+        "sagemaker:*",
+        "secretsmanager:*",
+        "servicediscovery:*",
+        "sns:*",
+        "sqs:*",
+        "ssm:*",
+        "states:*",
+        "wafv2:*"
+      ],
+      "Resource": [
+        "*"
+      ]
+    },
+    {
+      "Sid": "CallerIdentity",
+      "Effect": "Allow",
+      "Action": [
+        "sts:GetCallerIdentity"
+      ],
+      "Resource": [
+        "*"
+      ]
+    },
+    {
+      "Sid": "IAMRead",
+      "Effect": "Allow",
+      "Action": [
+        "iam:Get*",
+        "iam:List*"
+      ],
+      "Resource": [
+        "*"
+      ]
+    },
+    {
+      "Sid": "RoleWritesOnlyWithWorkloadBoundary",
+      "Effect": "Allow",
+      "Action": [
+        "iam:AttachRolePolicy",
+        "iam:CreateRole",
+        "iam:DeleteRolePolicy",
+        "iam:DetachRolePolicy",
+        "iam:PutRolePermissionsBoundary",
+        "iam:PutRolePolicy"
+      ],
+      "Resource": [
+        "*"
+      ],
+      "Condition": {
+        "StringEquals": {
+          "iam:PermissionsBoundary": "${workload_boundary_arn}"
+        }
+      }
+    },
+    {
+      "Sid": "CreateRoleOnlyTaggedForProject",
+      "Effect": "Deny",
+      "Action": [
+        "iam:CreateRole"
+      ],
+      "Resource": [
+        "*"
+      ],
+      "Condition": {
+        "StringNotEquals": {
+          "aws:RequestTag/Project": "${project}"
+        }
+      }
+    },
+    {
+      "Sid": "ProjectRolesOnly",
+      "Effect": "Allow",
+      "Action": [
+        "iam:DeleteRole",
+        "iam:PassRole",
+        "iam:TagRole",
+        "iam:UntagRole",
+        "iam:UpdateAssumeRolePolicy",
+        "iam:UpdateRole",
+        "iam:UpdateRoleDescription"
+      ],
+      "Resource": [
+        "*"
+      ],
+      "Condition": {
+        "StringEquals": {
+          "aws:ResourceTag/Project": "${project}"
+        }
+      }
+    },
+    {
+      "Sid": "PassRoleOnlyToStackServices",
+      "Effect": "Deny",
+      "Action": [
+        "iam:PassRole"
+      ],
+      "Resource": [
+        "*"
+      ],
+      "Condition": {
+        "StringNotEquals": {
+          "iam:PassedToService": [
+            "backup.amazonaws.com",
+            "bedrock-agentcore.amazonaws.com",
+            "bedrock.amazonaws.com",
+            "build.apprunner.amazonaws.com",
+            "codebuild.amazonaws.com",
+            "ec2.amazonaws.com",
+            "eks-fargate-pods.amazonaws.com",
+            "eks.amazonaws.com",
+            "kendra.amazonaws.com",
+            "lambda.amazonaws.com",
+            "monitoring.rds.amazonaws.com",
+            "pods.eks.amazonaws.com",
+            "sagemaker.amazonaws.com",
+            "tasks.apprunner.amazonaws.com",
+            "vpc-flow-logs.amazonaws.com"
+          ]
+        }
+      }
+    },
+    {
+      "Sid": "IAMSupport",
+      "Effect": "Allow",
+      "Action": [
+        "iam:AddClientIDToOpenIDConnectProvider",
+        "iam:AddRoleToInstanceProfile",
+        "iam:CreateInstanceProfile",
+        "iam:CreateOpenIDConnectProvider",
+        "iam:CreatePolicy",
+        "iam:CreatePolicyVersion",
+        "iam:CreateServiceLinkedRole",
+        "iam:DeleteInstanceProfile",
+        "iam:DeleteOpenIDConnectProvider",
+        "iam:DeletePolicy",
+        "iam:DeletePolicyVersion",
+        "iam:DeleteServiceLinkedRole",
+        "iam:RemoveClientIDFromOpenIDConnectProvider",
+        "iam:RemoveRoleFromInstanceProfile",
+        "iam:SetDefaultPolicyVersion",
+        "iam:TagInstanceProfile",
+        "iam:TagOpenIDConnectProvider",
+        "iam:TagPolicy",
+        "iam:UntagInstanceProfile",
+        "iam:UntagOpenIDConnectProvider",
+        "iam:UntagPolicy",
+        "iam:UpdateOpenIDConnectProviderThumbprint"
+      ],
+      "Resource": [
+        "*"
+      ]
+    },
+    {
+      "Sid": "DenyEditOwnPolicies",
+      "Effect": "Deny",
+      "Action": [
+        "iam:CreatePolicyVersion",
+        "iam:DeletePolicy",
+        "iam:DeletePolicyVersion",
+        "iam:SetDefaultPolicyVersion"
+      ],
+      "Resource": [
+        "arn:aws:iam::*:policy/*insideout*"
+      ]
+    },
+    {
+      "Sid": "DenyEditOwnRole",
+      "Effect": "Deny",
+      "Action": [
+        "iam:AttachRolePolicy",
+        "iam:DeleteRole",
+        "iam:DeleteRolePermissionsBoundary",
+        "iam:DeleteRolePolicy",
+        "iam:DetachRolePolicy",
+        "iam:PutRolePermissionsBoundary",
+        "iam:PutRolePolicy",
+        "iam:TagRole",
+        "iam:UntagRole",
+        "iam:UpdateAssumeRolePolicy"
+      ],
+      "Resource": [
+        "${deploy_role_arn}"
+      ]
+    },
+    {
+      "Sid": "DenyBoundaryRemoval",
+      "Effect": "Deny",
+      "Action": [
+        "iam:DeleteRolePermissionsBoundary"
+      ],
+      "Resource": [
+        "*"
+      ]
+    }
+  ]
+}
