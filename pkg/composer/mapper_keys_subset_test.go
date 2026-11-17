@@ -130,7 +130,11 @@ func kitchenSinkConfig() *Config {
 		CachePaths *string `json:"cachePaths,omitempty"` // DEPRECATED: use OriginPath
 	}{DefaultTtl: &ttl, OriginPath: &op}
 	vpcCIDR := []string{"10.1.0.0/16"}
-	cfg.AWSALB = &AWSALBConfig{EgressCIDRs: vpcCIDR}
+	// Internal is false, not true: the kitchen sink selects aws_cloudfront,
+	// and the mapper refuses an internal ALB behind CloudFront. False still
+	// makes the mapper emit "internal".
+	internetFacing := false
+	cfg.AWSALB = &AWSALBConfig{EgressCIDRs: vpcCIDR, Internal: &internetFacing}
 	adminCIDRs := []string{"203.0.113.0/24"}
 	cfg.AWSBastion = &AWSBastionConfig{AdminCIDRs: &adminCIDRs}
 	cfg.AWSRDS = &AWSRDSConfig{CPUSize: "8 vCPU", ReadReplicas: "2 read replicas", StorageSize: "200GB", EgressCIDRs: vpcCIDR}

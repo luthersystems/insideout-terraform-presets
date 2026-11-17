@@ -457,6 +457,20 @@ func (m DefaultMapper) BuildModuleValues(
 		}
 		if cfg != nil && cfg.AWSALB != nil {
 			setEgressCIDRs(vals, cfg.AWSALB.EgressCIDRs)
+			if cfg.AWSALB.Internal != nil {
+				// aws/cloudfront takes the ALB DNS name as a public custom
+				// origin (DefaultWiring), which it cannot reach on an
+				// internal ALB: the stack would deploy and then answer
+				// every request with 502. Fail at compose time instead.
+				if *cfg.AWSALB.Internal && comps != nil && boolPtrTrue(comps.AWSCloudFront) {
+					return nil, NewValidationError(
+						"AWSALB.Internal=true with aws_cloudfront selected: CloudFront uses the ALB " +
+							"as a public origin and cannot reach an internal ALB. Leave Internal unset " +
+							"for a stack behind CloudFront, or remove aws_cloudfront.",
+					)
+				}
+				vals["internal"] = *cfg.AWSALB.Internal
+			}
 		}
 
 	case KeyAWSBastion:

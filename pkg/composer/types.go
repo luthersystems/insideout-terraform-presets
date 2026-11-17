@@ -658,6 +658,22 @@ type AWSALBConfig struct {
 	// that no listener rule uses authenticate-oidc, which calls the IdP
 	// over the internet.
 	EgressCIDRs []string `json:"egressCidrs,omitempty" composer:"nobackfill"`
+
+	// Internal maps to internal (#910): true makes the ALB internal (no
+	// public address), for a stack reached only through a VPN or a peered
+	// network. Nil or false keeps the internet-facing default, because the
+	// ALB is the stack's public entry point and changing internal replaces
+	// it (new DNS name). An internal ALB is placed in the VPC's private
+	// subnets (wired from aws/vpc; it falls back to the public subnets on
+	// a VPC without them). The mapper rejects Internal=true when
+	// aws/cloudfront is in the stack: CloudFront uses the ALB DNS name as a
+	// public origin and cannot reach an internal ALB (every request would
+	// get a 502).
+	//
+	// No nobackfill tag here, unlike EgressCIDRs: a stored false keeps an
+	// existing stack internet-facing even if the preset default ever
+	// changes, and that is wanted, since a change replaces the ALB.
+	Internal *bool `json:"internal,omitempty"`
 }
 
 // AWSBastionConfig is the caller-facing config for the aws/bastion preset

@@ -2,10 +2,10 @@ mock_provider "aws" {}
 mock_provider "random" {}
 
 # Issue #910: aws/alb shape tests for the internal option. The default
-# must stay internet-facing in the public subnets, because the composer
-# does not set var.internal and existing stacks use the ALB as their
-# public entry point. A change to aws_lb.internal replaces the ALB, so
-# the default is pinned here.
+# must stay internet-facing in the public subnets: the composer sets
+# var.internal only when the caller opts in (aws_alb.internal), and
+# existing stacks use the ALB as their public entry point. A change to
+# aws_lb.internal replaces the ALB, so the default is pinned here.
 
 run "alb_defaults_internet_facing" {
   command = plan
@@ -20,7 +20,7 @@ run "alb_defaults_internet_facing" {
 
   assert {
     condition     = aws_lb.alb.internal == false
-    error_message = "The ALB must stay internet-facing by default (#910): the composer does not set internal, and a change replaces the ALB on live stacks."
+    error_message = "The ALB must stay internet-facing by default (#910): the composer sets internal only on opt-in, and a change replaces the ALB on live stacks."
   }
 
   assert {
