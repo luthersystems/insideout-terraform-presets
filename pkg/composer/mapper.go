@@ -575,8 +575,15 @@ func (m DefaultMapper) BuildModuleValues(
 		}
 
 	case KeyAWSS3:
-		if cfg != nil && cfg.AWSS3 != nil && cfg.AWSS3.Versioning != nil {
-			vals["versioning"] = *cfg.AWSS3.Versioning
+		if cfg != nil && cfg.AWSS3 != nil {
+			if cfg.AWSS3.Versioning != nil {
+				vals["versioning"] = *cfg.AWSS3.Versioning
+			}
+			// SSE-KMS only when the caller opted in (#909); empty keeps
+			// the preset's SSE-S3 default.
+			if k := strings.TrimSpace(cfg.AWSS3.KMSKeyARN); k != "" {
+				vals["kms_key_arn"] = k
+			}
 		}
 
 	case KeyAWSDynamoDB:
@@ -1569,6 +1576,11 @@ func (m DefaultMapper) BuildModuleValues(
 			}
 			if sm.WorkspaceBucketForceDestroy != nil {
 				vals["workspace_bucket_force_destroy"] = *sm.WorkspaceBucketForceDestroy
+			}
+			// SSE-KMS on the workspace bucket only when the caller opted
+			// in (#909); empty keeps the preset's SSE-S3 default.
+			if k := strings.TrimSpace(sm.WorkspaceKMSKeyARN); k != "" {
+				vals["workspace_kms_key_arn"] = k
 			}
 			if len(sm.StudioUsers) > 0 {
 				us := make([]any, 0, len(sm.StudioUsers))

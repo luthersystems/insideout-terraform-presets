@@ -100,6 +100,32 @@ locals {
     }
   ]
 
+  # An SSE-KMS docs bucket (aws/s3 with kms_key_arn, #909) needs
+  # kms:Decrypt on its key, or ingestion cannot read a single object.
+  # Granted only alongside the S3 read grant above. An IAM policy matches
+  # a KMS key by its key ARN only, so for an alias ARN the grant names the
+  # keys of that account and region, and the kms:ResourceAliases condition
+  # narrows it to the key the alias points to.
+  s3_kms_grant    = var.s3_bucket_arn != null && var.s3_kms_key_arn != null
+  s3_kms_is_alias = local.s3_kms_grant ? strcontains(var.s3_kms_key_arn, ":alias/") : false
+  bedrock_s3_kms_statements = concat(
+    local.s3_kms_grant && !local.s3_kms_is_alias ? [{
+      Action   = ["kms:Decrypt"]
+      Effect   = "Allow"
+      Resource = var.s3_kms_key_arn
+    }] : [],
+    local.s3_kms_is_alias ? [{
+      Action   = ["kms:Decrypt"]
+      Effect   = "Allow"
+      Resource = "${split(":alias/", var.s3_kms_key_arn)[0]}:key/*"
+      Condition = {
+        "ForAnyValue:StringEquals" = {
+          "kms:ResourceAliases" = "alias/${split(":alias/", var.s3_kms_key_arn)[1]}"
+        }
+      }
+    }] : [],
+  )
+
   bedrock_aoss_statements = var.opensearch_collection_arn == null ? [] : [
     {
       Action   = ["aoss:APIAccessAll"]
@@ -143,6 +169,7 @@ resource "aws_iam_role_policy" "bedrock_kb" {
       local.bedrock_s3_statements,
       local.bedrock_aoss_statements,
       local.bedrock_s3vectors_statements,
+      local.bedrock_s3_kms_statements,
     )
   })
 }

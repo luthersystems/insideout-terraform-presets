@@ -1134,7 +1134,11 @@ func DefaultWiringForConfig(selected map[ComponentKey]bool, k ComponentKey, comp
 	case KeyAWSBedrock:
 		if hasS3 {
 			wi.RawHCL["s3_bucket_arn"] = s3Ref(selected) + ".bucket_arn"
-			wi.Names = append(wi.Names, "s3_bucket_arn")
+			// The bucket's KMS key, null for SSE-S3: when the caller opts
+			// aws_s3 into SSE-KMS (#909), the KB role needs kms:Decrypt on
+			// it to read any object.
+			wi.RawHCL["s3_kms_key_arn"] = s3Ref(selected) + ".kms_key_arn"
+			wi.Names = append(wi.Names, "s3_bucket_arn", "s3_kms_key_arn")
 		}
 		if hasOpenSearch {
 			osRef := opensearchRef(selected)
@@ -1206,7 +1210,10 @@ func DefaultWiringForConfig(selected map[ComponentKey]bool, k ComponentKey, comp
 			// output, so the preset can't gate their count on `!= null` (unknown
 			// at plan). aws_s3 is selected here, so the data source exists → true.
 			wi.RawHCL["enable_s3_data_source"] = "true"
-			wi.Names = append(wi.Names, "s3_bucket_name", "s3_bucket_arn", "enable_s3_data_source")
+			// The bucket's KMS key, null for SSE-S3: the data-source role
+			// needs kms:Decrypt on it when aws_s3 uses SSE-KMS (#909).
+			wi.RawHCL["s3_kms_key_arn"] = s3 + ".kms_key_arn"
+			wi.Names = append(wi.Names, "s3_bucket_name", "s3_bucket_arn", "enable_s3_data_source", "s3_kms_key_arn")
 		}
 
 	case KeyAWSBackups:

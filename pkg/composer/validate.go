@@ -676,6 +676,29 @@ var configFieldValidators = []configFieldValidator{
 		normalize: normalizeTrimmedStrings,
 	},
 	{
+		// SSE-KMS opt-ins (#909), checked with the preset rules.
+		field:     "aws_s3.kmsKeyArn",
+		component: KeyAWSS3,
+		variable:  "kms_key_arn",
+		value: func(c *Config) (any, bool) {
+			if c == nil || c.AWSS3 == nil || strings.TrimSpace(c.AWSS3.KMSKeyARN) == "" {
+				return nil, false
+			}
+			return strings.TrimSpace(c.AWSS3.KMSKeyARN), true
+		},
+	},
+	{
+		field:     "aws_sagemaker.workspaceKmsKeyArn",
+		component: KeyAWSSageMaker,
+		variable:  "workspace_kms_key_arn",
+		value: func(c *Config) (any, bool) {
+			if c == nil || c.AWSSageMaker == nil || strings.TrimSpace(c.AWSSageMaker.WorkspaceKMSKeyARN) == "" {
+				return nil, false
+			}
+			return strings.TrimSpace(c.AWSSageMaker.WorkspaceKMSKeyARN), true
+		},
+	},
+	{
 		field:     "aws_api_gateway.certificateArn",
 		component: KeyAWSAPIGateway,
 		variable:  "certificate_arn",

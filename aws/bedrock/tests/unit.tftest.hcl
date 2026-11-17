@@ -864,3 +864,65 @@ run "rejects_bad_kms_arn" {
 
   expect_failures = [var.guardrail_kms_key_arn]
 }
+
+# --- SSE-KMS docs bucket (#909) ---------------------------------------------
+#
+# An aws/s3 bucket encrypted with a customer-managed key is unreadable to the
+# role without kms:Decrypt on that key. The grant appears only when the key
+# is wired, so an SSE-S3 bucket's policy does not change.
+
+run "s3_kms_key_grants_decrypt" {
+  command = plan
+
+  variables {
+    s3_kms_key_arn = "arn:aws:kms:us-east-1:111111111111:key/11111111-2222-3333-4444-555555555555"
+  }
+
+  assert {
+    condition = anytrue([
+      for s in jsondecode(aws_iam_role_policy.bedrock_kb.policy).Statement :
+      contains(try(s.Action, []), "kms:Decrypt") && s.Resource == "arn:aws:kms:us-east-1:111111111111:key/11111111-2222-3333-4444-555555555555"
+    ])
+    error_message = "With s3_kms_key_arn set, the role must get kms:Decrypt on that key."
+  }
+}
+
+run "no_s3_kms_key_no_decrypt" {
+  command = plan
+
+  assert {
+    condition = !anytrue([
+      for s in jsondecode(aws_iam_role_policy.bedrock_kb.policy).Statement :
+      contains(try(s.Action, []), "kms:Decrypt")
+    ])
+    error_message = "With no s3_kms_key_arn, the policy must not change (no kms:Decrypt)."
+  }
+}
+
+run "s3_kms_alias_grants_decrypt_by_alias" {
+  command = plan
+
+  variables {
+    s3_kms_key_arn = "arn:aws:kms:us-east-1:111111111111:alias/data"
+  }
+
+  # IAM matches a KMS key by its key ARN only, so an alias grant names the
+  # account's keys and narrows them with kms:ResourceAliases.
+  assert {
+    condition = anytrue([
+      for s in jsondecode(aws_iam_role_policy.bedrock_kb.policy).Statement :
+      contains(try(s.Action, []), "kms:Decrypt") && s.Resource == "arn:aws:kms:us-east-1:111111111111:key/*" && try(s.Condition["ForAnyValue:StringEquals"]["kms:ResourceAliases"], "") == "alias/data"
+    ])
+    error_message = "With an alias ARN, kms:Decrypt must be granted on the account's keys with a kms:ResourceAliases condition."
+  }
+}
+
+run "rejects_bad_s3_kms_key_arn" {
+  command = plan
+
+  variables {
+    s3_kms_key_arn = "not-an-arn"
+  }
+
+  expect_failures = [var.s3_kms_key_arn]
+}
