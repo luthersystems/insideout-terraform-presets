@@ -43,3 +43,11 @@ var ErrClientsWrongCloud = errors.New("imported: Clients union carries the wrong
 // packages. Distinct from ErrEnrichByIDNotImplemented (the type has no
 // by-id probe, so existence is UNKNOWN, not "gone").
 var ErrResourceNotFound = errors.New("imported: resource no longer exists")
+
+// ErrPartialDiscovery signals that Discover returned the resources it
+// could read but could not list some of their parents (for example one
+// Cloud DNS managed zone out of several). The returned slice is still
+// valid. A caller deciding whether a resource exists must not treat one
+// that is absent from a partial result as gone; a caller building a list
+// for the user may keep the rows and show the error as a warning.
+var ErrPartialDiscovery = errors.New("imported: discovery incomplete")

@@ -9,8 +9,10 @@ import (
 	"google.golang.org/api/cloudfunctions/v2"
 	"google.golang.org/api/cloudkms/v1"
 	"google.golang.org/api/cloudresourcemanager/v3"
+	dns "google.golang.org/api/dns/v1"
 	"google.golang.org/api/identitytoolkit/v2"
 	"google.golang.org/api/logging/v2"
+	"google.golang.org/api/option"
 	"google.golang.org/api/run/v2"
 	"google.golang.org/api/secretmanager/v1"
 	"google.golang.org/api/servicenetworking/v1"
@@ -872,25 +874,99 @@ func (l *RealVPCAccessConnectorLister) ListVPCAccessConnectors(ctx context.Conte
 	return out, nil
 }
 
+// ---- Cloud DNS record sets (#931) --------------------------------------
+
+// gcpDNSRecordSet is the projected view of a Cloud DNS record set used
+// by the dns_record_set discoverer: the fully qualified name (with its
+// trailing dot) and the record type. Both are part of the import ID.
+type gcpDNSRecordSet struct {
+	Name string // e.g. "www.example.com."
+	Type string // e.g. "A", "CNAME"
+}
+
+type gcpDNSRecordSetLister interface {
+	// ListDNSRecordSets returns every record set in one managed zone.
+	// zone is the zone NAME (not its numeric ID).
+	ListDNSRecordSets(ctx context.Context, projectID, zone string) ([]gcpDNSRecordSet, error)
+}
+
+// RealDNSRecordSetLister wraps google.golang.org/api/dns/v1.
+type RealDNSRecordSetLister struct {
+	svc *dns.Service
+}
+
+// NewRealDNSRecordSetLister constructs a Cloud DNS record set lister.
+// With no opts it uses ADC, which suits the CLI. A multi-tenant caller
+// (ui-core's oracle) must pass the customer's credentials, for example
+// option.WithTokenSource(inspectorTokenSource): with ADC it would list
+// the customer's zones as its own identity, a confused deputy.
+func NewRealDNSRecordSetLister(ctx context.Context, opts ...option.ClientOption) (*RealDNSRecordSetLister, error) {
+	svc, err := dns.NewService(ctx, opts...)
+	if err != nil {
+		return nil, fmt.Errorf("create dns client: %w", err)
+	}
+	return &RealDNSRecordSetLister{svc: svc}, nil
+}
+
+// NewDNSRecordSetListerFromService wraps a Cloud DNS client the caller
+// already built. The record set enricher reads the same API through
+// EnrichClients.DNS, so a caller that runs both discovery and enrichment
+// can build one *dns.Service with the customer's credentials and hand it
+// to both. That keeps one client, one connection pool and one credential
+// for the run, and removes the chance of the lister and the enricher
+// being built with different credentials. The caller owns svc; a nil svc
+// gives a lister whose calls fail with "dns client closed".
+func NewDNSRecordSetListerFromService(svc *dns.Service) *RealDNSRecordSetLister {
+	return &RealDNSRecordSetLister{svc: svc}
+}
+
+func (l *RealDNSRecordSetLister) ListDNSRecordSets(ctx context.Context, projectID, zone string) ([]gcpDNSRecordSet, error) {
+	if l == nil || l.svc == nil {
+		return nil, errors.New("dns client closed")
+	}
+	var out []gcpDNSRecordSet
+	err := l.svc.ResourceRecordSets.List(projectID, zone).Context(ctx).Pages(ctx, func(resp *dns.ResourceRecordSetsListResponse) error {
+		for _, rs := range resp.Rrsets {
+			if rs == nil {
+				continue
+			}
+			out = append(out, gcpDNSRecordSet{Name: rs.Name, Type: rs.Type})
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, wrapGCPAPIError("list dns record sets", err)
+	}
+	return out, nil
+}
+
 // ---- shared error wrapping --------------------------------------------
 
 // wrapGCPAPIError annotates a Google API error with operator-actionable
-// hints. Mirrors searcher.go::wrapSearchAllError for the non-CAI paths;
-// the common failure modes (stale ADC, API-not-enabled) surface with
-// the same fix-it-by-running-this guidance.
+// hints for the non-CAI paths (the CAI search has wrapSearchAllError).
+//
+// The hints do not assume where the credentials came from. These listers
+// run in the CLI with Application Default Credentials, and in ui-core with
+// a token source for the customer's inspector account. Telling the second
+// caller to run `gcloud auth application-default login` points at the
+// wrong fix, so each hint names the credentials used for the request and
+// gives the gcloud command only as the fix for the ADC case.
 func wrapGCPAPIError(op string, err error) error {
+	const (
+		authHint = "%s: GCP authentication failed for the credentials used for this request.\n" +
+			"  Check they are valid and not expired (with Application Default Credentials, run: gcloud auth application-default login).\n" +
+			"  (underlying error: %w)"
+		apiHint = "%s: a required API is not enabled.\n" +
+			"  Enable the service in the project and check the credentials used for this request have the roles in pkg/insideout-import/permissions/gcp.json.\n" +
+			"  (underlying error: %w)"
+	)
 	if s, ok := status.FromError(err); ok {
 		switch s.Code() {
 		case codes.Unauthenticated:
-			return fmt.Errorf("%s: GCP authentication failed.\n"+
-				"  Application Default Credentials need to be refreshed.\n"+
-				"  Run: gcloud auth application-default login\n"+
-				"  (underlying error: %w)", op, err)
+			return fmt.Errorf(authHint, op, err)
 		case codes.PermissionDenied:
 			if strings.Contains(s.Message(), "not enabled") || strings.Contains(s.Message(), "API not enabled") {
-				return fmt.Errorf("%s: required API is not enabled on the ADC quota project.\n"+
-					"  Check `gcloud auth application-default print-access-token` and enable the relevant service on the project the token bills against.\n"+
-					"  (underlying error: %w)", op, err)
+				return fmt.Errorf(apiHint, op, err)
 			}
 		}
 	}
@@ -899,13 +975,10 @@ func wrapGCPAPIError(op string, err error) error {
 	// substring check below covers both gRPC and REST returns.
 	msg := err.Error()
 	if strings.Contains(msg, "Error 401") || strings.Contains(msg, "invalid_grant") {
-		return fmt.Errorf("%s: GCP authentication failed.\n"+
-			"  Run: gcloud auth application-default login\n"+
-			"  (underlying error: %w)", op, err)
+		return fmt.Errorf(authHint, op, err)
 	}
 	if strings.Contains(msg, "Error 403") && (strings.Contains(msg, "not enabled") || strings.Contains(msg, "disabled")) {
-		return fmt.Errorf("%s: required API is not enabled on the ADC quota project.\n"+
-			"  (underlying error: %w)", op, err)
+		return fmt.Errorf(apiHint, op, err)
 	}
 	return fmt.Errorf("%s: %w", op, err)
 }

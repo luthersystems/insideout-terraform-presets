@@ -114,6 +114,12 @@ type cloudAssetConfig struct {
 //     sub-resources fanned out across parent rows by their bespoke
 //     listers; CAI does surface them but the per-object overhead would
 //     dwarf the parent's enrichment cost.
+//   - google_dns_managed_zone, google_dns_record_set (#931): the zone
+//     is CAI-discovered, but the CAI body models privateVisibilityConfig,
+//     dnssecConfig and the other nested settings as single objects while
+//     the Layer-1 struct expects lists of blocks, so the generic path
+//     cannot decode them. Both types enrich through hand-rolled Cloud DNS
+//     API enrichers instead (dns_enrich.go).
 //   - google_monitoring_dashboard, google_monitoring_alert_policy,
 //     google_monitoring_notification_channel: CAI's coverage of
 //     monitoring resources is partial / shaped differently from the TF

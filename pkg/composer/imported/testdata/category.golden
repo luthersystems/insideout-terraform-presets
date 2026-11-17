@@ -141,6 +141,8 @@ google_compute_target_https_proxy	Network Security
 google_compute_url_map	Network Security
 google_container_cluster	Virtual Machines
 google_container_node_pool	Virtual Machines
+google_dns_managed_zone	Network Security
+google_dns_record_set	Network Security
 google_firestore_database	Data Storage
 google_identity_platform_config	Security
 google_identity_platform_default_supported_idp_config	Security

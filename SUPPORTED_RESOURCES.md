@@ -23,7 +23,7 @@ and is checked in lockstep with the runtime registries. See the
 ## Summary
 
 - **AWS:** 149 types · 73% Discoverable · 73% Enrichable · 100% DriftDetectable · 61% MetricsAvailable · 90% AgentEditable
-- **GCP:** 64 types · 84% Discoverable · 84% Enrichable · 100% DriftDetectable · 78% MetricsAvailable · 91% AgentEditable
+- **GCP:** 64 types · 88% Discoverable · 88% Enrichable · 100% DriftDetectable · 78% MetricsAvailable · 91% AgentEditable
 
 ## AWS
 
@@ -214,8 +214,8 @@ and is checked in lockstep with the runtime registries. See the
 | `google_compute_url_map` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `google_container_cluster` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `google_container_node_pool` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `google_dns_managed_zone` | – | – | ✓ | ✓ | ✓ |
-| `google_dns_record_set` | – | – | ✓ | – | ✓ |
+| `google_dns_managed_zone` | ✓ | ✓ | ✓ | ✓ | ✓ |
+| `google_dns_record_set` | ✓ | ✓ | ✓ | – | ✓ |
 | `google_firestore_database` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `google_iam_workload_identity_pool` | – | – | ✓ | – | ✓ |
 | `google_iam_workload_identity_pool_provider` | – | – | ✓ | – | ✓ |

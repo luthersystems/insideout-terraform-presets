@@ -12,11 +12,11 @@ package policy
 // curated whole-list so a missing-or-extra association is one diff
 // entry.
 //
-// Bundle (#599): part of the DNS+cert mega-bundle. Codegen-only — see
-// gcpCodegenOnlyTypes in pkg/insideout-import/registry/registry.go for
-// the rationale on shipping drift policy before the CAI discoverer
-// hookup. Labels use gcpLabelDriftPolicy() so user-set labels (like
-// the canonical `project = <project>` label) participate in drift.
+// Bundle (#599): part of the DNS+cert mega-bundle. The policy shipped
+// codegen-only first; #931 wired the CAI discoverer, so the type is now
+// in gcpDiscoverTypes. Labels use gcpLabelDriftPolicy() so user-set
+// labels (like the canonical `project = <project>` label) participate
+// in drift.
 var googleDNSManagedZonePolicy = Map{
 	// Identity ----------------------------------------------------------
 	"id": {

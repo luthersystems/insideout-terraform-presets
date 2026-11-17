@@ -17,11 +17,10 @@
 #     or CNAME entries via var.records.
 #
 # #593 wired this module into the composer and added the Cloud DNS
-# inspector (pkg/observability/discovery/gcp/dns.go).
-# google_dns_managed_zone and google_dns_record_set are in
-# gcpCodegenOnlyTypes in pkg/insideout-import/registry/registry.go (typed
-# model and drift policy only). TODO(#931): wire the CAI discoverer so the
-# import wizard can discover them. google_dns_managed_zone is in
+# inspector (pkg/observability/discovery/gcp/dns.go). #931 wired import
+# discovery: the import wizard finds managed zones through Cloud Asset
+# Inventory and their record sets through the Cloud DNS API
+# (cmd/insideout-import/gcpdiscover/dns_*.go). google_dns_managed_zone is in
 # LABEL_CAPABLE_GCP, so tests/lint-project-label.sh enforces the
 # `labels = merge({ project = var.project }, var.labels)` block below. The label still propagates
 # the Project identity correctly at apply time, matching the convention

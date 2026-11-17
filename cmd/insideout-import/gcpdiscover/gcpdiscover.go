@@ -253,6 +253,9 @@ type GCPDiscovererOpts struct {
 	DefaultSupportedIdpConfigLister   gcpDefaultSupportedIdpConfigLister
 	ServiceNetworkingConnectionLister gcpServiceNetworkingConnectionLister
 	VPCAccessConnectorLister          gcpVPCAccessConnectorLister
+	// DNSRecordSetLister backs google_dns_record_set (#931). It fans
+	// out over the google_dns_managed_zone rows the CAI phase found.
+	DNSRecordSetLister gcpDNSRecordSetLister
 }
 
 // NewGCPDiscoverer wires up the production set of GCP discoverers. The
@@ -341,6 +344,11 @@ func NewGCPDiscoverer(searcher gcpAssetSearcher, projectID string, opts GCPDisco
 			"google_service_networking_connection":                  newServiceNetworkingConnectionDiscoverer(opts.ServiceNetworkingConnectionLister),
 			"google_vpc_access_connector":                           newVPCAccessConnectorDiscoverer(opts.VPCAccessConnectorLister),
 			"google_compute_resource_policy":                        newComputeResourcePolicyDiscoverer(),
+			// Cloud DNS (#931). The managed zone comes from CAI; the
+			// record set is listed per zone through the DNS API (see
+			// dns_record_set.go for why CAI cannot build its import ID).
+			"google_dns_managed_zone": newDNSManagedZoneDiscoverer(),
+			"google_dns_record_set":   newDNSRecordSetDiscoverer(opts.DNSRecordSetLister),
 		},
 		// Per-type SDK attribute enrichers (#403). Each entry is a sibling
 		// to the byType discoverer of the same name and populates ir.Attrs
@@ -399,6 +407,10 @@ func NewGCPDiscoverer(searcher gcpAssetSearcher, projectID string, opts GCPDisco
 			// implement ByIDEnricher in addition to AttributeEnricher.
 			"google_identity_platform_default_supported_idp_config": newIdentityPlatformDefaultSupportedIdpConfigEnricher(),
 			"google_storage_bucket_object":                          newStorageBucketObjectEnricher(),
+			// Cloud DNS (#931). Both read the DNS API; see dns_enrich.go
+			// for why the managed zone does not use the CAI fallback.
+			"google_dns_managed_zone": newDNSManagedZoneEnricher(),
+			"google_dns_record_set":   newDNSRecordSetEnricher(),
 		},
 	}
 	// HYBRID Cloud Asset Inventory fallback (mirrors AWS #490 steps 1+2):
@@ -493,6 +505,15 @@ func (g *GCPDiscoverer) DiscoverTypes(ctx context.Context, types []string, args 
 		return nil, fmt.Errorf("unknown resource type(s): %v (supported: %v)", unknown, g.SupportedTypes())
 	}
 
+	// Hidden parents: a non-CAI child type that fans out over parent rows
+	// finds nothing when the caller did not also ask for the parent type.
+	// Callers do ask for one type alone (an existence check, or a compose
+	// run narrowed to the types the user picked), and an empty answer there
+	// reads as "every record is gone". So discover the parent too, use its
+	// rows only as the child's input, and leave them out of the result: the
+	// caller gets exactly the types it asked for.
+	hidden := g.hiddenParents(selected)
+
 	// Group discoverers by ScopeStyle (#366, #381, #392). Three CAI
 	// buckets (labels / name-prefix / parent-name-prefix) dispatch
 	// SearchAllResources calls; a fourth non-CAI bucket runs after the
@@ -503,7 +524,7 @@ func (g *GCPDiscoverer) DiscoverTypes(ctx context.Context, types []string, args 
 	// should fail loudly rather than silently routing to a default
 	// bucket where the wrong filter would mask the discoverer's bug.
 	var labelsBucket, namePrefixBucket, parentBucket, nonCAIBucket []Discoverer
-	for _, d := range selected {
+	for _, d := range append(append([]Discoverer(nil), selected...), hidden...) {
 		switch d.ScopeStyle() {
 		case ScopeStyleLabels:
 			labelsBucket = append(labelsBucket, d)
@@ -618,6 +639,21 @@ func (g *GCPDiscoverer) DiscoverTypes(ctx context.Context, types []string, args 
 			onTypeDiscovered(d.ResourceType(), typeRows)
 		}
 	}
+	// Translate the hidden parents' rows apart from `out`, with their own
+	// address book, so they neither reach the caller nor change the
+	// addresses of the rows that do. No ItemFound or per-type events: the
+	// caller did not ask for these types.
+	var hiddenRows []imported.ImportedResource
+	hiddenBook := addressBook{}
+	for _, d := range hidden {
+		bucket := byAsset[d.AssetType()]
+		sort.SliceStable(bucket, func(i, j int) bool { return bucket[i].Name < bucket[j].Name })
+		for _, r := range bucket {
+			if imp := d.FromAsset(hiddenBook, r, g.projectID); imp.Identity.Type != "" {
+				hiddenRows = append(hiddenRows, imp)
+			}
+		}
+	}
 	args.Emitter.ServiceFinish(gcpServiceSlug, "", len(out), time.Since(stageStart))
 
 	// Non-CAI phase (#392): types whose resources aren't surfaced by
@@ -626,7 +662,15 @@ func (g *GCPDiscoverer) DiscoverTypes(ctx context.Context, types []string, args 
 	// the CAI-discovered google_sql_database_instance rows from `out`
 	// to drive per-instance fanout, so this phase needs the CAI results
 	// already settled.
+	var partial []error
 	if len(nonCAIBucket) > 0 {
+		// The listers read their parent rows from the visible results plus
+		// the hidden parents. A full-capacity copy keeps the append from
+		// writing into out's spare capacity.
+		priors := out
+		if len(hiddenRows) > 0 {
+			priors = append(append(make([]imported.ImportedResource, 0, len(out)+len(hiddenRows)), out...), hiddenRows...)
+		}
 		nonCAIStart := time.Now()
 		args.Emitter.ServiceStart(nonCAIServiceSlug, "")
 		var nonCAIResults []imported.ImportedResource
@@ -646,7 +690,15 @@ func (g *GCPDiscoverer) DiscoverTypes(ctx context.Context, types []string, args 
 			if !nonCAIDiscovererHasLister(d) {
 				fmt.Fprintf(os.Stderr, "WARN: %s: non-CAI lister unavailable; type will be silently skipped (check Real* lister construction at startup)\n", d.ResourceType())
 			}
-			rs, err := nd.ListNonCAI(ctx, g.projectID, args.Project, out, args.Emitter)
+			rs, err := nd.ListNonCAI(ctx, g.projectID, args.Project, priors, args.Emitter)
+			// A *PartialDiscoveryError means the lister returned what it
+			// could read and some parents failed. Keep the rows and carry
+			// the error to the caller instead of stopping the run.
+			var pe *PartialDiscoveryError
+			if errors.As(err, &pe) {
+				partial = append(partial, err)
+				err = nil
+			}
 			if err != nil {
 				args.Emitter.ServiceFinish(nonCAIServiceSlug, "", len(nonCAIResults), time.Since(nonCAIStart))
 				return nil, fmt.Errorf("non-CAI list for %q: %w", d.ResourceType(), err)
@@ -676,8 +728,63 @@ func (g *GCPDiscoverer) DiscoverTypes(ctx context.Context, types []string, args 
 	}
 
 	args.Emitter.StageFinish("discover", len(out), time.Since(stageStart))
+	if len(partial) > 0 {
+		return out, errors.Join(partial...)
+	}
 	return out, nil
 }
+
+// hiddenParentType maps a non-CAI child type to the CAI parent type its
+// lister fans out over, for the children DiscoverTypes discovers the
+// parent for when the caller did not ask for it (see hiddenParents).
+var hiddenParentType = map[string]string{
+	dnsRecordSetTFType: dnsManagedZoneTFType,
+}
+
+// hiddenParents returns the parent discoverers that the selected child
+// types need and the caller did not select, without duplicates.
+func (g *GCPDiscoverer) hiddenParents(selected []Discoverer) []Discoverer {
+	chosen := make(map[string]bool, len(selected))
+	for _, d := range selected {
+		chosen[d.ResourceType()] = true
+	}
+	var out []Discoverer
+	for _, d := range selected {
+		parent, ok := hiddenParentType[d.ResourceType()]
+		if !ok || chosen[parent] {
+			continue
+		}
+		if pd, ok := g.byType[parent]; ok {
+			chosen[parent] = true
+			out = append(out, pd)
+		}
+	}
+	return out
+}
+
+// PartialDiscoveryError reports that a lister returned the resources it
+// could read but could not list some of their parents (for example one
+// Cloud DNS managed zone whose record set listing failed). DiscoverTypes
+// returns the rows it found together with this error.
+//
+// It is an error, not only a progress warning, because a caller may use
+// the result to decide whether a resource still exists. A missing row
+// from a parent that failed to list would otherwise look the same as a
+// deleted resource. A caller that wants the rows anyway checks for it
+// with errors.As and keeps the returned slice.
+type PartialDiscoveryError struct {
+	// TFType is the Terraform type whose listing was incomplete.
+	TFType string
+	// Errs holds one error per parent that could not be listed.
+	Errs []error
+}
+
+func (e *PartialDiscoveryError) Error() string {
+	return fmt.Sprintf("%s: discovery incomplete, %d parent(s) could not be listed: %v", e.TFType, len(e.Errs), errors.Join(e.Errs...))
+}
+
+// Unwrap exposes the per-parent errors to errors.Is / errors.As.
+func (e *PartialDiscoveryError) Unwrap() []error { return e.Errs }
 
 // snapshotForCallback returns an isolated copy of a per-type result slice
 // for delivery to DiscoverArgs.OnTypeDiscovered — the GCP twin of
@@ -755,6 +862,8 @@ func nonCAIDiscovererHasLister(d Discoverer) bool {
 	case *serviceNetworkingConnectionDiscoverer:
 		return v.lister != nil
 	case *vpcAccessConnectorDiscoverer:
+		return v.lister != nil
+	case *dnsRecordSetDiscoverer:
 		return v.lister != nil
 	default:
 		fmt.Fprintf(os.Stderr, "WARN: %s: no lister-check wired in nonCAIDiscovererHasLister — extend the switch when adding a non-CAI type\n", d.ResourceType())

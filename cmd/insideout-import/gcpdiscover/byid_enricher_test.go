@@ -67,8 +67,9 @@ func TestExistingEnrichersDoNotImplementByID(t *testing.T) {
 	// retired hand-rolled enrichers (compute_address, pubsub_topic,
 	// pubsub_subscription) whose CAI fallback now achieves byte-equal
 	// parity via the #581 computed-only filter + #580 Normalizer kit
-	// (see computed_only_parity_test.go for the regression guard) = 28.
-	const handRolledCount = 28
+	// (see computed_only_parity_test.go for the regression guard) = 28;
+	// plus the two Cloud DNS enrichers (#931) = 30.
+	const handRolledCount = 30
 	caiNonOverlap := 0
 	for _, cfg := range cloudAssetTypeConfigs {
 		if cfg.Skip {

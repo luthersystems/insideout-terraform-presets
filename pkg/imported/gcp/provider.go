@@ -148,7 +148,15 @@ func (p *Provider) Discover(ctx context.Context, types []string, clients imp.Cli
 		TagSelectors: toGCPTagSelectors(opts.TagSelectors),
 		Emitter:      imp.NewDiscoverEmitter(opts.Progress, opts.Found),
 	}
-	return p.d.DiscoverTypes(ctx, types, args)
+	irs, err := p.d.DiscoverTypes(ctx, types, args)
+	// Tag a partial result with the cross-cloud sentinel so a facade
+	// caller can recognise it without importing gcpdiscover. The rows
+	// are returned with it.
+	var partial *gcpdiscover.PartialDiscoveryError
+	if errors.As(err, &partial) {
+		err = fmt.Errorf("%w: %w", imp.ErrPartialDiscovery, err)
+	}
+	return irs, err
 }
 
 func toGCPTagSelectors(in []imp.TagSelector) []gcpdiscover.TagSelector {

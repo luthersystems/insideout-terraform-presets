@@ -44,6 +44,13 @@ type gcpAssetResult struct {
 	// the InsideOut composer reads back from labels (the Project
 	// label specifically — see CLAUDE.md GCP labels rule).
 	Labels map[string]string
+	// DisplayName is the resource's display name as CAI reports it.
+	// Most types do not need it because their asset name already ends
+	// in the name Terraform imports by. Cloud DNS managed zones are the
+	// exception: CAI names them by the numeric zone ID
+	// (//dns.googleapis.com/projects/<p>/managedZones/<number>), while
+	// Terraform imports them by zone name, which CAI returns here (#931).
+	DisplayName string
 }
 
 // gcpAssetSearcher abstracts the Cloud Asset SearchAllResources call so
@@ -299,10 +306,11 @@ func wrapSearchAllError(err error) error {
 // downstream resource. See TestAssetResultFromProto_FieldMapping.
 func assetResultFromProto(r *assetpb.ResourceSearchResult) gcpAssetResult {
 	return gcpAssetResult{
-		Name:      r.GetName(),
-		AssetType: r.GetAssetType(),
-		Project:   r.GetProject(),
-		Location:  r.GetLocation(),
-		Labels:    r.GetLabels(),
+		Name:        r.GetName(),
+		AssetType:   r.GetAssetType(),
+		Project:     r.GetProject(),
+		Location:    r.GetLocation(),
+		Labels:      r.GetLabels(),
+		DisplayName: r.GetDisplayName(),
 	}
 }
