@@ -22,19 +22,26 @@ var AWSServiceActions = map[string][]string{
 	"s3":             {"list-buckets", "get-metrics"},
 	"kms":            {"list-keys", "list-aliases", "get-metrics"},
 	"secretsmanager": {"list-secrets", "get-metrics"},
-	"ecs":            {"list-clusters", "list-services", "describe-services", "get-metrics"},
+	"ecs":            {"list-clusters", "describe-clusters", "list-services", "describe-services", "get-metrics"},
 	// list-nodes pivots EKS metric discovery from cluster-name to EC2
 	// InstanceId via the AWS-managed `eks:cluster-name` tag, so the
 	// observability panel queries AWS/EC2 CPUUtilization per node
 	// instead of the unpopulated AWS/EKS namespace (#231 / Option A).
-	"eks":            {"list-clusters", "describe-cluster", "list-nodes", "get-metrics"},
+	// describe-clusters (eks), describe-tables (dynamodb) and
+	// describe-queues (sqs) return one object per resource with the
+	// config the drift extractors compare (#927). Their list actions
+	// return bare string arrays that callers render as is, so the config
+	// could not ride on them. ecs describe-clusters adds Service Connect,
+	// which takes extra calls per cluster, so the panel-default
+	// list-clusters stays cheap.
+	"eks":            {"list-clusters", "describe-clusters", "describe-cluster", "list-nodes", "get-metrics"},
 	"cloudfront":     {"list-distributions", "get-metrics"},
 	"cloudwatchlogs": {"describe-log-groups", "get-metrics"},
 	"alb":            {"describe-load-balancers", "get-metrics"},
 	"waf":            {"list-web-acls", "get-metrics"},
 	"elasticache":    {"describe-cache-clusters", "describe-replication-groups", "get-metrics"},
-	"dynamodb":       {"list-tables", "get-metrics"},
-	"sqs":            {"list-queues", "get-metrics"},
+	"dynamodb":       {"list-tables", "describe-tables", "get-metrics"},
+	"sqs":            {"list-queues", "describe-queues", "get-metrics"},
 	"msk":            {"list-clusters", "get-metrics"},
 	"cognito":        {"list-user-pools", "get-metrics"},
 	"backup":         {"list-backup-vaults"},

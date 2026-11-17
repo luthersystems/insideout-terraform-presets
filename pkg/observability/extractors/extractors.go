@@ -227,6 +227,55 @@ func getFloat64(m map[string]any, key string) (float64, bool) {
 	return f, ok
 }
 
+// uniformValue returns the value get reads from the items, when every
+// item that has a value agrees on it. Items get reports nothing for
+// (the inspector skipped or failed their describe call, #927) are left
+// out, so they neither hide nor fake a value. Disagreeing items give
+// ("", false): one design value cannot describe them all, and claiming
+// one would fire a false drift (the same rule extractCloudWatchLogsConfig
+// applies to retention).
+func uniformValue(items []map[string]any, get func(map[string]any) (string, bool)) (string, bool) {
+	val, seen := "", false
+	for _, it := range items {
+		v, ok := get(it)
+		if !ok {
+			continue
+		}
+		if !seen {
+			val, seen = v, true
+			continue
+		}
+		if v != val {
+			return "", false
+		}
+	}
+	return val, seen
+}
+
+// intField reads a JSON number field as a whole-number string.
+func intField(key string) func(map[string]any) (string, bool) {
+	return func(m map[string]any) (string, bool) {
+		f, ok := getFloat64(m, key)
+		if !ok {
+			return "", false
+		}
+		return strconv.FormatFloat(f, 'f', 0, 64), true
+	}
+}
+
+// boolField reads a JSON bool field as the literal lowercase "true" /
+// "false", the form the reliable-side humanizeConfigValue BOOLEAN_KEYS
+// contract expects (same as extractS3Config's versioning).
+func boolField(key string) func(map[string]any) (string, bool) {
+	return func(m map[string]any) (string, bool) {
+		b, ok := m[key].(bool)
+		if !ok {
+			return "", false
+		}
+		return strconv.FormatBool(b), true
+	}
+}
+
 // gcpResourceBasename returns the last path segment of a GCP resource URL or
 // full resource name. The GCP SDK returns fields like Instance.MachineType
 // (`https://www.googleapis.com/compute/v1/projects/foo/zones/us-central1-a/machineTypes/e2-medium`)
@@ -561,37 +610,36 @@ func extractALBConfig(rawResult any) map[string]string {
 	return cfg
 }
 
-// extractKMSConfig extracts config from list-keys response. The inspector
-// (inspectKMS) actually returns out.Aliases (KMS ListAliases), shape:
+// extractKMSConfig extracts config from the kms list-keys response. The
+// inspector (inspectKMS → listProjectKMSKeys) returns the project's
+// aliases plus one KeyOnly row for each project key without an alias:
 //
-//	[ { AliasName, AliasArn, TargetKeyId } ]
+//	[ { AliasName, AliasArn, TargetKeyId }, { TargetKeyId, KeyOnly: true } ]
 //
-// This is deliberate — raw ListKeys returns only opaque key IDs with no
-// identifying metadata, while aliases carry human-readable names that
-// correlate with the preset's `alias/${project}-*` naming convention.
+// Aliases alone are not a key count: two aliases can name one key and a
+// key can have no alias. So numKeys counts the distinct TargetKeyId values
+// across the rows, which is the number of project keys (#927).
+//
+// The list-aliases response (and list-keys before #927) has only the
+// alias rows. Counting distinct TargetKeyId values there gives the number
+// of aliased keys, which is still a key count, just without the keys
+// that have no alias.
 //
 // frontend field (lib/stack/ir.ts:372): numKeys (enum "1"|"3"|"5"). We
 // report the actual count so drift fires when the live number of keys
 // diverges from the design choice.
-//
-// TODO(#927): alias names do not 1:1 map to keys (an alias may point at
-// an external key or be a reserved/AWS-managed alias). For a tighter count
-// we'd need a second SDK call to ListKeys and filter aliases whose
-// TargetKeyId is non-empty and project-scoped. Current shape is good
-// enough for a drift signal.
 func extractKMSConfig(rawResult any) map[string]string {
 	items := sliceFromEnvelope(rawResult, "Aliases")
 	if len(items) == 0 {
 		return nil
 	}
-	// Only count project-scoped aliases (TargetKeyId non-empty filters out
-	// aliases pointing at AWS-managed keys from the same region).
-	count := 0
+	keys := make(map[string]struct{}, len(items))
 	for _, a := range items {
-		if getString(a, "TargetKeyId") != "" {
-			count++
+		if id := getString(a, "TargetKeyId"); id != "" {
+			keys[id] = struct{}{}
 		}
 	}
+	count := len(keys)
 	if count == 0 {
 		// Fall back to total alias count if TargetKeyId is unavailable
 		// (some fixtures / older SDK versions omit it).
@@ -721,22 +769,21 @@ func extractVPCConfig(rawResult any) map[string]string {
 }
 
 // extractAPIGatewayConfig extracts config from the API Gateway v2 get-apis
-// response (inspectAPIGateway). Shape:
+// response (inspectAPIGateway → listAPIGatewayAPIs). Shape:
 //
-//	[ { ApiId, Name, ProtocolType, ApiEndpoint, Tags, ... } ]
+//	[ { ApiId, Name, ProtocolType, ApiEndpoint, Tags, CustomDomainName, CertificateArn, ... } ]
 //
 // The handler uses the apigatewayv2 SDK (HTTP APIs + WebSocket APIs — the
 // modern replacement for classic REST API Gateway). We do NOT handle the
 // classic REST shape today because the preset generates v2 HTTP APIs.
 //
 // frontend fields (lib/stack/ir.ts:364): aws_apigateway.domainName,
-// certificateArn — neither is present on the Api summary; they live on
-// the DomainName resource (inspectAPIGateway's get-domain-names action).
-// When the inspector is dispatched via componentMetricsMapping["aws_apigateway"]
-// it uses get-apis, so we can only populate domainName from ApiEndpoint
-// (the auto-assigned *.execute-api.<region>.amazonaws.com endpoint) as a
-// best-effort drift signal. A second call to GetDomainNames would be
-// needed to surface the custom domain / ACM cert — TODO(#927).
+// certificateArn. Neither is on the Api record; the inspector finds the
+// project's custom domain names, maps them to their API through the API
+// mappings, and attaches CustomDomainName + CertificateArn to the API
+// (#927). domainName is that custom domain; an API with no custom domain
+// falls back to the auto-assigned *.execute-api.<region>.amazonaws.com
+// endpoint, which stays a usable drift signal.
 func extractAPIGatewayConfig(rawResult any) map[string]string {
 	items := sliceFromEnvelope(rawResult, "Items")
 	if len(items) == 0 {
@@ -754,10 +801,23 @@ func extractAPIGatewayConfig(rawResult any) map[string]string {
 		// desired.
 		cfg["protocolType"] = v
 	}
-	if v := getString(first, "ApiEndpoint"); v != "" {
-		// The auto-assigned invoke URL. A stable drift signal when no
-		// custom domain is wired up yet.
-		cfg["domainName"] = v
+	// The design config names one custom domain, so report the first API
+	// that has one; the preset maps its domain to its one API.
+	for _, api := range items {
+		if d := getString(api, "CustomDomainName"); d != "" {
+			cfg["domainName"] = d
+			if c := getString(api, "CertificateArn"); c != "" {
+				cfg["certificateArn"] = c
+			}
+			break
+		}
+	}
+	if _, ok := cfg["domainName"]; !ok {
+		if v := getString(first, "ApiEndpoint"); v != "" {
+			// The auto-assigned invoke URL. A stable drift signal when no
+			// custom domain is wired up yet.
+			cfg["domainName"] = v
+		}
 	}
 	// EndpointType lives on classic REST APIs; v2 HTTP/WebSocket APIs don't
 	// have it. Emit if present so the field is forward-compatible with any
@@ -839,16 +899,19 @@ func extractBedrockConfig(rawResult any) map[string]string {
 // Inspector returns either out.DistributionList (object with .Items) or a
 // filtered []map[string]any. Envelope key is "Items".
 //
-//	{ Items: [ { Id, DomainName, Status, Enabled, Comment, ... } ] }
+//	{ Items: [ { Id, DomainName, Status, Enabled, DefaultCacheBehavior, Origins, ... } ] }
 //
 // frontend fields (lib/stack/ir.ts:281): aws_cloudfront.defaultTtl,
-// originPath — neither is directly exposed on DistributionSummary without
-// a GetDistributionConfig call.
+// originPath. ListDistributions already returns both inside each
+// DistributionSummary (DefaultCacheBehavior.DefaultTTL, and OriginPath on
+// the origin the default behavior targets), the same values
+// GetDistributionConfig would return, so no extra call is needed (#927).
 //
-// TODO(#927): fan out GetDistributionConfig to surface DefaultTTL /
-// OriginPath for design-vs-deployed comparison. Today we surface the
-// identity fields (distribution ID, domain, status) so the "deploy exists"
-// signal is trustworthy.
+// defaultTtl is emitted in seconds; humanizeConfigValue turns both it and
+// the design value ("1h", "1day") into the same words. DefaultTTL is
+// absent when the behavior uses a cache policy instead of the legacy TTL
+// fields; then defaultTtl is not emitted. originPath is emitted even when
+// empty, because "" is a design choice too.
 func extractCloudFrontConfig(rawResult any) map[string]string {
 	// Inspector unfiltered path returns {DistributionList: {Items: [...]}}
 	// or the trimmed envelope {Items: [...]}; the filtered path returns a
@@ -873,6 +936,12 @@ func extractCloudFrontConfig(rawResult any) map[string]string {
 	if v := boolStr(d, "Enabled"); v != "" {
 		cfg["enabled"] = v
 	}
+	if v, ok := uniformValue(items, cloudFrontDefaultTTL); ok {
+		cfg["defaultTtl"] = v
+	}
+	if v, ok := uniformValue(items, cloudFrontDefaultOriginPath); ok {
+		cfg["originPath"] = v
+	}
 
 	if len(cfg) == 0 {
 		return nil
@@ -880,39 +949,95 @@ func extractCloudFrontConfig(rawResult any) map[string]string {
 	return cfg
 }
 
-// extractSQSConfig extracts config from list-queues response. Inspector
-// returns out.QueueUrls ([]string) — no metadata is returned inline, which
-// means we can only report the queue count for the design-vs-deployed
-// comparison.
+func cloudFrontDefaultTTL(d map[string]any) (string, bool) {
+	dcb := toMap(d["DefaultCacheBehavior"])
+	if dcb == nil {
+		return "", false
+	}
+	return intField("DefaultTTL")(dcb)
+}
+
+// cloudFrontDefaultOriginPath returns the OriginPath of the origin the
+// default cache behavior sends requests to. A distribution can have
+// several origins; the default behavior's is the one the preset's
+// origin_path sets.
+func cloudFrontDefaultOriginPath(d map[string]any) (string, bool) {
+	dcb := toMap(d["DefaultCacheBehavior"])
+	origins := toMap(d["Origins"])
+	if dcb == nil || origins == nil {
+		return "", false
+	}
+	target := getString(dcb, "TargetOriginId")
+	for _, o := range toSliceOfMaps(origins["Items"]) {
+		if getString(o, "Id") != target {
+			continue
+		}
+		if _, ok := o["OriginPath"]; !ok {
+			return "", false
+		}
+		return getString(o, "OriginPath"), true
+	}
+	return "", false
+}
+
+// extractSQSConfig extracts config from either sqs action. list-queues
+// returns a plain []string of URLs, which yields identity only (count
+// and the URL-suffix type). describe-queues (inspectSQS →
+// describeSQSQueues, #927) returns one row per queue:
+//
+//	[ { QueueUrl, VisibilityTimeout, FifoQueue } ]
+//
+// VisibilityTimeout and FifoQueue come from a GetQueueAttributes call per
+// queue and are absent when that call was skipped or failed.
 //
 // frontend fields (lib/stack/ir.ts:322-326): aws_sqs.type (Standard|FIFO)
-// and visibilityTimeout. Neither is available from ListQueues.
-//
-// TODO(#927): fan out GetQueueAttributes for the first queue URL to
-// surface VisibilityTimeout + FifoQueue attribute. Current config reports
-// queue count only.
+// and visibilityTimeout. type uses the FifoQueue attribute, or the
+// ".fifo" URL suffix (FIFO queue names must end in it) when the attribute
+// was not fetched. visibilityTimeout is emitted in seconds;
+// humanizeConfigValue turns both it and the design value ("10 minutes")
+// into the same words.
 func extractSQSConfig(rawResult any) map[string]string {
-	urls := stringSliceFromEnvelope(rawResult, "QueueUrls")
-	if len(urls) == 0 {
+	rows := sqsQueueRows(rawResult)
+	if len(rows) == 0 {
 		return nil
 	}
-	// Best-effort FIFO/Standard inference from URL suffix (".fifo").
 	cfg := map[string]string{
-		"queueCount": strconv.Itoa(len(urls)),
+		"queueCount": strconv.Itoa(len(rows)),
 	}
 	fifoCount := 0
-	for _, u := range urls {
-		if len(u) >= 5 && u[len(u)-5:] == ".fifo" {
+	for _, r := range rows {
+		fifo, ok := r["FifoQueue"].(bool)
+		if !ok {
+			fifo = strings.HasSuffix(getString(r, "QueueUrl"), ".fifo")
+		}
+		if fifo {
 			fifoCount++
 		}
 	}
-	if fifoCount == len(urls) && fifoCount > 0 {
+	if fifoCount == len(rows) {
 		cfg["type"] = "FIFO"
 	} else if fifoCount == 0 {
 		cfg["type"] = "Standard"
 	}
 	// mixed → omit type
+	if v, ok := uniformValue(rows, intField("VisibilityTimeout")); ok {
+		cfg["visibilityTimeout"] = v
+	}
 	return cfg
+}
+
+// sqsQueueRows returns the describe-queues rows, turning the list-queues
+// []string of URLs (or a {QueueUrls: [...]} fixture envelope) into
+// {QueueUrl} rows.
+func sqsQueueRows(rawResult any) []map[string]any {
+	if urls := stringSliceFromEnvelope(rawResult, "QueueUrls"); len(urls) > 0 {
+		rows := make([]map[string]any, 0, len(urls))
+		for _, u := range urls {
+			rows = append(rows, map[string]any{"QueueUrl": u})
+		}
+		return rows
+	}
+	return sliceFromEnvelope(rawResult, "QueueUrls")
 }
 
 // extractCognitoConfig extracts config from the list-user-pools response
@@ -962,53 +1087,157 @@ func extractCognitoConfig(rawResult any) map[string]string {
 	return cfg
 }
 
-// extractDynamoDBConfig extracts config from the list-tables response
-// (inspectDynamoDB → filterDynamoDBTablesByProjectTag). Inspector returns
-// a plain []string of table names. Envelope key for fixture round-trips:
-// "TableNames" (matches the AWS ListTables response shape).
+// extractDynamoDBConfig extracts config from either dynamodb action.
+// list-tables returns a plain []string of names (or the {TableNames:
+// [...]} fixture envelope), which yields identity only. describe-tables
+// (inspectDynamoDB → describeDynamoDBTables, #927) returns one row per
+// table:
 //
-// frontend fields (lib/stack/ir.ts:315): aws_dynamodb.type (billing mode) —
-// not returned by ListTables; would need DescribeTable per name.
+//	[ { TableName, BillingModeSummary, ProvisionedThroughput, SSEDescription } ]
 //
-// TODO(#927): fan out DescribeTable to surface BillingModeSummary,
-// ProvisionedThroughput, and SSEDescription. Today we surface drift
-// identity only (count + first-table name).
+// The three DescribeTable fields are absent when that call was skipped
+// or failed.
+//
+// frontend field (lib/stack/ir.ts:315): aws_dynamodb.type, the billing
+// mode, in the design vocabulary ("On demand" | "provisioned", ZDdbType),
+// so the deployed value reads the same as the design value. The
+// provisioned capacity and the encryption type are surfaced as drift
+// signals with no design counterpart.
 func extractDynamoDBConfig(rawResult any) map[string]string {
-	names := stringSliceFromEnvelope(rawResult, "TableNames")
-	if len(names) == 0 {
+	rows := dynamoDBTableRows(rawResult)
+	if len(rows) == 0 {
 		return nil
 	}
 	cfg := map[string]string{
-		"tableCount": strconv.Itoa(len(names)),
+		"tableCount": strconv.Itoa(len(rows)),
 	}
-	if names[0] != "" {
-		cfg["tableName"] = names[0]
+	if name := getString(rows[0], "TableName"); name != "" {
+		cfg["tableName"] = name
+	}
+	if v, ok := uniformValue(rows, dynamoDBBillingType); ok {
+		cfg["type"] = v
+	}
+	if v, ok := uniformValue(rows, dynamoDBCapacity("ReadCapacityUnits")); ok {
+		cfg["readCapacity"] = v
+	}
+	if v, ok := uniformValue(rows, dynamoDBCapacity("WriteCapacityUnits")); ok {
+		cfg["writeCapacity"] = v
+	}
+	if v, ok := uniformValue(rows, dynamoDBSSEType); ok {
+		cfg["sseType"] = v
 	}
 	return cfg
 }
 
-// extractECSConfig extracts config from the list-clusters response
-// (inspectECS → filterECSClustersByProjectTag). Inspector returns a typed
-// []ecstypes.Cluster; after the JSON round-trip the shape is a slice of
-// maps with {ClusterName, ClusterArn, Tags, Status, ...}. Envelope key
-// for fixture round-trips: "Clusters" (matches the AWS DescribeClusters
-// response shape).
+// dynamoDBTableRows returns the describe-tables rows, turning the
+// list-tables []string of names into {TableName} rows.
+func dynamoDBTableRows(rawResult any) []map[string]any {
+	if names := stringSliceFromEnvelope(rawResult, "TableNames"); len(names) > 0 {
+		rows := make([]map[string]any, 0, len(names))
+		for _, n := range names {
+			rows = append(rows, map[string]any{"TableName": n})
+		}
+		return rows
+	}
+	return sliceFromEnvelope(rawResult, "TableNames")
+}
+
+// dynamoDBDescribed reports whether the row carries a DescribeTable
+// answer. ProvisionedThroughput is in every DescribeTable answer, and
+// BillingModeSummary may be missing from one (a table that was always
+// provisioned), so it alone cannot be the marker.
+func dynamoDBDescribed(r map[string]any) bool {
+	return toMap(r["ProvisionedThroughput"]) != nil || toMap(r["BillingModeSummary"]) != nil
+}
+
+func dynamoDBBillingMode(r map[string]any) (string, bool) {
+	if !dynamoDBDescribed(r) {
+		return "", false
+	}
+	if bms := toMap(r["BillingModeSummary"]); bms != nil {
+		if m := getString(bms, "BillingMode"); m != "" {
+			return m, true
+		}
+	}
+	// AWS omits BillingModeSummary for tables that were never switched
+	// to on-demand: those are provisioned.
+	return "PROVISIONED", true
+}
+
+func dynamoDBBillingType(r map[string]any) (string, bool) {
+	mode, ok := dynamoDBBillingMode(r)
+	if !ok {
+		return "", false
+	}
+	switch mode {
+	case "PAY_PER_REQUEST":
+		return "On demand", true
+	case "PROVISIONED":
+		return "provisioned", true
+	}
+	return mode, true
+}
+
+// dynamoDBCapacity reads a provisioned capacity unit count. On-demand
+// tables report 0 units, which is not a setting, so only provisioned
+// tables give a value.
+func dynamoDBCapacity(key string) func(map[string]any) (string, bool) {
+	return func(r map[string]any) (string, bool) {
+		if mode, ok := dynamoDBBillingMode(r); !ok || mode != "PROVISIONED" {
+			return "", false
+		}
+		pt := toMap(r["ProvisionedThroughput"])
+		if pt == nil {
+			return "", false
+		}
+		return intField(key)(pt)
+	}
+}
+
+// dynamoDBSSEType reads the encryption at rest type. DynamoDB always
+// encrypts; SSEDescription is absent when the table uses the default
+// AWS owned key, and says KMS when it uses a KMS key.
+func dynamoDBSSEType(r map[string]any) (string, bool) {
+	if !dynamoDBDescribed(r) {
+		return "", false
+	}
+	sse := toMap(r["SSEDescription"])
+	if sse == nil {
+		return "AWS_OWNED", true
+	}
+	if t := getString(sse, "SSEType"); t != "" {
+		return t, true
+	}
+	return "AWS_OWNED", true
+}
+
+// extractECSConfig extracts config from the ecs describe-clusters
+// response (inspectECS → filterECSClustersByProjectTag →
+// enrichECSServiceConnect), or from the list-clusters response, which is
+// the same SDK clusters (DescribeClusters with the TAGS and SETTINGS
+// include) without the ServiceConnectEnabled field. describe-clusters
+// adds that field because Service Connect takes extra per-cluster calls
+// that the cheap panel-default list-clusters does not make. After the
+// JSON round-trip the shape is:
 //
-// frontend fields (lib/stack/ir.ts:271-280): aws_ecs.enableContainerInsights,
-// capacityProviders, defaultCapacityProvider, enableServiceConnect — none
-// of which are surfaced by the default DescribeClusters Include set the
-// inspector uses today (ClusterFieldTags only). Populating them requires:
+//	[ { ClusterName, ClusterArn, Settings, CapacityProviders,
+//	    DefaultCapacityProviderStrategy, ServiceConnectEnabled, ... } ]
 //
-//   - enableContainerInsights: Include SETTINGS, then read
-//     Settings[].{Name=containerInsights, Value}.
-//   - capacityProviders / defaultCapacityProviderStrategy: Include
-//     CAPACITY_PROVIDERS (not in ClusterField enum; passed as string).
-//   - enableServiceConnect: requires DescribeServices → ServiceConnectConfiguration,
-//     which is a per-service dispatch.
+// Envelope key for fixture round-trips: "Clusters" (matches the AWS
+// DescribeClusters response shape).
 //
-// TODO(#927): extend the inspector's Include set and surface the four
-// design fields so the design-vs-deployed card compares them directly.
-// Today we surface drift identity only (count + first-cluster name).
+// frontend fields (lib/stack/ir.ts:271-280), all read here (#927):
+//
+//   - enableContainerInsights: Settings[name=containerInsights]. The
+//     value is enabled, enhanced or disabled; the first two are on.
+//   - capacityProviders: CapacityProviders, comma-joined in AWS order.
+//   - defaultCapacityProvider: the DefaultCapacityProviderStrategy item
+//     with the largest base, then weight (the preset sets one item).
+//   - enableServiceConnect: ServiceConnectEnabled, which describe-clusters
+//     works out from the cluster's services; absent when unknown, and
+//     always absent from list-clusters.
+//
+// Each is emitted only when every cluster that has it agrees.
 func extractECSConfig(rawResult any) map[string]string {
 	items := sliceFromEnvelope(rawResult, "Clusters")
 	if len(items) == 0 {
@@ -1020,51 +1249,174 @@ func extractECSConfig(rawResult any) map[string]string {
 	if v := getString(items[0], "ClusterName"); v != "" {
 		cfg["clusterName"] = v
 	}
+	if v, ok := uniformValue(items, ecsContainerInsights); ok {
+		cfg["enableContainerInsights"] = v
+	}
+	if v, ok := uniformValue(items, ecsCapacityProviders); ok {
+		cfg["capacityProviders"] = v
+	}
+	if v, ok := uniformValue(items, ecsDefaultCapacityProvider); ok {
+		cfg["defaultCapacityProvider"] = v
+	}
+	if v, ok := uniformValue(items, boolField("ServiceConnectEnabled")); ok {
+		cfg["enableServiceConnect"] = v
+	}
 	return cfg
 }
 
-// extractEKSConfig extracts config from the list-clusters response
-// (inspectEKS → filterEKSClustersByProjectTag). Inspector returns a plain
-// []string of cluster names. Envelope key for fixture round-trips:
-// "Clusters" (matches the AWS ListClusters response shape).
-//
-// frontend fields (lib/stack/ir.ts:259-279): aws_eks.haControlPlane,
-// controlPlaneVisibility, desiredSize, maxSize, minSize, instanceType —
-// none of which are returned by ListClusters. They require DescribeCluster
-// (for endpoint access / version) plus DescribeNodegroup (for scaling /
-// instance type).
-//
-// TODO(#927): fan out DescribeCluster + DescribeNodegroup to surface
-// version, endpoint access, and node-group config so the design-vs-deployed
-// card can compare HA / visibility / sizing. Today we surface drift identity
-// only (count + first-cluster name).
-func extractEKSConfig(rawResult any) map[string]string {
-	names := stringSliceFromEnvelope(rawResult, "Clusters")
+func ecsContainerInsights(c map[string]any) (string, bool) {
+	for _, st := range toSliceOfMaps(c["Settings"]) {
+		if getString(st, "Name") != "containerInsights" {
+			continue
+		}
+		switch getString(st, "Value") {
+		case "enabled", "enhanced":
+			return "true", true
+		case "disabled":
+			return "false", true
+		}
+	}
+	return "", false
+}
+
+func ecsCapacityProviders(c map[string]any) (string, bool) {
+	list, ok := c["CapacityProviders"].([]any)
+	if !ok || len(list) == 0 {
+		return "", false
+	}
+	names := make([]string, 0, len(list))
+	for _, v := range list {
+		if s, ok := v.(string); ok && s != "" {
+			names = append(names, s)
+		}
+	}
 	if len(names) == 0 {
+		return "", false
+	}
+	return strings.Join(names, ", "), true
+}
+
+func ecsDefaultCapacityProvider(c map[string]any) (string, bool) {
+	best, bestBase, bestWeight := "", -1.0, -1.0
+	for _, item := range toSliceOfMaps(c["DefaultCapacityProviderStrategy"]) {
+		name := getString(item, "CapacityProvider")
+		if name == "" {
+			continue
+		}
+		base, _ := getFloat64(item, "Base")
+		weight, _ := getFloat64(item, "Weight")
+		if base > bestBase || (base == bestBase && weight > bestWeight) {
+			best, bestBase, bestWeight = name, base, weight
+		}
+	}
+	return best, best != ""
+}
+
+// extractEKSConfig extracts config from either eks cluster action.
+// list-clusters returns a plain []string of names (or the {Clusters:
+// [...]} fixture envelope), which yields identity only.
+// describe-clusters (inspectEKS → describeEKSClusters, #927) returns one
+// row per cluster:
+//
+//	[ { Name, Version, EndpointPublicAccess, EndpointPrivateAccess,
+//	    NodeGroups: [ { Name, InstanceTypes, DesiredSize, MinSize, MaxSize } ] } ]
+//
+// The fields after Name come from DescribeCluster and DescribeNodegroup
+// and are absent when those calls were skipped or failed.
+//
+// frontend fields (lib/stack/ir.ts:259-279):
+//
+//   - controlPlaneVisibility: "Public" when the API endpoint is public,
+//     else "Private" (the preset maps the design choice to
+//     endpoint_public_access, with private access always on).
+//   - desiredSize, minSize, maxSize, instanceType: from the managed node
+//     groups, emitted when every node group agrees.
+//   - haControlPlane is not emitted: the EKS control plane always runs
+//     across availability zones, and the preset has no setting for it,
+//     so there is no deployed value to compare.
+//
+// version (the Kubernetes version) is surfaced as a drift signal.
+func extractEKSConfig(rawResult any) map[string]string {
+	rows := eksClusterRows(rawResult)
+	if len(rows) == 0 {
 		return nil
 	}
 	cfg := map[string]string{
-		"clusterCount": strconv.Itoa(len(names)),
+		"clusterCount": strconv.Itoa(len(rows)),
 	}
-	if names[0] != "" {
-		cfg["clusterName"] = names[0]
+	if v := getString(rows[0], "Name"); v != "" {
+		cfg["clusterName"] = v
+	}
+	if v, ok := uniformValue(rows, func(r map[string]any) (string, bool) {
+		v := getString(r, "Version")
+		return v, v != ""
+	}); ok {
+		cfg["version"] = v
+	}
+	if v, ok := uniformValue(rows, func(r map[string]any) (string, bool) {
+		public, ok := r["EndpointPublicAccess"].(bool)
+		if !ok {
+			return "", false
+		}
+		if public {
+			return "Public", true
+		}
+		return "Private", true
+	}); ok {
+		cfg["controlPlaneVisibility"] = v
+	}
+
+	var nodeGroups []map[string]any
+	for _, r := range rows {
+		nodeGroups = append(nodeGroups, toSliceOfMaps(r["NodeGroups"])...)
+	}
+	for key, field := range map[string]string{"desiredSize": "DesiredSize", "minSize": "MinSize", "maxSize": "MaxSize"} {
+		if v, ok := uniformValue(nodeGroups, intField(field)); ok {
+			cfg[key] = v
+		}
+	}
+	if v, ok := uniformValue(nodeGroups, func(ng map[string]any) (string, bool) {
+		list, ok := ng["InstanceTypes"].([]any)
+		if !ok || len(list) == 0 {
+			return "", false
+		}
+		types := make([]string, 0, len(list))
+		for _, t := range list {
+			if s, ok := t.(string); ok {
+				types = append(types, s)
+			}
+		}
+		return strings.Join(types, ", "), len(types) > 0
+	}); ok {
+		cfg["instanceType"] = v
 	}
 	return cfg
 }
 
+// eksClusterRows returns the describe-clusters rows, turning the
+// list-clusters []string of names into {Name} rows.
+func eksClusterRows(rawResult any) []map[string]any {
+	if names := stringSliceFromEnvelope(rawResult, "Clusters"); len(names) > 0 {
+		rows := make([]map[string]any, 0, len(names))
+		for _, n := range names {
+			rows = append(rows, map[string]any{"Name": n})
+		}
+		return rows
+	}
+	return sliceFromEnvelope(rawResult, "Clusters")
+}
+
 // extractWAFConfig extracts config from the list-web-acls response
-// (inspectWAF, merged regional + CLOUDFRONT scopes). Shape:
+// (inspectWAF, merged regional + CLOUDFRONT scopes, each ACL described
+// with GetWebACL). Shape:
 //
-//	[ { Name, Id, ARN, Description, LockToken } ]
+//	[ { Name, Id, ARN, Description, LockToken, Scope, DefaultAction, RuleNames, RuleCount } ]
 //
 // aws_waf is a bare boolean in lib/stack/ir.ts — no designable config — so
-// this extractor emits drift-identity signals only. The summary doesn't
-// expose the ACL's scope (REGIONAL vs CLOUDFRONT) because WebACLSummary
-// lacks that field; we could infer it by re-querying per-scope, but that
-// doubles the API calls for minimal drift value.
-//
-// TODO(#927): fan out GetWebACL per id to surface the rule set and
-// default action. Today we surface count + first-ACL name/id.
+// this extractor emits drift signals only: the first ACL's identity and,
+// from GetWebACL (#927), its scope, default action (ALLOW | BLOCK) and
+// rule names in priority order. The GetWebACL fields are absent when that
+// call was skipped or failed; the identity fields are still reported.
 func extractWAFConfig(rawResult any) map[string]string {
 	items := sliceFromEnvelope(rawResult, "WebACLs")
 	if len(items) == 0 {
@@ -1079,6 +1431,24 @@ func extractWAFConfig(rawResult any) map[string]string {
 	}
 	if v := getString(first, "Id"); v != "" {
 		cfg["webAclId"] = v
+	}
+	if v := getString(first, "Scope"); v != "" {
+		cfg["scope"] = v
+	}
+	if v := getString(first, "DefaultAction"); v != "" {
+		cfg["defaultAction"] = v
+	}
+	if v, ok := intField("RuleCount")(first); ok {
+		cfg["ruleCount"] = v
+	}
+	if rules, ok := first["RuleNames"].([]any); ok && len(rules) > 0 {
+		names := make([]string, 0, len(rules))
+		for _, r := range rules {
+			if s, ok := r.(string); ok {
+				names = append(names, s)
+			}
+		}
+		cfg["rules"] = strings.Join(names, ", ")
 	}
 	return cfg
 }

@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"strconv"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/backup"
@@ -31,6 +32,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/secretsmanager"
 	smtypes "github.com/aws/aws-sdk-go-v2/service/secretsmanager/types"
 	"github.com/aws/aws-sdk-go-v2/service/sqs"
+	sqstypes "github.com/aws/aws-sdk-go-v2/service/sqs/types"
 	smithy "github.com/aws/smithy-go"
 
 	"github.com/luthersystems/insideout-terraform-presets/pkg/observability/filter"
@@ -250,15 +252,26 @@ type kmsKeysClient interface {
 }
 
 func inspectKMS(ctx context.Context, cfg aws.Config, action, filters string) (any, error) {
-	project := filter.Project(filters)
+	return inspectKMSWithClient(ctx, kms.NewFromConfig(cfg), action, filter.Project(filters))
+}
+
+// inspectKMSWithClient is the action switch of inspectKMS, split out so
+// tests can pass a fake client.
+func inspectKMSWithClient(ctx context.Context, client kmsKeysClient, action, project string) (any, error) {
 	switch action {
-	case "list-keys", "list-aliases":
-		// Both actions return the project-owned alias list keyed by
-		// target key id. ListAliases is the useful view (aliases carry
-		// names a human recognises); raw key ids only mean something
-		// when cross-referenced against an alias. Pre-migration the two
-		// actions diverged; consolidating keeps the contract sane.
-		return filterKMSAliasesByProjectTag(ctx, kms.NewFromConfig(cfg), project)
+	case "list-aliases":
+		// The project-owned alias list keyed by target key id. Aliases
+		// carry names a human recognises, so every row has an AliasName.
+		return filterKMSAliasesByProjectTag(ctx, client, project)
+	case "list-keys":
+		// The alias rows plus a KeyOnly row for each project key that
+		// has no alias. A caller asking for keys needs every key, and the
+		// aws_kms drift extractor counts keys from this action (it is the
+		// panel default in ComponentMetricsMapping), so the extra
+		// ListKeys pass lives here (#927). list-aliases keeps its
+		// alias-only rows, where a row without an AliasName would be
+		// noise.
+		return listProjectKMSKeys(ctx, client, project)
 	case "get-metrics":
 		return metricsRouted("kms")
 	default:
@@ -312,6 +325,14 @@ func kmsKeyOwnedByProject(ctx context.Context, client kmsKeysClient, keyID, proj
 //
 // Mirrors the InsideOut backend's filterKMSAliasesByProjectTag (aws_metrics.go:198).
 func filterKMSAliasesByProjectTag(ctx context.Context, client kmsKeysClient, project string) ([]kmstypes.AliasListEntry, error) {
+	return filterKMSAliasesByProjectTagMemo(ctx, client, project, map[string]bool{})
+}
+
+// filterKMSAliasesByProjectTagMemo is filterKMSAliasesByProjectTag with
+// the per-key ownership memo passed in, so listProjectKMSKeys can reuse
+// the answers for its ListKeys pass instead of describing each aliased
+// key twice.
+func filterKMSAliasesByProjectTagMemo(ctx context.Context, client kmsKeysClient, project string, keyOwned map[string]bool) ([]kmstypes.AliasListEntry, error) {
 	all := []kmstypes.AliasListEntry{}
 	paginator := kms.NewListAliasesPaginator(client, &kms.ListAliasesInput{})
 	for paginator.HasMorePages() {
@@ -324,7 +345,6 @@ func filterKMSAliasesByProjectTag(ctx context.Context, client kmsKeysClient, pro
 	if project == "" {
 		return all, nil
 	}
-	keyOwned := make(map[string]bool)
 	matched := make([]kmstypes.AliasListEntry, 0, len(all))
 	for _, alias := range all {
 		keyID := aws.ToString(alias.TargetKeyId)
@@ -352,6 +372,104 @@ func filterKMSAliasesByProjectTag(ctx context.Context, client kmsKeysClient, pro
 		}
 	}
 	return matched, nil
+}
+
+// kmsKeyEntry is one row of the kms list-keys result: a
+// project alias, or (KeyOnly) a project key that has no alias at all.
+// Embedding AliasListEntry keeps the alias rows' JSON exactly as it was
+// before #927, so readers of AliasName / TargetKeyId see no change. A
+// KeyOnly row carries only TargetKeyId (the key's id), so a reader that
+// shows "AliasName or TargetKeyId" still shows something useful.
+type kmsKeyEntry struct {
+	kmstypes.AliasListEntry
+	KeyOnly bool `json:"KeyOnly,omitempty"`
+}
+
+// kmsUnaliasedKeyCheckLimit bounds the DescribeKey + ListResourceTags
+// pairs listProjectKMSKeys spends on keys the alias pass did not already
+// check. ListKeys returns every key in the region, including other
+// projects' keys and AWS-managed keys, and only an ownership check tells
+// them apart. The aws/kms preset aliases every key it creates, so in a
+// preset stack this pass checks nothing new; the bound only matters in a
+// crowded shared account, where it keeps one panel load from making
+// hundreds of KMS calls. It is larger than configFanOutLimit because
+// these calls find our keys among other keys (stopping at ten could miss
+// ours), not describe keys already known to be ours.
+const kmsUnaliasedKeyCheckLimit = 50
+
+// listProjectKMSKeys returns the project's aliases plus one KeyOnly row
+// for each project key that has no alias (#927). The alias count alone
+// is not a key count: two aliases can name one key, and a key can have
+// no alias. extractKMSConfig counts distinct TargetKeyId values over
+// these rows, which is the true number of project keys.
+//
+// The ListKeys pass is best effort. A ListKeys failure, or an ownership
+// check failure for one key, is logged and the result degrades to the
+// alias rows (the pre-#927 result). A ListAliases failure still fails
+// the call, as before.
+//
+// With no project (the demo-session fallback) the alias list is not
+// scoped either, so there is no "our keys" set to complete; the pass is
+// skipped and the rows are the alias list as before.
+func listProjectKMSKeys(ctx context.Context, client kmsKeysClient, project string) ([]kmsKeyEntry, error) {
+	keyOwned := map[string]bool{}
+	aliases, err := filterKMSAliasesByProjectTagMemo(ctx, client, project, keyOwned)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]kmsKeyEntry, 0, len(aliases))
+	aliased := make(map[string]struct{}, len(aliases))
+	for _, a := range aliases {
+		out = append(out, kmsKeyEntry{AliasListEntry: a})
+		if id := aws.ToString(a.TargetKeyId); id != "" {
+			aliased[id] = struct{}{}
+		}
+	}
+	if project == "" {
+		return out, nil
+	}
+
+	checks := 0
+	paginator := kms.NewListKeysPaginator(client, &kms.ListKeysInput{})
+	for paginator.HasMorePages() {
+		page, err := paginator.NextPage(ctx)
+		if err != nil {
+			log.Printf("[kms ListKeys] project=%s: %v (key count falls back to aliased keys)", project, err)
+			return out, nil
+		}
+		for _, k := range page.Keys {
+			keyID := aws.ToString(k.KeyId)
+			if keyID == "" {
+				continue
+			}
+			if _, ok := aliased[keyID]; ok {
+				continue
+			}
+			owned, cached := keyOwned[keyID]
+			if !cached {
+				if checks >= kmsUnaliasedKeyCheckLimit {
+					log.Printf("[kms ListKeys] project=%s: stopped after %d unaliased-key checks (key count may be low)", project, checks)
+					return out, nil
+				}
+				checks++
+				ownedNow, _, err := kmsKeyOwnedByProject(ctx, client, keyID, project)
+				if err != nil {
+					log.Printf("[kms ListKeys] skip key=%s: %v", keyID, err)
+					keyOwned[keyID] = false
+					continue
+				}
+				keyOwned[keyID] = ownedNow
+				owned = ownedNow
+			}
+			if owned {
+				out = append(out, kmsKeyEntry{
+					AliasListEntry: kmstypes.AliasListEntry{TargetKeyId: aws.String(keyID)},
+					KeyOnly:        true,
+				})
+			}
+		}
+	}
+	return out, nil
 }
 
 // --- Backup ---
@@ -410,6 +528,13 @@ func filterBackupVaultsByProjectTag(ctx context.Context, client backupVaultsClie
 
 // --- SQS ---
 
+// sqsQueuesClient is the subset of the sqs SDK the describe-queues action
+// uses. Narrowed so tests can inject a fake.
+type sqsQueuesClient interface {
+	ListQueues(ctx context.Context, params *sqs.ListQueuesInput, optFns ...func(*sqs.Options)) (*sqs.ListQueuesOutput, error)
+	GetQueueAttributes(ctx context.Context, params *sqs.GetQueueAttributesInput, optFns ...func(*sqs.Options)) (*sqs.GetQueueAttributesOutput, error)
+}
+
 func inspectSQS(ctx context.Context, cfg aws.Config, action, filters string) (any, error) {
 	client := sqs.NewFromConfig(cfg)
 	project := filter.Project(filters)
@@ -428,9 +553,82 @@ func inspectSQS(ctx context.Context, cfg aws.Config, action, filters string) (an
 			return nil, err
 		}
 		return nilSliceToEmpty(out.QueueUrls), nil
+	case "describe-queues":
+		// The list-queues result is a bare array of URLs that callers
+		// render as is, so the config read for drift (#927) is a separate
+		// action that returns one object per queue.
+		return describeSQSQueues(ctx, client, project)
 	case "get-metrics":
 		return metricsRouted("sqs")
 	default:
 		return nil, unsupportedActionError("sqs", action)
 	}
+}
+
+// sqsQueue is one row of the describe-queues result (#927). ListQueues
+// returns only URLs, so list-queues lets the design-vs-deployed card
+// compare nothing but the queue count. This row also carries the two
+// attributes the design config sets (aws_sqs.type and
+// aws_sqs.visibilityTimeout), read with one GetQueueAttributes call per
+// queue.
+//
+// The attribute fields are pointers so the JSON omits them when the
+// GetQueueAttributes call was skipped (past configFanOutLimit) or failed;
+// extractSQSConfig then tells "not fetched" apart from a real value, the
+// same presence check extractS3Config does for Versioning.
+type sqsQueue struct {
+	QueueUrl          string `json:"QueueUrl"`
+	VisibilityTimeout *int64 `json:"VisibilityTimeout,omitempty"`
+	FifoQueue         *bool  `json:"FifoQueue,omitempty"`
+}
+
+// describeSQSQueues lists the project's queues the way list-queues does
+// and reads the config attributes of the first configFanOutLimit of
+// them. A failed GetQueueAttributes call is logged and that queue comes
+// back with its URL only; it never fails the action.
+func describeSQSQueues(ctx context.Context, client sqsQueuesClient, project string) ([]sqsQueue, error) {
+	input := &sqs.ListQueuesInput{}
+	// SQS supports server-side queue-name prefix filtering. Preset
+	// convention is to name SQS queues with the project as a prefix
+	// so this is the cheapest scope filter we have on this service.
+	if project != "" {
+		input.QueueNamePrefix = &project
+	}
+	out, err := client.ListQueues(ctx, input)
+	if err != nil {
+		return nil, err
+	}
+	queues := make([]sqsQueue, 0, len(out.QueueUrls))
+	for i, u := range out.QueueUrls {
+		q := sqsQueue{QueueUrl: u}
+		if i < configFanOutLimit {
+			readSQSQueueAttributes(ctx, client, &q)
+		}
+		queues = append(queues, q)
+	}
+	return queues, nil
+}
+
+// readSQSQueueAttributes fills q's config fields from GetQueueAttributes.
+// SQS returns attribute values as strings. FifoQueue is returned only for
+// FIFO queues, so a successful call without it means a standard queue.
+func readSQSQueueAttributes(ctx context.Context, client sqsQueuesClient, q *sqsQueue) {
+	attrs, err := client.GetQueueAttributes(ctx, &sqs.GetQueueAttributesInput{
+		QueueUrl: aws.String(q.QueueUrl),
+		AttributeNames: []sqstypes.QueueAttributeName{
+			sqstypes.QueueAttributeNameVisibilityTimeout,
+			sqstypes.QueueAttributeNameFifoQueue,
+		},
+	})
+	if err != nil {
+		log.Printf("[sqs GetQueueAttributes] queue=%s: %v (config omitted)", q.QueueUrl, err)
+		return
+	}
+	if v, ok := attrs.Attributes[string(sqstypes.QueueAttributeNameVisibilityTimeout)]; ok {
+		if n, perr := strconv.ParseInt(v, 10, 64); perr == nil {
+			q.VisibilityTimeout = &n
+		}
+	}
+	fifo := attrs.Attributes[string(sqstypes.QueueAttributeNameFifoQueue)] == "true"
+	q.FifoQueue = &fifo
 }

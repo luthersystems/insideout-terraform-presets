@@ -424,10 +424,13 @@ func extractMSKClusterARNs(raw any) []string {
 	return extractStringField(raw, "ClusterArn")
 }
 
+// extractWAFWebACLIDs reads the ACL ids from list-web-acls. Since #927
+// the inspector returns the summaries wrapped with their GetWebACL config,
+// so anything other than the typed summary slice is read by its JSON "Id".
 func extractWAFWebACLIDs(raw any) []string {
 	acls, ok := raw.([]wafv2types.WebACLSummary)
 	if !ok {
-		return nil
+		return extractStringFieldViaJSON(raw, "Id")
 	}
 	ids := make([]string, 0, len(acls))
 	for _, a := range acls {
@@ -438,10 +441,18 @@ func extractWAFWebACLIDs(raw any) []string {
 	return ids
 }
 
+// extractECSClusterNames reads the cluster names from ecs list-clusters,
+// which returns []ecstypes.Cluster. It also reads the describe-clusters
+// rows (#927), which wrap each SDK cluster with a ServiceConnectEnabled
+// field; that shape is JSON round-tripped back into []ecstypes.Cluster
+// (the wrapper embeds it, so the fields line up).
 func extractECSClusterNames(raw any) []string {
 	clusters, ok := raw.([]ecstypes.Cluster)
 	if !ok {
-		return nil
+		b, err := json.Marshal(raw)
+		if err != nil || json.Unmarshal(b, &clusters) != nil {
+			return nil
+		}
 	}
 	names := make([]string, 0, len(clusters))
 	for _, c := range clusters {

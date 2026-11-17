@@ -24,6 +24,7 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
+	dynamodbtypes "github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	"github.com/aws/aws-sdk-go-v2/service/elasticache"
 	elasticachetypes "github.com/aws/aws-sdk-go-v2/service/elasticache/types"
 	"github.com/aws/aws-sdk-go-v2/service/kafka"
@@ -75,6 +76,7 @@ func inspectRDS(ctx context.Context, cfg aws.Config, action, filters string) (an
 type dynamoDBTablesClient interface {
 	ListTables(ctx context.Context, params *dynamodb.ListTablesInput, optFns ...func(*dynamodb.Options)) (*dynamodb.ListTablesOutput, error)
 	ListTagsOfResource(ctx context.Context, params *dynamodb.ListTagsOfResourceInput, optFns ...func(*dynamodb.Options)) (*dynamodb.ListTagsOfResourceOutput, error)
+	DescribeTable(ctx context.Context, params *dynamodb.DescribeTableInput, optFns ...func(*dynamodb.Options)) (*dynamodb.DescribeTableOutput, error)
 }
 
 // stsAccountClient resolves the caller's account id for ARN
@@ -92,6 +94,16 @@ func inspectDynamoDB(ctx context.Context, cfg aws.Config, action, filters string
 	switch action {
 	case "list-tables":
 		return filterDynamoDBTablesByProjectTag(ctx, dynamodb.NewFromConfig(cfg), sts.NewFromConfig(cfg), cfg.Region, project)
+	case "describe-tables":
+		// The list-tables result is a bare array of names that callers
+		// render as is, so the config read for drift (#927) is a separate
+		// action that returns one object per table.
+		client := dynamodb.NewFromConfig(cfg)
+		names, err := filterDynamoDBTablesByProjectTag(ctx, client, sts.NewFromConfig(cfg), cfg.Region, project)
+		if err != nil {
+			return nil, err
+		}
+		return describeDynamoDBTables(ctx, client, names), nil
 	case "get-metrics":
 		return metricsRouted("dynamodb")
 	default:
@@ -143,6 +155,48 @@ func filterDynamoDBTablesByProjectTag(ctx context.Context, client dynamoDBTables
 		}
 	}
 	return matched, nil
+}
+
+// dynamoDBTable is one row of the describe-tables result (#927).
+// list-tables returns only names, so the design-vs-deployed card could
+// compare nothing but the table count. This row also carries the
+// DescribeTable fields behind the design config
+// (aws_dynamodb.type is the billing mode) plus the provisioned capacity
+// and encryption settings, under the SDK's own field names.
+//
+// The config fields are pointers so the JSON omits them when the
+// DescribeTable call was skipped (past configFanOutLimit) or failed.
+// ProvisionedThroughput is always present in a DescribeTable answer, so
+// extractDynamoDBConfig uses it as the "was described" marker.
+type dynamoDBTable struct {
+	TableName             string                                          `json:"TableName"`
+	BillingModeSummary    *dynamodbtypes.BillingModeSummary               `json:"BillingModeSummary,omitempty"`
+	ProvisionedThroughput *dynamodbtypes.ProvisionedThroughputDescription `json:"ProvisionedThroughput,omitempty"`
+	SSEDescription        *dynamodbtypes.SSEDescription                   `json:"SSEDescription,omitempty"`
+}
+
+// describeDynamoDBTables wraps each table name in a dynamoDBTable and
+// reads the config of the first configFanOutLimit tables. A failed
+// DescribeTable call is logged and that table comes back name-only; it
+// never fails the list.
+func describeDynamoDBTables(ctx context.Context, client dynamoDBTablesClient, names []string) []dynamoDBTable {
+	tables := make([]dynamoDBTable, 0, len(names))
+	for i, name := range names {
+		t := dynamoDBTable{TableName: name}
+		if i < configFanOutLimit {
+			out, err := client.DescribeTable(ctx, &dynamodb.DescribeTableInput{TableName: aws.String(name)})
+			switch {
+			case err != nil:
+				log.Printf("[dynamodb DescribeTable] table=%s: %v (config omitted)", name, err)
+			case out.Table != nil:
+				t.BillingModeSummary = out.Table.BillingModeSummary
+				t.ProvisionedThroughput = out.Table.ProvisionedThroughput
+				t.SSEDescription = out.Table.SSEDescription
+			}
+		}
+		tables = append(tables, t)
+	}
+	return tables
 }
 
 // --- ElastiCache ---

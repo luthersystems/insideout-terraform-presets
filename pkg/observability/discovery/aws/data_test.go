@@ -213,6 +213,19 @@ type fakeDynamoDBClient struct {
 	tablesErr error
 	tagsOut   *dynamodb.ListTagsOfResourceOutput
 	tagsErr   error
+	// DescribeTable fakes for the list-tables config fan-out (#927).
+	describeByName map[string]*dynamodbtypes.TableDescription
+	describeErrFor map[string]error
+	describeCalls  int
+}
+
+func (f *fakeDynamoDBClient) DescribeTable(_ context.Context, in *dynamodb.DescribeTableInput, _ ...func(*dynamodb.Options)) (*dynamodb.DescribeTableOutput, error) {
+	f.describeCalls++
+	name := aws.ToString(in.TableName)
+	if err := f.describeErrFor[name]; err != nil {
+		return nil, err
+	}
+	return &dynamodb.DescribeTableOutput{Table: f.describeByName[name]}, nil
 }
 
 func (f *fakeDynamoDBClient) ListTables(_ context.Context, _ *dynamodb.ListTablesInput, _ ...func(*dynamodb.Options)) (*dynamodb.ListTablesOutput, error) {
