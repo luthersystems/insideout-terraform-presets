@@ -646,6 +646,19 @@ func (m DefaultMapper) BuildModuleValues(
 			} else if cfg.AWSCognito.MFARequired != nil && *cfg.AWSCognito.MFARequired {
 				vals["mfa_factor"] = "totp"
 			}
+			// SMS / Email factor inputs (#923). Passed through only when set,
+			// so TOTP stacks keep the preset's null defaults. A factor chosen
+			// without its inputs is rejected by the preset's preconditions at
+			// plan, with a message naming the missing input.
+			if v := strings.TrimSpace(cfg.AWSCognito.SMSSNSCallerArn); v != "" {
+				vals["sms_sns_caller_arn"] = v
+			}
+			if v := strings.TrimSpace(cfg.AWSCognito.SMSExternalID); v != "" {
+				vals["sms_external_id"] = v
+			}
+			if v := strings.TrimSpace(cfg.AWSCognito.EmailSourceArn); v != "" {
+				vals["email_source_arn"] = v
+			}
 		}
 
 	case KeyAWSAPIGateway:

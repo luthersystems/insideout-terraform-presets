@@ -146,28 +146,37 @@ func configWithGCPGKE(in gcpGKECfgInput) *Config {
 // awsCognitoCfgInput mirrors the subset of Config.AWSCognito fields exercised
 // by mapper / validator tests.
 type awsCognitoCfgInput struct {
-	SignInType  string
-	MFARequired *bool
-	MFAFactor   string
+	SignInType      string
+	MFARequired     *bool
+	MFAFactor       string
+	SMSSNSCallerArn string
+	SMSExternalID   string
+	EmailSourceArn  string
 }
 
 // configWithAWSCognito returns *Config with AWSCognito populated from input.
 func configWithAWSCognito(in awsCognitoCfgInput) *Config {
 	return &Config{
 		AWSCognito: &struct {
-			SignInType  string `json:"signInType,omitempty"`
-			MFARequired *bool  `json:"mfaRequired,omitempty"`
-			MFAFactor   string `json:"mfaFactor,omitempty"`
-			Okta        *struct {
+			SignInType      string `json:"signInType,omitempty"`
+			MFARequired     *bool  `json:"mfaRequired,omitempty"`
+			MFAFactor       string `json:"mfaFactor,omitempty"`
+			SMSSNSCallerArn string `json:"smsSnsCallerArn,omitempty"`
+			SMSExternalID   string `json:"smsExternalId,omitempty"`
+			EmailSourceArn  string `json:"emailSourceArn,omitempty"`
+			Okta            *struct {
 				SelfSignupAllowed *bool `json:"selfSignupAllowed,omitempty"`
 			} `json:"okta,omitempty"`
 			Auth0 *struct {
 				MFARequired *bool `json:"mfaRequired,omitempty"`
 			} `json:"auth0,omitempty"`
 		}{
-			SignInType:  in.SignInType,
-			MFARequired: in.MFARequired,
-			MFAFactor:   in.MFAFactor,
+			SignInType:      in.SignInType,
+			MFARequired:     in.MFARequired,
+			MFAFactor:       in.MFAFactor,
+			SMSSNSCallerArn: in.SMSSNSCallerArn,
+			SMSExternalID:   in.SMSExternalID,
+			EmailSourceArn:  in.EmailSourceArn,
 		},
 	}
 }

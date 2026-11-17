@@ -160,10 +160,13 @@ func kitchenSinkConfig() *Config {
 		RetentionDays int `json:"retentionDays,omitempty"`
 	}{RetentionDays: 90}
 	cfg.AWSCognito = &struct {
-		SignInType  string `json:"signInType,omitempty"`
-		MFARequired *bool  `json:"mfaRequired,omitempty"`
-		MFAFactor   string `json:"mfaFactor,omitempty"`
-		Okta        *struct {
+		SignInType      string `json:"signInType,omitempty"`
+		MFARequired     *bool  `json:"mfaRequired,omitempty"`
+		MFAFactor       string `json:"mfaFactor,omitempty"`
+		SMSSNSCallerArn string `json:"smsSnsCallerArn,omitempty"`
+		SMSExternalID   string `json:"smsExternalId,omitempty"`
+		EmailSourceArn  string `json:"emailSourceArn,omitempty"`
+		Okta            *struct {
 			SelfSignupAllowed *bool `json:"selfSignupAllowed,omitempty"`
 		} `json:"okta,omitempty"`
 		Auth0 *struct {

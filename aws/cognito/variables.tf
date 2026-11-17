@@ -43,12 +43,52 @@ variable "mfa_required" {
 }
 
 variable "mfa_factor" {
-  description = "MFA factor when mfa_required=true. Currently only 'totp' (Software Token / TOTP) is supported. SMS and Email factors require additional wiring (SNS origination identity / SES domain) and are not yet implemented (#208)."
+  description = "MFA factor when mfa_required=true: totp (authenticator app, no other inputs), sms (needs sms_sns_caller_arn and sms_external_id) or email (needs email_source_arn)."
   type        = string
   default     = "totp"
   validation {
-    condition     = contains(["totp"], var.mfa_factor)
-    error_message = "mfa_factor must be 'totp' (SMS and Email factors are not yet supported — see #208)."
+    condition     = contains(["totp", "sms", "email"], var.mfa_factor)
+    error_message = "mfa_factor must be one of: totp, sms, email."
+  }
+}
+
+variable "sms_sns_caller_arn" {
+  description = "IAM role ARN that Cognito assumes to send SMS through SNS. Required when mfa_factor = \"sms\". Its trust policy must allow cognito-idp.amazonaws.com with sts:ExternalId = sms_external_id, and its policy must allow sns:Publish."
+  type        = string
+  default     = null
+}
+
+variable "sms_external_id" {
+  description = "External ID that the SNS caller role's trust policy requires (sts:ExternalId). Required when mfa_factor = \"sms\"."
+  type        = string
+  default     = null
+}
+
+variable "sms_sns_region" {
+  description = "AWS region of the SNS service Cognito sends SMS through. Null uses the user pool's region."
+  type        = string
+  default     = null
+}
+
+variable "email_source_arn" {
+  description = "ARN of a verified SES identity (email address or domain) that Cognito sends mail from. Required when mfa_factor = \"email\": Cognito sends email MFA codes only in DEVELOPER mode, through your own SES."
+  type        = string
+  default     = null
+}
+
+variable "email_from_address" {
+  description = "Optional From address for Cognito mail sent through SES, e.g. \"Example <no-reply@example.com>\". Null uses the SES identity's address."
+  type        = string
+  default     = null
+}
+
+variable "user_pool_tier" {
+  description = "Feature plan set on the user pool when mfa_factor = \"email\" (email MFA needs ESSENTIALS or PLUS). Not used for other factors, so live pools keep their tier."
+  type        = string
+  default     = "ESSENTIALS"
+  validation {
+    condition     = contains(["ESSENTIALS", "PLUS"], var.user_pool_tier)
+    error_message = "user_pool_tier must be ESSENTIALS or PLUS (email MFA is not available on LITE)."
   }
 }
 

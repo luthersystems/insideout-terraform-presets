@@ -1071,10 +1071,41 @@ func TestBuildModuleValues_AWSCognito_MFAFactor(t *testing.T) {
 	})
 
 	t.Run("unsupported factor returns error", func(t *testing.T) {
-		cfg := configWithAWSCognito(awsCognitoCfgInput{MFARequired: &trueVal, MFAFactor: "sms"})
+		cfg := configWithAWSCognito(awsCognitoCfgInput{MFARequired: &trueVal, MFAFactor: "voice"})
 		_, err := m.BuildModuleValues(KeyAWSCognito, nil, cfg, "", "")
 		require.Error(t, err)
-		assert.ErrorContains(t, err, `expected "totp"`)
+		assert.ErrorContains(t, err, `expected "totp", "sms", or "email"`)
+	})
+
+	// #923: SMS and Email factors pass through with their inputs.
+	t.Run("sms factor passes role and external id", func(t *testing.T) {
+		cfg := configWithAWSCognito(awsCognitoCfgInput{
+			MFARequired:     &trueVal,
+			MFAFactor:       "SMS",
+			SMSSNSCallerArn: " arn:aws:iam::123456789012:role/cognito-sns ",
+			SMSExternalID:   "ext-123",
+		})
+		vals, err := m.BuildModuleValues(KeyAWSCognito, nil, cfg, "", "")
+		require.NoError(t, err)
+		assert.Equal(t, "sms", vals["mfa_factor"])
+		assert.Equal(t, "arn:aws:iam::123456789012:role/cognito-sns", vals["sms_sns_caller_arn"])
+		assert.Equal(t, "ext-123", vals["sms_external_id"])
+		_, hasSES := vals["email_source_arn"]
+		assert.False(t, hasSES, "unset email_source_arn must not be emitted")
+	})
+
+	t.Run("email factor passes SES source ARN", func(t *testing.T) {
+		cfg := configWithAWSCognito(awsCognitoCfgInput{
+			MFARequired:    &trueVal,
+			MFAFactor:      "email",
+			EmailSourceArn: "arn:aws:ses:us-east-1:123456789012:identity/example.com",
+		})
+		vals, err := m.BuildModuleValues(KeyAWSCognito, nil, cfg, "", "")
+		require.NoError(t, err)
+		assert.Equal(t, "email", vals["mfa_factor"])
+		assert.Equal(t, "arn:aws:ses:us-east-1:123456789012:identity/example.com", vals["email_source_arn"])
+		_, hasRole := vals["sms_sns_caller_arn"]
+		assert.False(t, hasRole, "unset sms_sns_caller_arn must not be emitted")
 	})
 }
 

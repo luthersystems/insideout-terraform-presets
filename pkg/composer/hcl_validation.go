@@ -903,11 +903,11 @@ func normalizeCognitoMFAFactor(v any) (any, error) {
 	}
 	s := strings.ToLower(strings.TrimSpace(raw))
 	switch s {
-	case "totp":
+	case "totp", "sms", "email":
 		return s, nil
 	default:
 		return nil, NewValidationError(fmt.Sprintf(
-			"AWSCognito.MFAFactor=%q: expected \"totp\" (SMS and Email not yet supported — see #208)",
+			"AWSCognito.MFAFactor=%q: expected \"totp\", \"sms\", or \"email\"",
 			raw,
 		))
 	}
