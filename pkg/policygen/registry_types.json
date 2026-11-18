@@ -61,6 +61,9 @@
     ],
     "registry_sources": [
       "terraform-aws-modules/kms/aws@4.0.0"
+    ],
+    "iam_without_path": [
+      "./aws_iam_policy.cni_ipv6_policy"
     ]
   },
   "terraform-aws-modules/vpc/aws@6.7.0": {
@@ -104,6 +107,9 @@
     ],
     "principals": [
       "vpc-flow-logs.amazonaws.com"
+    ],
+    "iam_without_path": [
+      "./aws_iam_policy.vpc_flow_log_cloudwatch"
     ]
   }
 }

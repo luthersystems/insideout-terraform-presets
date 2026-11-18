@@ -41,6 +41,9 @@ type ModuleScan struct {
 	// The scoped deploy policy writes IAM only under IAMPath, so each must
 	// take the project path.
 	IAMWithoutPath []string `json:"iam_without_path,omitempty"`
+	// ServiceLinkedRoles are the aws_service_name values of the
+	// aws_iam_service_linked_role resources.
+	ServiceLinkedRoles []string `json:"service_linked_roles,omitempty"`
 }
 
 var (
@@ -71,11 +74,12 @@ func ScanModule(fsys fs.FS, dir string) (ModuleScan, error) {
 }
 
 type acc struct {
-	types, managed, principals, registry, remote, unbounded, unpathed map[string]bool
+	types, managed, principals, registry, remote, unbounded, unpathed, slr map[string]bool
 }
 
 func newAcc() *acc {
-	return &acc{map[string]bool{}, map[string]bool{}, map[string]bool{}, map[string]bool{}, map[string]bool{}, map[string]bool{}, map[string]bool{}}
+	m := func() map[string]bool { return map[string]bool{} }
+	return &acc{m(), m(), m(), m(), m(), m(), m(), m()}
 }
 
 func keys(m map[string]bool) []string {
@@ -96,6 +100,7 @@ func (a *acc) result() ModuleScan {
 		RemoteSources:        keys(a.remote),
 		RolesWithoutBoundary: keys(a.unbounded),
 		IAMWithoutPath:       keys(a.unpathed),
+		ServiceLinkedRoles:   keys(a.slr),
 	}
 }
 
@@ -180,6 +185,20 @@ func scanFile(name string, src []byte, a *acc, m *moduleText) ([]string, error) 
 			if b.Type == "data" && b.Labels[0] == "aws_iam_policy_document" && len(b.Labels) > 1 {
 				m.docs[b.Labels[1]] = text(b.Range())
 			}
+			if b.Type == "resource" && len(b.Labels) > 1 && iamPathTypes[b.Labels[0]] {
+				if _, ok := b.Body.Attributes["path"]; !ok {
+					a.unpathed[path.Dir(name)+"/"+b.Labels[0]+"."+b.Labels[1]] = true
+				}
+			}
+			if b.Type == "resource" && b.Labels[0] == "aws_iam_service_linked_role" {
+				// The deploy policy may delete only these services'
+				// service-linked roles, so the name must be a literal.
+				svc := literal(b.Body.Attributes["aws_service_name"])
+				if svc == "" {
+					svc = "<not a literal in " + name + ">"
+				}
+				a.slr[svc] = true
+			}
 			if b.Type == "resource" && b.Labels[0] == "aws_iam_role" {
 				if attr, ok := b.Body.Attributes["assume_role_policy"]; ok {
 					m.trusts = append(m.trusts, text(attr.Expr.Range()))
@@ -239,5 +258,8 @@ func (a *acc) merge(b ModuleScan) {
 	}
 	for _, s := range b.IAMWithoutPath {
 		a.unpathed[s] = true
+	}
+	for _, s := range b.ServiceLinkedRoles {
+		a.slr[s] = true
 	}
 }

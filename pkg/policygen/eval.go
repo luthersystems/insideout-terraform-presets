@@ -20,8 +20,8 @@ type Request struct {
 // within the generated policy without an AWS account, and with the same
 // condition keys the preflight will send (#935). It supports only what the
 // generator writes: Action and Resource wildcards, StringEquals and
-// StringNotEquals with a string or a list. Any other operator makes the
-// statement never match, so a new operator fails the tests loudly.
+// StringNotEquals with a string or a list, and Null. Any other operator
+// makes the statement never match, so a new operator fails the tests loudly.
 func Allows(req Request, docs ...Document) bool {
 	allowed := false
 	for _, d := range docs {
@@ -87,6 +87,11 @@ func statementMatches(s Statement, req Request) bool {
 			case "StringNotEquals":
 				// A missing key makes StringNotEquals true in IAM.
 				if in {
+					return false
+				}
+			case "Null":
+				// "true": the key must be missing; "false": present.
+				if valueIn(v, "true") == has {
 					return false
 				}
 			default:

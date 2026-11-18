@@ -160,7 +160,7 @@ func TestRoleEscalationDenied(t *testing.T) {
 		{"put inline policy without boundary", Request{"iam:PutRolePolicy", role, without("iam:PermissionsBoundary")}, false},
 		{"attach policy to a project role", Request{"iam:AttachRolePolicy", role, ctx}, true},
 		{"give a customer role the boundary", Request{"iam:PutRolePermissionsBoundary", customerRole, ctx}, false},
-		{"detach a customer role's policy", Request{"iam:DetachRolePolicy", customerRole, ctx}, false},
+		{"detach a customer role's policy", Request{"iam:DetachRolePolicy", customerRole, with("aws:ResourceTag/Project", "customer")}, false},
 		{"retrust a customer role", Request{"iam:UpdateAssumeRolePolicy", customerRole, ctx}, false},
 		{"retrust another project's role", Request{"iam:UpdateAssumeRolePolicy", otherProjectRole, ctx}, false},
 		{"tag a project role on create", Request{"iam:TagRole", role, without("aws:ResourceTag/Project")}, true},
@@ -170,11 +170,25 @@ func TestRoleEscalationDenied(t *testing.T) {
 		{"remove a boundary", Request{"iam:DeleteRolePermissionsBoundary", role, ctx}, false},
 		{"edit the deploy role", Request{"iam:AttachRolePolicy", PlaceholderDeployRoleARN, ctx}, false},
 		{"edit the workload boundary", Request{"iam:CreatePolicyVersion", PlaceholderWorkloadBoundaryARN, nil}, false},
+		{"edit the deploy policy", Request{"iam:CreatePolicyVersion", PlaceholderDeployPolicyARN, nil}, false},
+		{"tear down a legacy project role", Request{"iam:DeleteRole", "arn:aws:iam::111122223333:role/app", ctx}, true},
+		{"tear down a customer role", Request{"iam:DeleteRole", customerRole, with("aws:ResourceTag/Project", "customer")}, false},
+		{"detach a legacy project role's policy", Request{"iam:DetachRolePolicy", "arn:aws:iam::111122223333:role/app", ctx}, true},
+		{"attach a policy to a legacy project role", Request{"iam:AttachRolePolicy", "arn:aws:iam::111122223333:role/app", ctx}, false},
+		{"tag a customer role with the project", Request{"iam:TagRole", customerRole, without("aws:ResourceTag/Project")}, false},
 		{"write a project policy", Request{"iam:CreatePolicyVersion", policy, nil}, true},
 		{"rewrite a customer policy", Request{"iam:CreatePolicyVersion", customerPolicy, nil}, false},
 		{"delete the customer's GitHub OIDC provider", Request{"iam:DeleteOpenIDConnectProvider", githubOIDC, nil}, false},
-		{"create the EKS OIDC provider", Request{"iam:CreateOpenIDConnectProvider", eksOIDC, nil}, true},
-		{"create a service-linked role", Request{"iam:CreateServiceLinkedRole", "arn:aws:iam::111122223333:role/aws-service-role/es.amazonaws.com/AWSServiceRoleForAmazonOpenSearchService", nil}, true},
+		{"create the EKS OIDC provider", Request{"iam:CreateOpenIDConnectProvider", eksOIDC, ctx}, true},
+		{"create the EKS OIDC provider untagged", Request{"iam:CreateOpenIDConnectProvider", eksOIDC, nil}, false},
+		{"tag a new EKS OIDC provider", Request{"iam:TagOpenIDConnectProvider", eksOIDC, without("aws:ResourceTag/Project")}, true},
+		{"retag another project's EKS OIDC provider", Request{"iam:TagOpenIDConnectProvider", eksOIDC, with("aws:ResourceTag/Project", "other")}, false},
+		{"delete the project's EKS OIDC provider", Request{"iam:DeleteOpenIDConnectProvider", eksOIDC, ctx}, true},
+		{"delete a customer's EKS OIDC provider", Request{"iam:DeleteOpenIDConnectProvider", eksOIDC, with("aws:ResourceTag/Project", "customer")}, false},
+		{"create a service-linked role", Request{"iam:CreateServiceLinkedRole", "arn:aws:iam::111122223333:role/aws-service-role/eks.amazonaws.com/AWSServiceRoleForAmazonEKS", nil}, true},
+		{"delete a preset's service-linked role", Request{"iam:DeleteServiceLinkedRole", "arn:aws:iam::111122223333:role/aws-service-role/kafka.amazonaws.com/AWSServiceRoleForKafka", nil}, true},
+		{"delete another service-linked role", Request{"iam:DeleteServiceLinkedRole", "arn:aws:iam::111122223333:role/aws-service-role/eks.amazonaws.com/AWSServiceRoleForAmazonEKS", nil}, false},
+		{"create a project role in GovCloud", Request{"iam:CreateRole", "arn:aws-us-gov:iam::111122223333:role" + path + "app", ctx}, true},
 		{"assume any role", Request{"sts:AssumeRole", "*", ctx}, false},
 		{"create a user", Request{"iam:CreateUser", "*", ctx}, false},
 	}
@@ -195,9 +209,14 @@ func TestPreflightResource(t *testing.T) {
 		"iam:CreatePolicy":                "arn:aws:iam::*:policy/insideout/p/preflight",
 		"iam:CreateInstanceProfile":       "arn:aws:iam::*:instance-profile/insideout/p/preflight",
 		"iam:CreateOpenIDConnectProvider": "arn:aws:iam::*:oidc-provider/oidc.eks.preflight.amazonaws.com/id/preflight",
-		"iam:CreateServiceLinkedRole":     "arn:aws:iam::*:role/aws-service-role/preflight",
+		"iam:CreateServiceLinkedRole":     "arn:aws:iam::*:role/aws-service-role/preflight.amazonaws.com/preflight",
+		"iam:DeleteServiceLinkedRole":     "arn:aws:iam::*:role/aws-service-role/preflight.amazonaws.com/preflight",
 		"iam:GetRole":                     "*",
+		"iam:GetPolicy":                   "*",
+		"iam:ListInstanceProfiles":        "*",
 		"s3:CreateBucket":                 "*",
+		"s3:PutBucketPolicy":              "*",
+		"ec2:AssociateIamInstanceProfile": "*",
 	}
 	for a, want := range cases {
 		assert.Equal(t, want, PreflightResource(a, "p"), a)
@@ -304,6 +323,11 @@ func TestAllowsConditions(t *testing.T) {
 	assert.False(t, Allows(Request{"ec2:RunInstances", "*", map[string]string{"ec2:Region": "c"}}, doc))
 	assert.False(t, Allows(Request{"kms:Encrypt", "*", map[string]string{"kms:x": "y"}}, doc), "unknown operator never matches")
 	assert.False(t, Allows(Request{"sqs:SendMessage", "*", nil}, doc))
+
+	null := Document{Statement: []Statement{{Effect: "Allow", Action: []string{"iam:TagRole"}, Resource: star,
+		Condition: map[string]map[string]any{"Null": {"aws:ResourceTag/Project": "true"}}}}}
+	assert.True(t, Allows(Request{"iam:TagRole", "*", nil}, null), "Null true matches a missing key")
+	assert.False(t, Allows(Request{"iam:TagRole", "*", map[string]string{"aws:ResourceTag/Project": "p"}}, null))
 }
 
 // TestScanTrustAcrossFiles: a role's trust document may live in another file
@@ -335,6 +359,16 @@ data "aws_iam_policy_document" "trust" {
 	require.NoError(t, err)
 	assert.Equal(t, []string{"lambda.amazonaws.com"}, s.Principals)
 	assert.Equal(t, []string{"m/r"}, s.RolesWithoutBoundary)
+	assert.Equal(t, []string{"m/aws_iam_role.b", "m/aws_iam_role.r"}, s.IAMWithoutPath)
+}
+
+// offInPresets are IAM objects of a registry module that take no path but
+// that the preset never creates (count 0 with the inputs the preset passes).
+// The list may only shrink. If a preset turns one on, the scoped policy
+// refuses it, and the row must go with a path for it.
+var offInPresets = map[string]string{
+	"aws_eks ./aws_iam_policy.cni_ipv6_policy":         "needs an IPv6 cluster; aws/eks sets no ip_family",
+	"aws_vpc ./aws_iam_policy.vpc_flow_log_cloudwatch": "needs flow logs; aws/vpc sets no enable_flow_log",
 }
 
 // TestIAMTakesProjectPathAndBoundary is the step 2 rule of #147: the scoped
@@ -346,12 +380,22 @@ func TestIAMTakesProjectPathAndBoundary(t *testing.T) {
 	require.NoError(t, err)
 	for k, c := range r.Components {
 		assert.Empty(t, c.RolesWithoutBoundary, "%s: roles with no permissions_boundary", k)
-		assert.Empty(t, c.IAMWithoutPath, "%s: IAM objects with no path", k)
+		var unpathed []string
+		for _, o := range c.IAMWithoutPath {
+			if _, off := offInPresets[string(k)+" "+o]; !off {
+				unpathed = append(unpathed, o)
+			}
+		}
+		assert.Empty(t, unpathed, "%s: IAM objects with no path", k)
+	}
+	for row := range offInPresets {
+		k, o, _ := strings.Cut(row, " ")
+		assert.Contains(t, r.Components[composer.ComponentKey(k)].IAMWithoutPath, o, "offInPresets row %q is stale; delete it", row)
 	}
 
 	// The scan only sees that the argument is set. Check that each preset
 	// sets it from its input, so the template can pass the values in.
-	want := map[string]string{"path": "var.iam_path", "permissions_boundary": "var.iam_permissions_boundary"}
+	want := map[string]string{"path": "var.iam_scope.path", "permissions_boundary": "var.iam_scope.permissions_boundary"}
 	files, err := fs.Glob(terraformpresets.FS, "aws/*/*.tf")
 	require.NoError(t, err)
 	for _, f := range files {
@@ -387,11 +431,11 @@ func TestEKSModuleTakesProjectPathAndBoundary(t *testing.T) {
 	hf, diags := hclsyntax.ParseConfig(src, "aws/eks/main.tf", hcl.InitialPos)
 	require.False(t, diags.HasErrors(), diags.Error())
 	want := map[string]string{
-		"iam_role_path":                      "var.iam_path",
-		"iam_role_permissions_boundary":      "var.iam_permissions_boundary",
-		"encryption_policy_path":             "var.iam_path",
-		"node_iam_role_path":                 "var.iam_path",
-		"node_iam_role_permissions_boundary": "var.iam_permissions_boundary",
+		"iam_role_path":                      "var.iam_scope.path",
+		"iam_role_permissions_boundary":      "var.iam_scope.permissions_boundary",
+		"encryption_policy_path":             "var.iam_scope.path",
+		"node_iam_role_path":                 "var.iam_scope.path",
+		"node_iam_role_permissions_boundary": "var.iam_scope.permissions_boundary",
 	}
 	found := false
 	for _, b := range hf.Body.(*hclsyntax.Body).Blocks {
@@ -402,7 +446,7 @@ func TestEKSModuleTakesProjectPathAndBoundary(t *testing.T) {
 		for arg, ref := range want {
 			attr, ok := b.Body.Attributes[arg]
 			if assert.True(t, ok, "module.eks: no %s", arg) {
-				assert.Equal(t, ref, string(src[attr.Expr.Range().Start.Byte:attr.Expr.Range().End.Byte]), arg)
+				assert.Contains(t, string(src[attr.Expr.Range().Start.Byte:attr.Expr.Range().End.Byte]), ref, arg)
 			}
 		}
 	}

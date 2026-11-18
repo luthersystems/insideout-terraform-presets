@@ -100,8 +100,8 @@ resource "aws_iam_role" "mng" {
   assume_role_policy = data.aws_iam_policy_document.mng_assume.json
   tags               = merge(local.common_tags, var.tags)
 
-  path                 = var.iam_path
-  permissions_boundary = var.iam_permissions_boundary
+  path                 = try(var.iam_scope.path, null)
+  permissions_boundary = try(var.iam_scope.permissions_boundary, null)
 }
 
 # Standard policies for EKS worker nodes (only when we created the role)
