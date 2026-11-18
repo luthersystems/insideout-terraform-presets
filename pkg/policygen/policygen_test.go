@@ -203,14 +203,14 @@ func TestRoleEscalationDenied(t *testing.T) {
 // of IAM action.
 func TestPreflightResource(t *testing.T) {
 	cases := map[string]string{
-		"iam:CreateRole":                  "arn:aws:iam::*:role/insideout/p/preflight",
-		"iam:AttachRolePolicy":            "arn:aws:iam::*:role/insideout/p/preflight",
-		"iam:PassRole":                    "arn:aws:iam::*:role/insideout/p/preflight",
-		"iam:CreatePolicy":                "arn:aws:iam::*:policy/insideout/p/preflight",
-		"iam:CreateInstanceProfile":       "arn:aws:iam::*:instance-profile/insideout/p/preflight",
-		"iam:CreateOpenIDConnectProvider": "arn:aws:iam::*:oidc-provider/oidc.eks.preflight.amazonaws.com/id/preflight",
-		"iam:CreateServiceLinkedRole":     "arn:aws:iam::*:role/aws-service-role/preflight.amazonaws.com/preflight",
-		"iam:DeleteServiceLinkedRole":     "arn:aws:iam::*:role/aws-service-role/preflight.amazonaws.com/preflight",
+		"iam:CreateRole":                  "arn:*:iam::*:role/insideout/p/preflight",
+		"iam:AttachRolePolicy":            "arn:*:iam::*:role/insideout/p/preflight",
+		"iam:PassRole":                    "arn:*:iam::*:role/insideout/p/preflight",
+		"iam:CreatePolicy":                "arn:*:iam::*:policy/insideout/p/preflight",
+		"iam:CreateInstanceProfile":       "arn:*:iam::*:instance-profile/insideout/p/preflight",
+		"iam:CreateOpenIDConnectProvider": "arn:*:iam::*:oidc-provider/oidc.eks.preflight.amazonaws.com/id/preflight",
+		"iam:CreateServiceLinkedRole":     "arn:*:iam::*:role/aws-service-role/preflight.amazonaws.com/preflight",
+		"iam:DeleteServiceLinkedRole":     "arn:*:iam::*:role/aws-service-role/preflight.amazonaws.com/preflight",
 		"iam:GetRole":                     "*",
 		"iam:GetPolicy":                   "*",
 		"iam:ListInstanceProfiles":        "*",

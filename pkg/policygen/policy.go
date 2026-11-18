@@ -387,6 +387,11 @@ var legacyTeardownActions = []string{
 // Why: the scoped policy allows IAM writes only on project ARNs, so
 // SimulatePrincipalPolicy with no ResourceArns reports them as denied even
 // when a deploy would succeed (#147 step 3).
+//
+// The partition and account are "*": the caller does not know them, and
+// ui-core replaces a "*" field with the simulated principal's own value
+// (luthersystems/ui-core#594), so the ARN is right in GovCloud and China
+// too.
 func PreflightResource(action, project string) string {
 	name, ok := strings.CutPrefix(action, "iam:")
 	if !ok || strings.HasPrefix(name, "Get") || strings.HasPrefix(name, "List") {
@@ -395,15 +400,15 @@ func PreflightResource(action, project string) string {
 	path := IAMPath(project)
 	switch {
 	case strings.HasSuffix(name, "ServiceLinkedRole"):
-		return "arn:aws:iam::*:role/aws-service-role/preflight.amazonaws.com/preflight"
+		return "arn:*:iam::*:role/aws-service-role/preflight.amazonaws.com/preflight"
 	case strings.Contains(name, "OpenIDConnectProvider"):
-		return "arn:aws:iam::*:oidc-provider/oidc.eks.preflight.amazonaws.com/id/preflight"
+		return "arn:*:iam::*:oidc-provider/oidc.eks.preflight.amazonaws.com/id/preflight"
 	case strings.Contains(name, "InstanceProfile"):
-		return "arn:aws:iam::*:instance-profile" + path + "preflight"
+		return "arn:*:iam::*:instance-profile" + path + "preflight"
 	case strings.Contains(name, "Policy") && !strings.Contains(name, "Role"):
-		return "arn:aws:iam::*:policy" + path + "preflight"
+		return "arn:*:iam::*:policy" + path + "preflight"
 	}
-	return "arn:aws:iam::*:role" + path + "preflight"
+	return "arn:*:iam::*:role" + path + "preflight"
 }
 
 // slrARNs are the ARN patterns of the given services' service-linked roles.
