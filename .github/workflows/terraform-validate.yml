@@ -110,6 +110,8 @@ jobs:
 
   test-presets:
     needs: discover
+    # ci-gate allows this skip and no other (scripts/ci-gate.cjs). Change
+    # both together.
     if: ${{ needs.discover.outputs.presets_with_tests != '[]' }}
     runs-on: ubuntu-latest
     strategy:
@@ -177,8 +179,8 @@ jobs:
       - name: Lint enrichgen override citation comments (#415)
         run: bash tests/lint-enrichgen-override-citations.sh
 
-      - name: Unit tests for the ci-drift issue script (#882)
-        run: node --test scripts/ci-drift.test.cjs
+      - name: Unit tests for the ci-drift and ci-gate scripts (#882, #943)
+        run: node --test scripts/ci-drift.test.cjs scripts/ci-gate.test.cjs
 
   # Validates phantom-computed-fields.txt against the live provider schema
   # pinned by schemas/providers.tf. Catches the failure mode where a
@@ -429,28 +431,19 @@ jobs:
     if: always()
     runs-on: ubuntu-latest
     steps:
-      # Fails when a needed job failed, was cancelled or was skipped. A
-      # skipped job did not run, and would otherwise pass the gate. The one
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+
+      # Fails when a needed job failed, was cancelled or was skipped (#943).
+      # A skipped job did not run, and would otherwise pass the gate. The one
       # allowed skip is test-presets when discover found no preset with
-      # tests: an empty matrix is an error, so that job skips then.
+      # tests (see its `if:`). The verdict and its tests are in
+      # scripts/ci-gate.cjs; the tests also check that this list of needs
+      # names every job of this workflow.
       - name: Check all required jobs succeeded
         env:
           NEEDS_JSON: ${{ toJSON(needs) }}
           TESTABLE: ${{ needs.discover.outputs.presets_with_tests }}
-        run: |
-          allowed=""
-          if [ "$TESTABLE" = "[]" ]; then allowed="test-presets"; fi
-          bad=$(jq -r --arg allowed "$allowed" '
-            to_entries[]
-            | select(.value.result != "success"
-                and (.value.result != "skipped" or .key != $allowed))
-            | "\(.key): \(.value.result)"' <<<"$NEEDS_JSON")
-          if [ -n "$bad" ]; then
-            echo "$bad"
-            echo "::error::A required CI job failed, was cancelled or was skipped."
-            exit 1
-          fi
-          echo "All required CI jobs passed."
+        run: node scripts/ci-gate.cjs
 
   # Opens, refreshes or closes the ci-drift issue after a scheduled or
   # manual run on main (#882). Not part of ci-gate: it reports on the gate,
