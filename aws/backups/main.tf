@@ -42,6 +42,9 @@ resource "aws_iam_role" "backup" {
   name               = "${var.project}-backup-role"
   assume_role_policy = data.aws_iam_policy_document.backup_assume.json
   tags               = merge(module.name.tags, var.tags)
+
+  path                 = var.iam_path
+  permissions_boundary = var.iam_permissions_boundary
 }
 
 # Give IAM a moment to propagate the new role before attaching managed policies

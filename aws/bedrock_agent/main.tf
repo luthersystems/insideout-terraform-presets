@@ -83,6 +83,9 @@ resource "aws_iam_role" "agent" {
   lifecycle {
     ignore_changes = [inline_policy]
   }
+
+  path                 = var.iam_path
+  permissions_boundary = var.iam_permissions_boundary
 }
 
 # The agent role policy: InvokeModel on the agent's foundation model is always

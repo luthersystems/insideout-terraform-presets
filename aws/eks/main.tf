@@ -194,6 +194,9 @@ resource "aws_iam_role" "ebs_csi" {
   name               = "${local.cluster_name}-ebs-csi"
   assume_role_policy = data.aws_iam_policy_document.ebs_csi_pod_identity_trust[0].json
   tags               = local.common_tags
+
+  path                 = var.iam_path
+  permissions_boundary = var.iam_permissions_boundary
 }
 
 resource "aws_iam_role_policy_attachment" "ebs_csi" {
@@ -231,6 +234,15 @@ module "eks" {
   control_plane_subnet_ids = var.private_subnet_ids
 
   enable_cluster_creator_admin_permissions = true
+
+  # The scoped deploy policy allows IAM writes only under the project's IAM
+  # path, and creates roles only with the workload boundary
+  # (sandbox-infrastructure-template#147). null keeps the module defaults.
+  iam_role_path                      = var.iam_path
+  iam_role_permissions_boundary      = var.iam_permissions_boundary
+  encryption_policy_path             = var.iam_path
+  node_iam_role_path                 = var.iam_path
+  node_iam_role_permissions_boundary = var.iam_permissions_boundary
 
   tags = local.common_tags
 }

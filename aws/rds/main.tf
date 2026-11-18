@@ -105,6 +105,9 @@ resource "aws_iam_role" "rds_monitoring" {
   lifecycle {
     ignore_changes = [managed_policy_arns]
   }
+
+  path                 = var.iam_path
+  permissions_boundary = var.iam_permissions_boundary
 }
 
 resource "aws_iam_role_policy_attachment" "rds_monitoring" {

@@ -84,15 +84,24 @@
       ]
     },
     {
-      "Sid": "IAMReadAndServiceLinkedRoles",
+      "Sid": "IAMRead",
       "Effect": "Allow",
       "Action": [
-        "iam:CreateServiceLinkedRole",
         "iam:Get*",
         "iam:List*"
       ],
       "Resource": [
         "*"
+      ]
+    },
+    {
+      "Sid": "ServiceLinkedRoles",
+      "Effect": "Allow",
+      "Action": [
+        "iam:CreateServiceLinkedRole"
+      ],
+      "Resource": [
+        "arn:aws:iam::*:role/aws-service-role/*"
       ]
     },
     {
@@ -102,11 +111,10 @@
         "iam:PassRole"
       ],
       "Resource": [
-        "*"
+        "arn:aws:iam::*:role/insideout/${project}/*"
       ],
       "Condition": {
         "StringEquals": {
-          "aws:ResourceTag/Project": "${project}",
           "iam:PassedToService": [
             "backup.amazonaws.com",
             "bedrock-agentcore.amazonaws.com",

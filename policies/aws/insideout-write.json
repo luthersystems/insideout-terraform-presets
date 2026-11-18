@@ -79,22 +79,23 @@
       ]
     },
     {
-      "Sid": "CreateRoleOnlyWithWorkloadBoundary",
+      "Sid": "CreateProjectRolesWithWorkloadBoundary",
       "Effect": "Allow",
       "Action": [
         "iam:CreateRole"
       ],
       "Resource": [
-        "*"
+        "arn:aws:iam::*:role/insideout/${project}/*"
       ],
       "Condition": {
         "StringEquals": {
+          "aws:RequestTag/Project": "${project}",
           "iam:PermissionsBoundary": "${workload_boundary_arn}"
         }
       }
     },
     {
-      "Sid": "RoleWritesOnlyOnProjectRolesWithWorkloadBoundary",
+      "Sid": "ChangeProjectRolesWithWorkloadBoundary",
       "Effect": "Allow",
       "Action": [
         "iam:AttachRolePolicy",
@@ -104,36 +105,19 @@
         "iam:PutRolePolicy"
       ],
       "Resource": [
-        "*"
+        "arn:aws:iam::*:role/insideout/${project}/*"
       ],
       "Condition": {
         "StringEquals": {
-          "aws:ResourceTag/Project": "${project}",
           "iam:PermissionsBoundary": "${workload_boundary_arn}"
         }
       }
     },
     {
-      "Sid": "CreateRoleOnlyTaggedForProject",
-      "Effect": "Deny",
-      "Action": [
-        "iam:CreateRole"
-      ],
-      "Resource": [
-        "*"
-      ],
-      "Condition": {
-        "StringNotEquals": {
-          "aws:RequestTag/Project": "${project}"
-        }
-      }
-    },
-    {
-      "Sid": "ProjectRolesOnly",
+      "Sid": "ManageProjectRoles",
       "Effect": "Allow",
       "Action": [
         "iam:DeleteRole",
-        "iam:PassRole",
         "iam:TagRole",
         "iam:UntagRole",
         "iam:UpdateAssumeRolePolicy",
@@ -141,25 +125,20 @@
         "iam:UpdateRoleDescription"
       ],
       "Resource": [
-        "*"
-      ],
-      "Condition": {
-        "StringEquals": {
-          "aws:ResourceTag/Project": "${project}"
-        }
-      }
+        "arn:aws:iam::*:role/insideout/${project}/*"
+      ]
     },
     {
-      "Sid": "PassRoleOnlyToStackServices",
-      "Effect": "Deny",
+      "Sid": "PassProjectRolesToStackServices",
+      "Effect": "Allow",
       "Action": [
         "iam:PassRole"
       ],
       "Resource": [
-        "*"
+        "arn:aws:iam::*:role/insideout/${project}/*"
       ],
       "Condition": {
-        "StringNotEquals": {
+        "StringEquals": {
           "iam:PassedToService": [
             "backup.amazonaws.com",
             "bedrock-agentcore.amazonaws.com",
@@ -181,38 +160,66 @@
       }
     },
     {
-      "Sid": "IAMSupport",
+      "Sid": "ProjectPolicies",
       "Effect": "Allow",
       "Action": [
-        "iam:AddClientIDToOpenIDConnectProvider",
-        "iam:AddRoleToInstanceProfile",
-        "iam:CreateInstanceProfile",
-        "iam:CreateOpenIDConnectProvider",
         "iam:CreatePolicy",
         "iam:CreatePolicyVersion",
-        "iam:CreateServiceLinkedRole",
-        "iam:DeleteInstanceProfile",
-        "iam:DeleteOpenIDConnectProvider",
         "iam:DeletePolicy",
         "iam:DeletePolicyVersion",
-        "iam:DeleteServiceLinkedRole",
-        "iam:RemoveClientIDFromOpenIDConnectProvider",
-        "iam:RemoveRoleFromInstanceProfile",
         "iam:SetDefaultPolicyVersion",
-        "iam:TagInstanceProfile",
-        "iam:TagOpenIDConnectProvider",
         "iam:TagPolicy",
-        "iam:UntagInstanceProfile",
-        "iam:UntagOpenIDConnectProvider",
-        "iam:UntagPolicy",
-        "iam:UpdateOpenIDConnectProviderThumbprint"
+        "iam:UntagPolicy"
       ],
       "Resource": [
-        "*"
+        "arn:aws:iam::*:policy/insideout/${project}/*"
       ]
     },
     {
-      "Sid": "DenyEditOwnPolicies",
+      "Sid": "ProjectInstanceProfiles",
+      "Effect": "Allow",
+      "Action": [
+        "iam:AddRoleToInstanceProfile",
+        "iam:CreateInstanceProfile",
+        "iam:DeleteInstanceProfile",
+        "iam:RemoveRoleFromInstanceProfile",
+        "iam:TagInstanceProfile",
+        "iam:UntagInstanceProfile"
+      ],
+      "Resource": [
+        "arn:aws:iam::*:instance-profile/insideout/${project}/*"
+      ]
+    },
+    {
+      "Sid": "EKSOIDCProviders",
+      "Effect": "Allow",
+      "Action": [
+        "iam:AddClientIDToOpenIDConnectProvider",
+        "iam:CreateOpenIDConnectProvider",
+        "iam:DeleteOpenIDConnectProvider",
+        "iam:RemoveClientIDFromOpenIDConnectProvider",
+        "iam:TagOpenIDConnectProvider",
+        "iam:UntagOpenIDConnectProvider",
+        "iam:UpdateOpenIDConnectProviderThumbprint"
+      ],
+      "Resource": [
+        "arn:aws:iam::*:oidc-provider/oidc.eks.*.amazonaws.com/id/*"
+      ]
+    },
+    {
+      "Sid": "ServiceLinkedRoles",
+      "Effect": "Allow",
+      "Action": [
+        "iam:CreateServiceLinkedRole",
+        "iam:DeleteServiceLinkedRole",
+        "iam:GetServiceLinkedRoleDeletionStatus"
+      ],
+      "Resource": [
+        "arn:aws:iam::*:role/aws-service-role/*"
+      ]
+    },
+    {
+      "Sid": "DenyEditWorkloadBoundary",
       "Effect": "Deny",
       "Action": [
         "iam:CreatePolicyVersion",
@@ -221,11 +228,11 @@
         "iam:SetDefaultPolicyVersion"
       ],
       "Resource": [
-        "arn:aws:iam::*:policy/*insideout*"
+        "${workload_boundary_arn}"
       ]
     },
     {
-      "Sid": "DenyEditOwnRole",
+      "Sid": "DenyEditDeployRole",
       "Effect": "Deny",
       "Action": [
         "iam:AttachRolePolicy",

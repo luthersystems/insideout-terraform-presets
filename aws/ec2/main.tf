@@ -206,6 +206,9 @@ resource "aws_iam_role" "this" {
   name               = "${var.project}-ec2-role"
   assume_role_policy = data.aws_iam_policy_document.ec2_assume_role.json
   tags               = merge(module.name.tags, var.tags)
+
+  path                 = var.iam_path
+  permissions_boundary = var.iam_permissions_boundary
 }
 
 resource "aws_iam_role_policy_attachment" "ssm_core" {
@@ -217,6 +220,8 @@ resource "aws_iam_instance_profile" "this" {
   name = "${var.project}-ec2-profile"
   role = aws_iam_role.this.name
   tags = merge(module.name.tags, var.tags)
+
+  path = var.iam_path
 }
 
 # -------------------------------------------------------------

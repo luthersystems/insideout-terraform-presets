@@ -62,6 +62,9 @@ resource "aws_iam_role" "bedrock_kb" {
   lifecycle {
     ignore_changes = [inline_policy, managed_policy_arns]
   }
+
+  path                 = var.iam_path
+  permissions_boundary = var.iam_permissions_boundary
 }
 
 # The role's inline policy is assembled from one always-on statement plus
@@ -390,6 +393,9 @@ resource "aws_iam_role" "invocation_logging" {
   lifecycle {
     ignore_changes = [inline_policy, managed_policy_arns]
   }
+
+  path                 = var.iam_path
+  permissions_boundary = var.iam_permissions_boundary
 }
 
 resource "aws_iam_role_policy" "invocation_logging" {
