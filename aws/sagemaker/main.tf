@@ -209,7 +209,7 @@ resource "aws_s3_bucket_public_access_block" "workspace" {
 
 resource "aws_iam_role" "studio_execution" {
   name = "${var.project}-sagemaker-execution"
-  path = "/service-role/"
+  path = coalesce(var.iam_path, "/service-role/")
 
   # Confused-deputy guard: scope the service trust to the deploying
   # account so a hostile cross-account caller can't trick the SageMaker
@@ -240,6 +240,8 @@ resource "aws_iam_role" "studio_execution" {
   lifecycle {
     ignore_changes = [managed_policy_arns]
   }
+
+  permissions_boundary = var.iam_permissions_boundary
 }
 
 # AmazonSageMakerFullAccess is broad — it permits the role to manage almost

@@ -113,6 +113,9 @@ resource "aws_iam_role" "gateway" {
   lifecycle {
     ignore_changes = [inline_policy]
   }
+
+  path                 = var.iam_path
+  permissions_boundary = var.iam_permissions_boundary
 }
 
 # The gateway role's target-invocation policy. lambda:InvokeFunction on the

@@ -151,7 +151,7 @@ resource "aws_s3_bucket_public_access_block" "logs" {
 
 resource "aws_iam_role" "service" {
   name = "${var.project}-codebuild"
-  path = "/service-role/"
+  path = coalesce(var.iam_path, "/service-role/")
 
   # codebuild.amazonaws.com is the CodeBuild service principal. Scoped
   # to the deploying account via aws:SourceAccount so a hostile cross-
@@ -178,6 +178,8 @@ resource "aws_iam_role" "service" {
   lifecycle {
     ignore_changes = [managed_policy_arns]
   }
+
+  permissions_boundary = var.iam_permissions_boundary
 }
 
 # Inline base policy: CloudWatch Logs (always on — every build emits

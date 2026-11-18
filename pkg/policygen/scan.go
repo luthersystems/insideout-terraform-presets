@@ -36,6 +36,11 @@ type ModuleScan struct {
 	// can opt in (#147 step 2). A registry module that has the argument but
 	// gets no value from the preset is not listed here.
 	RolesWithoutBoundary []string `json:"roles_without_boundary,omitempty"`
+	// IAMWithoutPath are the aws_iam_role, aws_iam_policy and
+	// aws_iam_instance_profile resources ("dir/type.name") that set no path.
+	// The scoped deploy policy writes IAM only under IAMPath, so each must
+	// take the project path.
+	IAMWithoutPath []string `json:"iam_without_path,omitempty"`
 }
 
 var (
@@ -46,6 +51,13 @@ var (
 	policyDocRefRE  = regexp.MustCompile(`data\.aws_iam_policy_document\.([A-Za-z0-9_-]+)`)
 	registryRE      = regexp.MustCompile(`^[a-z0-9-]+/[a-z0-9-]+/[a-z0-9]+$`)
 )
+
+// iamPathTypes are the IAM resource types that take a path.
+var iamPathTypes = map[string]bool{
+	"aws_iam_role":             true,
+	"aws_iam_policy":           true,
+	"aws_iam_instance_profile": true,
+}
 
 // ScanModule scans the module in dir of fsys, and every local module
 // ("./x", "../x") it calls. Registry and remote sources are recorded, not
@@ -59,11 +71,11 @@ func ScanModule(fsys fs.FS, dir string) (ModuleScan, error) {
 }
 
 type acc struct {
-	types, managed, principals, registry, remote, unbounded map[string]bool
+	types, managed, principals, registry, remote, unbounded, unpathed map[string]bool
 }
 
 func newAcc() *acc {
-	return &acc{map[string]bool{}, map[string]bool{}, map[string]bool{}, map[string]bool{}, map[string]bool{}, map[string]bool{}}
+	return &acc{map[string]bool{}, map[string]bool{}, map[string]bool{}, map[string]bool{}, map[string]bool{}, map[string]bool{}, map[string]bool{}}
 }
 
 func keys(m map[string]bool) []string {
@@ -83,6 +95,7 @@ func (a *acc) result() ModuleScan {
 		RegistrySources:      keys(a.registry),
 		RemoteSources:        keys(a.remote),
 		RolesWithoutBoundary: keys(a.unbounded),
+		IAMWithoutPath:       keys(a.unpathed),
 	}
 }
 
@@ -223,5 +236,8 @@ func (a *acc) merge(b ModuleScan) {
 	}
 	for _, s := range b.RolesWithoutBoundary {
 		a.unbounded[s] = true
+	}
+	for _, s := range b.IAMWithoutPath {
+		a.unpathed[s] = true
 	}
 }

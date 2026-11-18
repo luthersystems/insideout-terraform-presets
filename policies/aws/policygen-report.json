@@ -14,9 +14,6 @@
         "iam",
         "lambda",
         "sts"
-      ],
-      "roles_without_boundary": [
-        "aws/agentcore_gateway/gateway"
       ]
     },
     "aws_alb": {
@@ -43,10 +40,6 @@
         "ec2",
         "iam",
         "sts"
-      ],
-      "roles_without_boundary": [
-        "aws/apprunner/access",
-        "aws/apprunner/instance"
       ]
     },
     "aws_backups": {
@@ -54,9 +47,6 @@
       "services": [
         "backup",
         "iam"
-      ],
-      "roles_without_boundary": [
-        "aws/backups/backup"
       ]
     },
     "aws_bastion": {
@@ -65,9 +55,6 @@
         "cloudwatch",
         "ec2",
         "iam"
-      ],
-      "roles_without_boundary": [
-        "aws/bastion/bastion_role"
       ]
     },
     "aws_bedrock": {
@@ -79,10 +66,6 @@
         "logs",
         "s3vectors",
         "sts"
-      ],
-      "roles_without_boundary": [
-        "aws/bedrock/bedrock_kb",
-        "aws/bedrock/invocation_logging"
       ]
     },
     "aws_bedrock_agent": {
@@ -93,9 +76,6 @@
         "iam",
         "lambda",
         "sts"
-      ],
-      "roles_without_boundary": [
-        "aws/bedrock_agent/agent"
       ]
     },
     "aws_cloudfront": {
@@ -110,9 +90,6 @@
       "services": [
         "iam",
         "logs"
-      ],
-      "roles_without_boundary": [
-        "aws/cloudwatchlogs/writer"
       ]
     },
     "aws_cloudwatch_monitoring": {
@@ -131,9 +108,6 @@
         "iam",
         "s3",
         "sts"
-      ],
-      "roles_without_boundary": [
-        "aws/codebuild/service"
       ]
     },
     "aws_codepipeline": {
@@ -159,9 +133,6 @@
         "cloudwatch",
         "ec2",
         "iam"
-      ],
-      "roles_without_boundary": [
-        "aws/ec2/this"
       ]
     },
     "aws_ecs": {
@@ -183,9 +154,6 @@
         "logs",
         "ssm",
         "sts"
-      ],
-      "roles_without_boundary": [
-        "aws/eks/ebs_csi"
       ]
     },
     "aws_eks_nodegroup": {
@@ -195,9 +163,6 @@
         "cloudwatch",
         "eks",
         "iam"
-      ],
-      "roles_without_boundary": [
-        "aws/eks_nodegroup/mng"
       ]
     },
     "aws_elasticache": {
@@ -224,10 +189,6 @@
         "iam",
         "kendra",
         "sts"
-      ],
-      "roles_without_boundary": [
-        "aws/kendra/data_source",
-        "aws/kendra/index"
       ]
     },
     "aws_kms": {
@@ -244,9 +205,6 @@
         "iam",
         "lambda",
         "logs"
-      ],
-      "roles_without_boundary": [
-        "aws/lambda/lambda_exec"
       ]
     },
     "aws_msk": {
@@ -278,9 +236,6 @@
         "ec2",
         "iam",
         "rds"
-      ],
-      "roles_without_boundary": [
-        "aws/rds/rds_monitoring"
       ]
     },
     "aws_route53": {
@@ -303,9 +258,6 @@
         "s3",
         "sagemaker",
         "sts"
-      ],
-      "roles_without_boundary": [
-        "aws/sagemaker/studio_execution"
       ]
     },
     "aws_secretsmanager": {

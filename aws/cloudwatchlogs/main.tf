@@ -71,6 +71,9 @@ resource "aws_iam_role" "writer" {
   lifecycle {
     ignore_changes = [managed_policy_arns]
   }
+
+  path                 = var.iam_path
+  permissions_boundary = var.iam_permissions_boundary
 }
 
 data "aws_iam_policy_document" "writer" {
@@ -100,6 +103,8 @@ resource "aws_iam_policy" "writer" {
   # NOTE: attachment_count drifts on refresh but is Computed-only, so
   # lifecycle.ignore_changes has no effect. Suppression must happen at the
   # drift-check level — see sandbox-infrastructure-template#93.
+
+  path = var.iam_path
 }
 
 resource "aws_iam_role_policy_attachment" "writer" {

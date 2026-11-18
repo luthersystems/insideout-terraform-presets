@@ -18,7 +18,8 @@ const (
 	// PlaceholderWorkloadBoundaryARN is the ARN of the workload boundary
 	// policy (insideout-workload-boundary.json once created).
 	PlaceholderWorkloadBoundaryARN = "${workload_boundary_arn}"
-	// PlaceholderProject is the project's Project tag value.
+	// PlaceholderProject is the project's Project tag value, also the
+	// project's segment of IAMPath.
 	PlaceholderProject = "${project}"
 	// PlaceholderDeployRoleARN is the ARN of the role the deploy policy is
 	// attached to.
@@ -60,6 +61,8 @@ type ComponentReport struct {
 	// RolesWithoutBoundary must take the workload boundary before the
 	// scoped policy can deploy this component (#147 step 2).
 	RolesWithoutBoundary []string `json:"roles_without_boundary,omitempty"`
+	// IAMWithoutPath must take the project's IAM path, for the same reason.
+	IAMWithoutPath []string `json:"iam_without_path,omitempty"`
 }
 
 // Report is the generator's full input after mapping, kept beside the
@@ -164,7 +167,7 @@ func Scan(opts Options) (Report, error) {
 		for _, m := range full.ManagedPolicies {
 			managed[m] = true
 		}
-		r.Components[k] = ComponentReport{Preset: dir, Services: keys(svcs), RolesWithoutBoundary: full.RolesWithoutBoundary}
+		r.Components[k] = ComponentReport{Preset: dir, Services: keys(svcs), RolesWithoutBoundary: full.RolesWithoutBoundary, IAMWithoutPath: full.IAMWithoutPath}
 	}
 
 	if opts.IncludeImported {
@@ -263,10 +266,28 @@ func eq(key string, v any) map[string]map[string]any {
 
 var star = []string{"*"}
 
-// roleWriteActions change what a role may do. The role must carry the
-// workload boundary (iam:PermissionsBoundary), so a role the deploy role
-// creates or edits can never do more than the boundary allows. Without this
-// condition the deploy role could create an admin role and use it (#935).
+// IAMPath is the IAM path of every role, customer managed policy and
+// instance profile a preset creates for a project. The deploy policy allows
+// IAM writes only under it.
+//
+// Why a path and not only the Project tag (#147): a path is part of the ARN,
+// so one Resource scope covers create, change, pass and delete, and a
+// customer's role or policy outside the path is never writable. A tag can be
+// added to a customer's role, and a role tagged by other Terraform (the
+// platform stack) may lack the boundary. The template must keep its own
+// roles and policies (the deploy role, InsideOutWrite, the boundaries) off
+// this path.
+func IAMPath(project string) string { return "/insideout/" + project + "/" }
+
+// projectARN is an IAM ARN pattern for kind under the project's path.
+func projectARN(kind string) string {
+	return "arn:aws:iam::*:" + kind + IAMPath(PlaceholderProject) + "*"
+}
+
+// roleWriteActions change what a project role may do. They also need the
+// workload boundary on the role, so a role the deploy role controls can never
+// do more than the boundary allows. Without that the deploy role could make
+// an admin role and use it (#935).
 var roleWriteActions = []string{
 	"iam:AttachRolePolicy",
 	"iam:DeleteRolePolicy",
@@ -275,12 +296,9 @@ var roleWriteActions = []string{
 	"iam:PutRolePolicy",
 }
 
-// projectRoleActions act on an existing role without changing its
-// permissions. They are limited to the project's own roles (Project tag), so
-// the deploy role can not pass, retrust or delete a customer's role.
+// projectRoleActions act on a project role without changing its permissions.
 var projectRoleActions = []string{
 	"iam:DeleteRole",
-	"iam:PassRole",
 	"iam:TagRole",
 	"iam:UntagRole",
 	"iam:UpdateAssumeRolePolicy",
@@ -288,63 +306,102 @@ var projectRoleActions = []string{
 	"iam:UpdateRoleDescription",
 }
 
-// iamSupportActions cover the other IAM objects the presets manage: instance
-// profiles, OIDC providers, service-linked roles and customer managed
-// policies. None of them grants permissions to a principal by itself.
-var iamSupportActions = []string{
-	"iam:AddClientIDToOpenIDConnectProvider",
-	"iam:AddRoleToInstanceProfile",
-	"iam:CreateInstanceProfile",
-	"iam:CreateOpenIDConnectProvider",
+// projectPolicyActions manage the project's customer managed policies. A
+// policy grants nothing until it is attached, and attaching needs the
+// boundary on the role.
+var projectPolicyActions = []string{
 	"iam:CreatePolicy",
 	"iam:CreatePolicyVersion",
-	"iam:CreateServiceLinkedRole",
-	"iam:DeleteInstanceProfile",
-	"iam:DeleteOpenIDConnectProvider",
 	"iam:DeletePolicy",
 	"iam:DeletePolicyVersion",
-	"iam:DeleteServiceLinkedRole",
-	"iam:RemoveClientIDFromOpenIDConnectProvider",
-	"iam:RemoveRoleFromInstanceProfile",
 	"iam:SetDefaultPolicyVersion",
-	"iam:TagInstanceProfile",
-	"iam:TagOpenIDConnectProvider",
 	"iam:TagPolicy",
-	"iam:UntagInstanceProfile",
-	"iam:UntagOpenIDConnectProvider",
 	"iam:UntagPolicy",
+}
+
+var instanceProfileActions = []string{
+	"iam:AddRoleToInstanceProfile",
+	"iam:CreateInstanceProfile",
+	"iam:DeleteInstanceProfile",
+	"iam:RemoveRoleFromInstanceProfile",
+	"iam:TagInstanceProfile",
+	"iam:UntagInstanceProfile",
+}
+
+// oidcProviderActions manage the EKS cluster's OIDC provider (the eks
+// registry module). They are limited to EKS issuer URLs, so the customer's
+// other providers (GitHub Actions) stay out of reach.
+var oidcProviderActions = []string{
+	"iam:AddClientIDToOpenIDConnectProvider",
+	"iam:CreateOpenIDConnectProvider",
+	"iam:DeleteOpenIDConnectProvider",
+	"iam:RemoveClientIDFromOpenIDConnectProvider",
+	"iam:TagOpenIDConnectProvider",
+	"iam:UntagOpenIDConnectProvider",
 	"iam:UpdateOpenIDConnectProviderThumbprint",
 }
 
+// EKSOIDCProviderARN is the ARN pattern of an EKS cluster's OIDC provider.
+const EKSOIDCProviderARN = "arn:aws:iam::*:oidc-provider/oidc.eks.*.amazonaws.com/id/*"
+
+// ServiceLinkedRoleARN is the ARN pattern of every service-linked role. AWS
+// owns their path and policies, so they can not be put under IAMPath.
+const ServiceLinkedRoleARN = "arn:aws:iam::*:role/aws-service-role/*"
+
+// PreflightResource returns the resource ARN the preflight must simulate an
+// IAM action on, for the scoped policy. Other actions use "*".
+//
+// Why: the scoped policy allows IAM writes only on project ARNs, so
+// SimulatePrincipalPolicy with no ResourceArns reports them as denied even
+// when a deploy would succeed (#147 step 3).
+func PreflightResource(action, project string) string {
+	path := IAMPath(project)
+	switch {
+	case action == "iam:CreateServiceLinkedRole":
+		return "arn:aws:iam::*:role/aws-service-role/preflight"
+	case strings.Contains(action, "OpenIDConnectProvider"):
+		return "arn:aws:iam::*:oidc-provider/oidc.eks.preflight.amazonaws.com/id/preflight"
+	case strings.Contains(action, "InstanceProfile"):
+		return "arn:aws:iam::*:instance-profile" + path + "preflight"
+	case strings.Contains(action, "Policy") && !strings.Contains(action, "Role"):
+		return "arn:aws:iam::*:policy" + path + "preflight"
+	case strings.HasPrefix(action, "iam:") && !strings.HasPrefix(action, "iam:Get") && !strings.HasPrefix(action, "iam:List"):
+		return "arn:aws:iam::*:role" + path + "preflight"
+	}
+	return "*"
+}
+
 func writePolicy(r Report) Document {
+	roles := []string{projectARN("role")}
 	return Document{Version: "2012-10-17", Statement: []Statement{
 		{Sid: "StackServices", Effect: "Allow", Action: serviceWildcards(r.DeployServices), Resource: star},
 		{Sid: "CallerIdentity", Effect: "Allow", Action: []string{"sts:GetCallerIdentity"}, Resource: star},
 		{Sid: "IAMRead", Effect: "Allow", Action: []string{"iam:Get*", "iam:List*"}, Resource: star},
-		{Sid: "CreateRoleOnlyWithWorkloadBoundary", Effect: "Allow", Action: []string{"iam:CreateRole"}, Resource: star,
-			Condition: eq("iam:PermissionsBoundary", PlaceholderWorkloadBoundaryARN)},
-		// The other role writes also need the Project tag, so the deploy
-		// role can not put the boundary on a customer's role and then
-		// change that role's policies.
-		{Sid: "RoleWritesOnlyOnProjectRolesWithWorkloadBoundary", Effect: "Allow", Action: roleWriteActions, Resource: star,
+		// The Project tag is still required on create: the InsideOut
+		// inspector finds resources by it.
+		{Sid: "CreateProjectRolesWithWorkloadBoundary", Effect: "Allow", Action: []string{"iam:CreateRole"}, Resource: roles,
 			Condition: map[string]map[string]any{"StringEquals": {
 				"iam:PermissionsBoundary": PlaceholderWorkloadBoundaryARN,
-				"aws:ResourceTag/Project": PlaceholderProject,
+				"aws:RequestTag/Project":  PlaceholderProject,
 			}}},
-		{Sid: "CreateRoleOnlyTaggedForProject", Effect: "Deny", Action: []string{"iam:CreateRole"}, Resource: star,
-			Condition: map[string]map[string]any{"StringNotEquals": {"aws:RequestTag/Project": PlaceholderProject}}},
-		{Sid: "ProjectRolesOnly", Effect: "Allow", Action: projectRoleActions, Resource: star,
-			Condition: eq("aws:ResourceTag/Project", PlaceholderProject)},
-		{Sid: "PassRoleOnlyToStackServices", Effect: "Deny", Action: []string{"iam:PassRole"}, Resource: star,
-			Condition: map[string]map[string]any{"StringNotEquals": {"iam:PassedToService": r.Principals}}},
-		{Sid: "IAMSupport", Effect: "Allow", Action: iamSupportActions, Resource: star},
-		// The deploy role must not edit the policies that bound it, or its
-		// own role. Their names all hold "insideout" (template account-setup
-		// and cloud-provision).
-		{Sid: "DenyEditOwnPolicies", Effect: "Deny", Action: []string{
+		{Sid: "ChangeProjectRolesWithWorkloadBoundary", Effect: "Allow", Action: roleWriteActions, Resource: roles,
+			Condition: eq("iam:PermissionsBoundary", PlaceholderWorkloadBoundaryARN)},
+		{Sid: "ManageProjectRoles", Effect: "Allow", Action: projectRoleActions, Resource: roles},
+		{Sid: "PassProjectRolesToStackServices", Effect: "Allow", Action: []string{"iam:PassRole"}, Resource: roles,
+			Condition: eq("iam:PassedToService", r.Principals)},
+		{Sid: "ProjectPolicies", Effect: "Allow", Action: projectPolicyActions, Resource: []string{projectARN("policy")}},
+		{Sid: "ProjectInstanceProfiles", Effect: "Allow", Action: instanceProfileActions, Resource: []string{projectARN("instance-profile")}},
+		{Sid: "EKSOIDCProviders", Effect: "Allow", Action: oidcProviderActions, Resource: []string{EKSOIDCProviderARN}},
+		{Sid: "ServiceLinkedRoles", Effect: "Allow", Action: []string{
+			"iam:CreateServiceLinkedRole", "iam:DeleteServiceLinkedRole", "iam:GetServiceLinkedRoleDeletionStatus",
+		}, Resource: []string{ServiceLinkedRoleARN}},
+		// Defense in depth: the boundary and the deploy role are off the
+		// project path, so no Allow reaches them. These Denies keep it so if
+		// the template ever moves them onto it.
+		{Sid: "DenyEditWorkloadBoundary", Effect: "Deny", Action: []string{
 			"iam:CreatePolicyVersion", "iam:DeletePolicy", "iam:DeletePolicyVersion", "iam:SetDefaultPolicyVersion",
-		}, Resource: []string{"arn:aws:iam::*:policy/*insideout*"}},
-		{Sid: "DenyEditOwnRole", Effect: "Deny", Action: []string{
+		}, Resource: []string{PlaceholderWorkloadBoundaryARN}},
+		{Sid: "DenyEditDeployRole", Effect: "Deny", Action: []string{
 			"iam:AttachRolePolicy", "iam:DeleteRole", "iam:DeleteRolePermissionsBoundary", "iam:DeleteRolePolicy",
 			"iam:DetachRolePolicy", "iam:PutRolePermissionsBoundary", "iam:PutRolePolicy", "iam:TagRole",
 			"iam:UntagRole", "iam:UpdateAssumeRolePolicy",
@@ -364,14 +421,12 @@ func boundaryPolicy(r Report) Document {
 	return Document{Version: "2012-10-17", Statement: []Statement{
 		{Sid: "StackServices", Effect: "Allow", Action: serviceWildcards(keys(all)), Resource: star},
 		{Sid: "CallerIdentity", Effect: "Allow", Action: []string{"sts:GetCallerIdentity"}, Resource: star},
-		{Sid: "IAMReadAndServiceLinkedRoles", Effect: "Allow", Action: []string{"iam:CreateServiceLinkedRole", "iam:Get*", "iam:List*"}, Resource: star},
+		{Sid: "IAMRead", Effect: "Allow", Action: []string{"iam:Get*", "iam:List*"}, Resource: star},
+		{Sid: "ServiceLinkedRoles", Effect: "Allow", Action: []string{"iam:CreateServiceLinkedRole"}, Resource: []string{ServiceLinkedRoleARN}},
 		// Managed policies such as AmazonSageMakerFullAccess pass the role to
 		// the service. Same limits as the deploy role.
-		{Sid: "PassProjectRolesToStackServices", Effect: "Allow", Action: []string{"iam:PassRole"}, Resource: star,
-			Condition: map[string]map[string]any{"StringEquals": {
-				"aws:ResourceTag/Project": PlaceholderProject,
-				"iam:PassedToService":     r.Principals,
-			}}},
+		{Sid: "PassProjectRolesToStackServices", Effect: "Allow", Action: []string{"iam:PassRole"}, Resource: []string{projectARN("role")},
+			Condition: eq("iam:PassedToService", r.Principals)},
 	}}
 }
 

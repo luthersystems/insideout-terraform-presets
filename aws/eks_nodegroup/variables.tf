@@ -143,3 +143,25 @@ variable "ami_type" {
     error_message = "ami_type must be a supported EKS-managed AMI type. See https://docs.aws.amazon.com/eks/latest/APIReference/API_Nodegroup.html#AmazonEKS-Type-Nodegroup-amiType."
   }
 }
+
+variable "iam_path" {
+  description = "IAM path for the roles, customer managed policies and instance profiles this module creates. The scoped deploy policy allows IAM writes only under /insideout/<project>/ (sandbox-infrastructure-template#147). null keeps the module's default path. Changing it replaces the roles."
+  type        = string
+  default     = null
+
+  validation {
+    condition     = var.iam_path == null ? true : can(regex("^/([A-Za-z0-9+=,.@_-]+/)*$", var.iam_path))
+    error_message = "iam_path must start and end with / and hold only IAM path characters."
+  }
+}
+
+variable "iam_permissions_boundary" {
+  description = "ARN of the permissions boundary for every role this module creates. The scoped deploy policy refuses a role without the workload boundary (sandbox-infrastructure-template#147). null sets no boundary."
+  type        = string
+  default     = null
+
+  validation {
+    condition     = var.iam_permissions_boundary == null ? true : can(regex("^arn:aws[a-z-]*:iam::([0-9]{12}|aws):policy/", var.iam_permissions_boundary))
+    error_message = "iam_permissions_boundary must be an IAM policy ARN."
+  }
+}
