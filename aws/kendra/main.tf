@@ -106,8 +106,8 @@ resource "aws_iam_role" "index" {
 
   tags = merge(module.name.tags, var.tags)
 
-  path                 = var.iam_path
-  permissions_boundary = var.iam_permissions_boundary
+  path                 = try(var.iam_scope.path, null)
+  permissions_boundary = try(var.iam_scope.permissions_boundary, null)
 }
 
 # The index role's CloudWatch logs + metrics policy. These are the minimum
@@ -248,8 +248,8 @@ resource "aws_iam_role" "data_source" {
 
   tags = merge(module.name.tags, var.tags)
 
-  path                 = var.iam_path
-  permissions_boundary = var.iam_permissions_boundary
+  path                 = try(var.iam_scope.path, null)
+  permissions_boundary = try(var.iam_scope.permissions_boundary, null)
 }
 
 # The S3 data-source access policy. s3:GetObject + s3:ListBucket on the wired

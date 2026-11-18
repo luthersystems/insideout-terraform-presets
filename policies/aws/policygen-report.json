@@ -154,6 +154,9 @@
         "logs",
         "ssm",
         "sts"
+      ],
+      "iam_without_path": [
+        "./aws_iam_policy.cni_ipv6_policy"
       ]
     },
     "aws_eks_nodegroup": {
@@ -283,6 +286,9 @@
         "rds",
         "redshift",
         "sts"
+      ],
+      "iam_without_path": [
+        "./aws_iam_policy.vpc_flow_log_cloudwatch"
       ]
     },
     "aws_waf": {
@@ -451,5 +457,11 @@
     "service-role/AWSLambdaVPCAccessExecutionRole",
     "service-role/AmazonEBSCSIDriverPolicy",
     "service-role/AmazonRDSEnhancedMonitoringRole"
+  ],
+  "service_linked_roles": [
+    "eks-nodegroup.amazonaws.com",
+    "kafka.amazonaws.com",
+    "observability.aoss.amazonaws.com",
+    "opensearchservice.amazonaws.com"
   ]
 }

@@ -101,7 +101,7 @@
         "iam:CreateServiceLinkedRole"
       ],
       "Resource": [
-        "arn:aws:iam::*:role/aws-service-role/*"
+        "arn:*:iam::*:role/aws-service-role/*"
       ]
     },
     {
@@ -111,7 +111,7 @@
         "iam:PassRole"
       ],
       "Resource": [
-        "arn:aws:iam::*:role/insideout/${project}/*"
+        "arn:*:iam::*:role/insideout/${project}/*"
       ],
       "Condition": {
         "StringEquals": {

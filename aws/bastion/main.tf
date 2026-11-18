@@ -85,8 +85,8 @@ resource "aws_iam_role" "bastion_role" {
   assume_role_policy = data.aws_iam_policy_document.ec2_assume_role.json
   tags               = merge(module.name.tags, var.tags)
 
-  path                 = var.iam_path
-  permissions_boundary = var.iam_permissions_boundary
+  path                 = try(var.iam_scope.path, null)
+  permissions_boundary = try(var.iam_scope.permissions_boundary, null)
 }
 
 resource "aws_iam_role_policy_attachment" "ssm_core" {
@@ -99,7 +99,7 @@ resource "aws_iam_instance_profile" "bastion_profile" {
   role = aws_iam_role.bastion_role.name
   tags = merge(module.name.tags, var.tags)
 
-  path = var.iam_path
+  path = try(var.iam_scope.path, null)
 }
 
 # locals for template vars

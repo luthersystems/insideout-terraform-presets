@@ -84,8 +84,8 @@ resource "aws_iam_role" "agent" {
     ignore_changes = [inline_policy]
   }
 
-  path                 = var.iam_path
-  permissions_boundary = var.iam_permissions_boundary
+  path                 = try(var.iam_scope.path, null)
+  permissions_boundary = try(var.iam_scope.permissions_boundary, null)
 }
 
 # The agent role policy: InvokeModel on the agent's foundation model is always

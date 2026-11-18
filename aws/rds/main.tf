@@ -106,8 +106,8 @@ resource "aws_iam_role" "rds_monitoring" {
     ignore_changes = [managed_policy_arns]
   }
 
-  path                 = var.iam_path
-  permissions_boundary = var.iam_permissions_boundary
+  path                 = try(var.iam_scope.path, null)
+  permissions_boundary = try(var.iam_scope.permissions_boundary, null)
 }
 
 resource "aws_iam_role_policy_attachment" "rds_monitoring" {

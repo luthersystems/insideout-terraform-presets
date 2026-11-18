@@ -100,7 +100,7 @@ resource "aws_iam_role" "access" {
   count = local.needs_access_role ? 1 : 0
 
   name = "${var.project}-apprunner-access"
-  path = coalesce(var.iam_path, "/service-role/")
+  path = try(var.iam_scope.path, "/service-role/")
 
   # build.apprunner.amazonaws.com is the App Runner build plane
   # service principal — distinct from the tasks.apprunner.amazonaws.com
@@ -129,7 +129,7 @@ resource "aws_iam_role" "access" {
     ignore_changes = [managed_policy_arns]
   }
 
-  permissions_boundary = var.iam_permissions_boundary
+  permissions_boundary = try(var.iam_scope.permissions_boundary, null)
 }
 
 resource "aws_iam_role_policy_attachment" "access_ecr" {
@@ -146,7 +146,7 @@ resource "aws_iam_role_policy_attachment" "access_ecr" {
 
 resource "aws_iam_role" "instance" {
   name = "${var.project}-apprunner-instance"
-  path = coalesce(var.iam_path, "/service-role/")
+  path = try(var.iam_scope.path, "/service-role/")
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -170,7 +170,7 @@ resource "aws_iam_role" "instance" {
     ignore_changes = [managed_policy_arns]
   }
 
-  permissions_boundary = var.iam_permissions_boundary
+  permissions_boundary = try(var.iam_scope.permissions_boundary, null)
 }
 
 # -----------------------------------------------------------------------------

@@ -72,8 +72,8 @@ resource "aws_iam_role" "writer" {
     ignore_changes = [managed_policy_arns]
   }
 
-  path                 = var.iam_path
-  permissions_boundary = var.iam_permissions_boundary
+  path                 = try(var.iam_scope.path, null)
+  permissions_boundary = try(var.iam_scope.permissions_boundary, null)
 }
 
 data "aws_iam_policy_document" "writer" {
@@ -104,7 +104,7 @@ resource "aws_iam_policy" "writer" {
   # lifecycle.ignore_changes has no effect. Suppression must happen at the
   # drift-check level — see sandbox-infrastructure-template#93.
 
-  path = var.iam_path
+  path = try(var.iam_scope.path, null)
 }
 
 resource "aws_iam_role_policy_attachment" "writer" {

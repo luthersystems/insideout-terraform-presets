@@ -195,8 +195,8 @@ resource "aws_iam_role" "ebs_csi" {
   assume_role_policy = data.aws_iam_policy_document.ebs_csi_pod_identity_trust[0].json
   tags               = local.common_tags
 
-  path                 = var.iam_path
-  permissions_boundary = var.iam_permissions_boundary
+  path                 = try(var.iam_scope.path, null)
+  permissions_boundary = try(var.iam_scope.permissions_boundary, null)
 }
 
 resource "aws_iam_role_policy_attachment" "ebs_csi" {
@@ -238,11 +238,11 @@ module "eks" {
   # The scoped deploy policy allows IAM writes only under the project's IAM
   # path, and creates roles only with the workload boundary
   # (sandbox-infrastructure-template#147). null keeps the module defaults.
-  iam_role_path                      = var.iam_path
-  iam_role_permissions_boundary      = var.iam_permissions_boundary
-  encryption_policy_path             = var.iam_path
-  node_iam_role_path                 = var.iam_path
-  node_iam_role_permissions_boundary = var.iam_permissions_boundary
+  iam_role_path                      = try(var.iam_scope.path, null)
+  iam_role_permissions_boundary      = try(var.iam_scope.permissions_boundary, null)
+  encryption_policy_path             = try(var.iam_scope.path, null)
+  node_iam_role_path                 = try(var.iam_scope.path, null)
+  node_iam_role_permissions_boundary = try(var.iam_scope.permissions_boundary, null)
 
   tags = local.common_tags
 }

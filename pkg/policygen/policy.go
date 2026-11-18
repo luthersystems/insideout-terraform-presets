@@ -24,6 +24,9 @@ const (
 	// PlaceholderDeployRoleARN is the ARN of the role the deploy policy is
 	// attached to.
 	PlaceholderDeployRoleARN = "${deploy_role_arn}"
+	// PlaceholderDeployPolicyARN is the ARN of the deploy policy itself
+	// (InsideOutWrite once created).
+	PlaceholderDeployPolicyARN = "${deploy_policy_arn}"
 )
 
 // Document is an IAM policy document.
@@ -75,6 +78,9 @@ type Report struct {
 	BoundaryExtra   []string                                  `json:"boundary_extra_services"`
 	Principals      []string                                  `json:"pass_role_principals"`
 	ManagedPolicies []string                                  `json:"managed_policies"`
+	// ServiceLinkedRoles are the services whose service-linked roles the
+	// presets create, and so may delete.
+	ServiceLinkedRoles []string `json:"service_linked_roles,omitempty"`
 	// Unmapped lists what the tables do not cover; Generate fails when it
 	// is not empty, and the tests name each item.
 	UnmappedTypes    []string `json:"-"`
@@ -117,7 +123,7 @@ func Scan(opts Options) (Report, error) {
 		return Report{}, err
 	}
 	r := Report{Components: map[composer.ComponentKey]ComponentReport{}}
-	deploy, principals, managed := map[string]bool{}, map[string]bool{}, map[string]bool{}
+	deploy, principals, managed, slr := map[string]bool{}, map[string]bool{}, map[string]bool{}, map[string]bool{}
 	unmappedTypes, unmappedManaged, missingReg, badRemote := map[string]bool{}, map[string]bool{}, map[string]bool{}, map[string]bool{}
 
 	addTypes := func(types []string, into map[string]bool) {
@@ -164,6 +170,9 @@ func Scan(opts Options) (Report, error) {
 		for _, p := range full.Principals {
 			principals[p] = true
 		}
+		for _, svc := range full.ServiceLinkedRoles {
+			slr[svc] = true
+		}
 		for _, m := range full.ManagedPolicies {
 			managed[m] = true
 		}
@@ -208,6 +217,7 @@ func Scan(opts Options) (Report, error) {
 	r.BoundaryExtra = keys(boundaryExtra)
 	r.Principals = keys(principals)
 	r.ManagedPolicies = keys(managed)
+	r.ServiceLinkedRoles = keys(slr)
 	r.UnmappedTypes = keys(unmappedTypes)
 	r.UnmappedManaged = keys(unmappedManaged)
 	r.MissingRegistry = keys(missingReg)
@@ -235,6 +245,11 @@ func Generate(opts Options) (Result, error) {
 	}
 	if len(r.UnexpectedRemote) > 0 {
 		problems = append(problems, "remote module sources the generator can not scan: "+strings.Join(r.UnexpectedRemote, ", "))
+	}
+	for _, svc := range r.ServiceLinkedRoles {
+		if strings.HasPrefix(svc, "<") {
+			problems = append(problems, "aws_iam_service_linked_role aws_service_name "+svc)
+		}
 	}
 	if len(problems) > 0 {
 		return Result{}, fmt.Errorf("policygen: %s", strings.Join(problems, "; "))
@@ -279,9 +294,10 @@ var star = []string{"*"}
 // this path.
 func IAMPath(project string) string { return "/insideout/" + project + "/" }
 
-// projectARN is an IAM ARN pattern for kind under the project's path.
+// projectARN is an IAM ARN pattern for kind under the project's path. The
+// partition is a wildcard so the policy also works in GovCloud and China.
 func projectARN(kind string) string {
-	return "arn:aws:iam::*:" + kind + IAMPath(PlaceholderProject) + "*"
+	return "arn:*:iam::*:" + kind + IAMPath(PlaceholderProject) + "*"
 }
 
 // roleWriteActions change what a project role may do. They also need the
@@ -328,12 +344,12 @@ var instanceProfileActions = []string{
 	"iam:UntagInstanceProfile",
 }
 
-// oidcProviderActions manage the EKS cluster's OIDC provider (the eks
-// registry module). They are limited to EKS issuer URLs, so the customer's
-// other providers (GitHub Actions) stay out of reach.
-var oidcProviderActions = []string{
+// oidcProviderChangeActions change or delete the EKS cluster's OIDC
+// provider (the eks registry module). An OIDC provider takes no path, so
+// they need the Project tag, which keeps the customer's other providers
+// (GitHub Actions, their own clusters) out of reach.
+var oidcProviderChangeActions = []string{
 	"iam:AddClientIDToOpenIDConnectProvider",
-	"iam:CreateOpenIDConnectProvider",
 	"iam:DeleteOpenIDConnectProvider",
 	"iam:RemoveClientIDFromOpenIDConnectProvider",
 	"iam:TagOpenIDConnectProvider",
@@ -341,12 +357,29 @@ var oidcProviderActions = []string{
 	"iam:UpdateOpenIDConnectProviderThumbprint",
 }
 
-// EKSOIDCProviderARN is the ARN pattern of an EKS cluster's OIDC provider.
-const EKSOIDCProviderARN = "arn:aws:iam::*:oidc-provider/oidc.eks.*.amazonaws.com/id/*"
+// EKSOIDCProviderARN is the ARN pattern of an EKS cluster's OIDC provider
+// (issuer oidc.eks.<region>.amazonaws.com, .com.cn in China).
+const EKSOIDCProviderARN = "arn:*:iam::*:oidc-provider/oidc.eks.*"
 
 // ServiceLinkedRoleARN is the ARN pattern of every service-linked role. AWS
 // owns their path and policies, so they can not be put under IAMPath.
-const ServiceLinkedRoleARN = "arn:aws:iam::*:role/aws-service-role/*"
+const ServiceLinkedRoleARN = "arn:*:iam::*:role/aws-service-role/*"
+
+// legacyTeardownActions only remove permissions or IAM objects. They are
+// allowed on IAM objects tagged with the project anywhere, so an existing
+// project can opt in: setting iam_path replaces each role, and Terraform
+// must detach and delete the old one off the path. They can not grant
+// anything, and the deploy role can not tag an object off the path, so it
+// can not claim a customer's role this way.
+var legacyTeardownActions = []string{
+	"iam:DeleteInstanceProfile",
+	"iam:DeletePolicy",
+	"iam:DeletePolicyVersion",
+	"iam:DeleteRole",
+	"iam:DeleteRolePolicy",
+	"iam:DetachRolePolicy",
+	"iam:RemoveRoleFromInstanceProfile",
+}
 
 // PreflightResource returns the resource ARN the preflight must simulate an
 // IAM action on, for the scoped policy. Other actions use "*".
@@ -355,20 +388,31 @@ const ServiceLinkedRoleARN = "arn:aws:iam::*:role/aws-service-role/*"
 // SimulatePrincipalPolicy with no ResourceArns reports them as denied even
 // when a deploy would succeed (#147 step 3).
 func PreflightResource(action, project string) string {
+	name, ok := strings.CutPrefix(action, "iam:")
+	if !ok || strings.HasPrefix(name, "Get") || strings.HasPrefix(name, "List") {
+		return "*"
+	}
 	path := IAMPath(project)
 	switch {
-	case action == "iam:CreateServiceLinkedRole":
-		return "arn:aws:iam::*:role/aws-service-role/preflight"
-	case strings.Contains(action, "OpenIDConnectProvider"):
+	case strings.HasSuffix(name, "ServiceLinkedRole"):
+		return "arn:aws:iam::*:role/aws-service-role/preflight.amazonaws.com/preflight"
+	case strings.Contains(name, "OpenIDConnectProvider"):
 		return "arn:aws:iam::*:oidc-provider/oidc.eks.preflight.amazonaws.com/id/preflight"
-	case strings.Contains(action, "InstanceProfile"):
+	case strings.Contains(name, "InstanceProfile"):
 		return "arn:aws:iam::*:instance-profile" + path + "preflight"
-	case strings.Contains(action, "Policy") && !strings.Contains(action, "Role"):
+	case strings.Contains(name, "Policy") && !strings.Contains(name, "Role"):
 		return "arn:aws:iam::*:policy" + path + "preflight"
-	case strings.HasPrefix(action, "iam:") && !strings.HasPrefix(action, "iam:Get") && !strings.HasPrefix(action, "iam:List"):
-		return "arn:aws:iam::*:role" + path + "preflight"
 	}
-	return "*"
+	return "arn:aws:iam::*:role" + path + "preflight"
+}
+
+// slrARNs are the ARN patterns of the given services' service-linked roles.
+func slrARNs(svcs []string) []string {
+	out := make([]string, 0, len(svcs))
+	for _, s := range svcs {
+		out = append(out, "arn:*:iam::*:role/aws-service-role/"+s+"/*")
+	}
+	return out
 }
 
 func writePolicy(r Report) Document {
@@ -391,16 +435,33 @@ func writePolicy(r Report) Document {
 			Condition: eq("iam:PassedToService", r.Principals)},
 		{Sid: "ProjectPolicies", Effect: "Allow", Action: projectPolicyActions, Resource: []string{projectARN("policy")}},
 		{Sid: "ProjectInstanceProfiles", Effect: "Allow", Action: instanceProfileActions, Resource: []string{projectARN("instance-profile")}},
-		{Sid: "EKSOIDCProviders", Effect: "Allow", Action: oidcProviderActions, Resource: []string{EKSOIDCProviderARN}},
-		{Sid: "ServiceLinkedRoles", Effect: "Allow", Action: []string{
-			"iam:CreateServiceLinkedRole", "iam:DeleteServiceLinkedRole", "iam:GetServiceLinkedRoleDeletionStatus",
-		}, Resource: []string{ServiceLinkedRoleARN}},
-		// Defense in depth: the boundary and the deploy role are off the
-		// project path, so no Allow reaches them. These Denies keep it so if
-		// the template ever moves them onto it.
-		{Sid: "DenyEditWorkloadBoundary", Effect: "Deny", Action: []string{
+		{Sid: "CreateEKSOIDCProviderForProject", Effect: "Allow", Action: []string{"iam:CreateOpenIDConnectProvider"}, Resource: []string{EKSOIDCProviderARN},
+			Condition: eq("aws:RequestTag/Project", PlaceholderProject)},
+		// Tags given at create are authorized as a tag call on an object
+		// with no tags yet. An untagged EKS provider of the customer's can
+		// be claimed this way; the tag-scoped changes below then reach it.
+		// The path scope that protects roles has no equal for providers.
+		{Sid: "TagNewEKSOIDCProviderForProject", Effect: "Allow", Action: []string{"iam:TagOpenIDConnectProvider"}, Resource: []string{EKSOIDCProviderARN},
+			Condition: map[string]map[string]any{
+				"StringEquals": {"aws:RequestTag/Project": PlaceholderProject},
+				"Null":         {"aws:ResourceTag/Project": "true"},
+			}},
+		{Sid: "ChangeProjectEKSOIDCProviders", Effect: "Allow", Action: oidcProviderChangeActions, Resource: []string{EKSOIDCProviderARN},
+			Condition: eq("aws:ResourceTag/Project", PlaceholderProject)},
+		// Services create their own service-linked role on first use, so
+		// create is open. Delete is limited to the services whose roles a
+		// preset creates.
+		{Sid: "CreateServiceLinkedRoles", Effect: "Allow", Action: []string{"iam:CreateServiceLinkedRole"}, Resource: []string{ServiceLinkedRoleARN}},
+		{Sid: "DeletePresetServiceLinkedRoles", Effect: "Allow", Action: []string{"iam:DeleteServiceLinkedRole"}, Resource: slrARNs(r.ServiceLinkedRoles)},
+		{Sid: "TeardownLegacyProjectIAM", Effect: "Allow", Action: legacyTeardownActions, Resource: star,
+			Condition: eq("aws:ResourceTag/Project", PlaceholderProject)},
+		// Defense in depth: the deploy role, its policy and the boundary
+		// are off the project path, so no path Allow reaches them. These
+		// Denies keep it so if the template ever moves them onto it, and
+		// against the tag-scoped teardown above.
+		{Sid: "DenyEditOwnPolicies", Effect: "Deny", Action: []string{
 			"iam:CreatePolicyVersion", "iam:DeletePolicy", "iam:DeletePolicyVersion", "iam:SetDefaultPolicyVersion",
-		}, Resource: []string{PlaceholderWorkloadBoundaryARN}},
+		}, Resource: []string{PlaceholderDeployPolicyARN, PlaceholderWorkloadBoundaryARN}},
 		{Sid: "DenyEditDeployRole", Effect: "Deny", Action: []string{
 			"iam:AttachRolePolicy", "iam:DeleteRole", "iam:DeleteRolePermissionsBoundary", "iam:DeleteRolePolicy",
 			"iam:DetachRolePolicy", "iam:PutRolePermissionsBoundary", "iam:PutRolePolicy", "iam:TagRole",
