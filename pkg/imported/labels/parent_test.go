@@ -29,6 +29,8 @@ func TestParentTfType_ChildResolvesToParent(t *testing.T) {
 		{"aws_internet_gateway", "aws_vpc"},
 		{"aws_subnet", "aws_vpc"},
 		{"aws_vpc_dhcp_options", "aws_vpc"},
+		{"aws_network_acl", "aws_vpc"},
+		{"aws_default_network_acl", "aws_vpc"},
 		// Split security-group rules.
 		{"aws_vpc_security_group_ingress_rule", "aws_security_group"},
 		{"aws_vpc_security_group_egress_rule", "aws_security_group"},

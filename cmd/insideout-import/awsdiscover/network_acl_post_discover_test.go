@@ -68,6 +68,7 @@ func TestNetworkACLPostDiscover_DefaultRetyped(t *testing.T) {
 
 	assert.Equal(t, "acl-07053f2bb73b58ba6", fake.gotACLID, "the acl-… id must drive DescribeNetworkAcls")
 	assert.Equal(t, "true", ir.Identity.NativeIDs["is_default"], "is_default must be stamped")
+	assert.Equal(t, "vpc-044b75ab41c527a20", ir.Identity.NativeIDs["vpc_id"], "vpc_id from the describe answer links the NACL to its aws_vpc")
 	assert.Equal(t, "aws_default_network_acl", ir.Identity.Type, "a default NACL must be re-typed to aws_default_network_acl")
 	assert.Equal(t, "aws_default_network_acl.acl_07053f2bb73b58ba6", ir.Identity.Address,
 		"Address must be regenerated so the type prefix matches the emitted import {} block")

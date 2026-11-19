@@ -747,12 +747,13 @@ var cloudControlTypeConfigs = []cloudControlConfig{
 		TagsFromProperties:      tagsFromKey("Tags"),
 	},
 	{
-		TFType:                 "aws_network_acl",
-		CloudFormationType:     "AWS::EC2::NetworkAcl",
-		Slug:                   "network_acl",
-		ImportIDFromIdentifier: passthroughImportID,
-		NameHintFromProperties: passthroughIdentifierName,
-		TagsFromProperties:     tagsFromKey("Tags"),
+		TFType:                  "aws_network_acl",
+		CloudFormationType:      "AWS::EC2::NetworkAcl",
+		Slug:                    "network_acl",
+		ImportIDFromIdentifier:  passthroughImportID,
+		NameHintFromProperties:  passthroughIdentifierName,
+		NativeIDsFromProperties: vpcIDNativeIDs,
+		TagsFromProperties:      tagsFromKey("Tags"),
 		// Resolve IsDefault at DISCOVER time via ec2:DescribeNetworkAcls.
 		// The CC AWS::EC2::NetworkAcl schema exposes only {VpcId, Id,
 		// Tags} — no IsDefault — so the property extractor cannot tell a

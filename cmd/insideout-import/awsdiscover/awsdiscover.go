@@ -514,6 +514,18 @@ func (a *AWSDiscoverer) DiscoverByID(ctx context.Context, tfType, id, region, ac
 // empty args.Regions defaults to the configured-region of the
 // aws.Config inside each per-service implementation, preserving the
 // pre-#291 single-region behavior.
+// retypedFrom maps a Terraform type that has no discoverer of its own to
+// the discoverer whose PostDiscover hook produces it. A request for the
+// re-typed type runs that discoverer instead of failing as unknown. The
+// selection closure needs this: a selected aws_vpc asks for all its
+// child types, aws_default_network_acl among them, and one unknown type
+// would fail the whole closure. The source discoverer also returns its
+// own type (custom NACLs here), which is harmless: callers filter the
+// results by type.
+var retypedFrom = map[string]string{
+	"aws_default_network_acl": "aws_network_acl",
+}
+
 func (a *AWSDiscoverer) DiscoverTypes(ctx context.Context, types []string, args DiscoverArgs) ([]imported.ImportedResource, error) {
 	if len(types) == 0 {
 		types = a.SupportedTypes()
@@ -530,7 +542,15 @@ func (a *AWSDiscoverer) DiscoverTypes(ctx context.Context, types []string, args 
 
 	var unknown []string
 	selected := make([]Discoverer, 0, len(types))
+	seen := make(map[string]bool, len(types))
 	for _, t := range types {
+		if src, ok := retypedFrom[t]; ok {
+			t = src
+		}
+		if seen[t] {
+			continue
+		}
+		seen[t] = true
 		d, ok := a.byType[t]
 		if !ok {
 			unknown = append(unknown, t)
