@@ -77,7 +77,10 @@ type VarSpec struct {
 	MaxItems  *int     // for list(string)
 	Sensitive bool     // optional
 	Nullable  bool     // ignored at root; root vars are required by design
-	Doc       string   // optional description
+	// NullDefault emits `default = null`, so the variable is optional.
+	// Use it for a root variable that only some callers set (iam_scope).
+	NullDefault bool
+	Doc         string // optional description
 }
 
 // renderSpecType -> canonical HCL RHS for type
@@ -265,6 +268,8 @@ func EmitVariablesTFWithSchema(
 					vb.SetAttributeValue("default", cv)
 				}
 			}
+		} else if hasSpec && spec.NullDefault {
+			vb.SetAttributeValue("default", cty.NullVal(cty.DynamicPseudoType))
 		}
 
 		// Validations from schema

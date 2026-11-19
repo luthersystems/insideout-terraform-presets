@@ -32,6 +32,12 @@ func RootVarSchema() map[string]VarSpec {
 		// Unlike template_ref (written by ui-core), the default is the actual
 		// version string so the deployed archive carries its own provenance
 		// without requiring an external writer.
+		// iam_scope is written by sandbox-infrastructure-template into
+		// iam_scope.auto.tfvars.json for a project on the scoped deploy
+		// policy (sandbox-infrastructure-template#147). The composer passes
+		// it to every AWS module that declares it; null keeps the old IAM
+		// path and no permissions boundary.
+		IAMScopeVar:   {Type: "any", NullDefault: true, Doc: "IAM path and permissions boundary for the IAM roles and policies the stack creates. Set by sandbox-infrastructure-template for a project on the scoped deploy policy; null keeps the default path and no boundary."},
 		"presets_ref": {Type: "string", Doc: "Module version of insideout-terraform-presets that composed this Terraform archive. Defaults to the version recorded in the consuming binary's Go build info at compose time. Empty when the composer runs in dev/in-tree mode."},
 	}
 }
