@@ -262,6 +262,10 @@ var awsCodegenOnlyTypes = []string{
 	// default NACL as aws_network_acl. It is codegen-only so the typed
 	// model exists for that re-typed resource: stored Attributes convert
 	// to typed Attrs, and the composer emits ingress/egress as blocks.
+	// Unlike the other entries here it IS discovered (through that
+	// re-type), so do not add a discoverer for it. The capability matrix
+	// still reports it as not discoverable, because it has no discoverer
+	// of its own.
 	"aws_default_network_acl",
 	"aws_dynamodb_global_table",
 	"aws_ecs_service",

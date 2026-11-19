@@ -22,7 +22,7 @@ and is checked in lockstep with the runtime registries. See the
 
 ## Summary
 
-- **AWS:** 150 types · 73% Discoverable · 73% Enrichable · 100% DriftDetectable · 61% MetricsAvailable · 90% AgentEditable
+- **AWS:** 150 types · 73% Discoverable · 73% Enrichable · 100% DriftDetectable · 61% MetricsAvailable · 89% AgentEditable
 - **GCP:** 64 types · 88% Discoverable · 88% Enrichable · 100% DriftDetectable · 78% MetricsAvailable · 91% AgentEditable
 
 ## AWS
@@ -85,7 +85,7 @@ and is checked in lockstep with the runtime registries. See the
 | `aws_db_instance` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `aws_db_parameter_group` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `aws_db_subnet_group` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `aws_default_network_acl` | – | – | ✓ | ✓ | ✓ |
+| `aws_default_network_acl` | – | – | ✓ | ✓ | – |
 | `aws_dynamodb_contributor_insights` | ✓ | ✓ | ✓ | ✓ | – |
 | `aws_dynamodb_global_table` | – | – | ✓ | – | ✓ |
 | `aws_dynamodb_table` | ✓ | ✓ | ✓ | ✓ | ✓ |

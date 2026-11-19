@@ -912,23 +912,23 @@ aws_db_subnet_group	tags_all	Tuning		Hidden	SystemOnly	Redacted
 aws_db_subnet_group	vpc_id	Wiring	Reliability	UIVisible	Never		
 aws_default_network_acl	arn	Identity		UIVisible	Never		
 aws_default_network_acl	default_network_acl_id	Identity		UIVisible	Never		AlwaysReplace
-aws_default_network_acl	egress	Tuning	Security	UIVisible	RequiresApproval		
-aws_default_network_acl	egress.action	Tuning	Security	UIVisible	RequiresApproval		
-aws_default_network_acl	egress.cidr_block	Tuning	Security	SummaryVisible	RequiresApproval		
-aws_default_network_acl	egress.from_port	Tuning	Security	SummaryVisible	RequiresApproval		
-aws_default_network_acl	egress.ipv6_cidr_block	Tuning	Security	SummaryVisible	RequiresApproval		
-aws_default_network_acl	egress.protocol	Tuning	Security	SummaryVisible	RequiresApproval		
-aws_default_network_acl	egress.rule_no	Tuning	Security	SummaryVisible	RequiresApproval		
-aws_default_network_acl	egress.to_port	Tuning	Security	SummaryVisible	RequiresApproval		
+aws_default_network_acl	egress	Tuning	Security	UIVisible	Never		
+aws_default_network_acl	egress.action	Tuning	Security	UIVisible	Never		
+aws_default_network_acl	egress.cidr_block	Tuning	Security	SummaryVisible	Never		
+aws_default_network_acl	egress.from_port	Tuning	Security	SummaryVisible	Never		
+aws_default_network_acl	egress.ipv6_cidr_block	Tuning	Security	SummaryVisible	Never		
+aws_default_network_acl	egress.protocol	Tuning	Security	SummaryVisible	Never		
+aws_default_network_acl	egress.rule_no	Tuning	Security	SummaryVisible	Never		
+aws_default_network_acl	egress.to_port	Tuning	Security	SummaryVisible	Never		
 aws_default_network_acl	id	Identity		UIVisible	Never		
-aws_default_network_acl	ingress	Tuning	Security	UIVisible	RequiresApproval		
-aws_default_network_acl	ingress.action	Tuning	Security	UIVisible	RequiresApproval		
-aws_default_network_acl	ingress.cidr_block	Tuning	Security	SummaryVisible	RequiresApproval		
-aws_default_network_acl	ingress.from_port	Tuning	Security	SummaryVisible	RequiresApproval		
-aws_default_network_acl	ingress.ipv6_cidr_block	Tuning	Security	SummaryVisible	RequiresApproval		
-aws_default_network_acl	ingress.protocol	Tuning	Security	SummaryVisible	RequiresApproval		
-aws_default_network_acl	ingress.rule_no	Tuning	Security	SummaryVisible	RequiresApproval		
-aws_default_network_acl	ingress.to_port	Tuning	Security	SummaryVisible	RequiresApproval		
+aws_default_network_acl	ingress	Tuning	Security	UIVisible	Never		
+aws_default_network_acl	ingress.action	Tuning	Security	UIVisible	Never		
+aws_default_network_acl	ingress.cidr_block	Tuning	Security	SummaryVisible	Never		
+aws_default_network_acl	ingress.from_port	Tuning	Security	SummaryVisible	Never		
+aws_default_network_acl	ingress.ipv6_cidr_block	Tuning	Security	SummaryVisible	Never		
+aws_default_network_acl	ingress.protocol	Tuning	Security	SummaryVisible	Never		
+aws_default_network_acl	ingress.rule_no	Tuning	Security	SummaryVisible	Never		
+aws_default_network_acl	ingress.to_port	Tuning	Security	SummaryVisible	Never		
 aws_default_network_acl	owner_id	Identity		UIVisible	Never		
 aws_default_network_acl	subnet_ids	Wiring	Security	SummaryVisible	Never		
 aws_default_network_acl	tags	Tuning		Hidden	SystemOnly	Redacted	
