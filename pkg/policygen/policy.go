@@ -16,7 +16,8 @@ import (
 // is account-independent, and the template knows these values only at apply.
 const (
 	// PlaceholderWorkloadBoundaryARN is the ARN of the workload boundary
-	// policy (insideout-workload-boundary.json once created).
+	// policy (insideout-workload-boundary.json once created). The template
+	// creates it off IAMPath, as <project>-workload-boundary.
 	PlaceholderWorkloadBoundaryARN = "${workload_boundary_arn}"
 	// PlaceholderProject is the project's Project tag value, also the
 	// project's segment of IAMPath.
@@ -581,7 +582,7 @@ const worstARNPrefix = "arn:aws-us-gov:iam::123456789012:"
 // placeholders. WorstCaseSize measures a policy with them.
 var WorstCaseValues = map[string]string{
 	PlaceholderProject:             worstProject,
-	PlaceholderWorkloadBoundaryARN: worstARNPrefix + "policy" + IAMPath(worstProject) + worstProject + "-workload-boundary",
+	PlaceholderWorkloadBoundaryARN: worstARNPrefix + "policy/" + worstProject + "-workload-boundary",
 	PlaceholderDeployRoleARN:       worstARNPrefix + "role/" + worstDeployRole,
 	PlaceholderDeployPolicyARN:     worstARNPrefix + "policy/" + worstDeployRole + "-deploy",
 }
