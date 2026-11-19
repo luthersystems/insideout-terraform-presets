@@ -34,6 +34,7 @@ aws_cognito_user_pool_domain	Security
 aws_db_instance	Data Storage
 aws_db_parameter_group	Data Storage
 aws_db_subnet_group	Data Storage
+aws_default_network_acl	Network Security
 aws_dynamodb_contributor_insights	Observability
 aws_dynamodb_table	Data Storage
 aws_ebs_volume	Data Storage

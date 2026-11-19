@@ -158,6 +158,9 @@ var coveredTypes = []string{
 	// instance profile, internet gateway, NAT gateway, network
 	// interface, route table.
 	"aws_db_subnet_group",
+	// #947 — a VPC's default network ACL (re-typed from aws_network_acl
+	// by discovery). Codegen-only: typed Attrs for stored resources.
+	"aws_default_network_acl",
 	"aws_dynamodb_contributor_insights",
 	// Bundle 4 (cont.) — DynamoDB global table.
 	"aws_dynamodb_global_table",

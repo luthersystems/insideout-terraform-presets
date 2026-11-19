@@ -111,6 +111,15 @@ so the tooltip flows through (no reliable code change needed — it consumes
   adopt the default NACL for provenance tagging **without managing or
   destroying its rules**. This keeps it imported (vs. dropping it) while
   yielding a clean tag-only plan.
+- **Typed model (#947).** `aws_default_network_acl` has a generated typed
+  model (`pkg/composer/imported/generated/aws_default_network_acl.gen.go`),
+  listed in `awsCodegenOnlyTypes`: discovery never lists the type on its
+  own, it only re-types. So stored rows can carry typed `Attrs`, a legacy
+  `Attributes` map converts to `Attrs` (`reverseimport.WrapPlanAttrValue`
+  plus `generated.UnmarshalAttrs`), and the typed emit path writes
+  `ingress` / `egress` as nested blocks. The ACL is named by
+  `default_network_acl_id`; `vpc_id` is computed. The `ignore_changes`
+  fixup above still applies.
 
 > See §5: the scalar-only emission is a general limitation, not specific to
 > default NACLs — they're just the case where it currently bites.

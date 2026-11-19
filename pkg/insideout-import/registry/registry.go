@@ -256,6 +256,13 @@ var awsCodegenOnlyTypes = []string{
 	"aws_codebuild_project",
 	"aws_codedeploy_app",
 	"aws_codepipeline",
+	// #947 — a VPC's default network ACL. Discovery never lists this type
+	// on its own: networkACLPostDiscover (awsdiscover) re-types a default
+	// aws_network_acl to it, because the provider refuses to import a
+	// default NACL as aws_network_acl. It is codegen-only so the typed
+	// model exists for that re-typed resource: stored Attributes convert
+	// to typed Attrs, and the composer emits ingress/egress as blocks.
+	"aws_default_network_acl",
 	"aws_dynamodb_global_table",
 	"aws_ecs_service",
 	"aws_ecs_task_definition",

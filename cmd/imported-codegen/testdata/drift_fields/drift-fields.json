@@ -3491,6 +3491,92 @@
       "semantic": "Exact"
     }
   ],
+  "aws_default_network_acl": [
+    {
+      "path": "arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "default_network_acl_id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "egress",
+      "semantic": "WholeList"
+    },
+    {
+      "path": "egress.action",
+      "semantic": "Exact"
+    },
+    {
+      "path": "egress.cidr_block",
+      "semantic": "Exact"
+    },
+    {
+      "path": "egress.from_port",
+      "semantic": "Exact"
+    },
+    {
+      "path": "egress.ipv6_cidr_block",
+      "semantic": "Exact"
+    },
+    {
+      "path": "egress.protocol",
+      "semantic": "Exact"
+    },
+    {
+      "path": "egress.rule_no",
+      "semantic": "Exact"
+    },
+    {
+      "path": "egress.to_port",
+      "semantic": "Exact"
+    },
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "ingress",
+      "semantic": "WholeList"
+    },
+    {
+      "path": "ingress.action",
+      "semantic": "Exact"
+    },
+    {
+      "path": "ingress.cidr_block",
+      "semantic": "Exact"
+    },
+    {
+      "path": "ingress.from_port",
+      "semantic": "Exact"
+    },
+    {
+      "path": "ingress.ipv6_cidr_block",
+      "semantic": "Exact"
+    },
+    {
+      "path": "ingress.protocol",
+      "semantic": "Exact"
+    },
+    {
+      "path": "ingress.rule_no",
+      "semantic": "Exact"
+    },
+    {
+      "path": "ingress.to_port",
+      "semantic": "Exact"
+    },
+    {
+      "path": "owner_id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "vpc_id",
+      "semantic": "Exact"
+    }
+  ],
   "aws_dynamodb_contributor_insights": [
     {
       "path": "id",

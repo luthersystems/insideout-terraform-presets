@@ -16296,6 +16296,180 @@
             "description_kind": "plain"
           }
         },
+        "aws_default_network_acl": {
+          "version": 0,
+          "block": {
+            "attributes": {
+              "arn": {
+                "type": "string",
+                "description_kind": "plain",
+                "computed": true
+              },
+              "default_network_acl_id": {
+                "type": "string",
+                "description_kind": "plain",
+                "required": true
+              },
+              "id": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "owner_id": {
+                "type": "string",
+                "description_kind": "plain",
+                "computed": true
+              },
+              "region": {
+                "type": "string",
+                "description": "Region where this resource will be [managed](https://docs.aws.amazon.com/general/latest/gr/rande.html#regional-endpoints). Defaults to the Region set in the [provider configuration](https://registry.terraform.io/providers/hashicorp/aws/latest/docs#aws-configuration-reference).",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "subnet_ids": {
+                "type": [
+                  "set",
+                  "string"
+                ],
+                "description_kind": "plain",
+                "optional": true
+              },
+              "tags": {
+                "type": [
+                  "map",
+                  "string"
+                ],
+                "description_kind": "plain",
+                "optional": true
+              },
+              "tags_all": {
+                "type": [
+                  "map",
+                  "string"
+                ],
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "vpc_id": {
+                "type": "string",
+                "description_kind": "plain",
+                "computed": true
+              }
+            },
+            "block_types": {
+              "egress": {
+                "nesting_mode": "set",
+                "block": {
+                  "attributes": {
+                    "action": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "required": true
+                    },
+                    "cidr_block": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "from_port": {
+                      "type": "number",
+                      "description_kind": "plain",
+                      "required": true
+                    },
+                    "icmp_code": {
+                      "type": "number",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "icmp_type": {
+                      "type": "number",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "ipv6_cidr_block": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "protocol": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "required": true
+                    },
+                    "rule_no": {
+                      "type": "number",
+                      "description_kind": "plain",
+                      "required": true
+                    },
+                    "to_port": {
+                      "type": "number",
+                      "description_kind": "plain",
+                      "required": true
+                    }
+                  },
+                  "description_kind": "plain"
+                }
+              },
+              "ingress": {
+                "nesting_mode": "set",
+                "block": {
+                  "attributes": {
+                    "action": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "required": true
+                    },
+                    "cidr_block": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "from_port": {
+                      "type": "number",
+                      "description_kind": "plain",
+                      "required": true
+                    },
+                    "icmp_code": {
+                      "type": "number",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "icmp_type": {
+                      "type": "number",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "ipv6_cidr_block": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "protocol": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "required": true
+                    },
+                    "rule_no": {
+                      "type": "number",
+                      "description_kind": "plain",
+                      "required": true
+                    },
+                    "to_port": {
+                      "type": "number",
+                      "description_kind": "plain",
+                      "required": true
+                    }
+                  },
+                  "description_kind": "plain"
+                }
+              }
+            },
+            "description_kind": "plain"
+          }
+        },
         "aws_dynamodb_contributor_insights": {
           "version": 0,
           "block": {
