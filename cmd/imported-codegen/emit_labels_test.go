@@ -127,6 +127,8 @@ func TestBuildLabelsMap_CarriesParentTfType(t *testing.T) {
 		{tfType: "aws_s3_bucket_versioning", wantParent: "aws_s3_bucket"},
 		{tfType: "aws_s3_bucket_public_access_block", wantParent: "aws_s3_bucket"},
 		{tfType: "aws_route_table", wantParent: "aws_vpc"},
+		{tfType: "aws_network_acl", wantParent: "aws_vpc"},
+		{tfType: "aws_default_network_acl", wantParent: "aws_vpc"},
 		{tfType: "aws_vpc_security_group_ingress_rule", wantParent: "aws_security_group"},
 		{tfType: "aws_kms_alias", wantParent: "aws_kms_key"},
 		{tfType: "aws_cloudwatch_log_stream", wantParent: "aws_cloudwatch_log_group"},

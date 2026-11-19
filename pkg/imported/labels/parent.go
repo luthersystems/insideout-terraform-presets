@@ -71,6 +71,12 @@ var parentTfTypes = map[string]string{
 	"aws_subnet":           "aws_vpc",
 	"aws_vpc_dhcp_options": "aws_vpc",
 
+	// Network ACLs. A NACL lives in one VPC and only filters that VPC's
+	// subnets, so it is imported with its VPC, not as its own tile. The
+	// default NACL (#947) is also created and deleted with the VPC.
+	"aws_network_acl":         "aws_vpc",
+	"aws_default_network_acl": "aws_vpc",
+
 	// Split security-group rule resources (the aws_vpc_security_group_*
 	// resources that replaced the legacy aws_security_group_rule). Each
 	// rule is addressed by, and only exists within, its security group.
