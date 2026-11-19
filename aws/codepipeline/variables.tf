@@ -104,6 +104,16 @@ variable "codebuild_service_role_name" {
   type        = string
 }
 
+variable "kms_key_arn" {
+  description = "ARN of a customer-managed KMS key for the artifact bucket and the artifact store. Null (default) keeps SSE-S3 (AES256). A key ARN, not an alias: the roles' policies name it."
+  type        = string
+  default     = null
+  validation {
+    condition     = var.kms_key_arn == null ? true : can(regex("^arn:aws[a-z-]*:kms:[a-z0-9-]+:[0-9]{12}:key/.+$", var.kms_key_arn))
+    error_message = "kms_key_arn must be a KMS key ARN (arn:aws:kms:<region>:<account>:key/<id>)."
+  }
+}
+
 variable "iam_scope" {
   description = "IAM path and permissions boundary for the roles, customer managed policies and instance profiles this module creates. The scoped deploy policy allows IAM writes only under /insideout/<project>/ and creates roles only with the workload boundary (sandbox-infrastructure-template#147). Both are set together, because the boundary passes only roles on the path. null keeps the module's defaults. Changing it replaces the roles."
   type = object({

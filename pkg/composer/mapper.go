@@ -1762,6 +1762,7 @@ func (m DefaultMapper) BuildModuleValues(
 			setString(vals, "connection_arn", cp.ConnectionARN)
 			setString(vals, "source_s3_bucket", cp.SourceS3Bucket)
 			setString(vals, "source_s3_key", cp.SourceS3Key)
+			setString(vals, "kms_key_arn", cp.KMSKeyARN)
 		}
 
 	case KeyAWSGrafana:

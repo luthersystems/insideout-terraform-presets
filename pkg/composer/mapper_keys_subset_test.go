@@ -419,6 +419,7 @@ func kitchenSinkConfig() *Config {
 		ConnectionARN:    "arn:aws:codestar-connections:us-east-1:111122223333:connection/abc",
 		SourceS3Bucket:   "src",
 		SourceS3Key:      "app.zip",
+		KMSKeyARN:        "arn:aws:kms:us-east-1:111122223333:key/1234abcd-12ab-34cd-56ef-1234567890ab",
 	}
 	cfg.AWSGrafana = &AWSGrafanaConfig{
 		AuthenticationProviders: []string{"AWS_SSO", "SAML"},

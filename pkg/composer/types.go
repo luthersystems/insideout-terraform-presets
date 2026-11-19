@@ -859,6 +859,9 @@ type AWSCodePipelineConfig struct {
 	ConnectionARN  string `json:"connectionArn,omitempty"`
 	SourceS3Bucket string `json:"sourceS3Bucket,omitempty"`
 	SourceS3Key    string `json:"sourceS3Key,omitempty"`
+	// KMSKeyARN maps to kms_key_arn: a customer-managed KMS key ARN for
+	// the artifact bucket and store. Empty keeps SSE-S3.
+	KMSKeyARN string `json:"kmsKeyArn,omitempty"`
 }
 
 // AWSGrafanaConfig is the caller-facing config for the aws/grafana preset

@@ -57,6 +57,7 @@ func TestMapper_AWSCodePipeline(t *testing.T) {
 		SourceS3Key:    "app.zip",
 		Branch:         "dev",
 		ConnectionARN:  "arn:aws:codestar-connections:us-east-1:111122223333:connection/abc",
+		KMSKeyARN:      "arn:aws:kms:us-east-1:111122223333:key/1234abcd-12ab-34cd-56ef-1234567890ab",
 	}}
 	vals, err = DefaultMapper{}.BuildModuleValues(KeyAWSCodePipeline, &Components{}, cfg, "demo", "us-east-1")
 	require.NoError(t, err)
@@ -65,6 +66,7 @@ func TestMapper_AWSCodePipeline(t *testing.T) {
 	require.Equal(t, "app.zip", vals["source_s3_key"])
 	require.Equal(t, "dev", vals["branch"])
 	require.Equal(t, "arn:aws:codestar-connections:us-east-1:111122223333:connection/abc", vals["connection_arn"])
+	require.Equal(t, "arn:aws:kms:us-east-1:111122223333:key/1234abcd-12ab-34cd-56ef-1234567890ab", vals["kms_key_arn"])
 	_, set := vals["github_repository"]
 	require.False(t, set, "an S3 source needs no repository placeholder")
 }

@@ -153,3 +153,47 @@ run "bad_source_type_fails" {
 
   expect_failures = [var.source_type]
 }
+
+run "default_sse_s3" {
+  command = plan
+
+  assert {
+    condition     = one(one(aws_s3_bucket_server_side_encryption_configuration.artifacts.rule).apply_server_side_encryption_by_default).sse_algorithm == "AES256"
+    error_message = "with no kms_key_arn, the artifact bucket keeps SSE-S3."
+  }
+  assert {
+    condition     = length(one(aws_codepipeline.main.artifact_store).encryption_key) == 0
+    error_message = "with no kms_key_arn, the artifact store names no key."
+  }
+}
+
+run "kms_key" {
+  command = plan
+
+  variables {
+    kms_key_arn = "arn:aws:kms:us-east-1:111122223333:key/1234abcd-12ab-34cd-56ef-1234567890ab"
+  }
+
+  assert {
+    condition     = one(one(aws_s3_bucket_server_side_encryption_configuration.artifacts.rule).apply_server_side_encryption_by_default).sse_algorithm == "aws:kms"
+    error_message = "kms_key_arn must turn on SSE-KMS on the artifact bucket."
+  }
+  assert {
+    condition     = one(one(aws_s3_bucket_server_side_encryption_configuration.artifacts.rule).apply_server_side_encryption_by_default).kms_master_key_id == var.kms_key_arn
+    error_message = "the bucket must use kms_key_arn."
+  }
+  assert {
+    condition     = one(one(aws_codepipeline.main.artifact_store).encryption_key).id == var.kms_key_arn && one(one(aws_codepipeline.main.artifact_store).encryption_key).type == "KMS"
+    error_message = "the artifact store must encrypt with kms_key_arn."
+  }
+}
+
+run "kms_alias_fails" {
+  command = plan
+
+  variables {
+    kms_key_arn = "arn:aws:kms:us-east-1:111122223333:alias/build"
+  }
+
+  expect_failures = [var.kms_key_arn]
+}

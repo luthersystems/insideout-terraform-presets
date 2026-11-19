@@ -55,6 +55,16 @@ data "aws_partition" "current" {}
 locals {
   tags = merge(module.name.tags, var.tags)
 
+  # With kms_key_arn, the pipeline and the build read and write artifacts
+  # encrypted with the key. The key policy must also let the account's IAM
+  # policies grant it (the default key policy does).
+  artifact_key_statement = var.kms_key_arn == null ? [] : [{
+    Sid      = "ArtifactKey"
+    Effect   = "Allow"
+    Action   = ["kms:Decrypt", "kms:GenerateDataKey"]
+    Resource = [var.kms_key_arn]
+  }]
+
   pipeline_name     = "${var.project}-${var.pipeline_name}"
   is_github         = var.source_type == "GITHUB"
   create_connection = local.is_github && var.connection_arn == ""
@@ -94,8 +104,10 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "artifacts" {
   bucket = aws_s3_bucket.artifacts.id
   rule {
     apply_server_side_encryption_by_default {
-      sse_algorithm = "AES256"
+      sse_algorithm     = var.kms_key_arn == null ? "AES256" : "aws:kms"
+      kms_master_key_id = var.kms_key_arn
     }
+    bucket_key_enabled = var.kms_key_arn != null
   }
 }
 
@@ -164,6 +176,7 @@ resource "aws_iam_role_policy" "pipeline" {
           Resource = [var.codebuild_project_arn]
         },
       ],
+      local.artifact_key_statement,
       local.is_github ? [{
         Sid    = "UseConnection"
         Effect = "Allow"
@@ -189,12 +202,12 @@ resource "aws_iam_role_policy" "codebuild_artifacts" {
 
   policy = jsonencode({
     Version = "2012-10-17"
-    Statement = [{
+    Statement = concat([{
       Sid      = "PipelineArtifacts"
       Effect   = "Allow"
       Action   = ["s3:GetObject", "s3:GetObjectVersion", "s3:PutObject", "s3:GetBucketLocation"]
       Resource = [aws_s3_bucket.artifacts.arn, "${aws_s3_bucket.artifacts.arn}/*"]
-    }]
+    }], local.artifact_key_statement)
   })
 }
 
@@ -210,6 +223,14 @@ resource "aws_codepipeline" "main" {
   artifact_store {
     location = aws_s3_bucket.artifacts.bucket
     type     = "S3"
+
+    dynamic "encryption_key" {
+      for_each = var.kms_key_arn == null ? [] : [var.kms_key_arn]
+      content {
+        id   = encryption_key.value
+        type = "KMS"
+      }
+    }
   }
 
   stage {
