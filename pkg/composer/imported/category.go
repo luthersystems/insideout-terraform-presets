@@ -112,6 +112,7 @@ var categoryByTFType = map[string]string{
 	"aws_db_instance":                                    CategoryDataStorage,
 	"aws_db_parameter_group":                             CategoryDataStorage,
 	"aws_db_subnet_group":                                CategoryDataStorage,
+	"aws_default_network_acl":                            CategoryNetworkSecurity,
 	"aws_dynamodb_contributor_insights":                  CategoryObservability,
 	"aws_dynamodb_table":                                 CategoryDataStorage,
 	"aws_ebs_volume":                                     CategoryDataStorage,

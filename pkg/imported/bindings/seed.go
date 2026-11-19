@@ -103,6 +103,7 @@ var seededTypes = []string{
 	"google_monitoring_notification_channel",
 	"aws_route_table",
 	"aws_network_acl",
+	"aws_default_network_acl",
 	"aws_launch_template",
 	"aws_eks_addon",
 	"aws_lambda_alias",
@@ -872,6 +873,15 @@ var seededBindings = map[string]ComponentMetricsBinding{
 		DefaultMetrics: []string{"BytesIn", "BytesOut", "PacketsIn", "PacketsOut"},
 	},
 	"aws_network_acl": {
+		Service:        "vpc",
+		Action:         "get-metrics",
+		DimensionKey:   "NetworkAclId",
+		DimensionFrom:  "id",
+		DefaultMetrics: []string{"AllowedFlowsCount", "DeniedFlowsCount"},
+	},
+	// #947 — a VPC's default NACL, re-typed from aws_network_acl by
+	// discovery. Same metrics and dimension as aws_network_acl.
+	"aws_default_network_acl": {
 		Service:        "vpc",
 		Action:         "get-metrics",
 		DimensionKey:   "NetworkAclId",
