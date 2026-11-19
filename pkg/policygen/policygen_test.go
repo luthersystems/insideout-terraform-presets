@@ -73,16 +73,18 @@ func TestEveryComponentHasServices(t *testing.T) {
 	}
 }
 
-// preflightContext is what the preflight must send as SimulatePrincipalPolicy
-// ContextEntries for the scoped policy, with the template placeholders as
-// values (the placeholders are what the policy compares against here).
+// preflightContext is PreflightIAMContext as a map, with the template
+// placeholders as values (the placeholders are what the policy compares
+// against here). passedTo overrides iam:PassedToService when not empty.
 func preflightContext(passedTo string) map[string]string {
-	return map[string]string{
-		"iam:PermissionsBoundary": PlaceholderWorkloadBoundaryARN,
-		"aws:ResourceTag/Project": PlaceholderProject,
-		"aws:RequestTag/Project":  PlaceholderProject,
-		"iam:PassedToService":     passedTo,
+	ctx := map[string]string{}
+	for _, e := range PreflightIAMContext(PlaceholderProject, PlaceholderWorkloadBoundaryARN) {
+		ctx[e.Key] = e.Values[0]
 	}
+	if passedTo != "" {
+		ctx["iam:PassedToService"] = passedTo
+	}
+	return ctx
 }
 
 // TestPreflightActionsAllowed is the other issue #147 rule: the preflight
@@ -90,8 +92,7 @@ func preflightContext(passedTo string) map[string]string {
 // deploy fails before it starts.
 func TestPreflightActionsAllowed(t *testing.T) {
 	res := generate(t)
-	require.NotEmpty(t, res.Report.Principals)
-	ctx := preflightContext(res.Report.Principals[0])
+	ctx := preflightContext("")
 	for _, a := range composer.RequiredAWSIAMActions(AWSComponents()) {
 		res0 := PreflightResource(a, PlaceholderProject)
 		assert.True(t, Allows(Request{Action: a, Resource: res0, Context: ctx}, res.Write),
@@ -494,4 +495,70 @@ func TestEKSModuleTakesProjectPathAndBoundary(t *testing.T) {
 		}
 	}
 	assert.True(t, found, `aws/eks/main.tf has no module "eks"`)
+}
+
+// TestPreflightPassedToServiceInPolicy: the scoped policy allows
+// iam:PassRole only to the services it lists, so the preflight's
+// iam:PassedToService must be one of them.
+func TestPreflightPassedToServiceInPolicy(t *testing.T) {
+	res := generate(t)
+	assert.Contains(t, res.Report.Principals, PreflightPassedToService)
+}
+
+// TestPreflightIAMChecks: every action with a project resource is in
+// exactly one check, on its PreflightResource; actions on "*" are in none.
+func TestPreflightIAMChecks(t *testing.T) {
+	actions := []string{"iam:CreateRole", "iam:PassRole", "iam:CreatePolicy", "iam:GetRole", "s3:CreateBucket", "iam:CreateRole"}
+	got := PreflightIAMChecks(actions, "p")
+	assert.Equal(t, []IAMResourceCheck{
+		{Actions: []string{"iam:CreatePolicy"}, ResourceARNs: []string{"arn:*:iam::*:policy/insideout/p/preflight"}},
+		{Actions: []string{"iam:CreateRole", "iam:PassRole"}, ResourceARNs: []string{"arn:*:iam::*:role/insideout/p/preflight"}},
+	}, got)
+	assert.Empty(t, PreflightIAMChecks([]string{"s3:CreateBucket"}, "p"))
+
+	b, err := json.Marshal(got[0])
+	require.NoError(t, err)
+	assert.JSONEq(t, `{"actions":["iam:CreatePolicy"],"resourceArns":["arn:*:iam::*:policy/insideout/p/preflight"]}`, string(b))
+}
+
+// TestPreflightChecksAllowedFilled runs the real payload (checks and
+// context, with filled values) against the filled policy, for every action
+// the presets need: a scoped deploy must pass its own preflight.
+func TestPreflightChecksAllowedFilled(t *testing.T) {
+	res := generate(t)
+	const project = "io-abc123"
+	const prefix = "arn:aws:iam::111122223333:"
+	boundary := prefix + "policy/" + WorkloadBoundaryName(project)
+	raw, err := Marshal(res.Write)
+	require.NoError(t, err)
+	var filled Document
+	require.NoError(t, json.Unmarshal([]byte(Substitute(string(raw), map[string]string{
+		PlaceholderProject:             project,
+		PlaceholderWorkloadBoundaryARN: boundary,
+		PlaceholderDeployRoleARN:       prefix + "role/abcd-luther-terraform",
+		PlaceholderDeployPolicyARN:     prefix + "policy/abcd-luther-terraform-deploy",
+	})), &filled))
+
+	// ui-core pins "*" in the partition and account of resource ARNs and
+	// ARN context values to the simulated principal's.
+	pin := func(arn string) string { return strings.Replace(arn, "arn:*:iam::*:", prefix, 1) }
+	ctx := map[string]string{}
+	for _, e := range PreflightIAMContext(project, WorkloadBoundaryPreflightARN(project)) {
+		ctx[e.Key] = pin(e.Values[0])
+	}
+	actions := composer.RequiredAWSIAMActions(AWSComponents())
+	checked := map[string]bool{}
+	for _, c := range PreflightIAMChecks(actions, project) {
+		for _, a := range c.Actions {
+			checked[a] = true
+			for _, r := range c.ResourceARNs {
+				assert.True(t, Allows(Request{Action: a, Resource: pin(r), Context: ctx}, filled), "%s on %s", a, pin(r))
+			}
+		}
+	}
+	for _, a := range actions {
+		if !checked[a] {
+			assert.True(t, Allows(Request{Action: a, Resource: "*", Context: ctx}, filled), "%s on *", a)
+		}
+	}
 }
