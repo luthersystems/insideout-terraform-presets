@@ -110,6 +110,8 @@ jobs:
 
   test-presets:
     needs: discover
+    # ci-gate allows this skip and no other (scripts/ci-gate.cjs). Change
+    # both together.
     if: ${{ needs.discover.outputs.presets_with_tests != '[]' }}
     runs-on: ubuntu-latest
     strategy:
@@ -177,8 +179,8 @@ jobs:
       - name: Lint enrichgen override citation comments (#415)
         run: bash tests/lint-enrichgen-override-citations.sh
 
-      - name: Unit tests for the ci-drift issue script (#882)
-        run: node --test scripts/ci-drift.test.cjs
+      - name: Unit tests for the ci-drift and ci-gate scripts (#882, #943)
+        run: node --test scripts/ci-drift.test.cjs scripts/ci-gate.test.cjs
 
   # Validates phantom-computed-fields.txt against the live provider schema
   # pinned by schemas/providers.tf. Catches the failure mode where a
@@ -429,13 +431,19 @@ jobs:
     if: always()
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+
+      # Fails when a needed job failed, was cancelled or was skipped (#943).
+      # A skipped job did not run, and would otherwise pass the gate. The one
+      # allowed skip is test-presets when discover found no preset with
+      # tests (see its `if:`). The verdict and its tests are in
+      # scripts/ci-gate.cjs; the tests also check that this list of needs
+      # names every job of this workflow.
       - name: Check all required jobs succeeded
-        run: |
-          if [[ "${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}" == "true" ]]; then
-            echo "One or more required CI jobs failed or were cancelled."
-            exit 1
-          fi
-          echo "All required CI jobs passed."
+        env:
+          NEEDS_JSON: ${{ toJSON(needs) }}
+          TESTABLE: ${{ needs.discover.outputs.presets_with_tests }}
+        run: node scripts/ci-gate.cjs
 
   # Opens, refreshes or closes the ci-drift issue after a scheduled or
   # manual run on main (#882). Not part of ci-gate: it reports on the gate,
