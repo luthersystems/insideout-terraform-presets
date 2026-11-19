@@ -425,6 +425,27 @@
     "sso:GetSharedSsoConfiguration",
     "sso:ListDirectoryAssociations"
   ],
+  "write_statements": [
+    "StackServices",
+    "StackServiceDependencies",
+    "CallerIdentity",
+    "IAMRead",
+    "CreateProjectRolesWithWorkloadBoundary",
+    "ChangeProjectRolesWithWorkloadBoundary",
+    "ManageProjectRoles",
+    "PassProjectRolesToStackServices",
+    "ProjectPolicies",
+    "ProjectInstanceProfiles",
+    "CreateOIDCProvidersForProject",
+    "TagNewOIDCProvidersForProject",
+    "ChangeProjectOIDCProviders",
+    "CreateServiceLinkedRoles",
+    "DeletePresetServiceLinkedRoles",
+    "TeardownLegacyProjectIAM",
+    "DenyEditOwnPolicies",
+    "DenyEditDeployRole",
+    "DenyBoundaryRemoval"
+  ],
   "boundary_extra_services": [
     "cloudformation",
     "codecommit",

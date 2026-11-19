@@ -2,7 +2,6 @@
   "Version": "2012-10-17",
   "Statement": [
     {
-      "Sid": "StackServices",
       "Effect": "Allow",
       "Action": [
         "acm:*",
@@ -60,7 +59,6 @@
       ]
     },
     {
-      "Sid": "StackServiceDependencies",
       "Effect": "Allow",
       "Action": [
         "identitystore:DescribeGroup",
@@ -80,7 +78,6 @@
       ]
     },
     {
-      "Sid": "CallerIdentity",
       "Effect": "Allow",
       "Action": [
         "sts:GetCallerIdentity"
@@ -90,7 +87,6 @@
       ]
     },
     {
-      "Sid": "IAMRead",
       "Effect": "Allow",
       "Action": [
         "iam:Get*",
@@ -101,7 +97,6 @@
       ]
     },
     {
-      "Sid": "CreateProjectRolesWithWorkloadBoundary",
       "Effect": "Allow",
       "Action": [
         "iam:CreateRole"
@@ -117,7 +112,6 @@
       }
     },
     {
-      "Sid": "ChangeProjectRolesWithWorkloadBoundary",
       "Effect": "Allow",
       "Action": [
         "iam:AttachRolePolicy",
@@ -136,7 +130,6 @@
       }
     },
     {
-      "Sid": "ManageProjectRoles",
       "Effect": "Allow",
       "Action": [
         "iam:DeleteRole",
@@ -151,7 +144,6 @@
       ]
     },
     {
-      "Sid": "PassProjectRolesToStackServices",
       "Effect": "Allow",
       "Action": [
         "iam:PassRole"
@@ -184,7 +176,6 @@
       }
     },
     {
-      "Sid": "ProjectPolicies",
       "Effect": "Allow",
       "Action": [
         "iam:CreatePolicy",
@@ -200,7 +191,6 @@
       ]
     },
     {
-      "Sid": "ProjectInstanceProfiles",
       "Effect": "Allow",
       "Action": [
         "iam:AddRoleToInstanceProfile",
@@ -215,7 +205,6 @@
       ]
     },
     {
-      "Sid": "CreateOIDCProvidersForProject",
       "Effect": "Allow",
       "Action": [
         "iam:CreateOpenIDConnectProvider"
@@ -231,7 +220,6 @@
       }
     },
     {
-      "Sid": "TagNewOIDCProvidersForProject",
       "Effect": "Allow",
       "Action": [
         "iam:TagOpenIDConnectProvider"
@@ -250,7 +238,6 @@
       }
     },
     {
-      "Sid": "ChangeProjectOIDCProviders",
       "Effect": "Allow",
       "Action": [
         "iam:AddClientIDToOpenIDConnectProvider",
@@ -271,7 +258,6 @@
       }
     },
     {
-      "Sid": "CreateServiceLinkedRoles",
       "Effect": "Allow",
       "Action": [
         "iam:CreateServiceLinkedRole"
@@ -281,7 +267,6 @@
       ]
     },
     {
-      "Sid": "DeletePresetServiceLinkedRoles",
       "Effect": "Allow",
       "Action": [
         "iam:DeleteServiceLinkedRole"
@@ -294,7 +279,6 @@
       ]
     },
     {
-      "Sid": "TeardownLegacyProjectIAM",
       "Effect": "Allow",
       "Action": [
         "iam:DeleteInstanceProfile",
@@ -315,7 +299,6 @@
       }
     },
     {
-      "Sid": "DenyEditOwnPolicies",
       "Effect": "Deny",
       "Action": [
         "iam:CreatePolicyVersion",
@@ -329,7 +312,6 @@
       ]
     },
     {
-      "Sid": "DenyEditDeployRole",
       "Effect": "Deny",
       "Action": [
         "iam:AttachRolePolicy",
@@ -348,7 +330,6 @@
       ]
     },
     {
-      "Sid": "DenyBoundaryRemoval",
       "Effect": "Deny",
       "Action": [
         "iam:DeleteRolePermissionsBoundary"

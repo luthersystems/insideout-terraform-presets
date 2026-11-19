@@ -2,6 +2,7 @@ package policygen
 
 import (
 	"bytes"
+	"encoding/json"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -272,10 +273,38 @@ func TestNoUnusedManagedRows(t *testing.T) {
 	}
 }
 
+// TestPolicySize checks the size IAM sees: the template fills the
+// placeholders before it creates the policy, and the values are longer than
+// the placeholders. Measured with placeholders only, the write policy was
+// 6,056 characters and passed, but 6,568 with long values, over the limit.
 func TestPolicySize(t *testing.T) {
 	res := generate(t)
-	assert.LessOrEqual(t, MinifiedSize(res.Write), ManagedPolicyLimit)
-	assert.LessOrEqual(t, MinifiedSize(res.Boundary), ManagedPolicyLimit)
+	for name, d := range map[string]Document{WriteFile: res.Write, BoundaryFile: res.Boundary} {
+		assert.LessOrEqual(t, WorstCaseSize(d), ManagedPolicyLimit, name)
+		assert.GreaterOrEqual(t, WorstCaseSize(d), MinifiedSize(d), name)
+	}
+}
+
+// TestWorstCaseValuesFillEveryPlaceholder keeps WorstCaseValues in step
+// with the placeholders, so a new placeholder is measured too.
+func TestWorstCaseValuesFillEveryPlaceholder(t *testing.T) {
+	res := generate(t)
+	for name, d := range map[string]Document{WriteFile: res.Write, BoundaryFile: res.Boundary} {
+		b, err := json.Marshal(d)
+		require.NoError(t, err)
+		assert.NotContains(t, Substitute(string(b), WorstCaseValues), "${", name)
+	}
+}
+
+// TestStatementNamesInReport: the policy has no Sid (IAM counts each one
+// against the size limit), so the report names the statements in order.
+func TestStatementNamesInReport(t *testing.T) {
+	res := generate(t)
+	require.Len(t, res.Report.WriteStatements, len(res.Write.Statement))
+	assert.Equal(t, "StackServices", res.Report.WriteStatements[0])
+	for _, st := range res.Write.Statement {
+		assert.Empty(t, st.Sid)
+	}
 }
 
 // TestCommittedPoliciesCurrent fails when policies/aws differs from the

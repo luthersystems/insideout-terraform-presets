@@ -38,7 +38,7 @@ type Document struct {
 // Statement is one IAM policy statement. Condition maps an operator
 // (StringEquals) to a key to one value or a list of values.
 type Statement struct {
-	Sid       string                    `json:"Sid"`
+	Sid       string                    `json:"Sid,omitempty"`
 	Effect    string                    `json:"Effect"`
 	Action    []string                  `json:"Action"`
 	Resource  []string                  `json:"Resource"`
@@ -76,7 +76,10 @@ type Report struct {
 	ExtraServices  []string                                  `json:"extra_services,omitempty"`
 	DeployServices []string                                  `json:"deploy_services"`
 	// ExtraActions are typeExtraActions of the types the presets use.
-	ExtraActions    []string `json:"extra_actions,omitempty"`
+	ExtraActions []string `json:"extra_actions,omitempty"`
+	// WriteStatements names the write policy's statements in order. The
+	// policy itself has no Sid: IAM counts each against the size limit.
+	WriteStatements []string `json:"write_statements"`
 	BoundaryExtra   []string `json:"boundary_extra_services"`
 	Principals      []string `json:"pass_role_principals"`
 	ManagedPolicies []string `json:"managed_policies"`
@@ -263,8 +266,10 @@ func Generate(opts Options) (Result, error) {
 	if len(problems) > 0 {
 		return Result{}, fmt.Errorf("policygen: %s", strings.Join(problems, "; "))
 	}
+	write, names := moveSids(writePolicy(r))
+	r.WriteStatements = names
 	return Result{
-		Write:    writePolicy(r),
+		Write:    write,
 		Boundary: boundaryPolicy(r),
 		Report:   r,
 	}, nil
@@ -508,6 +513,18 @@ func dropEmpty(d Document) Document {
 	return d
 }
 
+// moveSids takes the Sids out of d and returns them in statement order.
+// The write policy is near the IAM size limit, and the Sids cost about 600
+// characters; the code and the report keep the names.
+func moveSids(d Document) (Document, []string) {
+	names := make([]string, len(d.Statement))
+	for i := range d.Statement {
+		names[i] = d.Statement[i].Sid
+		d.Statement[i].Sid = ""
+	}
+	return d, names
+}
+
 func boundaryPolicy(r Report) Document {
 	all := map[string]bool{}
 	for _, s := range r.DeployServices {
@@ -547,6 +564,44 @@ func MinifiedSize(d Document) int {
 // ManagedPolicyLimit is IAM's size limit for a customer managed policy.
 const ManagedPolicyLimit = 6144
 
+// worstProject is the longest project name reliable makes: "io-" and a
+// session ID of up to 19 digits (projectNameFromSession, with the
+// UnixNano fallback of newSessionID).
+const worstProject = "io-1234567890123456789"
+
+// worstDeployRole is the template's deploy role name with a 12-character
+// short project ID (ui-core ShortProjectID gives 8 for a UUID).
+const worstDeployRole = "abcdef123456-luther-terraform"
+
+// worstARNPrefix is an IAM ARN prefix in the longest partition and an
+// account ID.
+const worstARNPrefix = "arn:aws-us-gov:iam::123456789012:"
+
+// WorstCaseValues are the longest values the template puts in the
+// placeholders. WorstCaseSize measures a policy with them.
+var WorstCaseValues = map[string]string{
+	PlaceholderProject:             worstProject,
+	PlaceholderWorkloadBoundaryARN: worstARNPrefix + "policy" + IAMPath(worstProject) + worstProject + "-workload-boundary",
+	PlaceholderDeployRoleARN:       worstARNPrefix + "role/" + worstDeployRole,
+	PlaceholderDeployPolicyARN:     worstARNPrefix + "policy/" + worstDeployRole + "-deploy",
+}
+
+// Substitute replaces each placeholder in s with its value, as the
+// template's templatefile() does.
+func Substitute(s string, values map[string]string) string {
+	for k, v := range values {
+		s = strings.ReplaceAll(s, k, v)
+	}
+	return s
+}
+
+// WorstCaseSize is MinifiedSize after the template fills the placeholders
+// with the longest values it can have. IAM checks the filled policy.
+func WorstCaseSize(d Document) int {
+	b, _ := json.Marshal(d)
+	return len(Substitute(string(b), WorstCaseValues))
+}
+
 // File names of the generated output, relative to the output directory.
 const (
 	WriteFile    = "insideout-write.json"
@@ -562,8 +617,8 @@ const (
 func Files(res Result) (map[string][]byte, error) {
 	files := map[string][]byte{}
 	for name, d := range map[string]Document{WriteFile: res.Write, BoundaryFile: res.Boundary} {
-		if n := MinifiedSize(d); n > ManagedPolicyLimit {
-			return nil, fmt.Errorf("%s is %d characters, over the IAM limit of %d", name, n, ManagedPolicyLimit)
+		if n := WorstCaseSize(d); n > ManagedPolicyLimit {
+			return nil, fmt.Errorf("%s is %d characters with the longest placeholder values, over the IAM limit of %d", name, n, ManagedPolicyLimit)
 		}
 		b, err := Marshal(d)
 		if err != nil {
