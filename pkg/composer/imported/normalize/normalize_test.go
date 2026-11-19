@@ -3040,7 +3040,7 @@ func TestFixupDefaultNetworkACL_InjectsIgnoreChanges(t *testing.T) {
 	if !strings.Contains(got, "lifecycle {") {
 		t.Errorf("lifecycle block not injected\n--- got ---\n%s", got)
 	}
-	if !regexp.MustCompile(`ignore_changes\s*=\s*\[egress,\s+ingress\]`).MatchString(got) {
+	if !regexp.MustCompile(`ignore_changes\s*=\s*\[egress,\s+ingress,\s+subnet_ids\]`).MatchString(got) {
 		t.Errorf("ignore_changes must be the bare-identifier list [egress, ingress]\n--- got ---\n%s", got)
 	}
 	// Bare identifiers, NOT quoted strings — terraform 1.5+ deprecates quoting.
@@ -3096,7 +3096,7 @@ func TestFixupDefaultNetworkACL_Idempotent(t *testing.T) {
 		t.Errorf("existing lifecycle block must not be duplicated, got %d\n--- got ---\n%s", n, got)
 	}
 	// Existing entry preserved AND egress/ingress merged in: [tags, egress, ingress].
-	if !regexp.MustCompile(`ignore_changes\s*=\s*\[tags,\s+egress,\s+ingress\]`).MatchString(got) {
+	if !regexp.MustCompile(`ignore_changes\s*=\s*\[tags,\s+egress,\s+ingress,\s+subnet_ids\]`).MatchString(got) {
 		t.Errorf("existing ignore_changes=[tags] must merge to [tags, egress, ingress]\n--- got ---\n%s", got)
 	}
 
@@ -3106,7 +3106,7 @@ func TestFixupDefaultNetworkACL_Idempotent(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !regexp.MustCompile(`ignore_changes\s*=\s*\[tags,\s+egress,\s+ingress\]`).MatchString(string(stable)) {
+	if !regexp.MustCompile(`ignore_changes\s*=\s*\[tags,\s+egress,\s+ingress,\s+subnet_ids\]`).MatchString(string(stable)) {
 		t.Errorf("re-run must be idempotent (no duplicate egress/ingress)\n--- got ---\n%s", string(stable))
 	}
 }
@@ -3133,7 +3133,7 @@ func TestFixupDefaultNetworkACL_WiredViaNormalizeImportedHCL(t *testing.T) {
 	if !strings.Contains(got, "lifecycle {") {
 		t.Errorf("NormalizeImportedHCL did not inject lifecycle block — map registration not wired\n--- got ---\n%s", got)
 	}
-	if !regexp.MustCompile(`ignore_changes\s*=\s*\[egress,\s+ingress\]`).MatchString(got) {
+	if !regexp.MustCompile(`ignore_changes\s*=\s*\[egress,\s+ingress,\s+subnet_ids\]`).MatchString(got) {
 		t.Errorf("ignore_changes = [egress, ingress] missing after NormalizeImportedHCL\n--- got ---\n%s", got)
 	}
 }

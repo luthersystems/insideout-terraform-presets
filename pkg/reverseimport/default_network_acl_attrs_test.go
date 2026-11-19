@@ -12,6 +12,7 @@ import (
 	"github.com/luthersystems/insideout-terraform-presets/pkg/composer"
 	"github.com/luthersystems/insideout-terraform-presets/pkg/composer/imported"
 	"github.com/luthersystems/insideout-terraform-presets/pkg/composer/imported/generated"
+	"github.com/luthersystems/insideout-terraform-presets/pkg/composer/imported/normalize"
 )
 
 // legacyDefaultNetworkACLAttributes is the legacy Attributes map of a
@@ -124,4 +125,12 @@ func TestDefaultNetworkACL_LegacyAttributesRoundTripTypedModel(t *testing.T) {
 	for _, computed := range []string{"id", "arn", "owner_id", "vpc_id"} {
 		assert.NotContainsf(t, res.Body.Attributes, computed, "computed %q must not emit:\n%s", computed, s)
 	}
+
+	// Every compose runs NormalizeImportedHCL after emit. It must still pin
+	// the rule blocks and subnet_ids next to the newly emitted blocks, so
+	// an apply never changes the live default NACL's rules or subnets.
+	normalized, err := normalize.NormalizeImportedHCL(out)
+	require.NoError(t, err)
+	assert.Regexpf(t, `ignore_changes\s*=\s*\[egress,\s+ingress,\s+subnet_ids\]`, string(normalized),
+		"normalized imported.tf must pin the rules and subnets:\n%s", normalized)
 }

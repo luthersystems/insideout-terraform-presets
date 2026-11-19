@@ -101,16 +101,15 @@ so the tooltip flows through (no reliable code change needed — it consumes
   `PostDiscover` hook). Without this they were silently dropped as
   `no_generated_config` — `aws_network_acl` import for a *default* NACL fails
   with "use the `aws_default_network_acl` resource instead."
-- **`lifecycle { ignore_changes = [egress, ingress] }`** is injected by the
-  `aws_default_network_acl` entry in `genconfig/fixups.go:resourceTypeFixups`.
-  Rationale: the final `imported.tf` is emitted from **scalar attributes**
-  (`composer.EmitImportedTF`), and nested HCL blocks are **not** extracted —
-  so the default NACL loses its `egress`/`ingress` allow-all rules in
-  `imported.tf`, and Terraform would plan to **delete** the live rules (the
-  only non-tag drift in a real whole-account import, and unsafe on apply). We
-  adopt the default NACL for provenance tagging **without managing or
-  destroying its rules**. This keeps it imported (vs. dropping it) while
-  yielding a clean tag-only plan.
+- **`lifecycle { ignore_changes = [egress, ingress, subnet_ids] }`** is
+  injected by `normalize.fixupDefaultNetworkACLIgnoreRules` on every compose.
+  We adopt the default NACL for provenance tagging **without managing or
+  destroying its rules**. Rows stored with only scalar `Attributes` emit no
+  `egress`/`ingress` blocks, so without the pin Terraform would plan to
+  **delete** the live allow-all rules. Rows with typed `Attrs` emit the
+  blocks, and the pin stays for the same safety reason. `subnet_ids` is
+  pinned because the stored list goes stale when a custom NACL takes a
+  subnet, and applying it would move the subnet back onto the default NACL.
 - **Typed model (#947).** `aws_default_network_acl` has a generated typed
   model (`pkg/composer/imported/generated/aws_default_network_acl.gen.go`),
   listed in `awsCodegenOnlyTypes`: discovery never lists the type on its
@@ -119,7 +118,8 @@ so the tooltip flows through (no reliable code change needed — it consumes
   plus `generated.UnmarshalAttrs`), and the typed emit path writes
   `ingress` / `egress` as nested blocks. The ACL is named by
   `default_network_acl_id`; `vpc_id` is computed. The `ignore_changes`
-  fixup above still applies.
+  fixup above still applies, so the policy marks the rule sets and
+  `subnet_ids` as never editable.
 
 > See §5: the scalar-only emission is a general limitation, not specific to
 > default NACLs — they're just the case where it currently bites.

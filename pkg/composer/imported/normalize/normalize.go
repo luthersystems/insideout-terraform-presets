@@ -150,28 +150,24 @@ var resourceTypeFixups = map[string]func(*hclwrite.Block){
 }
 
 // fixupDefaultNetworkACLIgnoreRules pins lifecycle.ignore_changes =
-// [egress, ingress] on an imported aws_default_network_acl so the
-// first-import plan is clean tag-only and a real apply can never strip the
-// live default NACL's allow-all rules.
+// [egress, ingress, subnet_ids] on an imported aws_default_network_acl, so
+// the first-import plan is tag-only and an apply never changes the live
+// default NACL's rules or subnets.
 //
-// Why this is needed: the FINAL imported.tf is emitted from each resource's
-// extracted SCALAR attributes (composer.EmitImportedTF). That extraction does
-// not capture nested HCL blocks, so an aws_default_network_acl loses its
-// `egress`/`ingress` rule blocks (the live default NACL carries allow-all
-// rule_no 100 in each direction). With egress/ingress absent from imported.tf,
-// `terraform plan` sees the live rules as drift it must remove (before:
-// [rule 100] -> after: []) — the only non-tag drift in a real whole-account
-// import, and unsafe on apply (it would delete the default NACL's allow-all
-// rules). genconfig's scratch generated.tf captures the blocks correctly via
-// generate-config-out; only the emitted imported.tf drops them, but both run
-// through this shared fixup so the result is consistent.
+// Why the rules are pinned: we adopt the default NACL for provenance
+// tagging, not to manage its rules. Terraform must never strip the live
+// allow-all rule_no 100 in each direction. Rows stored with only scalar
+// Attributes emit no egress/ingress blocks, so without the pin terraform
+// would plan to delete the live rules (before: [rule 100] -> after: []).
+// Rows with typed Attrs (#947) emit the blocks, but the pin stays: it is
+// the same safety rule for every row, and the policy marks the rule sets
+// as never editable for that reason. The first-import validator then sees
+// only tag/label repair.
 //
-// Rather than try to reconstruct the dropped rule blocks, we ADOPT the default
-// NACL for provenance tagging WITHOUT managing (or destroying) its rules:
-// ignore_changes = [egress, ingress] tells terraform to leave the live rules
-// untouched. The first-import validator then sees only tag/label repair, which
-// it allows ("path egress/ingress not in allowed set" no longer fires because
-// those paths produce no diff).
+// Why subnet_ids is pinned: a subnet sits on the default NACL until a
+// custom NACL takes it. The stored list goes stale whenever that happens,
+// and applying the stale list would move the subnet back onto the
+// allow-all default NACL. The policy does not compare it for drift.
 //
 // ignore_changes carries BARE attribute references (identifiers egress,
 // ingress), not quoted strings — terraform 1.5+ deprecates the quoted form.
@@ -179,7 +175,7 @@ var resourceTypeFixups = map[string]func(*hclwrite.Block){
 //
 // Idempotent and merge-safe: if the block already carries a lifecycle block we
 // MERGE egress/ingress into its existing ignore_changes rather than skip — an
-// existing `ignore_changes = [tags]` becomes `[tags, egress, ingress]`, so the
+// existing `ignore_changes = [tags]` becomes `[tags, egress, ingress, subnet_ids]`, so the
 // rule protection is never dropped just because cleanGenerated (or a prior
 // fixup) already emitted a lifecycle block. mergeIgnoreChanges de-dupes, so a
 // NormalizeImportedHCL re-run over already-fixed generated.tf is stable.
@@ -195,10 +191,10 @@ func fixupDefaultNetworkACLIgnoreRules(blk *hclwrite.Block) {
 	lc.Body().SetAttributeRaw("ignore_changes", IgnoreChangesTokens(defaultNACLIgnoreChanges))
 }
 
-// defaultNACLIgnoreChanges are the nested rule blocks dropped by scalar-only
-// imported.tf emission; pinned under ignore_changes so a default NACL is
-// adopted for tagging without managing (or destroying) its live rules.
-var defaultNACLIgnoreChanges = []string{"egress", "ingress"}
+// defaultNACLIgnoreChanges are pinned under ignore_changes so a default
+// NACL is adopted for tagging without managing its live rules or moving
+// its subnets.
+var defaultNACLIgnoreChanges = []string{"egress", "ingress", "subnet_ids"}
 
 // fixupCognitoVerificationMessageConflict drops Cognito's legacy top-level
 // email verification fields when generate-config-out also emits the newer

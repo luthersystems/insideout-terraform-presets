@@ -19,9 +19,12 @@ package policy
 //     readable but never edited, and drift on it is not compared.
 //
 // The `ingress` / `egress` rule sets are the load-bearing security axis,
-// compared WholeList, the same as aws_network_acl. (The genconfig fixup
-// pins ignore_changes = [egress, ingress] on the first import; see
-// docs/reverse-import-contract.md §3.)
+// compared WholeList, the same as aws_network_acl, so out-of-band rule
+// changes show as drift. They are never editable, unlike aws_network_acl:
+// every compose runs normalize.fixupDefaultNetworkACLIgnoreRules, which
+// pins ignore_changes = [egress, ingress, subnet_ids]. Terraform would
+// ignore an edited rule, so offering the edit would promise a change that
+// never happens. See docs/reverse-import-contract.md §3.
 var awsDefaultNetworkACLPolicy = Map{
 	// Identity ----------------------------------------------------------
 	"arn": {
@@ -64,86 +67,86 @@ var awsDefaultNetworkACLPolicy = Map{
 		// Stateless inbound rule set. Whole-list compare flags any
 		// out-of-band rule add / remove / modify as one diff entry.
 		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilityUIVisible,
-		Edit:          EditRequiresApproval,
+		Edit:          EditNever,
 		DriftSemantic: DriftSemanticWholeList,
 	},
 	"egress": {
 		// Stateless outbound rule set.
 		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilityUIVisible,
-		Edit:          EditRequiresApproval,
+		Edit:          EditNever,
 		DriftSemantic: DriftSemanticWholeList,
 	},
 
 	// Per-rule fields (per-element semantics for richer diff projection) -
 	"ingress.rule_no": {
 		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilitySummaryVisible,
-		Edit:          EditRequiresApproval,
+		Edit:          EditNever,
 		DriftSemantic: DriftSemanticExact,
 	},
 	"ingress.action": {
 		// allow | deny — flipping is the most security-critical drift.
 		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilityUIVisible,
-		Edit:          EditRequiresApproval,
+		Edit:          EditNever,
 		DriftSemantic: DriftSemanticExact,
 	},
 	"ingress.protocol": {
 		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilitySummaryVisible,
-		Edit:          EditRequiresApproval,
+		Edit:          EditNever,
 		DriftSemantic: DriftSemanticExact,
 	},
 	"ingress.from_port": {
 		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilitySummaryVisible,
-		Edit:          EditRequiresApproval,
+		Edit:          EditNever,
 		DriftSemantic: DriftSemanticExact,
 	},
 	"ingress.to_port": {
 		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilitySummaryVisible,
-		Edit:          EditRequiresApproval,
+		Edit:          EditNever,
 		DriftSemantic: DriftSemanticExact,
 	},
 	"ingress.cidr_block": {
 		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilitySummaryVisible,
-		Edit:          EditRequiresApproval,
+		Edit:          EditNever,
 		DriftSemantic: DriftSemanticExact,
 	},
 	"ingress.ipv6_cidr_block": {
 		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilitySummaryVisible,
-		Edit:          EditRequiresApproval,
+		Edit:          EditNever,
 		DriftSemantic: DriftSemanticExact,
 	},
 	"egress.rule_no": {
 		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilitySummaryVisible,
-		Edit:          EditRequiresApproval,
+		Edit:          EditNever,
 		DriftSemantic: DriftSemanticExact,
 	},
 	"egress.action": {
 		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilityUIVisible,
-		Edit:          EditRequiresApproval,
+		Edit:          EditNever,
 		DriftSemantic: DriftSemanticExact,
 	},
 	"egress.protocol": {
 		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilitySummaryVisible,
-		Edit:          EditRequiresApproval,
+		Edit:          EditNever,
 		DriftSemantic: DriftSemanticExact,
 	},
 	"egress.from_port": {
 		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilitySummaryVisible,
-		Edit:          EditRequiresApproval,
+		Edit:          EditNever,
 		DriftSemantic: DriftSemanticExact,
 	},
 	"egress.to_port": {
 		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilitySummaryVisible,
-		Edit:          EditRequiresApproval,
+		Edit:          EditNever,
 		DriftSemantic: DriftSemanticExact,
 	},
 	"egress.cidr_block": {
 		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilitySummaryVisible,
-		Edit:          EditRequiresApproval,
+		Edit:          EditNever,
 		DriftSemantic: DriftSemanticExact,
 	},
 	"egress.ipv6_cidr_block": {
 		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilitySummaryVisible,
-		Edit:          EditRequiresApproval,
+		Edit:          EditNever,
 		DriftSemantic: DriftSemanticExact,
 	},
 
