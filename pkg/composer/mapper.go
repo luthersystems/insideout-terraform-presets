@@ -1711,6 +1711,71 @@ func (m DefaultMapper) BuildModuleValues(
 			}
 		}
 
+	case KeyAWSGitHubActions:
+		// GitHub Actions deploy role (#936). github_repository has no
+		// preset default; the placeholder is the same as the GCP sibling's
+		// and admits no real repository. Other fields go only when set.
+		var ga *AWSGitHubActionsConfig
+		if cfg != nil {
+			ga = cfg.AWSGitHubActions
+		}
+		repo := "placeholder.invalid/placeholder"
+		if ga != nil && strings.TrimSpace(ga.GitHubRepository) != "" {
+			repo = strings.TrimSpace(ga.GitHubRepository)
+		}
+		vals["github_repository"] = repo
+		if ga != nil {
+			setStrings(vals, "allowed_branches", ga.AllowedBranches)
+			setStrings(vals, "allowed_tags", ga.AllowedTags)
+			setStrings(vals, "managed_policy_arns", ga.ManagedPolicyARNs)
+			if ga.AllowedPullRequest != nil {
+				vals["allowed_pull_request"] = *ga.AllowedPullRequest
+			}
+			if ga.CreateOIDCProvider != nil {
+				vals["create_oidc_provider"] = *ga.CreateOIDCProvider
+			}
+			setString(vals, "oidc_provider_arn", ga.OIDCProviderARN)
+		}
+
+	case KeyAWSCodePipeline:
+		// CodePipeline (#936). The codebuild_* inputs come from
+		// DefaultWiring. A GITHUB source (the preset default) needs a
+		// repository to plan, so it gets the placeholder when none is set.
+		var cp *AWSCodePipelineConfig
+		if cfg != nil {
+			cp = cfg.AWSCodePipeline
+		}
+		sourceType := "GITHUB"
+		if cp != nil && strings.TrimSpace(cp.SourceType) != "" {
+			sourceType = strings.ToUpper(strings.TrimSpace(cp.SourceType))
+			vals["source_type"] = sourceType
+		}
+		if sourceType == "GITHUB" {
+			repo := "placeholder.invalid/placeholder"
+			if cp != nil && strings.TrimSpace(cp.GitHubRepository) != "" {
+				repo = strings.TrimSpace(cp.GitHubRepository)
+			}
+			vals["github_repository"] = repo
+		}
+		if cp != nil {
+			setString(vals, "branch", cp.Branch)
+			setString(vals, "connection_arn", cp.ConnectionARN)
+			setString(vals, "source_s3_bucket", cp.SourceS3Bucket)
+			setString(vals, "source_s3_key", cp.SourceS3Key)
+		}
+
+	case KeyAWSGrafana:
+		// Amazon Managed Grafana (#936). Every field is optional.
+		if cfg != nil && cfg.AWSGrafana != nil {
+			g := cfg.AWSGrafana
+			setStrings(vals, "authentication_providers", g.AuthenticationProviders)
+			setStrings(vals, "admin_sso_user_ids", g.AdminSSOUserIDs)
+			setStrings(vals, "admin_sso_group_ids", g.AdminSSOGroupIDs)
+			setString(vals, "saml_idp_metadata_url", g.SAMLIdPMetadataURL)
+			setStrings(vals, "saml_admin_role_values", g.SAMLAdminRoleValues)
+			setStrings(vals, "saml_editor_role_values", g.SAMLEditorRoleValues)
+		}
+
 	case KeyGCPGitHubActions:
 		// GCP GitHub Actions WIF (#597 row 1). github_repository is required
 		// by the preset (no default); supply a preview-safe placeholder
@@ -2284,4 +2349,23 @@ func trimmedStrings(in []string) []any {
 		out = append(out, strings.TrimSpace(s))
 	}
 	return out
+}
+
+// setString sets vals[k] to the trimmed v when it is not empty.
+func setString(vals map[string]any, k, v string) {
+	if t := strings.TrimSpace(v); t != "" {
+		vals[k] = t
+	}
+}
+
+// setStrings sets vals[k] to vs as []any when vs is not empty.
+func setStrings(vals map[string]any, k string, vs []string) {
+	if len(vs) == 0 {
+		return
+	}
+	out := make([]any, len(vs))
+	for i, v := range vs {
+		out[i] = v
+	}
+	vals[k] = out
 }

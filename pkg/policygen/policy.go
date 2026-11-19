@@ -71,13 +71,15 @@ type ComponentReport struct {
 // Report is the generator's full input after mapping, kept beside the
 // policies so a reviewer sees why each service is in them.
 type Report struct {
-	Components      map[composer.ComponentKey]ComponentReport `json:"components"`
-	ImportServices  []string                                  `json:"import_services,omitempty"`
-	ExtraServices   []string                                  `json:"extra_services,omitempty"`
-	DeployServices  []string                                  `json:"deploy_services"`
-	BoundaryExtra   []string                                  `json:"boundary_extra_services"`
-	Principals      []string                                  `json:"pass_role_principals"`
-	ManagedPolicies []string                                  `json:"managed_policies"`
+	Components     map[composer.ComponentKey]ComponentReport `json:"components"`
+	ImportServices []string                                  `json:"import_services,omitempty"`
+	ExtraServices  []string                                  `json:"extra_services,omitempty"`
+	DeployServices []string                                  `json:"deploy_services"`
+	// ExtraActions are typeExtraActions of the types the presets use.
+	ExtraActions    []string `json:"extra_actions,omitempty"`
+	BoundaryExtra   []string `json:"boundary_extra_services"`
+	Principals      []string `json:"pass_role_principals"`
+	ManagedPolicies []string `json:"managed_policies"`
 	// ServiceLinkedRoles are the services whose service-linked roles the
 	// presets create, and so may delete.
 	ServiceLinkedRoles []string `json:"service_linked_roles,omitempty"`
@@ -124,6 +126,7 @@ func Scan(opts Options) (Report, error) {
 	}
 	r := Report{Components: map[composer.ComponentKey]ComponentReport{}}
 	deploy, principals, managed, slr := map[string]bool{}, map[string]bool{}, map[string]bool{}, map[string]bool{}
+	extraActions := map[string]bool{}
 	unmappedTypes, unmappedManaged, missingReg, badRemote := map[string]bool{}, map[string]bool{}, map[string]bool{}, map[string]bool{}
 
 	addTypes := func(types []string, into map[string]bool) {
@@ -164,6 +167,11 @@ func Scan(opts Options) (Report, error) {
 		}
 		svcs := map[string]bool{}
 		addTypes(full.Types, svcs)
+		for _, t := range full.Types {
+			for _, a := range typeExtraActions[t] {
+				extraActions[a] = true
+			}
+		}
 		for svc := range svcs {
 			deploy[svc] = true
 		}
@@ -214,6 +222,7 @@ func Scan(opts Options) (Report, error) {
 	}
 
 	r.DeployServices = keys(deploy)
+	r.ExtraActions = keys(extraActions)
 	r.BoundaryExtra = keys(boundaryExtra)
 	r.Principals = keys(principals)
 	r.ManagedPolicies = keys(managed)
@@ -344,10 +353,11 @@ var instanceProfileActions = []string{
 	"iam:UntagInstanceProfile",
 }
 
-// oidcProviderChangeActions change or delete the EKS cluster's OIDC
-// provider (the eks registry module). An OIDC provider takes no path, so
-// they need the Project tag, which keeps the customer's other providers
-// (GitHub Actions, their own clusters) out of reach.
+// oidcProviderChangeActions change or delete an OIDC provider a preset
+// creates: the EKS cluster's (the eks registry module) and the GitHub
+// Actions one (aws/githubactions with create_oidc_provider, #936). An OIDC
+// provider takes no path, so they need the Project tag, which keeps the
+// customer's other providers out of reach.
 var oidcProviderChangeActions = []string{
 	"iam:AddClientIDToOpenIDConnectProvider",
 	"iam:DeleteOpenIDConnectProvider",
@@ -360,6 +370,13 @@ var oidcProviderChangeActions = []string{
 // EKSOIDCProviderARN is the ARN pattern of an EKS cluster's OIDC provider
 // (issuer oidc.eks.<region>.amazonaws.com, .com.cn in China).
 const EKSOIDCProviderARN = "arn:*:iam::*:oidc-provider/oidc.eks.*"
+
+// GitHubOIDCProviderARN is the ARN of the account's GitHub Actions OIDC
+// provider. An account has at most one.
+const GitHubOIDCProviderARN = "arn:*:iam::*:oidc-provider/token.actions.githubusercontent.com"
+
+// presetOIDCProviderARNs are the OIDC providers the presets may create.
+var presetOIDCProviderARNs = []string{EKSOIDCProviderARN, GitHubOIDCProviderARN}
 
 // ServiceLinkedRoleARN is the ARN pattern of every service-linked role. AWS
 // owns their path and policies, so they can not be put under IAMPath.
@@ -422,8 +439,9 @@ func slrARNs(svcs []string) []string {
 
 func writePolicy(r Report) Document {
 	roles := []string{projectARN("role")}
-	return Document{Version: "2012-10-17", Statement: []Statement{
+	return dropEmpty(Document{Version: "2012-10-17", Statement: []Statement{
 		{Sid: "StackServices", Effect: "Allow", Action: serviceWildcards(r.DeployServices), Resource: star},
+		{Sid: "StackServiceDependencies", Effect: "Allow", Action: r.ExtraActions, Resource: star},
 		{Sid: "CallerIdentity", Effect: "Allow", Action: []string{"sts:GetCallerIdentity"}, Resource: star},
 		{Sid: "IAMRead", Effect: "Allow", Action: []string{"iam:Get*", "iam:List*"}, Resource: star},
 		// The Project tag is still required on create: the InsideOut
@@ -440,18 +458,19 @@ func writePolicy(r Report) Document {
 			Condition: eq("iam:PassedToService", r.Principals)},
 		{Sid: "ProjectPolicies", Effect: "Allow", Action: projectPolicyActions, Resource: []string{projectARN("policy")}},
 		{Sid: "ProjectInstanceProfiles", Effect: "Allow", Action: instanceProfileActions, Resource: []string{projectARN("instance-profile")}},
-		{Sid: "CreateEKSOIDCProviderForProject", Effect: "Allow", Action: []string{"iam:CreateOpenIDConnectProvider"}, Resource: []string{EKSOIDCProviderARN},
+		{Sid: "CreateOIDCProvidersForProject", Effect: "Allow", Action: []string{"iam:CreateOpenIDConnectProvider"}, Resource: presetOIDCProviderARNs,
 			Condition: eq("aws:RequestTag/Project", PlaceholderProject)},
 		// Tags given at create are authorized as a tag call on an object
-		// with no tags yet. An untagged EKS provider of the customer's can
-		// be claimed this way; the tag-scoped changes below then reach it.
-		// The path scope that protects roles has no equal for providers.
-		{Sid: "TagNewEKSOIDCProviderForProject", Effect: "Allow", Action: []string{"iam:TagOpenIDConnectProvider"}, Resource: []string{EKSOIDCProviderARN},
+		// with no tags yet. An untagged provider of the customer's (an EKS
+		// cluster's, or the account's GitHub provider) can be claimed this
+		// way; the tag-scoped changes below then reach it. The path scope
+		// that protects roles has no equal for providers.
+		{Sid: "TagNewOIDCProvidersForProject", Effect: "Allow", Action: []string{"iam:TagOpenIDConnectProvider"}, Resource: presetOIDCProviderARNs,
 			Condition: map[string]map[string]any{
 				"StringEquals": {"aws:RequestTag/Project": PlaceholderProject},
 				"Null":         {"aws:ResourceTag/Project": "true"},
 			}},
-		{Sid: "ChangeProjectEKSOIDCProviders", Effect: "Allow", Action: oidcProviderChangeActions, Resource: []string{EKSOIDCProviderARN},
+		{Sid: "ChangeProjectOIDCProviders", Effect: "Allow", Action: oidcProviderChangeActions, Resource: presetOIDCProviderARNs,
 			Condition: eq("aws:ResourceTag/Project", PlaceholderProject)},
 		// Services create their own service-linked role on first use, so
 		// create is open. Delete is limited to the services whose roles a
@@ -473,7 +492,20 @@ func writePolicy(r Report) Document {
 			"iam:UntagRole", "iam:UpdateAssumeRolePolicy",
 		}, Resource: []string{PlaceholderDeployRoleARN}},
 		{Sid: "DenyBoundaryRemoval", Effect: "Deny", Action: []string{"iam:DeleteRolePermissionsBoundary"}, Resource: star},
-	}}
+	}})
+}
+
+// dropEmpty removes statements with no actions (StackServiceDependencies
+// when no preset type needs one), which IAM would reject.
+func dropEmpty(d Document) Document {
+	out := d.Statement[:0]
+	for _, st := range d.Statement {
+		if len(st.Action) > 0 {
+			out = append(out, st)
+		}
+	}
+	d.Statement = out
+	return d
 }
 
 func boundaryPolicy(r Report) Document {

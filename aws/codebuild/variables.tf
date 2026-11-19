@@ -79,18 +79,18 @@ variable "compute_type" {
 # -----------------------------------------------------------------------------
 
 variable "source_type" {
-  description = "CodeBuild source provider. CODECOMMIT pulls from AWS CodeCommit, GITHUB from a public/private GitHub repo (private repos need an `aws_codebuild_source_credential` set up out-of-stack), S3 from a versioned object, and NO_SOURCE runs a buildspec-only build with no checkout. https://docs.aws.amazon.com/codebuild/latest/APIReference/API_ProjectSource.html"
+  description = "CodeBuild source provider. CODECOMMIT pulls from AWS CodeCommit, GITHUB from a public/private GitHub repo (private repos need an `aws_codebuild_source_credential` set up out-of-stack), S3 from a versioned object, NO_SOURCE runs a buildspec-only build with no checkout, and CODEPIPELINE takes the source artifact of a CodePipeline stage (the composer sets it when aws_codepipeline is in the stack). https://docs.aws.amazon.com/codebuild/latest/APIReference/API_ProjectSource.html"
   type        = string
   default     = "GITHUB"
 
   validation {
-    condition     = contains(["CODECOMMIT", "GITHUB", "S3", "NO_SOURCE"], var.source_type)
-    error_message = "source_type must be one of: CODECOMMIT, GITHUB, S3, NO_SOURCE."
+    condition     = contains(["CODECOMMIT", "GITHUB", "S3", "NO_SOURCE", "CODEPIPELINE"], var.source_type)
+    error_message = "source_type must be one of: CODECOMMIT, GITHUB, S3, NO_SOURCE, CODEPIPELINE."
   }
 }
 
 variable "source_location" {
-  description = "Source location for `source_type`. For GITHUB the HTTPS clone URL (e.g. `https://github.com/owner/repo.git`); for CODECOMMIT the repository HTTPS URL; for S3 the `<bucket>/<key>` path to a zipped source archive. Ignored (and the preset sets it to null) when source_type = NO_SOURCE — provide an inline `buildspec` instead. Empty default keeps the variable optional so a NO_SOURCE single-module preview composes cleanly; CodeBuild's own apply-time validator rejects an empty location for any other source_type."
+  description = "Source location for `source_type`. For GITHUB the HTTPS clone URL (e.g. `https://github.com/owner/repo.git`); for CODECOMMIT the repository HTTPS URL; for S3 the `<bucket>/<key>` path to a zipped source archive. Ignored (and the preset sets it to null) when source_type = NO_SOURCE or CODEPIPELINE — provide an inline `buildspec` instead. Empty default keeps the variable optional so a NO_SOURCE single-module preview composes cleanly; CodeBuild's own apply-time validator rejects an empty location for any other source_type."
   type        = string
   default     = ""
 }

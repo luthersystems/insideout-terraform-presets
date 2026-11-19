@@ -209,9 +209,8 @@ var ComposeOrder = []ComponentKey{
 	KeyGCPPubSub,
 	KeyGCPCloudBuild,
 	// CodeBuild standalone preset (#619, deferred row 3 of #598). Peer
-	// of gcp/cloud_build; no other key wires off of it today (CodePipeline
-	// integration is a future PR). Placed alongside the GCP analog +
-	// CodePipeline sibling for reviewability; ordering is not load-bearing.
+	// of gcp/cloud_build. CodePipeline wires off of it (#936), so
+	// KeyAWSCodeBuild must stay before KeyAWSCodePipeline.
 	KeyAWSCodeBuild,
 	KeyAWSGitHubActions,
 	KeyAWSCodePipeline,
@@ -370,7 +369,9 @@ var ImplicitDependencies = map[ComponentKey][]ComponentKey{
 	// the implicit dep mirrors the GCP analog (gcp/cloud_build also
 	// declares KeyGCPVPC) and keeps the wiring satisfiable when the
 	// caller flips on private builds later.
-	KeyAWSCodeBuild:    {KeyAWSVPC},
+	KeyAWSCodeBuild: {KeyAWSVPC},
+	// CodePipeline (#936): the Build stage runs the aws/codebuild project.
+	KeyAWSCodePipeline: {KeyAWSCodeBuild},
 	KeyAWSEKSNodeGroup: {KeyAWSEKS, KeyAWSVPC},
 	KeyAWSEC2:          {KeyAWSVPC},
 	KeyGCPCompute:      {KeyGCPVPC},
@@ -857,7 +858,24 @@ func DefaultWiringForConfig(selected map[ComponentKey]bool, k ComponentKey, comp
 			wi.Names = append(wi.Names, "vpc_id", "subnet_ids")
 		}
 
+	case KeyAWSCodePipeline:
+		// The Build stage runs the CodeBuild project (#936).
+		// ImplicitDependencies adds KeyAWSCodeBuild.
+		if selected[KeyAWSCodeBuild] {
+			wi.RawHCL["codebuild_project_name"] = "module.aws_codebuild.project_name"
+			wi.RawHCL["codebuild_project_arn"] = "module.aws_codebuild.project_arn"
+			wi.RawHCL["codebuild_service_role_name"] = "module.aws_codebuild.service_role_name"
+			wi.Names = append(wi.Names, "codebuild_project_name", "codebuild_project_arn", "codebuild_service_role_name")
+		}
+
 	case KeyAWSCodeBuild:
+		// In a pipeline, the project takes its source from and gives its
+		// artifacts to CodePipeline (#936).
+		if selected[KeyAWSCodePipeline] {
+			wi.RawHCL["source_type"] = `"CODEPIPELINE"`
+			wi.RawHCL["artifacts_type"] = `"CODEPIPELINE"`
+			wi.Names = append(wi.Names, "source_type", "artifacts_type")
+		}
 		// CodeBuild VPC-config path consumes vpc_id + subnet_ids
 		// (#619). The preset gates vpc_config creation on a non-empty
 		// subnet_ids list, but threading the wiring unconditionally is

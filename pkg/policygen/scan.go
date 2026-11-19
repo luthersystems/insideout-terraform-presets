@@ -55,6 +55,11 @@ var (
 	registryRE      = regexp.MustCompile(`^[a-z0-9-]+/[a-z0-9-]+/[a-z0-9]+$`)
 )
 
+// notPrincipals match principalRE but name no service a role is passed
+// to: sts.amazonaws.com is the audience of a web identity trust (the
+// aws/githubactions role), and STS takes no role.
+var notPrincipals = map[string]bool{"sts.amazonaws.com": true}
+
 // iamPathTypes are the IAM resource types that take a path.
 var iamPathTypes = map[string]bool{
 	"aws_iam_role":             true,
@@ -135,12 +140,15 @@ func scanDir(fsys fs.FS, dir string, a *acc, seen map[string]bool) error {
 	// A trust policy is jsonencode()d inline or read from a policy document
 	// data source; follow the reference so its principals count.
 	for _, t := range m.trusts {
-		for _, mm := range principalRE.FindAllStringSubmatch(t, -1) {
-			a.principals[mm[1]] = true
-		}
+		texts := []string{t}
 		for _, ref := range policyDocRefRE.FindAllStringSubmatch(t, -1) {
-			for _, mm := range principalRE.FindAllStringSubmatch(m.docs[ref[1]], -1) {
-				a.principals[mm[1]] = true
+			texts = append(texts, m.docs[ref[1]])
+		}
+		for _, text := range texts {
+			for _, mm := range principalRE.FindAllStringSubmatch(text, -1) {
+				if !notPrincipals[mm[1]] {
+					a.principals[mm[1]] = true
+				}
 			}
 		}
 	}

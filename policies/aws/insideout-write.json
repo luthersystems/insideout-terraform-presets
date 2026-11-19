@@ -21,6 +21,7 @@
         "codebuild:*",
         "codedeploy:*",
         "codepipeline:*",
+        "codestar-connections:*",
         "cognito-idp:*",
         "dynamodb:*",
         "ec2:*",
@@ -32,6 +33,7 @@
         "es:*",
         "events:*",
         "glue:*",
+        "grafana:*",
         "kafka:*",
         "kendra:*",
         "kinesis:*",
@@ -52,6 +54,26 @@
         "ssm:*",
         "states:*",
         "wafv2:*"
+      ],
+      "Resource": [
+        "*"
+      ]
+    },
+    {
+      "Sid": "StackServiceDependencies",
+      "Effect": "Allow",
+      "Action": [
+        "identitystore:DescribeGroup",
+        "identitystore:DescribeUser",
+        "organizations:DescribeOrganization",
+        "sso-directory:DescribeGroup",
+        "sso-directory:DescribeUser",
+        "sso:CreateManagedApplicationInstance",
+        "sso:DeleteManagedApplicationInstance",
+        "sso:DescribeRegisteredRegions",
+        "sso:GetManagedApplicationInstance",
+        "sso:GetSharedSsoConfiguration",
+        "sso:ListDirectoryAssociations"
       ],
       "Resource": [
         "*"
@@ -145,9 +167,11 @@
             "bedrock.amazonaws.com",
             "build.apprunner.amazonaws.com",
             "codebuild.amazonaws.com",
+            "codepipeline.amazonaws.com",
             "ec2.amazonaws.com",
             "eks-fargate-pods.amazonaws.com",
             "eks.amazonaws.com",
+            "grafana.amazonaws.com",
             "kendra.amazonaws.com",
             "lambda.amazonaws.com",
             "monitoring.rds.amazonaws.com",
@@ -191,13 +215,14 @@
       ]
     },
     {
-      "Sid": "CreateEKSOIDCProviderForProject",
+      "Sid": "CreateOIDCProvidersForProject",
       "Effect": "Allow",
       "Action": [
         "iam:CreateOpenIDConnectProvider"
       ],
       "Resource": [
-        "arn:*:iam::*:oidc-provider/oidc.eks.*"
+        "arn:*:iam::*:oidc-provider/oidc.eks.*",
+        "arn:*:iam::*:oidc-provider/token.actions.githubusercontent.com"
       ],
       "Condition": {
         "StringEquals": {
@@ -206,13 +231,14 @@
       }
     },
     {
-      "Sid": "TagNewEKSOIDCProviderForProject",
+      "Sid": "TagNewOIDCProvidersForProject",
       "Effect": "Allow",
       "Action": [
         "iam:TagOpenIDConnectProvider"
       ],
       "Resource": [
-        "arn:*:iam::*:oidc-provider/oidc.eks.*"
+        "arn:*:iam::*:oidc-provider/oidc.eks.*",
+        "arn:*:iam::*:oidc-provider/token.actions.githubusercontent.com"
       ],
       "Condition": {
         "Null": {
@@ -224,7 +250,7 @@
       }
     },
     {
-      "Sid": "ChangeProjectEKSOIDCProviders",
+      "Sid": "ChangeProjectOIDCProviders",
       "Effect": "Allow",
       "Action": [
         "iam:AddClientIDToOpenIDConnectProvider",
@@ -235,7 +261,8 @@
         "iam:UpdateOpenIDConnectProviderThumbprint"
       ],
       "Resource": [
-        "arn:*:iam::*:oidc-provider/oidc.eks.*"
+        "arn:*:iam::*:oidc-provider/oidc.eks.*",
+        "arn:*:iam::*:oidc-provider/token.actions.githubusercontent.com"
       ],
       "Condition": {
         "StringEquals": {

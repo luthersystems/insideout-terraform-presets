@@ -401,6 +401,33 @@ func kitchenSinkConfig() *Config {
 		SubnetIDs:         []string{"subnet-aaa"},
 		SecurityGroupIDs:  []string{"sg-aaa"},
 	}
+	// AWSGitHubActions, AWSCodePipeline, AWSGrafana (#936): every field
+	// set, so each conditional tfvar key is checked against the preset.
+	cfg.AWSGitHubActions = &AWSGitHubActionsConfig{
+		GitHubRepository:   "example/repo",
+		AllowedBranches:    []string{"main"},
+		AllowedTags:        []string{"v*"},
+		AllowedPullRequest: &t,
+		CreateOIDCProvider: &t,
+		OIDCProviderARN:    "arn:aws:iam::111122223333:oidc-provider/token.actions.githubusercontent.com",
+		ManagedPolicyARNs:  []string{"arn:aws:iam::aws:policy/ReadOnlyAccess"},
+	}
+	cfg.AWSCodePipeline = &AWSCodePipelineConfig{
+		SourceType:       "GITHUB",
+		GitHubRepository: "example/repo",
+		Branch:           "main",
+		ConnectionARN:    "arn:aws:codestar-connections:us-east-1:111122223333:connection/abc",
+		SourceS3Bucket:   "src",
+		SourceS3Key:      "app.zip",
+	}
+	cfg.AWSGrafana = &AWSGrafanaConfig{
+		AuthenticationProviders: []string{"AWS_SSO", "SAML"},
+		AdminSSOUserIDs:         []string{"u-1"},
+		AdminSSOGroupIDs:        []string{"g-1"},
+		SAMLIdPMetadataURL:      "https://idp.example.com/m",
+		SAMLAdminRoleValues:     []string{"admin"},
+		SAMLEditorRoleValues:    []string{"editor"},
+	}
 	// AWSBackups — inline anonymous struct. The mapper reads it only to size
 	// the always-emitted default_rule; populating keeps the kitchen-sink
 	// complete (see the reflection completeness guard) and exercises the

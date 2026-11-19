@@ -23,11 +23,7 @@ import (
 // scan finds no services for them. The list may only shrink: a new entry
 // means a component the policy would silently not cover. Each row names the
 // issue that removes it.
-var emptyComponents = map[composer.ComponentKey]string{
-	composer.KeyAWSCodePipeline:  "#936",
-	composer.KeyAWSGitHubActions: "#936",
-	composer.KeyAWSGrafana:       "#936",
-}
+var emptyComponents = map[composer.ComponentKey]string{}
 
 // committedDir is where `go run ./cmd/policygen` writes, relative to this
 // package.
@@ -111,10 +107,14 @@ func TestPreflightServicesScanned(t *testing.T) {
 	for _, s := range r.DeployServices {
 		deploy[s] = true
 	}
+	extra := map[string]bool{}
+	for _, a := range r.ExtraActions {
+		extra[a] = true
+	}
 	for k, actions := range composer.AWSIAMActions {
 		for _, a := range actions {
 			svc, _, _ := strings.Cut(a, ":")
-			assert.True(t, deploy[svc], "%s: seed action %s names service %s, which the scan does not find", k, a, svc)
+			assert.True(t, deploy[svc] || extra[a], "%s: seed action %s names service %s, which the scan does not find, and is not a typeExtraActions action", k, a, svc)
 		}
 	}
 }
@@ -167,6 +167,9 @@ func TestRoleEscalationDenied(t *testing.T) {
 		{"pass a project role", Request{"iam:PassRole", role, ctx}, true},
 		{"pass a customer role", Request{"iam:PassRole", customerRole, ctx}, false},
 		{"pass a role to a service no preset uses", Request{"iam:PassRole", role, with("iam:PassedToService", "iam.amazonaws.com")}, false},
+		// sts.amazonaws.com is the GitHub OIDC audience in a trust policy,
+		// not a service that takes a role.
+		{"pass a role to STS", Request{"iam:PassRole", role, with("iam:PassedToService", "sts.amazonaws.com")}, false},
 		{"remove a boundary", Request{"iam:DeleteRolePermissionsBoundary", role, ctx}, false},
 		{"edit the deploy role", Request{"iam:AttachRolePolicy", PlaceholderDeployRoleARN, ctx}, false},
 		{"edit the workload boundary", Request{"iam:CreatePolicyVersion", PlaceholderWorkloadBoundaryARN, nil}, false},
@@ -179,6 +182,17 @@ func TestRoleEscalationDenied(t *testing.T) {
 		{"write a project policy", Request{"iam:CreatePolicyVersion", policy, nil}, true},
 		{"rewrite a customer policy", Request{"iam:CreatePolicyVersion", customerPolicy, nil}, false},
 		{"delete the customer's GitHub OIDC provider", Request{"iam:DeleteOpenIDConnectProvider", githubOIDC, nil}, false},
+		// aws/githubactions with create_oidc_provider (#936).
+		{"create the GitHub OIDC provider", Request{"iam:CreateOpenIDConnectProvider", githubOIDC, ctx}, true},
+		{"create the GitHub OIDC provider untagged", Request{"iam:CreateOpenIDConnectProvider", githubOIDC, nil}, false},
+		{"delete the project's GitHub OIDC provider", Request{"iam:DeleteOpenIDConnectProvider", githubOIDC, ctx}, true},
+		{"retag another project's GitHub OIDC provider", Request{"iam:TagOpenIDConnectProvider", githubOIDC, with("aws:ResourceTag/Project", "other")}, false},
+		{"create another issuer's OIDC provider", Request{"iam:CreateOpenIDConnectProvider", "arn:aws:iam::111122223333:oidc-provider/accounts.google.com", ctx}, false},
+		// aws/grafana with IAM Identity Center login (#936).
+		{"register Grafana with Identity Center", Request{"sso:CreateManagedApplicationInstance", "*", nil}, true},
+		{"read the organization for Grafana", Request{"organizations:DescribeOrganization", "*", nil}, true},
+		{"leave the organization", Request{"organizations:LeaveOrganization", "*", nil}, false},
+		{"create an Identity Center user", Request{"identitystore:CreateUser", "*", nil}, false},
 		{"create the EKS OIDC provider", Request{"iam:CreateOpenIDConnectProvider", eksOIDC, ctx}, true},
 		{"create the EKS OIDC provider untagged", Request{"iam:CreateOpenIDConnectProvider", eksOIDC, nil}, false},
 		{"tag a new EKS OIDC provider", Request{"iam:TagOpenIDConnectProvider", eksOIDC, without("aws:ResourceTag/Project")}, true},
