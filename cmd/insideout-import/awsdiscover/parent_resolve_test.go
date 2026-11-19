@@ -289,6 +289,7 @@ var fkContractFixtures = map[string]fkContractFixture{
 	// Forward-edge children: the child's own config carries the FK.
 	"aws_route_table":                     {identifier: "rtb-1", props: map[string]any{"VpcId": "vpc-1"}},
 	"aws_subnet":                          {identifier: "subnet-1", props: map[string]any{"VpcId": "vpc-1"}},
+	"aws_network_acl":                     {identifier: "acl-1", props: map[string]any{"VpcId": "vpc-1"}},
 	"aws_vpc_security_group_ingress_rule": {identifier: "sgr-1", props: map[string]any{"GroupId": "sg-1"}},
 	"aws_vpc_security_group_egress_rule":  {identifier: "sgr-2", props: map[string]any{"GroupId": "sg-1"}},
 	"aws_kms_alias":                       {identifier: "alias/app", props: map[string]any{"TargetKeyId": "key-1"}},
@@ -333,6 +334,10 @@ var sdkOnlyFKChildren = map[string]struct{}{
 	// #651 — vpc_id stamped by the resolveVPCChildVPCIDs SDK pass.
 	"aws_internet_gateway": {},
 	"aws_vpc_dhcp_options": {},
+	// #947 — no Cloud Control config of its own: networkACLPostDiscover
+	// re-types a discovered default aws_network_acl and stamps vpc_id
+	// (TestNetworkACLPostDiscover_DefaultRetyped).
+	"aws_default_network_acl": {},
 }
 
 // TestParentFK_DiscovererEmitsForeignKey pins the discoverer↔resolver

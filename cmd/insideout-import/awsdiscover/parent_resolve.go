@@ -78,6 +78,12 @@ var parentFKByChildType = map[string]parentFK{
 	"aws_subnet":           {parentType: "aws_vpc", childKey: "vpc_id"},
 	"aws_internet_gateway": {parentType: "aws_vpc", childKey: "vpc_id"},
 	"aws_vpc_dhcp_options": {parentType: "aws_vpc", childKey: "vpc_id"},
+	// Network ACLs. The aws_network_acl discoverer lifts the model's
+	// VpcId into NativeIDs["vpc_id"] (vpcIDNativeIDs). The default NACL
+	// is the same discovered row, re-typed by networkACLPostDiscover, so
+	// it keeps that key.
+	"aws_network_acl":         {parentType: "aws_vpc", childKey: "vpc_id"},
+	"aws_default_network_acl": {parentType: "aws_vpc", childKey: "vpc_id"},
 
 	// Split security-group rules. The ingress/egress Cloud Control
 	// entries lift the model's GroupId into NativeIDs["security_group_id"],
@@ -123,7 +129,7 @@ var parentFKByChildType = map[string]parentFK{
 // TestParentFK_CoversLabelsRegistry can tell a deliberate, documented
 // omission from an accidental gap.
 //
-// This map is currently empty: as of #651 all 18 labels-registry child
+// This map is currently empty: all 20 labels-registry child
 // edges are resolvable — the last two holdouts (aws_internet_gateway and
 // aws_vpc_dhcp_options) now resolve via the resolveVPCChildVPCIDs SDK
 // augmentation pass (vpc_child_vpc_resolve.go). The variable is retained

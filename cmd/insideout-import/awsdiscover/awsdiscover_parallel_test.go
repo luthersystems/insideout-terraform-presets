@@ -564,3 +564,31 @@ func TestDiscoverTypes_PerTypeTimeoutParentCancelPropagates(t *testing.T) {
 		t.Fatal("expected error from parent-ctx cancellation; got nil — the per-type timeout downgrade must NOT swallow parent cancellation")
 	}
 }
+
+// TestDiscoverTypes_RetypedTypeRunsItsSource pins that a request for
+// aws_default_network_acl, which has no discoverer of its own, runs the
+// aws_network_acl discoverer (whose PostDiscover re-types default NACLs)
+// instead of failing the whole call as an unknown type. A selected
+// aws_vpc's selection closure asks for both, so the source must also run
+// only once.
+func TestDiscoverTypes_RetypedTypeRunsItsSource(t *testing.T) {
+	t.Parallel()
+	nacl := &fakeDiscoverer{t: "aws_network_acl", out: []imported.ImportedResource{ir("nacl1")}}
+	agg := &AWSDiscoverer{byType: map[string]Discoverer{"aws_network_acl": nacl}}
+
+	got, err := agg.DiscoverTypes(context.Background(), []string{"aws_default_network_acl"}, argsBasic())
+	if err != nil {
+		t.Fatalf("a re-typed type must not be unknown: %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("got %d resources, want 1", len(got))
+	}
+
+	got, err = agg.DiscoverTypes(context.Background(), []string{"aws_network_acl", "aws_default_network_acl"}, argsBasic())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 {
+		t.Errorf("got %d resources, want 1: the source discoverer must run once", len(got))
+	}
+}

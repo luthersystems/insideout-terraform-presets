@@ -98,6 +98,12 @@ func networkACLPostDiscoverWithClient(ctx context.Context, client networkACLDesc
 	if ir.Identity.NativeIDs == nil {
 		ir.Identity.NativeIDs = map[string]string{}
 	}
+	// The parent resolver joins a NACL to its aws_vpc on vpc_id. The
+	// Cloud Control model usually supplies it (vpcIDNativeIDs); the
+	// describe answer we already have fills it when that model did not.
+	if acl.VpcId != nil && *acl.VpcId != "" && ir.Identity.NativeIDs["vpc_id"] == "" {
+		ir.Identity.NativeIDs["vpc_id"] = *acl.VpcId
+	}
 	if isDefault {
 		ir.Identity.NativeIDs["is_default"] = "true"
 		retypeAsDefaultNetworkACL(ir)
