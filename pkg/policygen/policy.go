@@ -16,7 +16,8 @@ import (
 // is account-independent, and the template knows these values only at apply.
 const (
 	// PlaceholderWorkloadBoundaryARN is the ARN of the workload boundary
-	// policy (insideout-workload-boundary.json once created).
+	// policy (insideout-workload-boundary.json once created). The template
+	// creates it off IAMPath, as <project>-workload-boundary.
 	PlaceholderWorkloadBoundaryARN = "${workload_boundary_arn}"
 	// PlaceholderProject is the project's Project tag value, also the
 	// project's segment of IAMPath.
@@ -38,7 +39,7 @@ type Document struct {
 // Statement is one IAM policy statement. Condition maps an operator
 // (StringEquals) to a key to one value or a list of values.
 type Statement struct {
-	Sid       string                    `json:"Sid"`
+	Sid       string                    `json:"Sid,omitempty"`
 	Effect    string                    `json:"Effect"`
 	Action    []string                  `json:"Action"`
 	Resource  []string                  `json:"Resource"`
@@ -71,13 +72,18 @@ type ComponentReport struct {
 // Report is the generator's full input after mapping, kept beside the
 // policies so a reviewer sees why each service is in them.
 type Report struct {
-	Components      map[composer.ComponentKey]ComponentReport `json:"components"`
-	ImportServices  []string                                  `json:"import_services,omitempty"`
-	ExtraServices   []string                                  `json:"extra_services,omitempty"`
-	DeployServices  []string                                  `json:"deploy_services"`
-	BoundaryExtra   []string                                  `json:"boundary_extra_services"`
-	Principals      []string                                  `json:"pass_role_principals"`
-	ManagedPolicies []string                                  `json:"managed_policies"`
+	Components     map[composer.ComponentKey]ComponentReport `json:"components"`
+	ImportServices []string                                  `json:"import_services,omitempty"`
+	ExtraServices  []string                                  `json:"extra_services,omitempty"`
+	DeployServices []string                                  `json:"deploy_services"`
+	// ExtraActions are typeExtraActions of the types the presets use.
+	ExtraActions []string `json:"extra_actions,omitempty"`
+	// WriteStatements names the write policy's statements in order. The
+	// policy itself has no Sid: IAM counts each against the size limit.
+	WriteStatements []string `json:"write_statements"`
+	BoundaryExtra   []string `json:"boundary_extra_services"`
+	Principals      []string `json:"pass_role_principals"`
+	ManagedPolicies []string `json:"managed_policies"`
 	// ServiceLinkedRoles are the services whose service-linked roles the
 	// presets create, and so may delete.
 	ServiceLinkedRoles []string `json:"service_linked_roles,omitempty"`
@@ -124,6 +130,7 @@ func Scan(opts Options) (Report, error) {
 	}
 	r := Report{Components: map[composer.ComponentKey]ComponentReport{}}
 	deploy, principals, managed, slr := map[string]bool{}, map[string]bool{}, map[string]bool{}, map[string]bool{}
+	extraActions := map[string]bool{}
 	unmappedTypes, unmappedManaged, missingReg, badRemote := map[string]bool{}, map[string]bool{}, map[string]bool{}, map[string]bool{}
 
 	addTypes := func(types []string, into map[string]bool) {
@@ -164,6 +171,11 @@ func Scan(opts Options) (Report, error) {
 		}
 		svcs := map[string]bool{}
 		addTypes(full.Types, svcs)
+		for _, t := range full.Types {
+			for _, a := range typeExtraActions[t] {
+				extraActions[a] = true
+			}
+		}
 		for svc := range svcs {
 			deploy[svc] = true
 		}
@@ -214,6 +226,7 @@ func Scan(opts Options) (Report, error) {
 	}
 
 	r.DeployServices = keys(deploy)
+	r.ExtraActions = keys(extraActions)
 	r.BoundaryExtra = keys(boundaryExtra)
 	r.Principals = keys(principals)
 	r.ManagedPolicies = keys(managed)
@@ -254,8 +267,10 @@ func Generate(opts Options) (Result, error) {
 	if len(problems) > 0 {
 		return Result{}, fmt.Errorf("policygen: %s", strings.Join(problems, "; "))
 	}
+	write, names := moveSids(writePolicy(r))
+	r.WriteStatements = names
 	return Result{
-		Write:    writePolicy(r),
+		Write:    write,
 		Boundary: boundaryPolicy(r),
 		Report:   r,
 	}, nil
@@ -344,10 +359,11 @@ var instanceProfileActions = []string{
 	"iam:UntagInstanceProfile",
 }
 
-// oidcProviderChangeActions change or delete the EKS cluster's OIDC
-// provider (the eks registry module). An OIDC provider takes no path, so
-// they need the Project tag, which keeps the customer's other providers
-// (GitHub Actions, their own clusters) out of reach.
+// oidcProviderChangeActions change or delete an OIDC provider a preset
+// creates: the EKS cluster's (the eks registry module) and the GitHub
+// Actions one (aws/githubactions with create_oidc_provider, #936). An OIDC
+// provider takes no path, so they need the Project tag, which keeps the
+// customer's other providers out of reach.
 var oidcProviderChangeActions = []string{
 	"iam:AddClientIDToOpenIDConnectProvider",
 	"iam:DeleteOpenIDConnectProvider",
@@ -360,6 +376,13 @@ var oidcProviderChangeActions = []string{
 // EKSOIDCProviderARN is the ARN pattern of an EKS cluster's OIDC provider
 // (issuer oidc.eks.<region>.amazonaws.com, .com.cn in China).
 const EKSOIDCProviderARN = "arn:*:iam::*:oidc-provider/oidc.eks.*"
+
+// GitHubOIDCProviderARN is the ARN of the account's GitHub Actions OIDC
+// provider. An account has at most one.
+const GitHubOIDCProviderARN = "arn:*:iam::*:oidc-provider/token.actions.githubusercontent.com"
+
+// presetOIDCProviderARNs are the OIDC providers the presets may create.
+var presetOIDCProviderARNs = []string{EKSOIDCProviderARN, GitHubOIDCProviderARN}
 
 // ServiceLinkedRoleARN is the ARN pattern of every service-linked role. AWS
 // owns their path and policies, so they can not be put under IAMPath.
@@ -422,8 +445,9 @@ func slrARNs(svcs []string) []string {
 
 func writePolicy(r Report) Document {
 	roles := []string{projectARN("role")}
-	return Document{Version: "2012-10-17", Statement: []Statement{
+	return dropEmpty(Document{Version: "2012-10-17", Statement: []Statement{
 		{Sid: "StackServices", Effect: "Allow", Action: serviceWildcards(r.DeployServices), Resource: star},
+		{Sid: "StackServiceDependencies", Effect: "Allow", Action: r.ExtraActions, Resource: star},
 		{Sid: "CallerIdentity", Effect: "Allow", Action: []string{"sts:GetCallerIdentity"}, Resource: star},
 		{Sid: "IAMRead", Effect: "Allow", Action: []string{"iam:Get*", "iam:List*"}, Resource: star},
 		// The Project tag is still required on create: the InsideOut
@@ -440,18 +464,19 @@ func writePolicy(r Report) Document {
 			Condition: eq("iam:PassedToService", r.Principals)},
 		{Sid: "ProjectPolicies", Effect: "Allow", Action: projectPolicyActions, Resource: []string{projectARN("policy")}},
 		{Sid: "ProjectInstanceProfiles", Effect: "Allow", Action: instanceProfileActions, Resource: []string{projectARN("instance-profile")}},
-		{Sid: "CreateEKSOIDCProviderForProject", Effect: "Allow", Action: []string{"iam:CreateOpenIDConnectProvider"}, Resource: []string{EKSOIDCProviderARN},
+		{Sid: "CreateOIDCProvidersForProject", Effect: "Allow", Action: []string{"iam:CreateOpenIDConnectProvider"}, Resource: presetOIDCProviderARNs,
 			Condition: eq("aws:RequestTag/Project", PlaceholderProject)},
 		// Tags given at create are authorized as a tag call on an object
-		// with no tags yet. An untagged EKS provider of the customer's can
-		// be claimed this way; the tag-scoped changes below then reach it.
-		// The path scope that protects roles has no equal for providers.
-		{Sid: "TagNewEKSOIDCProviderForProject", Effect: "Allow", Action: []string{"iam:TagOpenIDConnectProvider"}, Resource: []string{EKSOIDCProviderARN},
+		// with no tags yet. An untagged provider of the customer's (an EKS
+		// cluster's, or the account's GitHub provider) can be claimed this
+		// way; the tag-scoped changes below then reach it. The path scope
+		// that protects roles has no equal for providers.
+		{Sid: "TagNewOIDCProvidersForProject", Effect: "Allow", Action: []string{"iam:TagOpenIDConnectProvider"}, Resource: presetOIDCProviderARNs,
 			Condition: map[string]map[string]any{
 				"StringEquals": {"aws:RequestTag/Project": PlaceholderProject},
 				"Null":         {"aws:ResourceTag/Project": "true"},
 			}},
-		{Sid: "ChangeProjectEKSOIDCProviders", Effect: "Allow", Action: oidcProviderChangeActions, Resource: []string{EKSOIDCProviderARN},
+		{Sid: "ChangeProjectOIDCProviders", Effect: "Allow", Action: oidcProviderChangeActions, Resource: presetOIDCProviderARNs,
 			Condition: eq("aws:ResourceTag/Project", PlaceholderProject)},
 		// Services create their own service-linked role on first use, so
 		// create is open. Delete is limited to the services whose roles a
@@ -473,7 +498,32 @@ func writePolicy(r Report) Document {
 			"iam:UntagRole", "iam:UpdateAssumeRolePolicy",
 		}, Resource: []string{PlaceholderDeployRoleARN}},
 		{Sid: "DenyBoundaryRemoval", Effect: "Deny", Action: []string{"iam:DeleteRolePermissionsBoundary"}, Resource: star},
-	}}
+	}})
+}
+
+// dropEmpty removes statements with no actions (StackServiceDependencies
+// when no preset type needs one), which IAM would reject.
+func dropEmpty(d Document) Document {
+	out := d.Statement[:0]
+	for _, st := range d.Statement {
+		if len(st.Action) > 0 {
+			out = append(out, st)
+		}
+	}
+	d.Statement = out
+	return d
+}
+
+// moveSids takes the Sids out of d and returns them in statement order.
+// The write policy is near the IAM size limit, and the Sids cost about 600
+// characters; the code and the report keep the names.
+func moveSids(d Document) (Document, []string) {
+	names := make([]string, len(d.Statement))
+	for i := range d.Statement {
+		names[i] = d.Statement[i].Sid
+		d.Statement[i].Sid = ""
+	}
+	return d, names
 }
 
 func boundaryPolicy(r Report) Document {
@@ -515,6 +565,44 @@ func MinifiedSize(d Document) int {
 // ManagedPolicyLimit is IAM's size limit for a customer managed policy.
 const ManagedPolicyLimit = 6144
 
+// worstProject is the longest project name reliable makes: "io-" and a
+// session ID of up to 19 digits (projectNameFromSession, with the
+// UnixNano fallback of newSessionID).
+const worstProject = "io-1234567890123456789"
+
+// worstDeployRole is the template's deploy role name with a 12-character
+// short project ID (ui-core ShortProjectID gives 8 for a UUID).
+const worstDeployRole = "abcdef123456-luther-terraform"
+
+// worstARNPrefix is an IAM ARN prefix in the longest partition and an
+// account ID.
+const worstARNPrefix = "arn:aws-us-gov:iam::123456789012:"
+
+// WorstCaseValues are the longest values the template puts in the
+// placeholders. WorstCaseSize measures a policy with them.
+var WorstCaseValues = map[string]string{
+	PlaceholderProject:             worstProject,
+	PlaceholderWorkloadBoundaryARN: worstARNPrefix + "policy/" + worstProject + "-workload-boundary",
+	PlaceholderDeployRoleARN:       worstARNPrefix + "role/" + worstDeployRole,
+	PlaceholderDeployPolicyARN:     worstARNPrefix + "policy/" + worstDeployRole + "-deploy",
+}
+
+// Substitute replaces each placeholder in s with its value, as the
+// template's templatefile() does.
+func Substitute(s string, values map[string]string) string {
+	for k, v := range values {
+		s = strings.ReplaceAll(s, k, v)
+	}
+	return s
+}
+
+// WorstCaseSize is MinifiedSize after the template fills the placeholders
+// with the longest values it can have. IAM checks the filled policy.
+func WorstCaseSize(d Document) int {
+	b, _ := json.Marshal(d)
+	return len(Substitute(string(b), WorstCaseValues))
+}
+
 // File names of the generated output, relative to the output directory.
 const (
 	WriteFile    = "insideout-write.json"
@@ -530,8 +618,8 @@ const (
 func Files(res Result) (map[string][]byte, error) {
 	files := map[string][]byte{}
 	for name, d := range map[string]Document{WriteFile: res.Write, BoundaryFile: res.Boundary} {
-		if n := MinifiedSize(d); n > ManagedPolicyLimit {
-			return nil, fmt.Errorf("%s is %d characters, over the IAM limit of %d", name, n, ManagedPolicyLimit)
+		if n := WorstCaseSize(d); n > ManagedPolicyLimit {
+			return nil, fmt.Errorf("%s is %d characters with the longest placeholder values, over the IAM limit of %d", name, n, ManagedPolicyLimit)
 		}
 		b, err := Marshal(d)
 		if err != nil {

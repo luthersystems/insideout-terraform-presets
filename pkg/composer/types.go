@@ -247,6 +247,12 @@ type Config struct {
 	// (matches the AWSAppRunnerConfig + AWSSageMakerConfig pattern).
 	AWSCodeBuild *AWSCodeBuildConfig `json:"aws_codebuild,omitempty"`
 
+	// AWSGitHubActions, AWSCodePipeline and AWSGrafana carry the config of
+	// the presets that were placeholders until #936.
+	AWSGitHubActions *AWSGitHubActionsConfig `json:"aws_github_actions,omitempty"`
+	AWSCodePipeline  *AWSCodePipelineConfig  `json:"aws_codepipeline,omitempty"`
+	AWSGrafana       *AWSGrafanaConfig       `json:"aws_grafana,omitempty"`
+
 	AWSAPIGateway *struct {
 		DomainName     string `json:"domainName,omitempty"`
 		CertificateArn string `json:"certificateArn,omitempty"`
@@ -826,6 +832,50 @@ type AWSCodeBuildConfig struct {
 	SecurityGroupIDs  []string `json:"securityGroupIds,omitempty"`
 }
 
+// AWSGitHubActionsConfig is the caller-facing config for the
+// aws/githubactions preset (#936). Every field is optional; the mapper
+// sends only the fields that are set.
+type AWSGitHubActionsConfig struct {
+	GitHubRepository   string   `json:"githubRepository,omitempty"`
+	AllowedBranches    []string `json:"allowedBranches,omitempty"`
+	AllowedTags        []string `json:"allowedTags,omitempty"`
+	AllowedPullRequest *bool    `json:"allowedPullRequest,omitempty"`
+	// CreateOIDCProvider creates the account's GitHub OIDC provider. An
+	// account can have only one, so the default uses the existing one.
+	CreateOIDCProvider *bool    `json:"createOidcProvider,omitempty"`
+	OIDCProviderARN    string   `json:"oidcProviderArn,omitempty"`
+	ManagedPolicyARNs  []string `json:"managedPolicyArns,omitempty"`
+}
+
+// AWSCodePipelineConfig is the caller-facing config for the
+// aws/codepipeline preset (#936).
+type AWSCodePipelineConfig struct {
+	// SourceType is "GITHUB" (the default) or "S3".
+	SourceType       string `json:"sourceType,omitempty"`
+	GitHubRepository string `json:"githubRepository,omitempty"`
+	Branch           string `json:"branch,omitempty"`
+	// ConnectionARN names an approved CodeStar connection. Empty creates
+	// one, which a person must approve in the AWS console.
+	ConnectionARN  string `json:"connectionArn,omitempty"`
+	SourceS3Bucket string `json:"sourceS3Bucket,omitempty"`
+	SourceS3Key    string `json:"sourceS3Key,omitempty"`
+	// KMSKeyARN maps to kms_key_arn: a customer-managed KMS key ARN for
+	// the artifact bucket and store. Empty keeps SSE-S3.
+	KMSKeyARN string `json:"kmsKeyArn,omitempty"`
+}
+
+// AWSGrafanaConfig is the caller-facing config for the aws/grafana preset
+// (#936).
+type AWSGrafanaConfig struct {
+	// AuthenticationProviders is AWS_SSO (the default), SAML, or both.
+	AuthenticationProviders []string `json:"authenticationProviders,omitempty"`
+	AdminSSOUserIDs         []string `json:"adminSsoUserIds,omitempty"`
+	AdminSSOGroupIDs        []string `json:"adminSsoGroupIds,omitempty"`
+	SAMLIdPMetadataURL      string   `json:"samlIdpMetadataUrl,omitempty"`
+	SAMLAdminRoleValues     []string `json:"samlAdminRoleValues,omitempty"`
+	SAMLEditorRoleValues    []string `json:"samlEditorRoleValues,omitempty"`
+}
+
 // VarEntry holds a module variable name and a value (or nil). RawExpr can be used for expressions.
 type VarEntry struct {
 	Name  string
@@ -1022,6 +1072,9 @@ func (c *Config) Normalize() {
 		c.AWSAppRunner = nil
 		c.AWSSageMaker = nil
 		c.AWSCodeBuild = nil
+		c.AWSGitHubActions = nil
+		c.AWSCodePipeline = nil
+		c.AWSGrafana = nil
 		c.AWSAPIGateway = nil
 		c.AWSKMS = nil
 		c.AWSSecretsManager = nil

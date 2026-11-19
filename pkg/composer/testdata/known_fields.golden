@@ -2,6 +2,7 @@ aws_alb.egressCidrs
 aws_api_gateway.certificateArn
 aws_bastion.adminCidrs
 aws_cloudwatch_logs.retentionDays
+aws_codepipeline.sourceType
 aws_cognito.mfaFactor
 aws_cognito.signInType
 aws_dynamodb.type
@@ -16,6 +17,7 @@ aws_eks.minSize
 aws_elasticache.egressCidrs
 aws_elasticache.nodeSize
 aws_elasticache.replicas
+aws_grafana.authenticationProviders
 aws_kms.numKeys
 aws_lambda.memorySize
 aws_lambda.runtime

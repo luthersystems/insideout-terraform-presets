@@ -687,6 +687,31 @@ var configFieldValidators = []configFieldValidator{
 			return strings.TrimSpace(c.AWSS3.KMSKeyARN), true
 		},
 	},
+	// presets#936 closed sets. The allowed values come from the preset
+	// validations, so the IR enums cannot drift from them (reliable's
+	// TestZodEnumsAreSubsetOfPresetsAllowed).
+	{
+		field:     "aws_codepipeline.sourceType",
+		component: KeyAWSCodePipeline,
+		variable:  "source_type",
+		value: func(c *Config) (any, bool) {
+			if c == nil || c.AWSCodePipeline == nil || c.AWSCodePipeline.SourceType == "" {
+				return nil, false
+			}
+			return c.AWSCodePipeline.SourceType, true
+		},
+	},
+	{
+		field:     "aws_grafana.authenticationProviders",
+		component: KeyAWSGrafana,
+		variable:  "authentication_providers",
+		value: func(c *Config) (any, bool) {
+			if c == nil || c.AWSGrafana == nil || c.AWSGrafana.AuthenticationProviders == nil {
+				return nil, false
+			}
+			return c.AWSGrafana.AuthenticationProviders, true
+		},
+	},
 	{
 		field:     "aws_sagemaker.workspaceKmsKeyArn",
 		component: KeyAWSSageMaker,

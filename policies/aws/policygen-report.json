@@ -112,7 +112,13 @@
     },
     "aws_codepipeline": {
       "preset": "aws/codepipeline",
-      "services": []
+      "services": [
+        "codepipeline",
+        "codestar-connections",
+        "iam",
+        "s3",
+        "sts"
+      ]
     },
     "aws_cognito": {
       "preset": "aws/cognito",
@@ -179,11 +185,17 @@
     },
     "aws_github_actions": {
       "preset": "aws/githubactions",
-      "services": []
+      "services": [
+        "iam"
+      ]
     },
     "aws_grafana": {
       "preset": "aws/grafana",
-      "services": []
+      "services": [
+        "grafana",
+        "iam",
+        "sts"
+      ]
     },
     "aws_kendra": {
       "preset": "aws/kendra",
@@ -364,6 +376,7 @@
     "codebuild",
     "codedeploy",
     "codepipeline",
+    "codestar-connections",
     "cognito-idp",
     "dynamodb",
     "ec2",
@@ -375,6 +388,7 @@
     "es",
     "events",
     "glue",
+    "grafana",
     "iam",
     "kafka",
     "kendra",
@@ -397,6 +411,40 @@
     "states",
     "sts",
     "wafv2"
+  ],
+  "extra_actions": [
+    "identitystore:DescribeGroup",
+    "identitystore:DescribeUser",
+    "organizations:DescribeOrganization",
+    "sso-directory:DescribeGroup",
+    "sso-directory:DescribeUser",
+    "sso:CreateManagedApplicationInstance",
+    "sso:DeleteManagedApplicationInstance",
+    "sso:DescribeRegisteredRegions",
+    "sso:GetManagedApplicationInstance",
+    "sso:GetSharedSsoConfiguration",
+    "sso:ListDirectoryAssociations"
+  ],
+  "write_statements": [
+    "StackServices",
+    "StackServiceDependencies",
+    "CallerIdentity",
+    "IAMRead",
+    "CreateProjectRolesWithWorkloadBoundary",
+    "ChangeProjectRolesWithWorkloadBoundary",
+    "ManageProjectRoles",
+    "PassProjectRolesToStackServices",
+    "ProjectPolicies",
+    "ProjectInstanceProfiles",
+    "CreateOIDCProvidersForProject",
+    "TagNewOIDCProvidersForProject",
+    "ChangeProjectOIDCProviders",
+    "CreateServiceLinkedRoles",
+    "DeletePresetServiceLinkedRoles",
+    "TeardownLegacyProjectIAM",
+    "DenyEditOwnPolicies",
+    "DenyEditDeployRole",
+    "DenyBoundaryRemoval"
   ],
   "boundary_extra_services": [
     "cloudformation",
@@ -422,9 +470,11 @@
     "bedrock.amazonaws.com",
     "build.apprunner.amazonaws.com",
     "codebuild.amazonaws.com",
+    "codepipeline.amazonaws.com",
     "ec2.amazonaws.com",
     "eks-fargate-pods.amazonaws.com",
     "eks.amazonaws.com",
+    "grafana.amazonaws.com",
     "kendra.amazonaws.com",
     "lambda.amazonaws.com",
     "monitoring.rds.amazonaws.com",

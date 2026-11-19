@@ -136,7 +136,27 @@ func TestAllowedValues(t *testing.T) {
 		[]string{"STANDARD", "NEARLINE", "COLDLINE", "ARCHIVE"},
 		AllowedValues("gcp_gcs.storageClass"),
 	)
+	require.ElementsMatch(t, []string{"GITHUB", "S3"}, AllowedValues("aws_codepipeline.sourceType"))
+	require.ElementsMatch(t, []string{"AWS_SSO", "SAML"}, AllowedValues("aws_grafana.authenticationProviders"))
 	require.Nil(t, AllowedValues("gcp_pubsub.messageRetentionDuration"))
+}
+
+// The presets#936 closed sets fail at compose time, not at terraform plan.
+func TestValidate_Presets936ClosedSets(t *testing.T) {
+	t.Parallel()
+
+	fields := func(cfg *Config) []string {
+		var out []string
+		for _, is := range Validate(&Components{}, cfg) {
+			out = append(out, is.Field)
+		}
+		return out
+	}
+	require.Contains(t, fields(&Config{AWSCodePipeline: &AWSCodePipelineConfig{SourceType: "BITBUCKET"}}), "aws_codepipeline.sourceType")
+	require.Contains(t, fields(&Config{AWSGrafana: &AWSGrafanaConfig{AuthenticationProviders: []string{"OKTA"}}}), "aws_grafana.authenticationProviders")
+	require.Contains(t, fields(&Config{AWSGrafana: &AWSGrafanaConfig{AuthenticationProviders: []string{}}}), "aws_grafana.authenticationProviders")
+	require.NotContains(t, fields(&Config{AWSCodePipeline: &AWSCodePipelineConfig{SourceType: "S3"}}), "aws_codepipeline.sourceType")
+	require.NotContains(t, fields(&Config{AWSGrafana: &AWSGrafanaConfig{AuthenticationProviders: []string{"AWS_SSO", "SAML"}}}), "aws_grafana.authenticationProviders")
 }
 
 func TestKnownFields(t *testing.T) {

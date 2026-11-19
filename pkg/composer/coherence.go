@@ -342,6 +342,7 @@ func isOrphanStrippableKey(key ComponentKey) bool {
 		KeyAWSKMS, KeyAWSSecretsManager, KeyAWSOpenSearch,
 		KeyAWSBedrock, KeyAWSBedrockAgent, KeyAWSAgentCoreGateway, KeyAWSKendra, KeyAWSBackups, KeyAWSRoute53,
 		KeyAWSACM,
+		KeyAWSGitHubActions, KeyAWSCodePipeline, KeyAWSGrafana, // cfg sub-blocks since #936
 		KeyGCPCompute, KeyGCPGKE, KeyGCPCloudRun,
 		KeyGCPCloudFunctions, KeyGCPLoadbalancer,
 		KeyGCPCloudSQL, KeyGCPMemorystore, KeyGCPGCS,

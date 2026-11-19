@@ -54,6 +54,7 @@ var typePrefixService = map[string]string{
 	"aws_codebuild_":                   "codebuild",
 	"aws_codedeploy_":                  "codedeploy",
 	"aws_codepipeline":                 "codepipeline",
+	"aws_codestarconnections_":         "codestar-connections",
 	"aws_cognito_":                     "cognito-idp",
 	"aws_customer_gateway":             "ec2",
 	"aws_db_":                          "rds",
@@ -74,6 +75,7 @@ var typePrefixService = map[string]string{
 	"aws_elasticache_":                 "elasticache",
 	"aws_flow_log":                     "ec2",
 	"aws_glue_":                        "glue",
+	"aws_grafana_":                     "grafana",
 	"aws_iam_":                         "iam",
 	"aws_instance":                     "ec2",
 	"aws_internet_gateway":             "ec2",
@@ -111,6 +113,32 @@ var typePrefixService = map[string]string{
 	"aws_vpc":                          "ec2", // aws_vpc, aws_vpc_*
 	"aws_vpn_":                         "ec2",
 	"aws_wafv2_":                       "wafv2",
+}
+
+// typeExtraActions are actions of other services that a type's create or
+// delete calls make as the caller, so the deploy role needs them beside
+// its own service. They are exact actions, not service wildcards: the
+// services (IAM Identity Center, Organizations) hold the account's
+// identity, and a wildcard would let the deploy role change it.
+var typeExtraActions = map[string][]string{
+	// Amazon Managed Grafana registers the workspace as an IAM Identity
+	// Center application when it uses AWS_SSO login (#936).
+	"aws_grafana_workspace": {
+		"organizations:DescribeOrganization",
+		"sso:CreateManagedApplicationInstance",
+		"sso:DeleteManagedApplicationInstance",
+		"sso:DescribeRegisteredRegions",
+		"sso:GetManagedApplicationInstance",
+		"sso:GetSharedSsoConfiguration",
+		"sso:ListDirectoryAssociations",
+	},
+	// A role association looks the users and groups up in the directory.
+	"aws_grafana_role_association": {
+		"identitystore:DescribeGroup",
+		"identitystore:DescribeUser",
+		"sso-directory:DescribeGroup",
+		"sso-directory:DescribeUser",
+	},
 }
 
 // sortedPrefixes is typePrefixService's keys, longest first, so the first

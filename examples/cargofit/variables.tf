@@ -148,3 +148,9 @@ variable "vpc_region" {
 variable "waf_project" {
   type = string
 }
+
+variable "githubactions_github_repository" {
+  description = "GitHub repository (OWNER/REPO) whose workflows may assume the deploy role"
+  type        = string
+  default     = "example-org/cargofit"
+}

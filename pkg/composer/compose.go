@@ -111,6 +111,24 @@ func nsKey(comp ComponentKey, name string) string { return fmt.Sprintf("%s_%s", 
 // apply time. Modules that don't declare var.project_id (every AWS module
 // plus a small set of GCP modules) have it filtered out by the namespacing
 // loop in the caller. See issue #157.
+// IAMScopeVar is the root variable that carries the IAM path and
+// permissions boundary for a project on the scoped deploy policy
+// (sandbox-infrastructure-template#147).
+const IAMScopeVar = "iam_scope"
+
+// wireIAMScope declares the iam_scope root variable on an AWS stack and
+// passes it to a module that declares the variable. The value is not
+// namespaced: one scope covers the whole stack. A GCP stack gets nothing.
+func wireIAMScope(cloud string, declared map[string]bool, inputs, rootVars map[string]any) {
+	if strings.ToLower(cloud) == "gcp" {
+		return
+	}
+	rootVars[IAMScopeVar] = nil
+	if declared[IAMScopeVar] {
+		inputs[IAMScopeVar] = RawExpr{Expr: "var." + IAMScopeVar}
+	}
+}
+
 func maybeInjectGCPProjectID(cloud, gcpProjectID string, vals map[string]any) {
 	if cloud == "gcp" && strings.TrimSpace(gcpProjectID) != "" {
 		vals["project_id"] = gcpProjectID
@@ -298,6 +316,12 @@ func (c *Client) composeSingleImpl(opts ComposeSingleOpts) (*ComposeSingleResult
 			}
 		}
 	}
+
+	singleDeclared := make(map[string]bool, len(vars))
+	for _, v := range vars {
+		singleDeclared[v.Name] = true
+	}
+	wireIAMScope(cloud, singleDeclared, inputs, rootVars)
 
 	issues = append(issues, validateRequiredIssues(vars, wired, vals, string(opts.Key))...)
 	issues = append(issues, ValidateGCPProjectID(cloud, opts.GCPProjectID)...)
@@ -611,6 +635,8 @@ func (c *Client) composeStackImpl(opts ComposeStackOpts) (*ComposeStackResult, e
 				}
 			}
 		}
+
+		wireIAMScope(cloud, declared, inputs, rootVars)
 
 		issues = append(issues, validateRequiredIssues(vars, wired, vals, string(k))...)
 		presetPaths[string(k)] = presetPath

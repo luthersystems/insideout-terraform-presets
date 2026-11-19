@@ -325,13 +325,13 @@ resource "aws_codebuild_project" "main" {
 
   source {
     type      = var.source_type
-    location  = var.source_type == "NO_SOURCE" ? null : var.source_location
+    location  = contains(["NO_SOURCE", "CODEPIPELINE"], var.source_type) ? null : var.source_location
     buildspec = var.buildspec
   }
 
   artifacts {
     type     = var.artifacts_type
-    location = var.artifacts_type == "NO_ARTIFACTS" ? null : var.artifacts_location
+    location = var.artifacts_type == "S3" ? var.artifacts_location : null
   }
 
   environment {

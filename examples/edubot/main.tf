@@ -124,6 +124,7 @@ module "bedrock" {
 }
 
 module "githubactions" {
-  source  = "../../aws/githubactions"
-  project = var.githubactions_project
+  source            = "../../aws/githubactions"
+  project           = var.githubactions_project
+  github_repository = var.githubactions_github_repository
 }

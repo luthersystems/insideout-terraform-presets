@@ -104,12 +104,23 @@ var AWSIAMActions = map[ComponentKey][]string{
 	KeyAWSMSK:                  {"kafka:CreateClusterV2"},
 	KeyAWSCloudWatchLogs:       {"logs:CreateLogGroup"},
 	KeyAWSCloudWatchMonitoring: {"cloudwatch:PutMetricAlarm", "kms:CreateAlias", "kms:CreateKey"}, // kms: the module's key for the alarms SNS topic (see aws/cloudwatchmonitoring/main.tf)
-	// Grafana, GitHub Actions and CodePipeline: placeholder presets that
-	// create nothing, so the preflight checks nothing for them (#936).
-	KeyAWSGrafana:       nil,
-	KeyAWSCognito:       {"cognito-idp:CreateUserPool"},
-	KeyAWSBackups:       {"backup:CreateBackupPlan", "backup:CreateBackupVault"},
-	KeyAWSGitHubActions: nil,
+	// Grafana (#936): the workspace role and its inline policy, and the IAM
+	// Identity Center application that AWS_SSO login registers.
+	KeyAWSGrafana: {
+		"grafana:CreateWorkspace",
+		"iam:CreateRole",
+		"iam:PassRole",
+		"iam:PutRolePolicy",
+		"organizations:DescribeOrganization",
+		"sso:CreateManagedApplicationInstance",
+		"sso:DescribeRegisteredRegions",
+		"sso:GetSharedSsoConfiguration",
+	},
+	KeyAWSCognito: {"cognito-idp:CreateUserPool"},
+	KeyAWSBackups: {"backup:CreateBackupPlan", "backup:CreateBackupVault"},
+	// GitHub Actions (#936): the deploy role. The OIDC provider create is
+	// optional (create_oidc_provider), so it is not checked here.
+	KeyAWSGitHubActions: {"iam:AttachRolePolicy", "iam:CreateRole"},
 	// CodeBuild (#619). Project CREATE + the inline service-role
 	// policies the preset attaches (logs:CreateLogGroup for the build's
 	// CloudWatch Logs group, optional S3 bucket setup when enable_s3_logs
@@ -129,7 +140,19 @@ var AWSIAMActions = map[ComponentKey][]string{
 		"s3:PutBucketVersioning",
 		"s3:PutEncryptionConfiguration",
 	},
-	KeyAWSCodePipeline: nil, // placeholder preset (#936)
+	// CodePipeline (#936): pipeline, artifact bucket, service role and
+	// the GitHub connection.
+	KeyAWSCodePipeline: {
+		"codepipeline:CreatePipeline",
+		"codestar-connections:CreateConnection",
+		"iam:CreateRole",
+		"iam:PassRole",
+		"iam:PutRolePolicy",
+		"s3:CreateBucket",
+		"s3:PutBucketPublicAccessBlock",
+		"s3:PutBucketVersioning",
+		"s3:PutEncryptionConfiguration",
+	},
 	// route53:CreateHostedZone covers the create_zone=true path; the data-
 	// lookup path (create_zone=false) needs only route53:GetHostedZone, which
 	// is implied by the create capability. Record-set CRUD is covered by

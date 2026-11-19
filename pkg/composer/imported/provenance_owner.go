@@ -105,6 +105,8 @@ var untaggableAWS = map[string]struct{}{
 	"aws_cognito_user_pool_domain":                       {},
 	"aws_dynamodb_contributor_insights":                  {},
 	"aws_ecs_cluster_capacity_providers":                 {},
+	"aws_grafana_role_association":                       {},
+	"aws_grafana_workspace_saml_configuration":           {},
 	"aws_iam_group":                                      {},
 	"aws_iam_instance_profile":                           {},
 	"aws_iam_role_policy":                                {},
