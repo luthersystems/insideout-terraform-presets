@@ -167,7 +167,8 @@ module "sqs" {
 }
 
 module "githubactions" {
-  source      = "../../aws/githubactions"
-  project     = var.githubactions_project
-  environment = var.environment
+  source            = "../../aws/githubactions"
+  project           = var.githubactions_project
+  environment       = var.environment
+  github_repository = var.githubactions_github_repository
 }
