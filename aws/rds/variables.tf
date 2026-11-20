@@ -230,6 +230,16 @@ variable "cloudwatch_logs_exports" {
   }
 }
 
+variable "cloudwatch_logs_retention_days" {
+  description = "Days to keep the exported RDS logs in CloudWatch Logs. The preset owns each log group, so a destroy deletes it (#957). Must be one of CloudWatch's retention values."
+  type        = number
+  default     = 30
+  validation {
+    condition     = contains([1, 3, 5, 7, 14, 30, 60, 90, 120, 150, 180, 365, 400, 545, 731, 1096, 1827, 2192, 2557, 2922, 3288, 3653], var.cloudwatch_logs_retention_days)
+    error_message = "cloudwatch_logs_retention_days must be one of CloudWatch's retention values: 1, 3, 5, 7, 14, 30, 60, 90, 120, 150, 180, 365, 400, 545, 731, 1096, 1827, 2192, 2557, 2922, 3288, 3653."
+  }
+}
+
 variable "monitoring_interval" {
   description = "RDS Enhanced Monitoring sampling interval in seconds. 0 disables Enhanced Monitoring; valid non-zero values are 1, 5, 10, 15, 30, 60."
   type        = number
