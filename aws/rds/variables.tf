@@ -215,7 +215,7 @@ variable "tags" {
 }
 
 variable "enable_cloudwatch_logs" {
-  description = "Export Postgres logs to CloudWatch Logs"
+  description = "Export Postgres logs to CloudWatch Logs. The preset owns the log groups (#957), so setting this to false, or removing an entry from cloudwatch_logs_exports, deletes those groups and the logs in them."
   type        = bool
   default     = false
 }
@@ -227,6 +227,16 @@ variable "cloudwatch_logs_exports" {
   validation {
     condition     = length(var.cloudwatch_logs_exports) >= 0
     error_message = "cloudwatch_logs_exports must be a list (use empty to disable)."
+  }
+}
+
+variable "cloudwatch_logs_retention_days" {
+  description = "Days to keep the exported RDS logs in CloudWatch Logs. The preset owns each log group, so a destroy deletes it (#957). Must be one of CloudWatch's retention values."
+  type        = number
+  default     = 30
+  validation {
+    condition     = contains([1, 3, 5, 7, 14, 30, 60, 90, 120, 150, 180, 365, 400, 545, 731, 1096, 1827, 2192, 2557, 2922, 3288, 3653], var.cloudwatch_logs_retention_days)
+    error_message = "cloudwatch_logs_retention_days must be one of CloudWatch's retention values: 1, 3, 5, 7, 14, 30, 60, 90, 120, 150, 180, 365, 400, 545, 731, 1096, 1827, 2192, 2557, 2922, 3288, 3653."
   }
 }
 

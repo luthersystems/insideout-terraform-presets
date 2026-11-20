@@ -138,9 +138,78 @@ resource "random_password" "db" {
 }
 
 # -----------------------------------------------------------------------------
+# CloudWatch log groups for the log exports
+# -----------------------------------------------------------------------------
+# When log export is on, RDS writes to /aws/rds/instance/<id>/<export>. If
+# that group does not exist, RDS makes it, and Terraform does not own it:
+# a destroy left it, with its data and its storage cost, and it never
+# expired (#957). So the preset makes each group before the instances
+# (depends_on below), RDS writes into it, and a destroy deletes it after
+# the instances.
+#
+# A stack deployed before #957 already has groups that RDS made. Making
+# one again fails with ResourceAlreadyExistsException, and an import {}
+# block is allowed only in the root module (#199). So the preset reads the
+# groups that exist and makes a group only when it does not exist or has
+# the owner tag. The owner tag is what keeps a group in the plan after the
+# first apply; without it the next plan would see the group exists and
+# delete it. A group that RDS made stays as it was (not owned, never
+# expires), as before #957.
+#
+# Limit: the tag is read again on every plan. If the owner tag is removed
+# from an owned group, or the group is deleted outside Terraform and RDS
+# makes it again without tags, the next plan destroys that group. Do not
+# remove the insideout:log-group-owner tag. Terraform has no other way to
+# make a resource only when it does not exist (a terraform_data record is
+# unknown at plan time, so for_each cannot use it).
+locals {
+  log_group_owner_tag = { "insideout:log-group-owner" = "terraform" }
+
+  rds_instance_identifiers = concat([local.safe_name], local.replica_identifiers)
+
+  rds_log_group_names = var.enable_cloudwatch_logs ? toset(flatten([
+    for id in local.rds_instance_identifiers : [
+      for e in var.cloudwatch_logs_exports : "/aws/rds/instance/${id}/${e}"
+    ]
+  ])) : toset([])
+
+  rds_log_groups_existing = setintersection(
+    local.rds_log_group_names,
+    toset(flatten([for d in data.aws_cloudwatch_log_groups.rds_existing : d.log_group_names])),
+  )
+
+  # Not owned means it exists without the owner tag. try() reads the tag
+  # only for a group that exists (|| does not short-circuit).
+  rds_log_groups_owned = toset([
+    for n in local.rds_log_group_names : n
+    if !contains(local.rds_log_groups_existing, n) || try(data.aws_cloudwatch_log_group.rds_existing[n].tags["insideout:log-group-owner"], "") == "terraform"
+  ])
+}
+
+data "aws_cloudwatch_log_groups" "rds_existing" {
+  for_each              = var.enable_cloudwatch_logs ? toset(local.rds_instance_identifiers) : toset([])
+  log_group_name_prefix = "/aws/rds/instance/${each.key}/"
+}
+
+data "aws_cloudwatch_log_group" "rds_existing" {
+  for_each = local.rds_log_groups_existing
+  name     = each.key
+}
+
+resource "aws_cloudwatch_log_group" "rds" {
+  for_each          = local.rds_log_groups_owned
+  name              = each.key
+  retention_in_days = var.cloudwatch_logs_retention_days
+  tags              = merge(module.name.tags, var.tags, local.log_group_owner_tag)
+}
+
+# -----------------------------------------------------------------------------
 # Primary RDS instance (PostgreSQL)
 # -----------------------------------------------------------------------------
 resource "aws_db_instance" "primary" {
+  # The log groups first, so RDS writes into groups Terraform owns (#957).
+  depends_on = [aws_cloudwatch_log_group.rds]
+
   identifier = local.safe_name
   engine     = "postgres"
 
@@ -225,6 +294,8 @@ locals {
 }
 
 resource "aws_db_instance" "replica" {
+  depends_on = [aws_cloudwatch_log_group.rds]
+
   count          = local.replica_count
   identifier     = local.replica_identifiers[count.index]
   engine         = "postgres"

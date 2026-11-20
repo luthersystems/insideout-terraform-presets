@@ -89,6 +89,22 @@ variable "cluster_enabled_log_types" {
   }
 }
 
+variable "container_insights_log_groups" {
+  description = "Make the Container Insights log groups (/aws/containerinsights/<cluster>/*) that the amazon-cloudwatch-observability addon of aws/eks_nodegroup writes to, so a destroy deletes them (#957). The composer does not set the addon switch of aws/eks_nodegroup, so the addon is on in every composed stack. If no node group runs the addon, set this to false, or the four groups stay empty."
+  type        = bool
+  default     = true
+}
+
+variable "container_insights_log_retention_days" {
+  description = "Days to keep the Container Insights logs in CloudWatch Logs. Must be one of CloudWatch's retention values."
+  type        = number
+  default     = 30
+  validation {
+    condition     = contains([1, 3, 5, 7, 14, 30, 60, 90, 120, 150, 180, 365, 400, 545, 731, 1096, 1827, 2192, 2557, 2922, 3288, 3653], var.container_insights_log_retention_days)
+    error_message = "container_insights_log_retention_days must be one of CloudWatch's retention values: 1, 3, 5, 7, 14, 30, 60, 90, 120, 150, 180, 365, 400, 545, 731, 1096, 1827, 2192, 2557, 2922, 3288, 3653."
+  }
+}
+
 variable "tags" {
   description = "Additional AWS tags applied to all resources"
   type        = map(string)

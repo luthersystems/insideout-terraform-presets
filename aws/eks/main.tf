@@ -246,3 +246,69 @@ module "eks" {
 
   tags = local.common_tags
 }
+
+# -----------------------------------------------------------------------------
+# Container Insights log groups
+# -----------------------------------------------------------------------------
+# aws/eks_nodegroup installs the amazon-cloudwatch-observability addon (on by
+# default). Its CloudWatch agent and fluent-bit write to
+# /aws/containerinsights/<cluster>/{application,dataplane,host,performance}
+# and make those groups when they do not exist. Terraform did not own them,
+# so a destroy left them, with their data and storage cost, and they never
+# expired (#957).
+#
+# They are here, not in aws/eks_nodegroup, because the node group gets the
+# cluster name from module.eks, which is unknown at plan time on a new
+# stack. The existence check below needs the name at plan time; this
+# preset has it (local.cluster_name). output.cluster_name depends on these
+# groups, so the node group and its addon are made after them and
+# destroyed before them, and no agent is left to make a group again.
+#
+# A stack deployed before #957 already has groups that the addon made.
+# Making one again fails with ResourceAlreadyExistsException, and an
+# import {} block is allowed only in the root module (#199). So the preset
+# reads the groups that exist and makes a group only when it does not exist
+# or has the owner tag. The owner tag is what keeps a group in the plan
+# after the first apply; without it the next plan would see the group
+# exists and delete it. A group that the addon made stays as it was.
+#
+# Limit: the tag is read again on every plan. If the owner tag is removed
+# from an owned group, or the group is deleted outside Terraform and the
+# addon makes it again without tags, the next plan destroys that group. Do
+# not remove the insideout:log-group-owner tag. aws/rds has the same limit.
+locals {
+  log_group_owner_tag = { "insideout:log-group-owner" = "terraform" }
+
+  container_insights_log_group_names = var.container_insights_log_groups ? toset([
+    for t in ["application", "dataplane", "host", "performance"] : "/aws/containerinsights/${local.cluster_name}/${t}"
+  ]) : toset([])
+
+  container_insights_log_groups_existing = setintersection(
+    local.container_insights_log_group_names,
+    toset(flatten([for d in data.aws_cloudwatch_log_groups.container_insights_existing : d.log_group_names])),
+  )
+
+  # try() reads the tag only for a group that exists (|| does not
+  # short-circuit).
+  container_insights_log_groups_owned = toset([
+    for n in local.container_insights_log_group_names : n
+    if !contains(local.container_insights_log_groups_existing, n) || try(data.aws_cloudwatch_log_group.container_insights_existing[n].tags["insideout:log-group-owner"], "") == "terraform"
+  ])
+}
+
+data "aws_cloudwatch_log_groups" "container_insights_existing" {
+  count                 = var.container_insights_log_groups ? 1 : 0
+  log_group_name_prefix = "/aws/containerinsights/${local.cluster_name}/"
+}
+
+data "aws_cloudwatch_log_group" "container_insights_existing" {
+  for_each = local.container_insights_log_groups_existing
+  name     = each.key
+}
+
+resource "aws_cloudwatch_log_group" "container_insights" {
+  for_each          = local.container_insights_log_groups_owned
+  name              = each.key
+  retention_in_days = var.container_insights_log_retention_days
+  tags              = merge(local.common_tags, local.log_group_owner_tag)
+}
