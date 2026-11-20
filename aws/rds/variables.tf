@@ -215,7 +215,7 @@ variable "tags" {
 }
 
 variable "enable_cloudwatch_logs" {
-  description = "Export Postgres logs to CloudWatch Logs"
+  description = "Export Postgres logs to CloudWatch Logs. The preset owns the log groups (#957), so setting this to false, or removing an entry from cloudwatch_logs_exports, deletes those groups and the logs in them."
   type        = bool
   default     = false
 }

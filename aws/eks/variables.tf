@@ -90,7 +90,7 @@ variable "cluster_enabled_log_types" {
 }
 
 variable "container_insights_log_groups" {
-  description = "Make the Container Insights log groups (/aws/containerinsights/<cluster>/*) that the amazon-cloudwatch-observability addon of aws/eks_nodegroup writes to, so a destroy deletes them (#957). Set false only when no node group runs the addon."
+  description = "Make the Container Insights log groups (/aws/containerinsights/<cluster>/*) that the amazon-cloudwatch-observability addon of aws/eks_nodegroup writes to, so a destroy deletes them (#957). The composer does not set the addon switch of aws/eks_nodegroup, so the addon is on in every composed stack. If no node group runs the addon, set this to false, or the four groups stay empty."
   type        = bool
   default     = true
 }

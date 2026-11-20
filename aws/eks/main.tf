@@ -271,6 +271,11 @@ module "eks" {
 # or has the owner tag. The owner tag is what keeps a group in the plan
 # after the first apply; without it the next plan would see the group
 # exists and delete it. A group that the addon made stays as it was.
+#
+# Limit: the tag is read again on every plan. If the owner tag is removed
+# from an owned group, or the group is deleted outside Terraform and the
+# addon makes it again without tags, the next plan destroys that group. Do
+# not remove the insideout:log-group-owner tag. aws/rds has the same limit.
 locals {
   log_group_owner_tag = { "insideout:log-group-owner" = "terraform" }
 

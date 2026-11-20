@@ -155,6 +155,13 @@ resource "random_password" "db" {
 # first apply; without it the next plan would see the group exists and
 # delete it. A group that RDS made stays as it was (not owned, never
 # expires), as before #957.
+#
+# Limit: the tag is read again on every plan. If the owner tag is removed
+# from an owned group, or the group is deleted outside Terraform and RDS
+# makes it again without tags, the next plan destroys that group. Do not
+# remove the insideout:log-group-owner tag. Terraform has no other way to
+# make a resource only when it does not exist (a terraform_data record is
+# unknown at plan time, so for_each cannot use it).
 locals {
   log_group_owner_tag = { "insideout:log-group-owner" = "terraform" }
 
