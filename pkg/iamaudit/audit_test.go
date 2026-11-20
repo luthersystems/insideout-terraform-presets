@@ -147,7 +147,9 @@ func TestDiffAgainstPlaceholderPolicy(t *testing.T) {
 	// ec2:RunInstances and lambda:CreateFunction pass a role, and the
 	// placeholder allows iam:PassRole only under a Condition.
 	assert.Equal(t, []string{"iam:PassRole"}, rep.UsedScoped)
-	assert.Equal(t, []string{"organizations", "ssm", "tag"}, rep.ServicesBeyondComposerSeed)
+	// The Grafana preset's seed (composer.AWSIAMActions, c6fc7dd) names
+	// organizations:DescribeOrganization, so it is not beyond the seed.
+	assert.Equal(t, []string{"ssm", "tag"}, rep.ServicesBeyondComposerSeed)
 
 	never := map[string]bool{}
 	for _, p := range rep.AllowedNeverUsed {
