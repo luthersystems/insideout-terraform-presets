@@ -181,6 +181,9 @@ func Scan(opts Options) (Report, error) {
 		}
 		for _, p := range full.Principals {
 			principals[p] = true
+			for _, svc := range passedVia[p] {
+				principals[svc] = true
+			}
 		}
 		for _, svc := range full.ServiceLinkedRoles {
 			slr[svc] = true
@@ -633,4 +636,15 @@ func Files(res Result) (map[string][]byte, error) {
 	}
 	files[ReportFile] = append(rep, '\n')
 	return files, nil
+}
+
+// passedVia maps a trust principal to the other services that receive the
+// role in the API call. iam:PassedToService names the service whose API
+// takes the role, which is not always the service that assumes it. RDS
+// CreateDBInstance passes the enhanced monitoring role (trusted by
+// monitoring.rds.amazonaws.com) with iam:PassedToService rds.amazonaws.com:
+// the shadow run of sandbox-infrastructure-template#147 was refused there.
+// Add a row only for a pair a deploy has shown.
+var passedVia = map[string][]string{
+	"monitoring.rds.amazonaws.com": {"rds.amazonaws.com"},
 }

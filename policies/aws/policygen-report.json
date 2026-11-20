@@ -479,6 +479,7 @@
     "lambda.amazonaws.com",
     "monitoring.rds.amazonaws.com",
     "pods.eks.amazonaws.com",
+    "rds.amazonaws.com",
     "sagemaker.amazonaws.com",
     "tasks.apprunner.amazonaws.com",
     "vpc-flow-logs.amazonaws.com"
