@@ -1,6 +1,10 @@
 output "cluster_name" {
   description = "EKS cluster name"
   value       = module.eks.cluster_name
+  # aws/eks_nodegroup takes the cluster name from here, so its node group
+  # and Container Insights addon are made after the log groups and
+  # destroyed before them (#957).
+  depends_on = [aws_cloudwatch_log_group.container_insights]
 }
 
 output "cluster_version" {

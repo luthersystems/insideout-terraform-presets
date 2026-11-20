@@ -271,6 +271,13 @@ resource "aws_autoscaling_group_tag" "node_tags" {
 # CloudWatch ingest cost (~$0.30/GB) is the trade-off; opt out via
 # var.enable_container_insights = false.
 #
+# The addon's agent and fluent-bit write to
+# /aws/containerinsights/<cluster>/*. aws/eks owns those log groups, so a
+# destroy deletes them (#957): it knows the cluster name at plan time, and
+# var.cluster_name comes from its cluster_name output, which depends on
+# the groups. A cluster made outside aws/eks has no such groups; the addon
+# makes them, and a destroy leaves them.
+#
 # Depends on the node group being up so the addon's DaemonSets can
 # schedule, and on the CloudWatchAgentServerPolicy attachment so the
 # agent has cloudwatch:PutMetricData when it starts.
