@@ -167,6 +167,8 @@ func TestRoleEscalationDenied(t *testing.T) {
 		{"tag a project role on create", Request{"iam:TagRole", role, without("aws:ResourceTag/Project")}, true},
 		{"pass a project role", Request{"iam:PassRole", role, ctx}, true},
 		{"pass a customer role", Request{"iam:PassRole", customerRole, ctx}, false},
+		// RDS passes the enhanced monitoring role to itself (#147 shadow run).
+		{"pass the RDS monitoring role to RDS", Request{"iam:PassRole", role, with("iam:PassedToService", "rds.amazonaws.com")}, true},
 		{"pass a role to a service no preset uses", Request{"iam:PassRole", role, with("iam:PassedToService", "iam.amazonaws.com")}, false},
 		// sts.amazonaws.com is the GitHub OIDC audience in a trust policy,
 		// not a service that takes a role.
