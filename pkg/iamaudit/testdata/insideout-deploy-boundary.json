@@ -1,0 +1,72 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "AllowAllProvisioning",
+      "Effect": "Allow",
+      "Action": "*",
+      "Resource": "*"
+    },
+    {
+      "Sid": "DenyOrgAccountAndBillingControlPlane",
+      "Effect": "Deny",
+      "Action": [
+        "account:*",
+        "artifact:*",
+        "aws-portal:*",
+        "billing:*",
+        "budgets:*",
+        "ce:*",
+        "controltower:*",
+        "cur:*",
+        "identitystore:*",
+        "invoicing:*",
+        "organizations:*",
+        "payments:*",
+        "purchase-orders:*",
+        "savingsplans:*",
+        "sso:*",
+        "sso-directory:*"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "DenyIAMUserAndCredentialEscalation",
+      "Effect": "Deny",
+      "Action": [
+        "iam:ChangePassword",
+        "iam:CreateAccountAlias",
+        "iam:CreateLoginProfile",
+        "iam:CreateSAMLProvider",
+        "iam:CreateUser",
+        "iam:DeactivateMFADevice",
+        "iam:DeleteAccountAlias",
+        "iam:DeleteAccountPasswordPolicy",
+        "iam:DeleteLoginProfile",
+        "iam:DeleteVirtualMFADevice",
+        "iam:UpdateAccountPasswordPolicy",
+        "iam:UpdateLoginProfile",
+        "iam:UpdateSAMLProvider"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "DenySecurityMonitoringTeardown",
+      "Effect": "Deny",
+      "Action": [
+        "accessanalyzer:DeleteAnalyzer",
+        "cloudtrail:DeleteTrail",
+        "cloudtrail:StopLogging",
+        "cloudtrail:UpdateTrail",
+        "config:DeleteConfigurationRecorder",
+        "config:DeleteDeliveryChannel",
+        "config:StopConfigurationRecorder",
+        "guardduty:DeleteDetector",
+        "guardduty:DisassociateFromMasterAccount",
+        "macie2:DisableMacie",
+        "securityhub:DisableSecurityHub"
+      ],
+      "Resource": "*"
+    }
+  ]
+}
