@@ -208,11 +208,25 @@ resource "aws_db_instance" "primary" {
 # -----------------------------------------------------------------------------
 locals {
   replica_count = max(var.read_replica_count, 0)
+
+  # An RDS identifier has at most 63 characters. A Reliable project name
+  # ("io-" + 12 characters) gives a 56-character safe_name, so
+  # "<safe_name>-replica-1" (66) was refused at apply with "Invalid
+  # database identifier" (#955). A name that fits is kept as it is, so no
+  # existing replica is replaced. A longer one keeps the start of safe_name
+  # and adds a hash of all of it, so two instances in one project stay apart.
+  replica_identifiers = [
+    for i in range(local.replica_count) : (
+      length("${local.safe_name}-replica-${i + 1}") <= 63
+      ? "${local.safe_name}-replica-${i + 1}"
+      : "${trim(substr(local.safe_name, 0, 63 - length("-replica-${i + 1}") - 9), "-")}-${substr(sha1(local.safe_name), 0, 8)}-replica-${i + 1}"
+    )
+  ]
 }
 
 resource "aws_db_instance" "replica" {
   count          = local.replica_count
-  identifier     = "${local.safe_name}-replica-${count.index + 1}"
+  identifier     = local.replica_identifiers[count.index]
   engine         = "postgres"
   instance_class = var.instance_class
 
