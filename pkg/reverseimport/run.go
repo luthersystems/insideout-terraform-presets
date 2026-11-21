@@ -17,6 +17,7 @@ import (
 	"github.com/luthersystems/insideout-terraform-presets/pkg/composer"
 	"github.com/luthersystems/insideout-terraform-presets/pkg/composer/imported"
 	"github.com/luthersystems/insideout-terraform-presets/pkg/composer/imported/normalize"
+	"github.com/luthersystems/insideout-terraform-presets/pkg/planredact"
 	"github.com/luthersystems/insideout-terraform-presets/pkg/reverseimport/job"
 )
 
@@ -544,7 +545,17 @@ func runFinalPlanJSON(ctx context.Context, opts Options, planPath, validateJSONP
 		return nil, validateJSON, fmt.Errorf("terraform show final plan: %w", showErr)
 	}
 	opts.progressf("reverse-import: plan complete\n")
-	if writeErr := writeFileAtomic(tfplanJSONPath, planJSON, 0o644); writeErr != nil {
+	// tfplan.json is uploaded and served (ui-core GetJobPlan, reliable's
+	// artifact endpoints), and `terraform show -json` puts every input
+	// variable value in it, the credential tfvars among them. Write the
+	// redacted form; the caller keeps the exact plan in memory to count and
+	// classify changes (luthersystems/reliable#2553). No redacted plan means
+	// no tfplan.json, never the raw one.
+	redacted, redactErr := planredact.JSON(planJSON)
+	if redactErr != nil {
+		return planJSON, validateJSON, fmt.Errorf("redact tfplan.json: %w", redactErr)
+	}
+	if writeErr := writeFileAtomic(tfplanJSONPath, redacted, 0o644); writeErr != nil {
 		return planJSON, validateJSON, fmt.Errorf("write tfplan.json: %w", writeErr)
 	}
 	return planJSON, validateJSON, nil
