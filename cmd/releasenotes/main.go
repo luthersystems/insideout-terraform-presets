@@ -35,7 +35,7 @@ func main() {
 }
 
 func git(args ...string) (string, error) {
-	cmd := exec.Command("git", args...)
+	cmd := exec.Command("git", args...) //nolint:gosec // G204: fixed git binary, arguments as argv, no shell
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	out, err := cmd.Output()
@@ -102,8 +102,9 @@ func notes(lastTag string) (string, error) {
 	if lastTag != "" {
 		rangeArg = lastTag + "..HEAD"
 	}
-	// One bullet per change on main: a merge commit is one PR.
-	shas, err := git("rev-list", "--first-parent", "--max-count=200", rangeArg)
+	// One bullet per change on main: a merge commit is one PR. No cap: a
+	// cut list would hide PRs while Module Changes covers the whole diff.
+	shas, err := git("rev-list", "--first-parent", rangeArg)
 	if err != nil {
 		return "", err
 	}

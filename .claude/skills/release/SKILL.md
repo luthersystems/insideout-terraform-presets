@@ -90,8 +90,10 @@ The downstream InsideOut backend reads it when it bumps this module, and PR
 titles alone do not show a breaking variable rename. Do not edit the release
 by hand: agent sessions cannot edit a release. To see the notes before the
 run, use `LAST_TAG=<previous tag> go run ./cmd/releasenotes`. Read the
-Breaking line when you choose the version: a breaking change is a major bump
-(see the guide below).
+Breaking line (removed modules, variables or outputs, new required inputs,
+changed types, nullable turned off) and the Check line (changed defaults,
+validations or output sensitivity) when you choose the version: a breaking
+change is a major bump (see the guide below).
 
 ### 6. Verify Downstream Consumption
 

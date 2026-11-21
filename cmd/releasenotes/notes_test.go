@@ -3,6 +3,7 @@ package main
 import (
 	"strings"
 	"testing"
+	"unicode/utf8"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -118,3 +119,75 @@ func names(vs []variable) []string {
 	}
 	return out
 }
+
+// Review of #961: the first version read only names and default text, so a
+// type change shipped as "No variable or output change", and a reformatted
+// list default showed as a new default.
+func TestModuleChangesTypesValidationsAndFormatting(t *testing.T) {
+	oldTree := tree(map[string]string{"aws/x/variables.tf": `
+variable "count_of" { type = string }
+variable "list" {
+  default = [
+    "a",
+    "b",
+  ]
+}
+variable "env" {
+  default = "dev"
+  validation {
+    condition     = length(var.env) > 0
+    error_message = "env"
+  }
+}
+variable "maybe" { default = null }
+output "secret" { value = 1 }
+`})
+	newTree := tree(map[string]string{"aws/x/variables.tf": `
+variable "count_of" { type = number }
+variable "list" { default = ["a", "b"] }
+variable "env" {
+  default = "dev"
+  validation {
+    condition     = contains(["dev", "prod"], var.env)
+    error_message = "env"
+  }
+}
+variable "maybe" {
+  default  = null
+  nullable = false
+}
+output "secret" {
+  value     = 1
+  sensitive = true
+}
+`})
+	changes, err := moduleChanges([]string{"aws/x/variables.tf"}, oldTree, newTree)
+	require.NoError(t, err)
+	require.Len(t, changes, 1)
+	c := changes[0]
+	assert.Empty(t, c.DefaultsChanged, "a reformatted list is the same default")
+	assert.Equal(t, []string{"count_of"}, c.TypesChanged)
+	assert.Equal(t, []string{"maybe"}, c.NullableOff)
+	assert.Equal(t, []string{"env"}, c.ValidationsChanged)
+	assert.Equal(t, []string{"secret"}, c.SensitiveChanged)
+	assert.True(t, c.breaking())
+
+	onlyCheck := moduleChange{Dir: "aws/y", Status: statusChanged, ValidationsChanged: []string{"env"}}
+	assert.False(t, onlyCheck.breaking())
+	out := render(nil, []moduleChange{onlyCheck}, nil, "")
+	assert.Contains(t, out, "**Check:** `aws/y`")
+}
+
+func TestShortAndSpanKeepTheTableRow(t *testing.T) {
+	long := `"^(dev|staging|prod)-[a-z0-9-]+-some-long-regex-suffix-here-ééé"`
+	got := short(long)
+	assert.NotContains(t, strings.ReplaceAll(got, `\|`, ""), "|", "every | must be escaped, also in a cut default")
+	assert.True(t, utf8ValidString(got))
+	assert.Equal(t, "`` a`b ``", span("a`b"))
+}
+
+func TestPRLineSquashMerge(t *testing.T) {
+	assert.Equal(t, "- Add iamaudit (#939)", prLine("aba5dd9000", "Add iamaudit (#939)", ""))
+}
+
+func utf8ValidString(s string) bool { return utf8.ValidString(s) }
