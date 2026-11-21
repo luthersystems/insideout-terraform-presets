@@ -30,7 +30,7 @@ variable "gone" { default = 1 }
 `,
 		"aws/rds/outputs.tf": `output "endpoint" { value = 1 }
 output "old_out" { value = 2 }`,
-		"aws/old/main.tf": `variable "x" {}`,
+		"aws/old/main.tf":  `variable "x" {}`,
 		"aws/same/main.tf": `variable "x" { default = "a" }`,
 	})
 	newTree := tree(map[string]string{
@@ -47,8 +47,8 @@ variable "needed" {}
 `,
 		"aws/rds/outputs.tf": `output "endpoint" { value = 1 }
 output "arn" { value = 3 }`,
-		"aws/new/main.tf":   `variable "x" {}`,
-		"aws/same/main.tf":  `variable "x" { default   =   "a" }`,
+		"aws/new/main.tf":             `variable "x" {}`,
+		"aws/same/main.tf":            `variable "x" { default   =   "a" }`,
 		"aws/same/tests/a.tftest.hcl": `run "x" {}`,
 	})
 	changed := []string{
