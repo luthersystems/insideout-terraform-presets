@@ -41,3 +41,7 @@ jobs:
       version: ${{ inputs.version }}
       dry_run: ${{ inputs.dry_run }}
       ci_workflow: terraform-validate.yml
+      # The notes carry the Module Changes section (variables, outputs and
+      # defaults of each changed module), which the release used to get by
+      # a hand edit after the run; an agent session cannot edit a release.
+      notes_command: go run ./cmd/releasenotes

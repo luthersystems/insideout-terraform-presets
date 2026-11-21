@@ -82,12 +82,16 @@ gh workflow run release-tag.yml --ref main -f version=v<X.Y.Z> -f dry_run=false
 watch_new_run "$since"
 ```
 
-The workflow creates the tag and the GitHub release, with notes generated from
-the merged pull requests. Then edit the release (`gh release edit v<X.Y.Z>
---notes-file ...`) and add a **Module Changes** section: new, changed and
-removed modules, and any renamed variable or removed output. The downstream
-InsideOut backend reads it when it bumps this module, and PR titles alone do
-not show a breaking variable rename.
+The workflow creates the tag and the GitHub release. Its notes come from
+`go run ./cmd/releasenotes` (the workflow's `notes_command`): the merged pull
+requests, then a **Module Changes** section with each changed module's added
+and removed variables and outputs, changed defaults and a **Breaking:** line.
+The downstream InsideOut backend reads it when it bumps this module, and PR
+titles alone do not show a breaking variable rename. Do not edit the release
+by hand: agent sessions cannot edit a release. To see the notes before the
+run, use `LAST_TAG=<previous tag> go run ./cmd/releasenotes`. Read the
+Breaking line when you choose the version: a breaking change is a major bump
+(see the guide below).
 
 ### 6. Verify Downstream Consumption
 
@@ -119,5 +123,5 @@ Remind the user to update the downstream dependency.
 - [ ] `go build ./...` succeeds
 - [ ] Dry run printed the right version
 - [ ] `Release (tag)` workflow run succeeded (tag and GitHub release created)
-- [ ] Release notes have a Module Changes section
+- [ ] Release notes have a Module Changes section (written by the workflow)
 - [ ] User reminded to update downstream `go.mod`
