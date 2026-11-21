@@ -343,6 +343,11 @@ func LooksLikePlan(content []byte) bool {
 	if obj, err := decodeObject(content); err == nil {
 		return looksLikePlan(obj)
 	}
+	// Valid JSON that is not one object (an array such as imported.json)
+	// is not a plan; only bytes that do not parse get the byte-level test.
+	if json.Valid(content) {
+		return false
+	}
 	return mayBePlan(content)
 }
 

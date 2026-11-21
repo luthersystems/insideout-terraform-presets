@@ -319,6 +319,9 @@ func TestLooksLikePlan(t *testing.T) {
 	assert.True(t, LooksLikePlan([]byte(planWithSecrets[:len(planWithSecrets)/2])), "a truncated plan")
 	assert.True(t, LooksLikePlan([]byte(planWithSecrets+"\n{}")), "a plan with trailing data")
 	assert.False(t, LooksLikePlan([]byte(`[{"identity":{"type":"aws_s3_bucket"}}]`)))
+	// Valid JSON that is not an object is never a plan, even when an
+	// attribute names plan members (imported.json is an array).
+	assert.False(t, LooksLikePlan([]byte(`[{"attrs":{"format_version":"1","values":[1]}}]`)))
 	assert.False(t, LooksLikePlan([]byte(`{"format_version":"1.0","status":"succeeded"}`)))
 	assert.False(t, LooksLikePlan([]byte("resource \"x\" \"y\" {}")))
 }
