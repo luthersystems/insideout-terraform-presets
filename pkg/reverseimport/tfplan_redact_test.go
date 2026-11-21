@@ -85,3 +85,54 @@ func TestRunWritesRedactedTFPlanJSON(t *testing.T) {
 		t.Fatalf("tfplan.json lost its resource changes:\n%s", written)
 	}
 }
+
+// badPlanRunner returns plan bytes that are not one JSON object, so the
+// redaction fails.
+type badPlanRunner struct{ fakeTerraformRunner }
+
+func (badPlanRunner) ShowPlanJSON(context.Context, string, string) ([]byte, error) {
+	return []byte(`{"format_version":"1.2","variables":{}} {}`), nil
+}
+
+// TestRunRemovesStaleTFPlanJSONWhenRedactionFails: a plan that cannot be
+// redacted fails the run, and a tfplan.json left by an earlier pass is not
+// left for upload.
+func TestRunRemovesStaleTFPlanJSONWhenRedactionFails(t *testing.T) {
+	dir := t.TempDir()
+	stale := filepath.Join(dir, "tfplan.json")
+	if err := os.WriteFile(stale, []byte(`{"stale":true}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	req := job.Request{
+		Version: job.Version,
+		Resources: []job.ResourceSpec{{
+			Identity: imported.ResourceIdentity{
+				Cloud:    "aws",
+				Type:     "aws_sqs_queue",
+				Address:  "aws_sqs_queue.orders",
+				ImportID: "https://sqs.us-east-1.amazonaws.com/123/orders",
+				Region:   "us-east-1",
+			},
+			Tier:   imported.TierImportedFlat,
+			Source: imported.SourceImporter,
+		}},
+	}
+	_, err := Run(context.Background(), req, Options{
+		OutputDir:       dir,
+		SkipDepChase:    true,
+		ImportProjectID: "io-test",
+		ImportSessionID: "sess-test",
+		deps: deps{
+			runGenconfig: fakeGenconfig,
+			runDriftfix:  fakeDriftfix,
+			runDepChase:  fakeDepChase,
+			tf:           badPlanRunner{},
+		},
+	})
+	if err == nil || !strings.Contains(err.Error(), "redact tfplan.json") {
+		t.Fatalf("Run error = %v, want a redaction error", err)
+	}
+	if _, statErr := os.Stat(stale); !os.IsNotExist(statErr) {
+		t.Fatalf("stale tfplan.json still on disk (stat err %v)", statErr)
+	}
+}

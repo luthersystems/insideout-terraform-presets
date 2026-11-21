@@ -19,13 +19,15 @@
 //     let them through. No consumer reads a variable value from a stored
 //     plan; the names stay for the operator views.
 //   - Values that Terraform marks sensitive (sensitive_values,
-//     before_sensitive / after_sensitive, an output's "sensitive", a
-//     configuration variable's "sensitive") are replaced at the marked
-//     paths. Non-sensitive values stay exact, because the plan gates and
+//     before_sensitive / after_sensitive, an output's "sensitive") are
+//     replaced at the marked paths, in a plan and in a state's top-level
+//     "values". Non-sensitive values stay exact, because the plan gates and
 //     operators read resource addresses, actions, tags and import blocks.
-//   - Literals in provider config and module-call inputs are replaced: the
-//     reverse-import runner writes assume_role { external_id = "<id>" } into
-//     its generated providers (pkg/reverseimport providers.go).
+//   - In .configuration, every variable default and every literal
+//     (constant_value) is replaced: the configuration has no sensitivity
+//     marks of its own, and the reverse-import runner writes
+//     assume_role { external_id = "<id>" } into its generated providers
+//     (pkg/reverseimport providers.go). References stay.
 //   - Fail closed: anything that is not one JSON object is an error, and a
 //     caller must then not write or serve the bytes.
 //
@@ -96,6 +98,11 @@ func redactPlanObject(plan map[string]any) {
 
 	if pv, ok := plan["planned_values"].(map[string]any); ok {
 		redactPlanValues(pv)
+	}
+	// `terraform show -json` of a state (not a plan) keeps its values at the
+	// top level. A writer or a backstop may get one under a plan's name.
+	if sv, ok := plan["values"].(map[string]any); ok {
+		redactPlanValues(sv)
 	}
 	if ps, ok := plan["prior_state"].(map[string]any); ok {
 		if vals, ok := ps["values"].(map[string]any); ok {
@@ -224,8 +231,16 @@ func redactChange(ch map[string]any) {
 	}
 }
 
-// redactConfigModule replaces the default of each variable the configuration
-// declares sensitive, in the root module and every module call.
+// redactConfigModule replaces every variable default and every literal
+// (constant_value) in a module's resources, outputs and module-call inputs,
+// in the root module and every module call. A default is replaced whether or
+// not the variable is declared sensitive, for the reason .variables values
+// are: the credential tfvars are not always declared sensitive. A literal is
+// replaced wherever it sits, because the configuration has no sensitivity
+// marks of its own (a resource's `password = "<literal>"` is echoed here
+// beside its masked planned value). Nothing reads literals from a stored
+// plan's configuration: the gates read resource_changes and planned_values,
+// and references stay, so the wiring still shows.
 func redactConfigModule(m any) {
 	mod, ok := m.(map[string]any)
 	if !ok {
@@ -233,19 +248,18 @@ func redactConfigModule(m any) {
 	}
 	if vars, ok := mod["variables"].(map[string]any); ok {
 		for _, v := range vars {
-			if obj, ok := v.(map[string]any); ok && obj["sensitive"] == true {
+			if obj, ok := v.(map[string]any); ok {
 				if _, has := obj["default"]; has {
 					obj["default"] = Placeholder
 				}
 			}
 		}
 	}
+	redactConstantValues(mod["resources"])
+	redactConstantValues(mod["outputs"])
 	if calls, ok := mod["module_calls"].(map[string]any); ok {
 		for _, c := range calls {
 			if obj, ok := c.(map[string]any); ok {
-				// A literal module input is a variable value by another
-				// route (module "x" { credentials = "<literal>" }); the
-				// composer wires inputs by reference, so this costs nothing.
 				redactConstantValues(obj["expressions"])
 				redactConfigModule(obj["module"])
 			}
@@ -304,7 +318,7 @@ func looksLikePlan(obj map[string]any) bool {
 	return false
 }
 
-var topLevelKeys = []string{"variables", "planned_values", "resource_changes", "prior_state", "output_changes", "configuration"}
+var topLevelKeys = []string{"values", "variables", "planned_values", "resource_changes", "prior_state", "output_changes", "configuration"}
 
 // mayBePlan is the byte-level test for content that did not decode: a
 // truncated or concatenated plan still names its top-level members.
@@ -332,34 +346,21 @@ func LooksLikePlan(content []byte) bool {
 	return mayBePlan(content)
 }
 
-// hclCredentialAttr matches an HCL attribute whose literal value is a credential.
-// external_id is the one the reverse-import job writes (its generated
-// providers-imported.tf / genconfig/providers.tf carry assume_role
-// { external_id = "<id>" }); the others are the AWS and GCP provider
-// credential arguments, listed so a provider written with static
-// credentials is not served either.
-var hclCredentialAttr = regexp.MustCompile(`^(\s*(?:external_id|access_key|secret_key|token|credentials|access_token|password)\s*=\s*)"(?:[^"\\]|\\.)*"`)
+// hclCredentialAttr matches an HCL attribute whose literal value is a
+// credential, at the start of a line or after a "{" (a one-line block such as
+// assume_role { external_id = "x" }). external_id is the one the
+// reverse-import job writes (its generated providers-imported.tf /
+// genconfig/providers.tf carry assume_role { external_id = "<id>" }); the
+// others are the AWS and GCP provider credential arguments, listed so a
+// provider written with static credentials is not served either.
+var hclCredentialAttr = regexp.MustCompile(`(?m)((?:^|\{)\s*(?:external_id|access_key|secret_key|token|web_identity_token|credentials|access_token|password)\s*=\s*)"(?:[^"\\]|\\.)*"`)
 
-// HCL replaces the quoted literal of each credential
-// attribute, one line at a time. A heredoc or a reference (var.x) is not a
-// quoted literal and is left alone: a heredoc credential is not a shape
-// any generator here writes.
+// HCL replaces the quoted literal of each credential attribute. A heredoc
+// or a reference (var.x) is not a quoted literal and is left alone: a
+// heredoc credential is not a shape any generator here writes.
 func HCL(content []byte) []byte {
-	lines := bytes.Split(content, []byte("\n"))
-	changed := false
-	for i, ln := range lines {
-		if m := hclCredentialAttr.FindSubmatchIndex(ln); m != nil {
-			out := append([]byte(nil), ln[:m[3]]...)
-			out = append(out, '"')
-			out = append(out, Placeholder...)
-			out = append(out, '"')
-			out = append(out, ln[m[1]:]...)
-			lines[i] = out
-			changed = true
-		}
-	}
-	if !changed {
+	if !hclCredentialAttr.Match(content) {
 		return content
 	}
-	return bytes.Join(lines, []byte("\n"))
+	return hclCredentialAttr.ReplaceAll(content, []byte(`${1}"`+Placeholder+`"`))
 }

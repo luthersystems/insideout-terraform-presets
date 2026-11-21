@@ -3,6 +3,7 @@ package reverseimport
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -553,6 +554,11 @@ func runFinalPlanJSON(ctx context.Context, opts Options, planPath, validateJSONP
 	// no tfplan.json, never the raw one.
 	redacted, redactErr := planredact.JSON(planJSON)
 	if redactErr != nil {
+		// An earlier pass's tfplan.json describes another resource set; do
+		// not leave it to be uploaded with this run.
+		if rmErr := os.Remove(tfplanJSONPath); rmErr != nil && !errors.Is(rmErr, os.ErrNotExist) {
+			redactErr = errors.Join(redactErr, rmErr)
+		}
 		return planJSON, validateJSON, fmt.Errorf("redact tfplan.json: %w", redactErr)
 	}
 	if writeErr := writeFileAtomic(tfplanJSONPath, redacted, 0o644); writeErr != nil {

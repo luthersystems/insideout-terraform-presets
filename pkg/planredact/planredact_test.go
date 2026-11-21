@@ -30,13 +30,17 @@ const (
 	planLeakListElem    = "list-element-secret"
 	planLeakProviderExt = "provider-external-id-secret-77"
 	planLeakModuleInput = "module-input-literal-secret"
+	planLeakPlainDef    = "plain-default-external-id-secret"
+	planLeakCfgOutput   = "config-output-literal-secret"
+	planLeakCfgResource = "config-resource-literal-secret"
 )
 
 var planLeaks = []string{
 	planLeakAWSKey, planLeakAWSSAK, planLeakGCPAccount, planLeakExternalID,
 	planLeakDefault, planLeakDBAttr, planLeakPriorDB, planLeakDriftDB,
 	planLeakDeferred, planLeakOutput, planLeakChildModule, planLeakListElem,
-	planLeakProviderExt, planLeakModuleInput,
+	planLeakProviderExt, planLeakModuleInput, planLeakPlainDef,
+	planLeakCfgOutput, planLeakCfgResource,
 }
 
 // planWithSecrets is a trimmed `terraform show -json` plan that carries every
@@ -183,8 +187,21 @@ const planWithSecrets = `{
     "root_module": {
       "variables": {
         "region":      {"default": "us-west-2"},
-        "db_password": {"default": "` + planLeakDefault + `", "sensitive": true}
+        "db_password": {"default": "` + planLeakDefault + `", "sensitive": true},
+        "aws_external_id": {"default": "` + planLeakPlainDef + `"}
       },
+      "outputs": {
+        "conn": {"sensitive": true, "expression": {"constant_value": "` + planLeakCfgOutput + `"}}
+      },
+      "resources": [
+        {
+          "address": "aws_db_instance.main",
+          "mode": "managed",
+          "type": "aws_db_instance",
+          "name": "main",
+          "expressions": {"password": {"constant_value": "` + planLeakCfgResource + `"}}
+        }
+      ],
       "module_calls": {
         "api": {
           "source": "./api",
@@ -246,7 +263,7 @@ func TestRedactPlanJSON_RemovesKnownSecrets(t *testing.T) {
 
 	// Non-sensitive data stays exact.
 	s := string(out)
-	for _, kept := range []string{"kept-bucket", "kept-db", "kept-host", "kept-param", `"importing"`, `"no-op"`, "us-west-2", "var.bootstrap_role"} {
+	for _, kept := range []string{"kept-bucket", "kept-db", "kept-host", "kept-param", `"importing"`, `"no-op"`, "var.bootstrap_role"} {
 		assert.Contains(t, s, kept)
 	}
 	planned := jsonObj(t, got["planned_values"])
@@ -281,6 +298,19 @@ func TestRedactPlanJSON_Invalid(t *testing.T) {
 	}
 }
 
+// TestJSON_State: `terraform show -json` of a state keeps its secrets
+// under a top-level "values"; it is caught and redacted like a plan.
+func TestJSON_State(t *testing.T) {
+	t.Parallel()
+	state := []byte(`{"format_version":"1.0","terraform_version":"1.9.8","values":{"outputs":{"db":{"sensitive":true,"value":"` + planLeakOutput + `"}},"root_module":{"resources":[{"address":"aws_db_instance.main","values":{"password":"` + planLeakDBAttr + `","name":"kept-db"},"sensitive_values":{"password":true}}]}}}`)
+	require.True(t, LooksLikePlan(state))
+	out, err := JSON(state)
+	require.NoError(t, err)
+	assert.NotContains(t, string(out), planLeakOutput)
+	assert.NotContains(t, string(out), planLeakDBAttr)
+	assert.Contains(t, string(out), "kept-db")
+}
+
 // TestLooksLikePlan: a plan is caught whole, renamed, or cut off; other
 // JSON is not.
 func TestLooksLikePlan(t *testing.T) {
@@ -303,6 +333,14 @@ func TestHCL(t *testing.T) {
 	assert.Contains(t, out, `external_id = "`+Placeholder+`" # set by the job`)
 	assert.Contains(t, out, "arn:aws:iam::123456789012:role/x")
 	assert.Contains(t, out, "token = var.token")
+
+	// A one-line block and a web identity token are caught too.
+	oneLine := []byte("provider \"aws\" { assume_role { external_id = \"" + planLeakProviderExt + "\" } }\n")
+	assert.NotContains(t, string(HCL(oneLine)), planLeakProviderExt)
+	wit := []byte("  assume_role_with_web_identity {\n    web_identity_token = \"" + planLeakDeferred + "\"\n  }\n")
+	assert.NotContains(t, string(HCL(wit)), planLeakDeferred)
+	// A name that only ends in a credential word is not a credential.
+	assert.Contains(t, string(HCL([]byte("  my_token_name = \"kept\"\n"))), `"kept"`)
 
 	plain := []byte("resource \"aws_s3_bucket\" \"assets\" {\n  bucket = \"kept\"\n}\n")
 	assert.Equal(t, string(plain), string(HCL(plain)))
