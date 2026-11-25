@@ -41,11 +41,16 @@ jobs:
       version: ${{ inputs.version }}
       dry_run: ${{ inputs.dry_run }}
       ci_workflow: terraform-validate.yml
-      # The notes carry the Module Changes section (variables, outputs and
-      # defaults of each changed module), which the release used to get by
-      # a hand edit after the run; an agent session cannot edit a release.
-      # It needs Go on the runner: the shared job runs on ubuntu-latest,
-      # whose Go fetches go.mod's toolchain. If the command fails, no
-      # release is cut (fail closed: a release without its notes is the
-      # bug this fixes).
-      notes_command: go run ./cmd/releasenotes
+      # notes: changes writes the shared list of every change on main since
+      # the last release and the compare link (luthersystems/.github
+      # actions/release-notes), so the list is the same in every repo and a
+      # fix lands once. Only this repo can read its HCL, so its own section,
+      # Module Changes (variables, outputs and defaults of each changed
+      # module), comes from notes_extra_command. The release used to get
+      # that section by a hand edit after the run; an agent session cannot
+      # edit a release. It needs Go on the runner: the shared job runs on
+      # ubuntu-latest, whose Go fetches go.mod's toolchain. If the command
+      # fails, no release is cut (fail closed: a release without its notes
+      # is the bug this fixes).
+      notes: changes
+      notes_extra_command: go run ./cmd/releasenotes

@@ -82,14 +82,18 @@ gh workflow run release-tag.yml --ref main -f version=v<X.Y.Z> -f dry_run=false
 watch_new_run "$since"
 ```
 
-The workflow creates the tag and the GitHub release. Its notes come from
-`go run ./cmd/releasenotes` (the workflow's `notes_command`): the merged pull
-requests, then a **Module Changes** section with each changed module's added
-and removed variables and outputs, changed defaults and a **Breaking:** line.
+The workflow creates the tag and the GitHub release. Its notes are the shared
+list from luthersystems/.github (`notes: changes`: every change on main since
+the last release, then the compare link), with this repo's **Module Changes**
+section between them, from `go run ./cmd/releasenotes` (the workflow's
+`notes_extra_command`): each changed module's added and removed variables
+and outputs, changed defaults and a **Breaking:** line. It prints nothing when
+no module or Go package changed.
 The downstream InsideOut backend reads it when it bumps this module, and PR
 titles alone do not show a breaking variable rename. Do not edit the release
 by hand: agent sessions cannot edit a release. To see the notes before the
-run, use `LAST_TAG=<previous tag> go run ./cmd/releasenotes`. Read the
+run, use `LAST_TAG=<previous tag> go run ./cmd/releasenotes` (Module Changes
+only). Read the
 Breaking line (removed modules, variables or outputs, new required inputs,
 changed types, nullable turned off) and the Check line (changed defaults,
 validations or output sensitivity) when you choose the version: a breaking
@@ -125,5 +129,5 @@ Remind the user to update the downstream dependency.
 - [ ] `go build ./...` succeeds
 - [ ] Dry run printed the right version
 - [ ] `Release (tag)` workflow run succeeded (tag and GitHub release created)
-- [ ] Release notes have a Module Changes section (written by the workflow)
+- [ ] Release notes have a Module Changes section when a module or Go package changed (written by the workflow)
 - [ ] User reminded to update downstream `go.mod`

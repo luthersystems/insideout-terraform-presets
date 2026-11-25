@@ -1,20 +1,22 @@
-// Command releasenotes prints the notes of a presets release: the merged PRs
-// since the previous release tag, and a Module Changes section that lists,
-// for each changed module, its added and removed variables and outputs and
-// its changed defaults, and marks the changes that can break a caller.
+// Command releasenotes prints the presets' own section of a release's notes,
+// Module Changes: for each changed module, its added and removed variables
+// and outputs and its changed defaults, with the changes that can break a
+// caller marked.
 //
 // Why: the InsideOut backend reads Module Changes when it bumps this module,
 // and PR titles alone do not show a removed variable. The release skill used
 // to add the section by hand with `gh release edit` after the release; agent
 // sessions cannot edit a release, so v0.15.3 shipped without it. The shared
-// release workflow runs this as its notes_command, so the release is created
-// with the section and nobody edits it after.
+// release workflow (luthersystems/.github, notes: changes) writes the list of
+// changes and the compare link, and runs this as its notes_extra_command, so
+// the release is created with the section and nobody edits it after. Only
+// this repo can read its HCL, so only the section is here.
 //
 //	LAST_TAG=v0.15.2 go run ./cmd/releasenotes
 //
 // LAST_TAG is set by the shared workflow (empty for a first release). The
-// notes cover LAST_TAG..HEAD. GITHUB_REPOSITORY and GITHUB_SHA, when set,
-// add the compare link.
+// section covers LAST_TAG..HEAD; with no module or package change it prints
+// nothing.
 package main
 
 import (
@@ -98,29 +100,6 @@ func prefixed(dirs []string) []string {
 }
 
 func notes(lastTag string) (string, error) {
-	rangeArg := "HEAD"
-	if lastTag != "" {
-		rangeArg = lastTag + "..HEAD"
-	}
-	// One bullet per change on main: a merge commit is one PR. No cap: a
-	// cut list would hide PRs while Module Changes covers the whole diff.
-	shas, err := git("rev-list", "--first-parent", rangeArg)
-	if err != nil {
-		return "", err
-	}
-	var prs []string
-	for _, sha := range lines(shas) {
-		subject, err := git("log", "-1", "--format=%s", sha)
-		if err != nil {
-			return "", err
-		}
-		body, err := git("log", "-1", "--format=%b", sha)
-		if err != nil {
-			return "", err
-		}
-		prs = append(prs, prLine(sha, strings.TrimSpace(subject), body))
-	}
-
 	var changed []string
 	if lastTag != "" {
 		d, err := git("diff", "--name-only", lastTag, "HEAD")
@@ -147,10 +126,5 @@ func notes(lastTag string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-
-	compare := ""
-	if repo, sha := os.Getenv("GITHUB_REPOSITORY"), os.Getenv("GITHUB_SHA"); repo != "" && sha != "" && lastTag != "" {
-		compare = fmt.Sprintf("https://github.com/%s/compare/%s...%s", repo, lastTag, sha)
-	}
-	return render(prs, changes, changedPackages(changed), compare), nil
+	return render(changes, changedPackages(changed)), nil
 }

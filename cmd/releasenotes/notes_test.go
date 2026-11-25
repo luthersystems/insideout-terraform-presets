@@ -90,26 +90,29 @@ func TestPackagesSkipTestsAndKeepOrder(t *testing.T) {
 	assert.Equal(t, []string{"pkg/a", "pkg/b"}, changedPackages(changed))
 }
 
-func TestRenderMarksBreakingAndLinksPRs(t *testing.T) {
+func TestRenderMarksBreaking(t *testing.T) {
 	out := render(
-		[]string{"- Own the log groups (#958)"},
 		[]moduleChange{
 			{Dir: "aws/rds", Status: statusChanged, VarsAdded: []variable{{Name: "retention", Default: "30", HasDefault: true}}},
 			{Dir: "aws/old", Status: statusRemoved},
 		},
 		[]string{"pkg/planredact"},
-		"https://github.com/o/r/compare/v0.15.2...abc",
 	)
-	assert.Contains(t, out, "- Own the log groups (#958)")
+	assert.True(t, strings.HasPrefix(out, "## Module Changes\n"))
 	assert.Contains(t, out, "| `aws/rds` | Variables added: `retention` (default `30`) |")
 	assert.Contains(t, out, "**Breaking:** `aws/old`")
 	assert.Contains(t, out, "`pkg/planredact`")
-	assert.True(t, strings.HasSuffix(strings.TrimSpace(out), "https://github.com/o/r/compare/v0.15.2...abc"))
+	// The shared workflow writes the list of changes and the compare link.
+	assert.NotContains(t, out, "What's Changed")
+	assert.NotContains(t, out, "Full Changelog")
+	assert.True(t, strings.HasSuffix(out, ".\n") && !strings.HasSuffix(out, "\n\n"))
 }
 
-func TestPRLine(t *testing.T) {
-	assert.Equal(t, "- Own the log groups (#958)", prLine("abcdef1234", "Merge pull request #958 from luthersystems/x", "Own the log groups\n\nbody"))
-	assert.Equal(t, "- Fix a typo (abcdef1)", prLine("abcdef1234", "Fix a typo", ""))
+// With no module or package change the section is left out, so the release
+// has no empty heading.
+func TestRenderEmptyPrintsNothing(t *testing.T) {
+	assert.Equal(t, "", render(nil, nil))
+	assert.Contains(t, render(nil, []string{"pkg/a"}), "Go packages changed: `pkg/a`.")
 }
 
 func names(vs []variable) []string {
@@ -174,7 +177,7 @@ output "secret" {
 
 	onlyCheck := moduleChange{Dir: "aws/y", Status: statusChanged, ValidationsChanged: []string{"env"}}
 	assert.False(t, onlyCheck.breaking())
-	out := render(nil, []moduleChange{onlyCheck}, nil, "")
+	out := render([]moduleChange{onlyCheck}, nil)
 	assert.Contains(t, out, "**Check:** `aws/y`")
 }
 
@@ -184,10 +187,6 @@ func TestShortAndSpanKeepTheTableRow(t *testing.T) {
 	assert.NotContains(t, strings.ReplaceAll(got, `\|`, ""), "|", "every | must be escaped, also in a cut default")
 	assert.True(t, utf8ValidString(got))
 	assert.Equal(t, "`` a`b ``", span("a`b"))
-}
-
-func TestPRLineSquashMerge(t *testing.T) {
-	assert.Equal(t, "- Add iamaudit (#939)", prLine("aba5dd9000", "Add iamaudit (#939)", ""))
 }
 
 func utf8ValidString(s string) bool { return utf8.ValidString(s) }

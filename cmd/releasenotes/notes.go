@@ -274,35 +274,6 @@ func changedPackages(changed []string) []string {
 	return sortedKeys(set)
 }
 
-var (
-	mergeRE  = regexp.MustCompile(`^Merge pull request #([0-9]+) from `)
-	squashRE = regexp.MustCompile(`\(#[0-9]+\)$`)
-)
-
-// prLine is one bullet: a merged PR's title (the first body line of its
-// merge commit) with its number, or a direct commit's subject.
-func prLine(sha, subject, body string) string {
-	if m := mergeRE.FindStringSubmatch(subject); m != nil {
-		title := subject
-		for _, l := range strings.Split(body, "\n") {
-			if strings.TrimSpace(l) != "" {
-				title = strings.TrimSpace(l)
-				break
-			}
-		}
-		return fmt.Sprintf("- %s (#%s)", title, m[1])
-	}
-	// A squash merge already ends in its PR number.
-	if squashRE.MatchString(subject) {
-		return "- " + subject
-	}
-	short := sha
-	if len(short) > 7 {
-		short = short[:7]
-	}
-	return fmt.Sprintf("- %s (%s)", subject, short)
-}
-
 func code(names []string) string {
 	q := make([]string, len(names))
 	for i, n := range names {
@@ -405,19 +376,15 @@ func (c moduleChange) describe() string {
 	return strings.Join(parts, ". ")
 }
 
-func render(prs []string, changes []moduleChange, pkgs []string, compareURL string) string {
-	var b strings.Builder
-	b.WriteString("## What's Changed\n\n")
-	if len(prs) == 0 {
-		b.WriteString("No changes.\n")
-	}
-	for _, l := range prs {
-		b.WriteString(l + "\n")
-	}
-	b.WriteString("\n## Module Changes\n\n")
+// render writes the Module Changes section, which the shared release
+// workflow puts after its list of changes. With no module or package
+// change it is empty, so the release has no empty section.
+func render(changes []moduleChange, pkgs []string) string {
 	if len(changes) == 0 && len(pkgs) == 0 {
-		b.WriteString("No module changed.\n")
+		return ""
 	}
+	var b strings.Builder
+	b.WriteString("## Module Changes\n\n")
 	var breaking, check []string
 	for _, c := range changes {
 		if c.breaking() {
@@ -440,12 +407,9 @@ func render(prs []string, changes []moduleChange, pkgs []string, compareURL stri
 		b.WriteString("\n")
 	}
 	if len(pkgs) > 0 {
-		b.WriteString("Go packages changed: " + code(pkgs) + ".\n\n")
+		b.WriteString("Go packages changed: " + code(pkgs) + ".\n")
 	}
-	if compareURL != "" {
-		b.WriteString("**Full Changelog**: " + compareURL + "\n")
-	}
-	return b.String()
+	return strings.TrimRight(b.String(), "\n") + "\n"
 }
 
 func sortedKeys[V any](m map[string]V) []string {
