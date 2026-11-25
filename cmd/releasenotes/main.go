@@ -14,7 +14,8 @@
 //
 //	LAST_TAG=v0.15.2 go run ./cmd/releasenotes
 //
-// LAST_TAG is set by the shared workflow (empty for a first release). The
+// LAST_TAG is set by the shared workflow; when it is empty (a first release
+// or a major bump) the last v* tag behind HEAD is used, if there is one. The
 // section covers LAST_TAG..HEAD; with no module or package change it prints
 // nothing.
 package main
@@ -28,12 +29,36 @@ import (
 )
 
 func main() {
-	out, err := notes(os.Getenv("LAST_TAG"))
+	out, err := run(os.Getenv("LAST_TAG"))
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "releasenotes:", err)
 		os.Exit(1)
 	}
 	fmt.Print(out)
+}
+
+// run prints the section for a release of HEAD after lastTag.
+func run(lastTag string) (string, error) {
+	note := ""
+	if lastTag == "" {
+		// The shared workflow sets LAST_TAG to the latest tag of the new
+		// version's major, so a major bump (v0.15.3 to v1.0.0) gets none.
+		// Comparing with an empty tree would call every module new and
+		// hide the breaking change that made the bump. Compare with the
+		// last release tag behind HEAD; with none, this is a first release.
+		if t, err := git("describe", "--tags", "--abbrev=0", "--match", "v[0-9]*", "HEAD"); err == nil {
+			lastTag = strings.TrimSpace(t)
+			note = "Compared with " + lastTag + ", the last release before this one.\n\n"
+		}
+	}
+	out, err := notes(lastTag)
+	if err != nil {
+		return "", err
+	}
+	if out != "" && note != "" {
+		out = strings.Replace(out, moduleChangesHeading, moduleChangesHeading+note, 1)
+	}
+	return out, nil
 }
 
 func git(args ...string) (string, error) {
@@ -102,7 +127,9 @@ func prefixed(dirs []string) []string {
 func notes(lastTag string) (string, error) {
 	var changed []string
 	if lastTag != "" {
-		d, err := git("diff", "--name-only", lastTag, "HEAD")
+		// --no-renames lists a moved file at its old path too, so a moved
+		// or renamed module shows as removed, not only as new.
+		d, err := git("diff", "--no-renames", "--name-only", lastTag, "HEAD")
 		if err != nil {
 			return "", err
 		}

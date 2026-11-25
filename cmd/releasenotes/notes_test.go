@@ -86,8 +86,10 @@ output "arn" { value = 3 }`,
 }
 
 func TestPackagesSkipTestsAndKeepOrder(t *testing.T) {
-	changed := []string{"pkg/b/x.go", "pkg/a/x_test.go", "pkg/a/sub/y.go", "pkg/c/z_test.go", "main.go"}
+	changed := []string{"pkg/b/x.go", "pkg/a/x_test.go", "pkg/a/sub/y.go", "pkg/c/z_test.go", "zz_embed_test.go", "cmd/releasenotes/main.go"}
 	assert.Equal(t, []string{"pkg/a", "pkg/b"}, changedPackages(changed))
+	// zz_embed.go decides which preset files a consumer gets.
+	assert.Equal(t, []string{rootPackage}, changedPackages([]string{"zz_embed.go"}))
 }
 
 func TestRenderMarksBreaking(t *testing.T) {
@@ -113,6 +115,50 @@ func TestRenderMarksBreaking(t *testing.T) {
 func TestRenderEmptyPrintsNothing(t *testing.T) {
 	assert.Equal(t, "", render(nil, nil))
 	assert.Contains(t, render(nil, []string{"pkg/a"}), "Go packages changed: `pkg/a`.")
+}
+
+// Review of #961: text comparison flagged changes that do not change what a
+// caller may pass: a reflowed object type, a reworded error_message, an
+// explicit sensitive = false.
+func TestModuleChangesIgnoreRewrites(t *testing.T) {
+	oldTree := tree(map[string]string{"aws/x/variables.tf": `
+variable "obj" { type = object({ a = string, b = number }) }
+variable "env" {
+  validation {
+    condition     = length(var.env) > 0
+    error_message = "env must be set"
+  }
+}
+output "id" { value = 1 }
+`})
+	newTree := tree(map[string]string{"aws/x/variables.tf": `
+variable "obj" {
+  type = object({
+    a = string
+    b = number
+  })
+}
+variable "env" {
+  validation {
+    # Say what to set.
+    condition     = length(var.env) > 0
+    error_message = "Set env."
+  }
+}
+output "id" {
+  value     = 1
+  sensitive = false
+}
+`})
+	changes, err := moduleChanges([]string{"aws/x/variables.tf"}, oldTree, newTree)
+	require.NoError(t, err)
+	require.Len(t, changes, 1)
+	c := changes[0]
+	assert.Empty(t, c.TypesChanged)
+	assert.Empty(t, c.ValidationsChanged)
+	assert.Empty(t, c.SensitiveChanged)
+	assert.False(t, c.breaking())
+	assert.False(t, c.check())
 }
 
 func names(vs []variable) []string {

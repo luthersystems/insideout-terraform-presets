@@ -10,6 +10,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/hashicorp/hcl/v2"
+	"github.com/hashicorp/hcl/v2/ext/typeexpr"
 	"github.com/hashicorp/hcl/v2/hclsyntax"
 	"github.com/zclconf/go-cty/cty"
 )
@@ -40,9 +41,15 @@ type variable struct {
 	// default. cty.NilVal when it does not evaluate without a context.
 	value cty.Value
 	// Type, Validation and Nullable are source text, whitespace collapsed.
+	// Validation is only the condition of each validation block: a
+	// reworded error_message accepts and refuses the same inputs.
 	Type       string
 	Validation string
 	Nullable   string
+	// typ is the parsed type constraint, so that a reflowed object type is
+	// not a type change. cty.NilType when it does not parse, or when it
+	// has optional attribute defaults, which only the text compares.
+	typ cty.Type
 }
 
 type defaultChange struct {
@@ -123,7 +130,7 @@ func parseModule(dir string, tree map[string][]byte) (iface, bool, error) {
 			}
 			switch b.Type {
 			case "variable":
-				v := variable{Name: b.Labels[0], value: cty.NilVal}
+				v := variable{Name: b.Labels[0], value: cty.NilVal, typ: cty.NilType}
 				if a, ok := b.Body.Attributes["default"]; ok {
 					v.HasDefault = true
 					v.Default = normalize(string(a.Expr.Range().SliceBytes(src)))
@@ -132,17 +139,27 @@ func parseModule(dir string, tree map[string][]byte) (iface, bool, error) {
 					}
 				}
 				v.Type = attrText(b.Body, "type", src)
+				if a, ok := b.Body.Attributes["type"]; ok {
+					if t, defs, d := typeexpr.TypeConstraintWithDefaults(a.Expr); !d.HasErrors() && defs == nil {
+						v.typ = t
+					}
+				}
 				v.Nullable = attrText(b.Body, "nullable", src)
 				var vals []string
 				for _, vb := range b.Body.Blocks {
 					if vb.Type == "validation" {
-						vals = append(vals, normalize(string(vb.Range().SliceBytes(src))))
+						vals = append(vals, attrText(vb.Body, "condition", src))
 					}
 				}
 				v.Validation = strings.Join(vals, "\n")
 				m.vars[v.Name] = v
 			case "output":
-				m.outputs[b.Labels[0]] = attrText(b.Body, "sensitive", src)
+				// No sensitive attribute is sensitive = false.
+				sens := attrText(b.Body, "sensitive", src)
+				if sens == "" {
+					sens = "false"
+				}
+				m.outputs[b.Labels[0]] = sens
 			}
 		}
 	}
@@ -164,6 +181,15 @@ func sameDefault(a, b variable) bool {
 		return a.value.RawEquals(b.value)
 	}
 	return a.Default == b.Default
+}
+
+// sameType compares two type constraints by type when both parse, and by
+// whitespace-collapsed text when either does not.
+func sameType(a, b variable) bool {
+	if a.typ != cty.NilType && b.typ != cty.NilType {
+		return a.typ.Equals(b.typ)
+	}
+	return a.Type == b.Type
 }
 
 // normalize collapses whitespace, so a terraform fmt change of a default is
@@ -226,7 +252,7 @@ func moduleChanges(changed []string, oldTree, newTree map[string][]byte) ([]modu
 				if !ok {
 					continue
 				}
-				if ov.Type != nv.Type {
+				if !sameType(ov, nv) {
 					c.TypesChanged = append(c.TypesChanged, n)
 				}
 				if nv.Nullable == "false" && ov.Nullable != "false" {
@@ -260,12 +286,20 @@ func moduleChanges(changed []string, oldTree, newTree map[string][]byte) ([]modu
 	return out, nil
 }
 
+// rootPackage names the Go package at the repo root, whose zz_embed.go
+// decides which preset files a consumer of this module gets.
+const rootPackage = "github.com/luthersystems/insideout-terraform-presets"
+
 // changedPackages lists the Go packages under pkg/ whose non-test code
-// changed, at the top level (pkg/<name>), sorted.
+// changed, at the top level (pkg/<name>), sorted, and the root package.
 func changedPackages(changed []string) []string {
 	set := map[string]bool{}
 	for _, p := range changed {
 		parts := strings.Split(p, "/")
+		if len(parts) == 1 && path.Ext(p) == ".go" && !strings.HasSuffix(p, "_test.go") {
+			set[rootPackage] = true
+			continue
+		}
 		if len(parts) < 3 || parts[0] != "pkg" || path.Ext(p) != ".go" || strings.HasSuffix(p, "_test.go") {
 			continue
 		}
@@ -376,6 +410,8 @@ func (c moduleChange) describe() string {
 	return strings.Join(parts, ". ")
 }
 
+const moduleChangesHeading = "## Module Changes\n\n"
+
 // render writes the Module Changes section, which the shared release
 // workflow puts after its list of changes. With no module or package
 // change it is empty, so the release has no empty section.
@@ -384,7 +420,7 @@ func render(changes []moduleChange, pkgs []string) string {
 		return ""
 	}
 	var b strings.Builder
-	b.WriteString("## Module Changes\n\n")
+	b.WriteString(moduleChangesHeading)
 	var breaking, check []string
 	for _, c := range changes {
 		if c.breaking() {
