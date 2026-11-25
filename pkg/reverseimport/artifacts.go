@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/luthersystems/insideout-terraform-presets/pkg/planredact"
 	"github.com/luthersystems/insideout-terraform-presets/pkg/reverseimport/job"
 )
 
@@ -21,6 +22,10 @@ const (
 	planSummaryJSONFile = "plan-summary.json"
 	reverseResultFile   = "reverse-result.json"
 	graphJSONFile       = "graph.json"
+
+	// redactedDir holds the redacted copies of the debug HCL files. It is
+	// under OutputDir, but no Terraform run reads it.
+	redactedDir = "redacted"
 )
 
 func writeJSON(path string, v any) error {
@@ -89,4 +94,21 @@ func addArtifact(ptr **job.Artifact, path, mediaType string) error {
 	}
 	*ptr = a
 	return nil
+}
+
+// redactedHCLArtifact writes a copy of the HCL file at path, with its
+// credential literals replaced (planredact.HCL), to OutputDir/redacted/rel,
+// and returns the artifact for the copy. The original stays as it is,
+// because Terraform reads it. The debug set names only the copy, so the
+// external ID the job writes into its provider files is not uploaded (#960).
+func redactedHCLArtifact(outputDir, path, rel string) (*job.Artifact, error) {
+	body, err := os.ReadFile(path) //nolint:gosec // G304: path from the caller's options
+	if err != nil {
+		return nil, err
+	}
+	dst := filepath.Join(outputDir, redactedDir, rel)
+	if err := writeFileAtomic(dst, planredact.HCL(body), 0o644); err != nil {
+		return nil, fmt.Errorf("write redacted %s: %w", rel, err)
+	}
+	return artifact(dst, "text/hcl")
 }

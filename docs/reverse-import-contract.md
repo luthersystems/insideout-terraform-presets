@@ -238,3 +238,10 @@ genconfig→drift-fix→dep-chase→plan chain against a plannable stack.
   *forward* `apply` path. The reliable ↔ Mars contract is the `--request` JSON
   in and the artifact files (`imported.tf`, `tfplan.json`, `plan-summary.json`,
   `reverse-result.json`) out.
+- **Upload only the redacted files.** `providers-imported.tf` and
+  `genconfig/providers.tf` hold `assume_role { external_id = "<id>" }` as a
+  literal, because Terraform reads them in place. The debug set in
+  `reverse-result.json` names redacted copies under `OutputDir/redacted/`
+  instead (#960); an uploader takes those, never the originals.
+  `tfplan.json` is redacted when it is written. `tfplan.bin` holds every
+  input variable value and is never an artifact: do not upload it.
