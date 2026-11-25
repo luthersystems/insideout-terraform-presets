@@ -155,6 +155,41 @@ func TestImportedTF_TerraformValidate(t *testing.T) {
 			Tier:  imported.TierImportedFlat,
 			Attrs: []byte(`{"name":{"literal":"orders"}}`),
 		},
+		// Opaque-only resources with provider nested blocks. Before #942
+		// the opaque path wrote them as `versioning = [{...}]`, which
+		// validate rejects as "Unsupported argument".
+		{
+			Identity: imported.ResourceIdentity{
+				Cloud:    "aws",
+				Type:     "aws_s3_bucket",
+				Address:  "aws_s3_bucket.opaque_versioned",
+				ImportID: "opaque-versioned",
+			},
+			Tier: imported.TierImportedFlat,
+			Attributes: map[string]any{
+				"bucket":     "opaque-versioned",
+				"tags_all":   map[string]any{},
+				"versioning": []any{map[string]any{"enabled": true, "mfa_delete": false}},
+			},
+		},
+		{
+			Identity: imported.ResourceIdentity{
+				Cloud:    "aws",
+				Type:     "aws_default_network_acl",
+				Address:  "aws_default_network_acl.opaque",
+				ImportID: "acl-1",
+			},
+			Tier: imported.TierImportedFlat,
+			Attributes: map[string]any{
+				"default_network_acl_id": "acl-1",
+				"tags_all":               map[string]any{},
+				"egress":                 []any{},
+				"ingress": []any{map[string]any{
+					"rule_no": 100, "action": "allow", "protocol": "-1",
+					"from_port": 0, "to_port": 0, "cidr_block": "0.0.0.0/0",
+				}},
+			},
+		},
 	}
 
 	out, _ := EmitImportedTF("aws", irs, EmitImportedOpts{})

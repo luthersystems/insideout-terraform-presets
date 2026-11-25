@@ -189,31 +189,17 @@ func EmitImportedTFWithIssues(cloud string, irs []imported.ImportedResource, opt
 		e := entry{address: addr}
 		switch mode {
 		case emitModeResourceImport, emitModeResourceOnly:
-			body, err := emitImportedResourceBody(*ir)
+			resource, alias, err := renderImportedResourceBlock(ir, got, awsRegions, opts)
 			if err != nil {
 				issues = append(issues, ValidationIssue{
 					Field:  "imported." + addr,
 					Value:  ir.Identity.Type,
 					Code:   CodeImportedResourceEmitFailed,
-					Reason: fmt.Sprintf("emit resource body: %v", err),
+					Reason: err.Error(),
 				})
 				continue
 			}
-			if opts.shouldInject() {
-				body, err = injectProvenance(body, ir, opts.ImportProjectID, opts.ImportSessionID, opts.ImportedAt)
-				if err != nil {
-					issues = append(issues, ValidationIssue{
-						Field:  "imported." + addr,
-						Value:  ir.Identity.Type,
-						Code:   CodeImportedResourceEmitFailed,
-						Reason: fmt.Sprintf("inject provenance: %v", err),
-					})
-					continue
-				}
-			}
-			body = appendImportedLifecycle(body, ir.Identity.Type)
-			alias := providerAliasForResource(got, ir.Identity, awsRegions)
-			e.resource = wrapResourceBlock(ir.Identity.Type, addressLabel(addr), alias, body)
+			e.resource = resource
 			if mode == emitModeResourceImport {
 				e.imported = renderImportBlock(addr, importid.ForResource(*ir))
 			}
@@ -271,6 +257,29 @@ func EmitImportedTFWithIssues(cloud string, irs []imported.ImportedResource, opt
 		return doc.Bytes(), providersUsed, issues
 	}
 	return formatted.Bytes(), providersUsed, issues
+}
+
+// renderImportedResourceBlock renders the `resource` block for ir: its body,
+// provenance, lifecycle pins and provider alias. cloud is the lower-cased
+// Identity.Cloud. It is the one per-resource renderer, shared by
+// EmitImportedTFWithIssues and EmitImportedResource, so the equivalence
+// check sees exactly what compose writes. It may set ir.WeakLocked (see
+// injectProvenance).
+func renderImportedResourceBlock(ir *imported.ImportedResource, cloud string, awsRegions []string, opts EmitImportedOpts) (resource []byte, alias string, err error) {
+	body, err := emitImportedResourceBody(*ir)
+	if err != nil {
+		return nil, "", fmt.Errorf("emit resource body: %w", err)
+	}
+	if opts.shouldInject() {
+		body, err = injectProvenance(body, ir, opts.ImportProjectID, opts.ImportSessionID, opts.ImportedAt)
+		if err != nil {
+			return nil, "", fmt.Errorf("inject provenance: %w", err)
+		}
+	}
+	body = appendImportedLifecycle(body, ir.Identity.Type)
+	alias = providerAliasForResource(cloud, ir.Identity, awsRegions)
+	addr := strings.TrimSpace(ir.Identity.Address)
+	return wrapResourceBlock(ir.Identity.Type, addressLabel(addr), alias, body), alias, nil
 }
 
 // classifyEmitMode decides what artifact(s) to emit for ir.
@@ -475,7 +484,11 @@ func emitOpaqueAttrsBody(ir imported.ImportedResource) ([]byte, error) {
 	if len(ir.Attributes) == 0 {
 		return nil, nil
 	}
-	_, schema, hasSchema := generated.Lookup(ir.Identity.Type)
+	goType, schema, hasSchema := generated.Lookup(ir.Identity.Type)
+	var blockTypes map[string]reflect.Type
+	if hasSchema {
+		blockTypes = nestedBlockTypes(goType)
+	}
 
 	keys := make([]string, 0, len(ir.Attributes))
 	for k := range ir.Attributes {
@@ -500,6 +513,15 @@ func emitOpaqueAttrsBody(ir imported.ImportedResource) ([]byte, error) {
 			}
 		}
 		v := ir.Attributes[k]
+		if elemType, isBlock := blockTypes[k]; isBlock {
+			ok, err := writeOpaqueBlocks(body, k, v, elemType)
+			if err != nil {
+				return nil, fmt.Errorf("block %q: %w", k, err)
+			}
+			if ok {
+				continue
+			}
+		}
 		// Same empty-collection rule as the typed path (#951). Without a
 		// schema there is no typed path to disagree with, so the value is
 		// written as before.
@@ -511,6 +533,124 @@ func emitOpaqueAttrsBody(ir imported.ImportedResource) ([]byte, error) {
 		}
 	}
 	return bytes.TrimRight(f.Bytes(), "\n"), nil
+}
+
+// tfFieldNames returns the tf tag names of a generated model struct. The
+// typed path decodes a block into that struct, so a key it does not name is
+// dropped there; the opaque path drops it too, or it would write an argument
+// terraform does not know.
+func tfFieldNames(t reflect.Type) map[string]bool {
+	for t.Kind() == reflect.Pointer {
+		t = t.Elem()
+	}
+	if t.Kind() != reflect.Struct {
+		return nil
+	}
+	out := map[string]bool{}
+	for i := 0; i < t.NumField(); i++ {
+		if name, _, _ := strings.Cut(t.Field(i).Tag.Get("tf"), ","); name != "" && name != "-" {
+			out[name] = true
+		}
+	}
+	return out
+}
+
+// nestedBlockTypes maps each nested-block name of a generated model struct
+// (fields tagged `,block` or `,blocks`) to its element struct type.
+func nestedBlockTypes(t reflect.Type) map[string]reflect.Type {
+	for t.Kind() == reflect.Pointer {
+		t = t.Elem()
+	}
+	if t.Kind() != reflect.Struct {
+		return nil
+	}
+	out := map[string]reflect.Type{}
+	for i := 0; i < t.NumField(); i++ {
+		parts := strings.Split(t.Field(i).Tag.Get("tf"), ",")
+		if parts[0] == "" || len(parts) < 2 || (parts[1] != "block" && parts[1] != "blocks") {
+			continue
+		}
+		elem := t.Field(i).Type
+		for elem.Kind() == reflect.Pointer || elem.Kind() == reflect.Slice {
+			elem = elem.Elem()
+		}
+		out[parts[0]] = elem
+	}
+	return out
+}
+
+// writeOpaqueBlocks writes an opaque value for a provider nested block as
+// HCL blocks. Discovery stores a block as a list of objects (or one
+// object), and writing that as `name = [{...}]` is invalid: terraform
+// rejects it with "Unsupported argument ... Did you mean to define a block
+// of type "name"?" (#942). An empty list writes no block, as on the typed
+// path. It returns false, writing nothing, for a value of any other shape,
+// which the caller then writes as an attribute as before.
+func writeOpaqueBlocks(body *hclwrite.Body, name string, v any, elemType reflect.Type) (bool, error) {
+	var elems []map[string]any
+	switch x := v.(type) {
+	case map[string]any:
+		elems = []map[string]any{x}
+	case []any:
+		for _, it := range x {
+			if it == nil {
+				// A null element is no block; writing the list as an
+				// attribute instead would be invalid HCL (#942).
+				continue
+			}
+			m, ok := it.(map[string]any)
+			if !ok {
+				return false, nil
+			}
+			elems = append(elems, m)
+		}
+	default:
+		return false, nil
+	}
+	for _, m := range elems {
+		if err := writeOpaqueBlockBody(body.AppendNewBlock(name, nil).Body(), m, elemType); err != nil {
+			return true, err
+		}
+	}
+	return true, nil
+}
+
+// writeOpaqueBlockBody writes the contents of one nested block. It follows
+// the typed marshaler inside blocks, which has no per-field schema there:
+// a key the element struct does not name is dropped, nested blocks recurse
+// (an empty object is one empty block, as at the top level), and a null or
+// empty collection attribute is left out (null and absent mean the same to
+// terraform).
+func writeOpaqueBlockBody(body *hclwrite.Body, m map[string]any, t reflect.Type) error {
+	blockTypes := nestedBlockTypes(t)
+	known := tfFieldNames(t)
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	for _, k := range keys {
+		v := m[k]
+		if v == nil || (known != nil && !known[k]) {
+			continue
+		}
+		if elemType, isBlock := blockTypes[k]; isBlock {
+			ok, err := writeOpaqueBlocks(body, k, v, elemType)
+			if err != nil {
+				return fmt.Errorf("block %q: %w", k, err)
+			}
+			if ok {
+				continue
+			}
+		}
+		if isEmptyOpaqueCollection(v) {
+			continue
+		}
+		if err := writeOpaqueAttr(body, k, v); err != nil {
+			return fmt.Errorf("attr %q: %w", k, err)
+		}
+	}
+	return nil
 }
 
 // isEmptyOpaqueCollection reports whether v is an empty list or map in the
