@@ -583,22 +583,29 @@ func populateArtifacts(result *job.Result, outputDir, generatedPath string, dcRe
 	if err := addArtifact(&result.Artifacts.PlanSummaryJSON, filepath.Join(outputDir, planSummaryJSONFile), "application/json"); err != nil {
 		return err
 	}
-	for _, path := range []string{
-		generatedPath,
-		filepath.Join(filepath.Dir(generatedPath), "imports.tf"),
-		filepath.Join(filepath.Dir(generatedPath), "providers.tf"),
-		filepath.Join(outputDir, importedProvidersTF),
-	} {
-		if strings.TrimSpace(path) == "" {
+	// The provider files hold assume_role { external_id = "<id>" } as a
+	// literal (appendAWSAssumeRole), and Terraform reads them in place, so
+	// the debug set points at redacted copies instead (#960).
+	type debugHCL struct{ path, rel string }
+	var hclFiles []debugHCL
+	if strings.TrimSpace(generatedPath) != "" {
+		genDir := filepath.Dir(generatedPath)
+		hclFiles = append(hclFiles,
+			debugHCL{generatedPath, filepath.Join("genconfig", filepath.Base(generatedPath))},
+			debugHCL{filepath.Join(genDir, "imports.tf"), filepath.Join("genconfig", "imports.tf")},
+			debugHCL{filepath.Join(genDir, "providers.tf"), filepath.Join("genconfig", "providers.tf")},
+		)
+	}
+	hclFiles = append(hclFiles, debugHCL{filepath.Join(outputDir, importedProvidersTF), importedProvidersTF})
+	for _, f := range hclFiles {
+		if _, err := os.Stat(f.path); err != nil {
 			continue
 		}
-		if _, err := os.Stat(path); err == nil {
-			a, err := artifact(path, "text/hcl")
-			if err != nil {
-				return err
-			}
-			result.Artifacts.Debug = append(result.Artifacts.Debug, *a)
+		a, err := redactedHCLArtifact(outputDir, f.path, f.rel)
+		if err != nil {
+			return err
 		}
+		result.Artifacts.Debug = append(result.Artifacts.Debug, *a)
 	}
 	if dcRes != nil {
 		graphPath := filepath.Join(outputDir, graphJSONFile)
