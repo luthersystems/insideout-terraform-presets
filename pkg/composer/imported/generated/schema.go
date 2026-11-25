@@ -48,3 +48,28 @@ type FieldSchema struct {
 func (s FieldSchema) Configurable() bool {
 	return s.Required || s.Optional
 }
+
+// KeepEmptyCollection reports whether an imported resource body writes an
+// empty map or list (`tags_all = {}`, `members = []`) for the top-level
+// attribute name, or drops it. Both emit paths (typed Attrs and opaque
+// Attributes) follow it, so the same desired state renders the same HCL
+// (#951).
+//
+// The rule is by attribute class:
+//
+//   - Required: written. Dropping it fails the plan with "Missing required
+//     argument", and the empty value is real state (an IAM binding with no
+//     members).
+//   - Optional+Computed: dropped. Absent means "use what the provider
+//     computes", which for an imported resource is the refreshed state the
+//     empty value was read from, so the plan is a no-op. An explicit empty
+//     value instead pins it, and for tags_all that fights the provider's
+//     own tags + default_tags computation.
+//   - Optional: dropped. The SDKv2 providers behind almost every imported
+//     type treat an empty collection and null the same, and the typed path
+//     has always dropped it, so typed output does not change.
+//   - Computed-only, or not in the schema: dropped (never configurable).
+func KeepEmptyCollection(schema map[string]FieldSchema, name string) bool {
+	fs, ok := schema[name]
+	return ok && fs.Required
+}

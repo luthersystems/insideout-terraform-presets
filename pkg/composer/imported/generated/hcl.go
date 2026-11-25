@@ -99,6 +99,14 @@ func writeBody(body *hclwrite.Body, v reflect.Value, schema map[string]FieldSche
 			}
 		}
 		fv := v.Field(i)
+		if kind == tagAttr && KeepEmptyCollection(schema, tag) && isEmptyCollection(fv) {
+			// A Required collection keeps its empty value (#951); writeAttr
+			// would drop it as omitempty.
+			if err := writeEmptyCollection(body, tag, fv); err != nil {
+				return fmt.Errorf("field %s: %w", fld.Name, err)
+			}
+			continue
+		}
 		if err := writeField(body, tag, kind, fv); err != nil {
 			return fmt.Errorf("field %s: %w", fld.Name, err)
 		}
@@ -175,6 +183,30 @@ func writeAttr(body *hclwrite.Body, name string, fv reflect.Value) error {
 		return writeValueMap(body, name, fv)
 	}
 	return fmt.Errorf("attr field must be *Value[T], slice, or map; got %v", fv.Kind())
+}
+
+// isEmptyCollection reports whether fv is a set but empty slice or map. A
+// nil one means the attribute was absent from Attrs, so it stays absent.
+func isEmptyCollection(fv reflect.Value) bool {
+	switch fv.Kind() {
+	case reflect.Slice, reflect.Map:
+		return !fv.IsNil() && fv.Len() == 0
+	}
+	return false
+}
+
+// writeEmptyCollection writes `name = []` or `name = {}`, the forms the
+// opaque path writes for the same value.
+func writeEmptyCollection(body *hclwrite.Body, name string, fv reflect.Value) error {
+	switch fv.Kind() {
+	case reflect.Slice:
+		body.SetAttributeValue(name, cty.EmptyTupleVal)
+	case reflect.Map:
+		body.SetAttributeValue(name, cty.EmptyObjectVal)
+	default:
+		return fmt.Errorf("empty collection field %q has kind %v", name, fv.Kind())
+	}
+	return nil
 }
 
 func writeValuePointer(body *hclwrite.Body, name string, ptr reflect.Value) error {

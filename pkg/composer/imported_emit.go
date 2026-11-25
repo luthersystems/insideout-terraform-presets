@@ -500,11 +500,31 @@ func emitOpaqueAttrsBody(ir imported.ImportedResource) ([]byte, error) {
 			}
 		}
 		v := ir.Attributes[k]
+		// Same empty-collection rule as the typed path (#951). Without a
+		// schema there is no typed path to disagree with, so the value is
+		// written as before.
+		if hasSchema && isEmptyOpaqueCollection(v) && !generated.KeepEmptyCollection(schema, k) {
+			continue
+		}
 		if err := writeOpaqueAttr(body, k, v); err != nil {
 			return nil, fmt.Errorf("attr %q: %w", k, err)
 		}
 	}
 	return bytes.TrimRight(f.Bytes(), "\n"), nil
+}
+
+// isEmptyOpaqueCollection reports whether v is an empty list or map in the
+// shapes toCty accepts.
+func isEmptyOpaqueCollection(v any) bool {
+	switch x := v.(type) {
+	case []any:
+		return len(x) == 0
+	case []int:
+		return len(x) == 0
+	case map[string]any:
+		return len(x) == 0
+	}
+	return false
 }
 
 // writeOpaqueAttr emits one attribute. RawExpr values pass through as raw
