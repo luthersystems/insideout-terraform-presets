@@ -14,3 +14,10 @@ paths = [
   '''^cmd/insideout-import/address_test\.go$''',
   '''^cmd/insideout-import/depchase/depchase_test\.go$''',
 ]
+
+[[allowlists]]
+description = "iamaudit doc comment: GetDistribution2020_05_31 is a CloudTrail event name with its API version date, not a key. Scoped to this file and that name shape only."
+condition = "AND"
+paths = ['''^pkg/iamaudit/actionmap\.go$''']
+regexTarget = "match"
+regexes = ['''API version: [A-Za-z]+\d{4}_\d{2}_\d{2}\.?$''']
