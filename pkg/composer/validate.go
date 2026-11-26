@@ -159,8 +159,30 @@ func ValidateAll(
 // dedupeAndSortIssues returns a deterministic, deduped copy of issues. Two
 // issues are duplicates iff (Field, Code, Reason) match exactly.
 func dedupeAndSortIssues(in []ValidationIssue) []ValidationIssue {
-	if len(in) == 0 {
+	out := dedupeIssues(in)
+	if len(out) == 0 {
 		return nil
+	}
+	sort.SliceStable(out, func(i, j int) bool {
+		if out[i].Field != out[j].Field {
+			return out[i].Field < out[j].Field
+		}
+		if out[i].Code != out[j].Code {
+			return out[i].Code < out[j].Code
+		}
+		return out[i].Reason < out[j].Reason
+	})
+	return out
+}
+
+// dedupeIssues returns issues without duplicates, in their first order.
+// Two issues are duplicates iff (Field, Code, Reason) match exactly. Several
+// validators raise the same issue for one cause (imported Attrs that do not
+// decode are read by the structural, authorization and wiring checks), and
+// the caller should see it once.
+func dedupeIssues(in []ValidationIssue) []ValidationIssue {
+	if len(in) == 0 {
+		return in
 	}
 	type key struct{ field, code, reason string }
 	seen := make(map[key]struct{}, len(in))
@@ -173,15 +195,6 @@ func dedupeAndSortIssues(in []ValidationIssue) []ValidationIssue {
 		seen[k] = struct{}{}
 		out = append(out, iss)
 	}
-	sort.SliceStable(out, func(i, j int) bool {
-		if out[i].Field != out[j].Field {
-			return out[i].Field < out[j].Field
-		}
-		if out[i].Code != out[j].Code {
-			return out[i].Code < out[j].Code
-		}
-		return out[i].Reason < out[j].Reason
-	})
 	return out
 }
 
