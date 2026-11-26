@@ -91,8 +91,11 @@ const redactedPlaceholder = "***"
 // DiffImportedResources compares two slices of ImportedResource and returns
 // one ResourceDiff per address that differs. Resources in old but not new
 // produce Action="removed"; resources in new but not old produce
-// Action="added"; same address on both sides with any Tier or Attributes
-// difference produces Action="modified".
+// Action="added"; same address on both sides with any Tier or attribute
+// difference produces Action="modified". Attribute values come from typed
+// Attrs, or from the legacy Attributes map for rows written before Attrs
+// existed (importedDesiredAttrs), so a row moved from one to the other with
+// the same values shows no diff.
 //
 // Field-level diffs respect the curated Layer 2 policy for the resource
 // type:
@@ -195,7 +198,7 @@ func addedResourceDiff(ir imported.ImportedResource) ResourceDiff {
 	if ir.Tier == imported.TierImportedMissing {
 		rd.Remediation = ir.Remediation
 	}
-	rd.Changes = diffAttributeMaps(ir.Identity.Type, nil, ir.Attributes)
+	rd.Changes = diffAttributeMaps(ir.Identity.Type, nil, importedDesiredAttrs(ir))
 	return rd
 }
 
@@ -210,7 +213,7 @@ func removedResourceDiff(ir imported.ImportedResource) ResourceDiff {
 		Action:   ResourceActionRemoved,
 		FromTier: ir.Tier,
 	}
-	rd.Changes = diffAttributeMaps(ir.Identity.Type, ir.Attributes, nil)
+	rd.Changes = diffAttributeMaps(ir.Identity.Type, importedDesiredAttrs(ir), nil)
 	return rd
 }
 
@@ -232,7 +235,7 @@ func modifiedResourceDiff(oldIR, newIR imported.ImportedResource) (ResourceDiff,
 			rd.Remediation = newIR.Remediation
 		}
 	}
-	rd.Changes = diffAttributeMaps(newIR.Identity.Type, oldIR.Attributes, newIR.Attributes)
+	rd.Changes = diffAttributeMaps(newIR.Identity.Type, importedDesiredAttrs(oldIR), importedDesiredAttrs(newIR))
 	if !tierChanged && len(rd.Changes) == 0 {
 		return ResourceDiff{}, false
 	}
@@ -312,9 +315,10 @@ func redactionRequired(entry policy.FieldPolicy) bool {
 	return false
 }
 
-// stringifyAttr renders an Attributes value as a stable display string. nil
+// stringifyAttr renders an attribute value as a stable display string. nil
 // stays as the empty string so the From/To delta correctly shows additions
-// and removals as " → x" / "x → ".
+// and removals as " → x" / "x → ". A RawExpr renders as its expression text,
+// the form the legacy Attributes map stored references in.
 func stringifyAttr(v any) string {
 	if v == nil {
 		return ""
@@ -322,6 +326,8 @@ func stringifyAttr(v any) string {
 	switch t := v.(type) {
 	case string:
 		return t
+	case RawExpr:
+		return t.Expr
 	case int, int32, int64, float32, float64, bool:
 		return fmt.Sprintf("%v", t)
 	}
