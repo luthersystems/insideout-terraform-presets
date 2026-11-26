@@ -176,8 +176,8 @@ func TestRun_HappyPath(t *testing.T) {
 	if _, err := os.Stat(res.GeneratedPath); err != nil {
 		t.Errorf("Result.GeneratedPath does not exist on disk: %v", err)
 	}
-	if len(res.Resources) != 1 || res.Resources[0].Attributes["name"] != "alpha" {
-		t.Errorf("Resources[0].Attributes = %v, want name=alpha", res.Resources[0].Attributes)
+	if len(res.Resources) != 1 || !strings.Contains(string(res.Resources[0].Attrs), `"name":{"literal":"alpha"}`) {
+		t.Errorf("Resources[0].Attrs = %s, want name=alpha", res.Resources[0].Attrs)
 	}
 
 	// Pin: validate read the *cleaned* file (no `arn`), not the raw plan

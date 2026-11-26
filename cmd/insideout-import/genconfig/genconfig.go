@@ -159,7 +159,7 @@ func providerOrDefault(p string) string {
 
 // Result reports what Run produced for downstream consumers (the discover
 // command writes Resources back over imported.json so the manifest carries
-// populated Attributes).
+// populated typed Attrs).
 type Result struct {
 	GeneratedPath string
 	Resources     []imported.ImportedResource
@@ -187,7 +187,8 @@ type Result struct {
 //  5. Cross-reference replacement (replace literal ARNs/IDs with refs to
 //     other in-batch resources).
 //  6. terraform validate (the contract gate).
-//  7. Extract cleaned attributes back into ImportedResource.Attributes.
+//  7. Extract cleaned attributes back into ImportedResource.Attrs (the
+//     legacy Attributes map only for a type with no typed model).
 //
 // Any failure aborts and returns the error verbatim — the workdir is left
 // in place so the operator can inspect intermediate state.

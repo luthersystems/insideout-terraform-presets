@@ -38,10 +38,17 @@ var genconfigEvalContext = &hcl.EvalContext{
 }
 
 // extractAttributes parses the cleaned generated.tf and returns a copy of
-// the input slice with each ImportedResource.Attributes populated from its
+// the input slice with each resource's desired state populated from its
 // matching `resource "TYPE" "NAME"` block.
 //
-// Decoding rules:
+// A type with a generated typed model gets typed Attrs only. The deprecated
+// Attributes map is written only for a type with no model, where it is the
+// only place the desired state can go
+// (luthersystems/insideout-terraform-presets#921). Every discoverable type
+// has a model (registry TestEveryDiscoverableTypeHasTypedModel), so in
+// practice reverse import writes Attrs only.
+//
+// Decoding rules for the Attributes map:
 //
 //   - Scalar literals (string, number, bool) decode to their Go-native form
 //     and land in Attributes as a value of that type.
@@ -86,18 +93,25 @@ func extractAttributes(cleaned []byte, resources []imported.ImportedResource) ([
 		if !ok {
 			continue
 		}
-		attrs, err := decodeBlockAttrs(blk)
-		if err != nil {
-			return nil, fmt.Errorf("resource %q: %w", out[i].Identity.Address, err)
+		tfType := out[i].Identity.Type
+		if tfType == "" {
+			tfType = blk.Labels()[0]
 		}
-		if len(attrs) > 0 {
-			out[i].Attributes = attrs
+		if _, _, modeled := generated.Lookup(tfType); !modeled {
+			attrs, err := decodeBlockAttrs(blk)
+			if err != nil {
+				return nil, fmt.Errorf("resource %q: %w", out[i].Identity.Address, err)
+			}
+			if len(attrs) > 0 {
+				out[i].Attributes = attrs
+			}
+			continue
 		}
 		body, ok := syntaxByAddr[out[i].Identity.Address]
 		if !ok {
 			continue
 		}
-		typedAttrs, err := decodeTypedAttrs(cleaned, out[i].Identity.Type, body)
+		typedAttrs, err := decodeTypedAttrs(cleaned, tfType, body)
 		if err != nil {
 			return nil, fmt.Errorf("resource %q: typed attrs: %w", out[i].Identity.Address, err)
 		}
