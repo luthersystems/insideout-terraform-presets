@@ -240,21 +240,21 @@ func hasIssueCode(issues []ValidationIssue, code string) bool {
 	return false
 }
 
-// TestEvaluateReimportConflict_MergesLegacyKeys pins that a row with both
-// Attrs and Attributes (an old row the backfill added Attrs to) still reads
-// the keys only Attributes has: Attrs keys win, Attributes fills the rest.
-func TestEvaluateReimportConflict_MergesLegacyKeys(t *testing.T) {
+// TestEvaluateReimportConflict_ReadsAttrsAlone pins that a row with both
+// Attrs and Attributes reads Attrs alone, as emit does: a key only
+// Attributes has is not desired state.
+func TestEvaluateReimportConflict_ReadsAttrsAlone(t *testing.T) {
 	t.Parallel()
 	ir := typedSQS(t, "q", 30, "")
 	ir.Attributes = map[string]any{"delay_seconds": float64(5), "visibility_timeout_seconds": float64(99)}
 	edit := imported.FieldEdit{Source: imported.SourceAgent, EditedAt: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC), NewValue: float64(10)}
 
 	_, conflict := evaluateReimportConflict("f", "delay_seconds", edit, ir)
-	require.True(t, conflict, "delay_seconds lives only in Attributes (5), the edit wants 10")
+	require.False(t, conflict, "delay_seconds is only in Attributes, which emit does not read")
 
 	edit.NewValue = float64(30)
 	_, conflict = evaluateReimportConflict("f", "visibility_timeout_seconds", edit, ir)
-	require.False(t, conflict, "Attrs (30) wins over Attributes (99)")
+	require.False(t, conflict, "Attrs (30) is the desired value, not Attributes (99)")
 }
 
 // TestEvaluateReimportConflict_JSONEncodeExpr pins that a jsonencode() of

@@ -79,9 +79,11 @@ func TestImportedDesiredAttrs_FallsBackToLegacyAttributes(t *testing.T) {
 	require.Error(t, err)
 }
 
-// TestImportedDesiredAttrs_MergesAttrsOverAttributes pins the merge for an
-// old row that has both: Attrs keys win, Attributes fills the rest.
-func TestImportedDesiredAttrs_MergesAttrsOverAttributes(t *testing.T) {
+// TestImportedDesiredAttrs_AttrsAloneWhenSet pins that a row with both
+// reads Attrs alone, as emit does, so the diff, wiring and conflict checks
+// see the values the composed HCL has. Attributes is read only when Attrs is
+// empty.
+func TestImportedDesiredAttrs_AttrsAloneWhenSet(t *testing.T) {
 	t.Parallel()
 	ir := typedSQS(t, "q", 30, "")
 	ir.Attributes = map[string]any{"delay_seconds": float64(5), "visibility_timeout_seconds": float64(99)}
@@ -90,9 +92,7 @@ func TestImportedDesiredAttrs_MergesAttrsOverAttributes(t *testing.T) {
 	require.Equal(t, map[string]any{
 		"name":                       "q",
 		"visibility_timeout_seconds": float64(30),
-		"delay_seconds":              float64(5),
 	}, got)
-	require.Equal(t, float64(99), ir.Attributes["visibility_timeout_seconds"], "the caller's map must not change")
 }
 
 // TestDiffImportedResources_TypedAttrsOnly pins that the diff reads typed
