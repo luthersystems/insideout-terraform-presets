@@ -405,3 +405,26 @@ func TestExtractImportedEdges_Deduplicates(t *testing.T) {
 	edges := extractImportedEdges([]imported.ImportedResource{ir})
 	require.Len(t, edges, 1, "edges: %+v", edges)
 }
+
+// TestComposeStack_DecodeIssueOnce pins that Attrs that do not decode raise
+// one imported_resource_decode_failed issue, not one per validator that
+// reads them.
+func TestComposeStack_DecodeIssueOnce(t *testing.T) {
+	// Sequential: composeStackImpl reads the package-global nowFn.
+	ir := badAttrsSQS()
+	ir.Identity.ImportID = "q"
+	res, err := newTestClient().ComposeStackWithIssues(ComposeStackOpts{
+		Cloud:    "aws",
+		Project:  "io-test",
+		Region:   "us-east-1",
+		Imported: []imported.ImportedResource{ir},
+	})
+	require.NoError(t, err)
+	n := 0
+	for _, iss := range res.Issues {
+		if iss.Code == "imported_resource_decode_failed" {
+			n++
+		}
+	}
+	require.Equal(t, 1, n, "issues: %+v", res.Issues)
+}

@@ -860,7 +860,7 @@ func (c *Client) composeStackImpl(opts ComposeStackOpts) (*ComposeStackResult, e
 
 	return &ComposeStackResult{
 		Files:         files,
-		Issues:        issues,
+		Issues:        dedupeIssues(issues),
 		ProvidersUsed: importedClouds,
 	}, nil
 }
