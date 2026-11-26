@@ -1,6 +1,7 @@
 package composer
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"reflect"
@@ -49,6 +50,11 @@ type ResourceDiff struct {
 	// Remediation surfaces the operator-chosen action when the resource
 	// transitioned into TierImportedMissing. Empty otherwise.
 	Remediation imported.MissingAction `json:"remediation,omitempty"`
+
+	// Error is set when a side's typed Attrs do not decode against the
+	// type's model. Changes is then empty: the diff cannot tell what
+	// changed, and must not guess from a partial row.
+	Error string `json:"error,omitempty"`
 
 	Changes []ResourceFieldDiff `json:"changes,omitempty"`
 }
@@ -198,7 +204,12 @@ func addedResourceDiff(ir imported.ImportedResource) ResourceDiff {
 	if ir.Tier == imported.TierImportedMissing {
 		rd.Remediation = ir.Remediation
 	}
-	rd.Changes = diffAttributeMaps(ir.Identity.Type, nil, importedDesiredAttrs(ir))
+	attrs, err := importedDesiredAttrs(ir)
+	if err != nil {
+		rd.Error = diffDecodeError(ir, err)
+		return rd
+	}
+	rd.Changes = diffAttributeMaps(ir.Identity.Type, nil, attrs)
 	return rd
 }
 
@@ -213,13 +224,24 @@ func removedResourceDiff(ir imported.ImportedResource) ResourceDiff {
 		Action:   ResourceActionRemoved,
 		FromTier: ir.Tier,
 	}
-	rd.Changes = diffAttributeMaps(ir.Identity.Type, importedDesiredAttrs(ir), nil)
+	attrs, err := importedDesiredAttrs(ir)
+	if err != nil {
+		rd.Error = diffDecodeError(ir, err)
+		return rd
+	}
+	rd.Changes = diffAttributeMaps(ir.Identity.Type, attrs, nil)
 	return rd
 }
 
 // modifiedResourceDiff returns a diff for two snapshots of the same address.
 // ok=false when nothing visible changed (same Tier and no policy-visible
 // attribute deltas) — DiffImportedResources skips no-op modifies entirely.
+//
+// When exactly one side is a legacy-only row (Attributes and no typed
+// Attrs), only the keys both sides carry are compared. The legacy map never
+// stored nested blocks or the values genconfig skipped, so a key the typed
+// side alone has is not a change the operator made; showing it would flag
+// every row the first time it moves to typed Attrs.
 func modifiedResourceDiff(oldIR, newIR imported.ImportedResource) (ResourceDiff, bool) {
 	rd := ResourceDiff{
 		Address: newIR.Identity.Address,
@@ -235,19 +257,59 @@ func modifiedResourceDiff(oldIR, newIR imported.ImportedResource) (ResourceDiff,
 			rd.Remediation = newIR.Remediation
 		}
 	}
-	rd.Changes = diffAttributeMaps(newIR.Identity.Type, importedDesiredAttrs(oldIR), importedDesiredAttrs(newIR))
+	oldAttrs, oldErr := importedDesiredAttrs(oldIR)
+	newAttrs, newErr := importedDesiredAttrs(newIR)
+	if oldErr != nil || newErr != nil {
+		if !tierChanged && bytes.Equal(oldIR.Attrs, newIR.Attrs) && reflect.DeepEqual(oldIR.Attributes, newIR.Attributes) {
+			return ResourceDiff{}, false
+		}
+		if newErr != nil {
+			rd.Error = diffDecodeError(newIR, newErr)
+		} else {
+			rd.Error = diffDecodeError(oldIR, oldErr)
+		}
+		return rd, true
+	}
+	if legacyOnlyRow(oldIR) != legacyOnlyRow(newIR) {
+		oldAttrs, newAttrs = sharedKeys(oldAttrs, newAttrs)
+	}
+	rd.Changes = diffAttributeMaps(newIR.Identity.Type, oldAttrs, newAttrs)
 	if !tierChanged && len(rd.Changes) == 0 {
 		return ResourceDiff{}, false
 	}
 	return rd, true
 }
 
+func diffDecodeError(ir imported.ImportedResource, err error) string {
+	return fmt.Sprintf("decode typed Attrs for %q failed: %s", ir.Identity.Type, err.Error())
+}
+
+// sharedKeys returns a and b restricted to the keys both have.
+func sharedKeys(a, b map[string]any) (map[string]any, map[string]any) {
+	outA := make(map[string]any, len(a))
+	outB := make(map[string]any, len(b))
+	for k, v := range a {
+		if w, ok := b[k]; ok {
+			outA[k] = v
+			outB[k] = w
+		}
+	}
+	return outA, outB
+}
+
 // diffAttributeMaps walks the union of keys across old and new and emits
-// ResourceFieldDiff entries for visible (non-Hidden) paths whose stringified
-// values differ. For each top-level path that the curated map declares as a
-// JSON-projection parent, the projection paths are diffed individually
-// rather than as a single raw parent diff (best-effort; parse failures fall
-// back to raw).
+// ResourceFieldDiff entries for visible (non-Hidden) paths whose values
+// differ. Values are compared through comparableAttrValue, so an
+// expression shows as its source text (or its value, for a constant) at any
+// depth.
+//
+// Policy applies at every path, not only the top level: under a key that
+// has curated nested entries (environment.variables, a block's attribute),
+// the diff descends into the value, drops Hidden paths and redacts
+// Sensitive / Redacted ones, so no nested secret reaches the output. For a
+// top-level path that is a registered JSON-projection parent, the
+// projection paths are diffed individually (best-effort; parse failures
+// fall back to one parent diff, redacted when any projection is).
 //
 // Output is sorted by Path. Empty old and empty new short-circuit to nil so
 // the caller gets a clean tail.
@@ -256,30 +318,158 @@ func diffAttributeMaps(tfType string, old, new map[string]any) []ResourceFieldDi
 		return nil
 	}
 	polMap, _ := policy.Lookup(tfType)
-	keys := unionKeys(old, new)
-	parents := jsonProjectionParents(polMap)
+	parents := jsonProjectionParents(tfType, polMap)
+	nested := nestedPolicyPrefixes(polMap)
 
 	var diffs []ResourceFieldDiff
-	for _, key := range keys {
+	for _, key := range unionKeys(old, new) {
+		oldVal := comparableAttrValue(old[key])
+		newVal := comparableAttrValue(new[key])
 		if parents[key] {
-			diffs = append(diffs, diffJSONProjection(tfType, key, old[key], new[key], polMap)...)
+			diffs = append(diffs, diffJSONProjection(tfType, key, oldVal, newVal, polMap)...)
 			continue
 		}
-		entry, hasEntry := polMap[key]
-		if hasEntry && entry.Visibility == policy.VisibilityHidden {
-			continue
-		}
-		oldStr := stringifyAttr(old[key])
-		newStr := stringifyAttr(new[key])
-		if oldStr == newStr {
-			continue
-		}
-		diffs = append(diffs, makeFieldDiff(key, oldStr, newStr, entry, hasEntry))
+		diffs = appendValueDiffs(diffs, polMap, nested, key, key, oldVal, newVal)
 	}
 	sort.Slice(diffs, func(i, j int) bool {
 		return diffs[i].Path < diffs[j].Path
 	})
 	return diffs
+}
+
+// appendValueDiffs appends the diffs of one value. path is the display path
+// (with [i] for an element of a repeated block); logical is the policy path
+// (no indices).
+func appendValueDiffs(diffs []ResourceFieldDiff, polMap policy.Map, nested map[string]bool, path, logical string, old, new any) []ResourceFieldDiff {
+	entry, hasEntry := polMap[logical]
+	if hasEntry && entry.Visibility == policy.VisibilityHidden {
+		return diffs
+	}
+	if hasEntry && redactionRequired(entry) {
+		if leafValuesEqual(old, new) {
+			return diffs
+		}
+		return append(diffs, makeFieldDiff(path, redactedPlaceholder, redactedPlaceholder, entry, hasEntry))
+	}
+	if !nested[logical] {
+		if leafValuesEqual(old, new) {
+			return diffs
+		}
+		return append(diffs, makeFieldDiff(path, stringifyAttr(old), stringifyAttr(new), entry, hasEntry))
+	}
+	// A JSON-string attribute with curated subpaths (the legacy map's form
+	// of push_config and friends) is walked as the object it holds.
+	old, new = jsonObjectOrSelf(old), jsonObjectOrSelf(new)
+	if oldMap, newMap, ok := bothMaps(old, new); ok {
+		for _, k := range unionKeys(oldMap, newMap) {
+			diffs = appendValueDiffs(diffs, polMap, nested, path+"."+k, logical+"."+k, oldMap[k], newMap[k])
+		}
+		return diffs
+	}
+	if oldList, newList, ok := bothLists(old, new); ok {
+		if len(oldList) <= 1 && len(newList) <= 1 {
+			return appendValueDiffs(diffs, polMap, nested, path, logical, listAt(oldList, 0), listAt(newList, 0))
+		}
+		for i := 0; i < max(len(oldList), len(newList)); i++ {
+			diffs = appendValueDiffs(diffs, polMap, nested, fmt.Sprintf("%s[%d]", path, i), logical, listAt(oldList, i), listAt(newList, i))
+		}
+		return diffs
+	}
+	// The two sides have different shapes, so they cannot be walked
+	// together. Show each with its Hidden paths dropped and its sensitive
+	// paths redacted.
+	if leafValuesEqual(old, new) {
+		return diffs
+	}
+	oldSafe := sanitizeAttrValue(polMap, logical, old)
+	newSafe := sanitizeAttrValue(polMap, logical, new)
+	if leafValuesEqual(oldSafe, newSafe) {
+		return append(diffs, ResourceFieldDiff{Path: path, From: redactedPlaceholder, To: redactedPlaceholder, Redacted: true})
+	}
+	return append(diffs, makeFieldDiff(path, stringifyAttr(oldSafe), stringifyAttr(newSafe), entry, hasEntry))
+}
+
+// sanitizeAttrValue returns v with every nested path the policy hides
+// dropped and every path it redacts replaced by the placeholder.
+func sanitizeAttrValue(polMap policy.Map, logical string, v any) any {
+	switch t := v.(type) {
+	case map[string]any:
+		out := make(map[string]any, len(t))
+		for k, e := range t {
+			child := logical + "." + k
+			entry, ok := polMap[child]
+			switch {
+			case ok && entry.Visibility == policy.VisibilityHidden:
+				continue
+			case ok && redactionRequired(entry):
+				out[k] = redactedPlaceholder
+			default:
+				out[k] = sanitizeAttrValue(polMap, child, e)
+			}
+		}
+		return out
+	case []any:
+		out := make([]any, len(t))
+		for i, e := range t {
+			out[i] = sanitizeAttrValue(polMap, logical, e)
+		}
+		return out
+	}
+	return v
+}
+
+// leafValuesEqual compares two encoded values by value, or by their display
+// text (the legacy map may hold a number as a string).
+func leafValuesEqual(a, b any) bool {
+	return attrValuesEqual(a, b) || stringifyAttr(a) == stringifyAttr(b)
+}
+
+// jsonObjectOrSelf returns the object a JSON-string value holds, or v.
+func jsonObjectOrSelf(v any) any {
+	if str, ok := v.(string); ok {
+		if doc, ok := decodeJSONDocument(str); ok {
+			if m, ok := doc.(map[string]any); ok {
+				return m
+			}
+		}
+	}
+	return v
+}
+
+// bothMaps reports whether old and new are maps (or absent), at least one
+// present.
+func bothMaps(old, new any) (map[string]any, map[string]any, bool) {
+	om, oOK := old.(map[string]any)
+	nm, nOK := new.(map[string]any)
+	return om, nm, (oOK || old == nil) && (nOK || new == nil) && (oOK || nOK)
+}
+
+// bothLists reports whether old and new are lists (or absent), at least one
+// present.
+func bothLists(old, new any) ([]any, []any, bool) {
+	ol, oOK := old.([]any)
+	nl, nOK := new.([]any)
+	return ol, nl, (oOK || old == nil) && (nOK || new == nil) && (oOK || nOK)
+}
+
+func listAt(l []any, i int) any {
+	if i < len(l) {
+		return l[i]
+	}
+	return nil
+}
+
+// nestedPolicyPrefixes returns every proper prefix of a dotted policy path:
+// the paths under which the diff must descend to apply nested policy.
+func nestedPolicyPrefixes(m policy.Map) map[string]bool {
+	out := map[string]bool{}
+	for path := range m {
+		segs := strings.Split(path, ".")
+		for i := 1; i < len(segs); i++ {
+			out[strings.Join(segs[:i], ".")] = true
+		}
+	}
+	return out
 }
 
 // makeFieldDiff applies redaction and policy projection to a raw From/To
@@ -357,18 +547,33 @@ func unionKeys(a, b map[string]any) []string {
 }
 
 // jsonProjectionParents returns the set of top-level attribute names that
-// are declared as JSON-projection parents in m. Used by diffAttributeMaps
-// to route those keys through the projection-aware path.
-func jsonProjectionParents(m policy.Map) map[string]bool {
+// back a registered JSON projection in m. Used by diffAttributeMaps to route
+// those keys through the projection-aware path. A dotted path that is not a
+// registered projection is a nested attribute, which diffAttributeMaps
+// descends into instead.
+func jsonProjectionParents(tfType string, m policy.Map) map[string]bool {
 	parents := map[string]bool{}
 	for path := range m {
 		i := strings.Index(path, ".")
 		if i <= 0 {
 			continue
 		}
-		parents[path[:i]] = true
+		if _, ok := policy.LookupJSONProjection(tfType, path); ok {
+			parents[path[:i]] = true
+		}
 	}
 	return parents
+}
+
+// projectionRedacted reports whether any projection under parent is Hidden
+// or must be redacted, so a raw parent diff would leak it.
+func projectionRedacted(parent string, polMap policy.Map) bool {
+	for path, entry := range polMap {
+		if strings.HasPrefix(path, parent+".") && (entry.Visibility == policy.VisibilityHidden || redactionRequired(entry)) {
+			return true
+		}
+	}
+	return false
 }
 
 // diffJSONProjection renders one or more ResourceFieldDiff entries for a
@@ -382,13 +587,16 @@ func diffJSONProjection(tfType, parent string, oldVal, newVal any, polMap policy
 	oldMap, oldOK := decodeJSONProjection(oldVal)
 	newMap, newOK := decodeJSONProjection(newVal)
 	if !oldOK || !newOK {
-		oldStr := stringifyAttr(oldVal)
-		newStr := stringifyAttr(newVal)
-		if oldStr == newStr {
+		if leafValuesEqual(oldVal, newVal) {
 			return nil
 		}
 		entry, hasEntry := polMap[parent]
-		return []ResourceFieldDiff{makeFieldDiff(parent, oldStr, newStr, entry, hasEntry)}
+		if projectionRedacted(parent, polMap) {
+			d := makeFieldDiff(parent, redactedPlaceholder, redactedPlaceholder, entry, hasEntry)
+			d.Redacted = true
+			return []ResourceFieldDiff{d}
+		}
+		return []ResourceFieldDiff{makeFieldDiff(parent, stringifyAttr(oldVal), stringifyAttr(newVal), entry, hasEntry)}
 	}
 	keys := unionKeys(oldMap, newMap)
 	var diffs []ResourceFieldDiff

@@ -57,12 +57,13 @@ type ImportedResource struct {
 	// (TestEveryDiscoverableTypeHasTypedModel in
 	// pkg/insideout-import/registry); reverseimport's backfillResourceAttrs
 	// (pkg/reverseimport/plan_attrs.go) and the AWS and GCP attribute
-	// enrichers write only Attrs. Every reader here reads Attrs first and
-	// falls back to Attributes only when Attrs is empty: emit, the
-	// required-field and provenance checks, the import ID region lookup,
-	// pkg/imported's agent context, and, through importedDesiredAttrs in
-	// pkg/composer, DiffImportedResources, the wiring graph's reference
-	// edges and the re-import conflict check.
+	// enrichers write only Attrs. Emit, the required-field and provenance
+	// checks, the import ID region lookup and pkg/imported's agent context
+	// read Attrs first and fall back to Attributes only when Attrs is
+	// empty. DiffImportedResources, the wiring graph's reference edges and
+	// the re-import conflict check read importedDesiredAttrs in
+	// pkg/composer, which merges the two (an Attrs key wins, Attributes
+	// fills the keys Attrs lacks) and reports Attrs that do not decode.
 	//
 	// Path to removal, in order:
 	//

@@ -44,7 +44,7 @@ func ValidateCrossTierWiring(blocks []ModuleBlock, irs []imported.ImportedResour
 		}
 	}
 
-	var issues []ValidationIssue
+	_, issues := extractImportedEdgesWithIssues(irs)
 	for _, edge := range extractUnionEdges(blocks, irs) {
 		switch edge.Producer.Kind {
 		case NodeKindResource:

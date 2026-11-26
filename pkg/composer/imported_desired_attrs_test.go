@@ -36,7 +36,8 @@ func typedSQS(t *testing.T, name string, visibility int64, kmsExpr string) impor
 
 func TestImportedDesiredAttrs_UnwrapsTypedAttrs(t *testing.T) {
 	t.Parallel()
-	got := importedDesiredAttrs(typedSQS(t, "orders", 30, "aws_kms_key.queues.arn"))
+	got, err := importedDesiredAttrs(typedSQS(t, "orders", 30, "aws_kms_key.queues.arn"))
+	require.NoError(t, err)
 	require.Equal(t, map[string]any{
 		"name":                       "orders",
 		"visibility_timeout_seconds": float64(30),
@@ -55,21 +56,43 @@ func TestImportedDesiredAttrs_UnwrapsNestedBlocksAndNull(t *testing.T) {
 		Identity: imported.ResourceIdentity{Address: "aws_sqs_queue.q", Type: "aws_sqs_queue"},
 		Attrs:    raw,
 	}
+	got, err := importedDesiredAttrs(ir)
+	require.NoError(t, err)
 	require.Equal(t, map[string]any{
 		"name":     nil,
 		"tags":     map[string]any{"Env": "dev"},
 		"timeouts": map[string]any{"create": "5m"},
-	}, importedDesiredAttrs(ir))
+	}, got)
 }
 
 func TestImportedDesiredAttrs_FallsBackToLegacyAttributes(t *testing.T) {
 	t.Parallel()
 	legacy := sampleSQS("q", 30)
-	require.Equal(t, legacy.Attributes, importedDesiredAttrs(legacy))
+	got, err := importedDesiredAttrs(legacy)
+	require.NoError(t, err)
+	require.Equal(t, legacy.Attributes, got)
 
-	// Attrs that do not decode against the model fall back too.
+	// Attrs that do not decode against the model are an error, not a
+	// silent fallback to Attributes.
 	legacy.Attrs = json.RawMessage(`{"name": "not-an-envelope"}`)
-	require.Equal(t, legacy.Attributes, importedDesiredAttrs(legacy))
+	_, err = importedDesiredAttrs(legacy)
+	require.Error(t, err)
+}
+
+// TestImportedDesiredAttrs_MergesAttrsOverAttributes pins the merge for an
+// old row that has both: Attrs keys win, Attributes fills the rest.
+func TestImportedDesiredAttrs_MergesAttrsOverAttributes(t *testing.T) {
+	t.Parallel()
+	ir := typedSQS(t, "q", 30, "")
+	ir.Attributes = map[string]any{"delay_seconds": float64(5), "visibility_timeout_seconds": float64(99)}
+	got, err := importedDesiredAttrs(ir)
+	require.NoError(t, err)
+	require.Equal(t, map[string]any{
+		"name":                       "q",
+		"visibility_timeout_seconds": float64(30),
+		"delay_seconds":              float64(5),
+	}, got)
+	require.Equal(t, float64(99), ir.Attributes["visibility_timeout_seconds"], "the caller's map must not change")
 }
 
 // TestDiffImportedResources_TypedAttrsOnly pins that the diff reads typed
