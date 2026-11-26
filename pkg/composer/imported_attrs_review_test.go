@@ -275,6 +275,25 @@ func TestEvaluateReimportConflict_JSONEncodeExpr(t *testing.T) {
 	require.True(t, conflict, "different JSON value")
 }
 
+// TestEvaluateReimportConflict_ExprTextMatchesEdit pins that an edit whose
+// NewValue is the expression's own source text is a match: the agent wrote
+// that text, so the desired state still holds the edit.
+func TestEvaluateReimportConflict_ExprTextMatchesEdit(t *testing.T) {
+	t.Parallel()
+	ir := imported.ImportedResource{
+		Identity: imported.ResourceIdentity{Address: "aws_sqs_queue.q", Type: "aws_sqs_queue", Cloud: "aws"},
+		Tier:     imported.TierImportedFlat,
+		Attrs:    json.RawMessage(`{"redrive_policy": {"expr": "jsonencode({ maxReceiveCount = 5 })"}}`),
+	}
+	edit := imported.FieldEdit{Source: imported.SourceAgent, EditedAt: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC), NewValue: "jsonencode({ maxReceiveCount = 5 })"}
+	_, conflict := evaluateReimportConflict("f", "redrive_policy", edit, ir)
+	require.False(t, conflict, "NewValue is the expression's text")
+
+	edit.NewValue = "jsonencode({ maxReceiveCount = 6 })"
+	_, conflict = evaluateReimportConflict("f", "redrive_policy", edit, ir)
+	require.True(t, conflict, "different expression text")
+}
+
 // TestEvaluateReimportConflict_UnevaluableExprByText pins that an expression
 // that cannot be evaluated (it reads another resource) is compared by text.
 func TestEvaluateReimportConflict_UnevaluableExprByText(t *testing.T) {

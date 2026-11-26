@@ -296,7 +296,7 @@ func evaluateReimportConflict(issueField, path string, edit imported.FieldEdit, 
 	if edit.NewValue == nil {
 		return ValidationIssue{}, false
 	}
-	if attrValuesEqual(comparableAttrValue(desired), comparableAttrValue(edit.NewValue)) {
+	if attrValuesEqual(comparableAttrValue(desired), comparableAttrValue(edit.NewValue)) || exprTextEqual(desired, edit.NewValue) {
 		return ValidationIssue{}, false
 	}
 	return ValidationIssue{
@@ -305,6 +305,24 @@ func evaluateReimportConflict(issueField, path string, edit imported.FieldEdit, 
 		Reason:     fmt.Sprintf("imported resource path %q has a pending FieldEdit but desired state diverged from FieldEdit.NewValue; a re-import or other writer overwrote the edit (decision #19)", path),
 		Suggestion: "operator must accept cloud, keep the edit, or abort",
 	}, true
+}
+
+// exprTextEqual reports whether desired is an expression whose source text
+// is the edit's NewValue. An edit may carry the expression as written
+// ("jsonencode({ ... })"); comparing only the evaluated value would call
+// that a conflict.
+func exprTextEqual(desired, newValue any) bool {
+	expr, ok := desired.(RawExpr)
+	if !ok {
+		return false
+	}
+	switch nv := newValue.(type) {
+	case string:
+		return strings.TrimSpace(nv) == strings.TrimSpace(expr.Expr)
+	case RawExpr:
+		return strings.TrimSpace(nv.Expr) == strings.TrimSpace(expr.Expr)
+	}
+	return false
 }
 
 // lookupTopLevelAttribute returns the value at path in attrs when the path
