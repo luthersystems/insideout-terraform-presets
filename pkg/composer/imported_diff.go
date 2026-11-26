@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/luthersystems/insideout-terraform-presets/pkg/composer/imported"
+	"github.com/luthersystems/insideout-terraform-presets/pkg/composer/imported/generated"
 	"github.com/luthersystems/insideout-terraform-presets/pkg/composer/imported/policy"
 )
 
@@ -238,10 +239,10 @@ func removedResourceDiff(ir imported.ImportedResource) ResourceDiff {
 // attribute deltas) — DiffImportedResources skips no-op modifies entirely.
 //
 // When exactly one side is a legacy-only row (Attributes and no typed
-// Attrs), only the keys both sides carry are compared. The legacy map never
-// stored nested blocks or the values genconfig skipped, so a key the typed
-// side alone has is not a change the operator made; showing it would flag
-// every row the first time it moves to typed Attrs.
+// Attrs), the typed side's nested blocks and computed-only attributes that
+// the legacy side lacks are left out (dropLegacyUnheldKeys). The legacy map
+// never stored them, so showing them would flag every row the first time it
+// moves to typed Attrs. Every other key is compared as usual.
 func modifiedResourceDiff(oldIR, newIR imported.ImportedResource) (ResourceDiff, bool) {
 	rd := ResourceDiff{
 		Address: newIR.Identity.Address,
@@ -270,8 +271,11 @@ func modifiedResourceDiff(oldIR, newIR imported.ImportedResource) (ResourceDiff,
 		}
 		return rd, true
 	}
-	if legacyOnlyRow(oldIR) != legacyOnlyRow(newIR) {
-		oldAttrs, newAttrs = sharedKeys(oldAttrs, newAttrs)
+	switch {
+	case legacyOnlyRow(oldIR) && !legacyOnlyRow(newIR):
+		newAttrs = dropLegacyUnheldKeys(newIR.Identity.Type, oldAttrs, newAttrs)
+	case legacyOnlyRow(newIR) && !legacyOnlyRow(oldIR):
+		oldAttrs = dropLegacyUnheldKeys(newIR.Identity.Type, newAttrs, oldAttrs)
 	}
 	rd.Changes = diffAttributeMaps(newIR.Identity.Type, oldAttrs, newAttrs)
 	if !tierChanged && len(rd.Changes) == 0 {
@@ -284,17 +288,50 @@ func diffDecodeError(ir imported.ImportedResource, err error) string {
 	return fmt.Sprintf("decode typed Attrs for %q failed: %s", ir.Identity.Type, err.Error())
 }
 
-// sharedKeys returns a and b restricted to the keys both have.
-func sharedKeys(a, b map[string]any) (map[string]any, map[string]any) {
-	outA := make(map[string]any, len(a))
-	outB := make(map[string]any, len(b))
-	for k, v := range a {
-		if w, ok := b[k]; ok {
-			outA[k] = v
-			outB[k] = w
+// dropLegacyUnheldKeys returns typed without the keys the legacy map could
+// not hold and does not have: nested blocks (the legacy map kept only
+// top-level attributes) and computed-only attributes (generate-config-out
+// never writes them, so genconfig never stored them). Every other key stays,
+// so a key the legacy row had and the typed row lost still shows as a
+// removal, and a configurable key only the typed row has as an addition.
+func dropLegacyUnheldKeys(tfType string, legacy, typed map[string]any) map[string]any {
+	goType, schema, ok := generated.Lookup(tfType)
+	if !ok {
+		return typed
+	}
+	blocks := typedBlockFields(goType)
+	out := make(map[string]any, len(typed))
+	for k, v := range typed {
+		if _, inLegacy := legacy[k]; !inLegacy {
+			if blocks[k] {
+				continue
+			}
+			if fs, ok := schema[k]; ok && !fs.Configurable() {
+				continue
+			}
+		}
+		out[k] = v
+	}
+	return out
+}
+
+// typedBlockFields returns the Terraform names of goType's nested block
+// fields (tf tag option block or blocks).
+func typedBlockFields(goType reflect.Type) map[string]bool {
+	for goType.Kind() == reflect.Pointer {
+		goType = goType.Elem()
+	}
+	out := map[string]bool{}
+	if goType.Kind() != reflect.Struct {
+		return out
+	}
+	for i := 0; i < goType.NumField(); i++ {
+		name, opts, _ := strings.Cut(goType.Field(i).Tag.Get("tf"), ",")
+		if opts == "block" || opts == "blocks" {
+			out[name] = true
 		}
 	}
-	return outA, outB
+	return out
 }
 
 // diffAttributeMaps walks the union of keys across old and new and emits

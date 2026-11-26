@@ -178,6 +178,36 @@ func TestDiffImportedResources_LegacyToTypedNormalized(t *testing.T) {
 	require.Empty(t, DiffImportedResources([]imported.ImportedResource{legacy}, []imported.ImportedResource{typed}))
 }
 
+// TestDiffImportedResources_LegacyToTypedKeepsRealChanges pins that moving a
+// row between Attributes and typed Attrs hides only the keys the legacy map
+// could not hold (nested blocks, computed-only values genconfig never wrote).
+// A key the legacy row had and the typed row lost is a removal, and a
+// configurable key only the typed row has is an addition.
+func TestDiffImportedResources_LegacyToTypedKeepsRealChanges(t *testing.T) {
+	t.Parallel()
+	legacy := imported.ImportedResource{
+		Identity:   imported.ResourceIdentity{Address: "aws_iam_role.r", Type: "aws_iam_role", Cloud: "aws"},
+		Tier:       imported.TierImportedFlat,
+		Attributes: map[string]any{"name": "r", "description": "d"},
+	}
+	typed := legacy
+	typed.Attributes = nil
+	typed.Attrs = json.RawMessage(`{
+		"name": {"literal": "r"},
+		"arn": {"literal": "arn:aws:iam::123456789012:role/r"},
+		"max_session_duration": {"literal": 7200},
+		"inline_policy": [{"name": {"literal": "p"}, "policy": {"literal": "{}"}}]
+	}`)
+	for name, pair := range map[string][2]imported.ImportedResource{
+		"legacy to typed": {legacy, typed},
+		"typed to legacy": {typed, legacy},
+	} {
+		diffs := DiffImportedResources([]imported.ImportedResource{pair[0]}, []imported.ImportedResource{pair[1]})
+		require.Len(t, diffs, 1, name)
+		require.Equal(t, []string{"description", "max_session_duration"}, fieldPaths(diffs[0].Changes), name)
+	}
+}
+
 // TestDiffImportedResources_NestedRawExprAsText pins that a nested
 // expression renders as its source text, not {"Expr":...}.
 func TestDiffImportedResources_NestedRawExprAsText(t *testing.T) {
