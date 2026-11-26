@@ -22,24 +22,29 @@ type AWSCognitoUserPool struct {
 	LastModifiedDate              *Value[string]                                    `tf:"last_modified_date" json:"last_modified_date,omitempty"`
 	MFAConfiguration              *Value[string]                                    `tf:"mfa_configuration" json:"mfa_configuration,omitempty"`
 	Name                          *Value[string]                                    `tf:"name" json:"name,omitempty"`
+	Region                        *Value[string]                                    `tf:"region" json:"region,omitempty"`
 	SMSAuthenticationMessage      *Value[string]                                    `tf:"sms_authentication_message" json:"sms_authentication_message,omitempty"`
 	SMSVerificationMessage        *Value[string]                                    `tf:"sms_verification_message" json:"sms_verification_message,omitempty"`
 	Tags                          map[string]*Value[string]                         `tf:"tags" json:"tags,omitempty"`
 	TagsAll                       map[string]*Value[string]                         `tf:"tags_all" json:"tags_all,omitempty"`
+	UserPoolTier                  *Value[string]                                    `tf:"user_pool_tier" json:"user_pool_tier,omitempty"`
 	UsernameAttributes            []*Value[string]                                  `tf:"username_attributes" json:"username_attributes,omitempty"`
 	AccountRecoverySetting        []AWSCognitoUserPoolAccountRecoverySetting        `tf:"account_recovery_setting,blocks" json:"account_recovery_setting,omitempty"`
 	AdminCreateUserConfig         []AWSCognitoUserPoolAdminCreateUserConfig         `tf:"admin_create_user_config,blocks" json:"admin_create_user_config,omitempty"`
 	DeviceConfiguration           []AWSCognitoUserPoolDeviceConfiguration           `tf:"device_configuration,blocks" json:"device_configuration,omitempty"`
 	EmailConfiguration            []AWSCognitoUserPoolEmailConfiguration            `tf:"email_configuration,blocks" json:"email_configuration,omitempty"`
+	EmailMFAConfiguration         []AWSCognitoUserPoolEmailMFAConfiguration         `tf:"email_mfa_configuration,blocks" json:"email_mfa_configuration,omitempty"`
 	LambdaConfig                  []AWSCognitoUserPoolLambdaConfig                  `tf:"lambda_config,blocks" json:"lambda_config,omitempty"`
 	PasswordPolicy                []AWSCognitoUserPoolPasswordPolicy                `tf:"password_policy,blocks" json:"password_policy,omitempty"`
 	Schema                        []AWSCognitoUserPoolSchemaNested                  `tf:"schema,blocks" json:"schema,omitempty"`
+	SignInPolicy                  []AWSCognitoUserPoolSignInPolicy                  `tf:"sign_in_policy,blocks" json:"sign_in_policy,omitempty"`
 	SMSConfiguration              []AWSCognitoUserPoolSMSConfiguration              `tf:"sms_configuration,blocks" json:"sms_configuration,omitempty"`
 	SoftwareTokenMFAConfiguration []AWSCognitoUserPoolSoftwareTokenMFAConfiguration `tf:"software_token_mfa_configuration,blocks" json:"software_token_mfa_configuration,omitempty"`
 	UserAttributeUpdateSettings   []AWSCognitoUserPoolUserAttributeUpdateSettings   `tf:"user_attribute_update_settings,blocks" json:"user_attribute_update_settings,omitempty"`
 	UserPoolAddOns                []AWSCognitoUserPoolUserPoolAddOns                `tf:"user_pool_add_ons,blocks" json:"user_pool_add_ons,omitempty"`
 	UsernameConfiguration         []AWSCognitoUserPoolUsernameConfiguration         `tf:"username_configuration,blocks" json:"username_configuration,omitempty"`
 	VerificationMessageTemplate   []AWSCognitoUserPoolVerificationMessageTemplate   `tf:"verification_message_template,blocks" json:"verification_message_template,omitempty"`
+	WebAuthnConfiguration         []AWSCognitoUserPoolWebAuthnConfiguration         `tf:"web_authn_configuration,blocks" json:"web_authn_configuration,omitempty"`
 }
 
 // AWSCognitoUserPoolAccountRecoverySetting is a nested-block type used by the parent resource.
@@ -79,6 +84,12 @@ type AWSCognitoUserPoolEmailConfiguration struct {
 	FromEmailAddress    *Value[string] `tf:"from_email_address" json:"from_email_address,omitempty"`
 	ReplyToEmailAddress *Value[string] `tf:"reply_to_email_address" json:"reply_to_email_address,omitempty"`
 	SourceARN           *Value[string] `tf:"source_arn" json:"source_arn,omitempty"`
+}
+
+// AWSCognitoUserPoolEmailMFAConfiguration is a nested-block type used by the parent resource.
+type AWSCognitoUserPoolEmailMFAConfiguration struct {
+	Message *Value[string] `tf:"message" json:"message,omitempty"`
+	Subject *Value[string] `tf:"subject" json:"subject,omitempty"`
 }
 
 // AWSCognitoUserPoolLambdaConfig is a nested-block type used by the parent resource.
@@ -158,6 +169,11 @@ type AWSCognitoUserPoolSchemaNestedStringAttributeConstraints struct {
 	MinLength *Value[string] `tf:"min_length" json:"min_length,omitempty"`
 }
 
+// AWSCognitoUserPoolSignInPolicy is a nested-block type used by the parent resource.
+type AWSCognitoUserPoolSignInPolicy struct {
+	AllowedFirstAuthFactors []*Value[string] `tf:"allowed_first_auth_factors" json:"allowed_first_auth_factors,omitempty"`
+}
+
 // AWSCognitoUserPoolSoftwareTokenMFAConfiguration is a nested-block type used by the parent resource.
 type AWSCognitoUserPoolSoftwareTokenMFAConfiguration struct {
 	Enabled *Value[bool] `tf:"enabled" json:"enabled,omitempty"`
@@ -170,7 +186,13 @@ type AWSCognitoUserPoolUserAttributeUpdateSettings struct {
 
 // AWSCognitoUserPoolUserPoolAddOns is a nested-block type used by the parent resource.
 type AWSCognitoUserPoolUserPoolAddOns struct {
-	AdvancedSecurityMode *Value[string] `tf:"advanced_security_mode" json:"advanced_security_mode,omitempty"`
+	AdvancedSecurityMode            *Value[string]                                                    `tf:"advanced_security_mode" json:"advanced_security_mode,omitempty"`
+	AdvancedSecurityAdditionalFlows []AWSCognitoUserPoolUserPoolAddOnsAdvancedSecurityAdditionalFlows `tf:"advanced_security_additional_flows,blocks" json:"advanced_security_additional_flows,omitempty"`
+}
+
+// AWSCognitoUserPoolUserPoolAddOnsAdvancedSecurityAdditionalFlows is a nested-block type used by the parent resource.
+type AWSCognitoUserPoolUserPoolAddOnsAdvancedSecurityAdditionalFlows struct {
+	CustomAuthMode *Value[string] `tf:"custom_auth_mode" json:"custom_auth_mode,omitempty"`
 }
 
 // AWSCognitoUserPoolUsernameConfiguration is a nested-block type used by the parent resource.
@@ -186,6 +208,12 @@ type AWSCognitoUserPoolVerificationMessageTemplate struct {
 	EmailSubject       *Value[string] `tf:"email_subject" json:"email_subject,omitempty"`
 	EmailSubjectByLink *Value[string] `tf:"email_subject_by_link" json:"email_subject_by_link,omitempty"`
 	SMSMessage         *Value[string] `tf:"sms_message" json:"sms_message,omitempty"`
+}
+
+// AWSCognitoUserPoolWebAuthnConfiguration is a nested-block type used by the parent resource.
+type AWSCognitoUserPoolWebAuthnConfiguration struct {
+	RelyingPartyID   *Value[string] `tf:"relying_party_id" json:"relying_party_id,omitempty"`
+	UserVerification *Value[string] `tf:"user_verification" json:"user_verification,omitempty"`
 }
 
 // AWSCognitoUserPoolSchema describes provider metadata for each attribute / nested
@@ -206,24 +234,29 @@ var AWSCognitoUserPoolSchema = map[string]FieldSchema{
 	"last_modified_date":               {Computed: true, Replacement: ReplacementUnknown},
 	"mfa_configuration":                {Optional: true, Replacement: ReplacementUnknown},
 	"name":                             {Required: true, Replacement: ReplacementUnknown},
+	"region":                           {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"sms_authentication_message":       {Optional: true, Replacement: ReplacementUnknown},
 	"sms_verification_message":         {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"tags":                             {Optional: true, Replacement: ReplacementUnknown},
 	"tags_all":                         {Optional: true, Computed: true, Replacement: ReplacementUnknown},
+	"user_pool_tier":                   {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"username_attributes":              {Optional: true, Replacement: ReplacementUnknown},
 	"account_recovery_setting":         {Optional: true, Replacement: ReplacementUnknown},
 	"admin_create_user_config":         {Optional: true, Replacement: ReplacementUnknown},
 	"device_configuration":             {Optional: true, Replacement: ReplacementUnknown},
 	"email_configuration":              {Optional: true, Replacement: ReplacementUnknown},
+	"email_mfa_configuration":          {Optional: true, Replacement: ReplacementUnknown},
 	"lambda_config":                    {Optional: true, Replacement: ReplacementUnknown},
 	"password_policy":                  {Optional: true, Replacement: ReplacementUnknown},
 	"schema":                           {Optional: true, Replacement: ReplacementUnknown},
+	"sign_in_policy":                   {Optional: true, Replacement: ReplacementUnknown},
 	"sms_configuration":                {Optional: true, Replacement: ReplacementUnknown},
 	"software_token_mfa_configuration": {Optional: true, Replacement: ReplacementUnknown},
 	"user_attribute_update_settings":   {Optional: true, Replacement: ReplacementUnknown},
 	"user_pool_add_ons":                {Optional: true, Replacement: ReplacementUnknown},
 	"username_configuration":           {Optional: true, Replacement: ReplacementUnknown},
 	"verification_message_template":    {Optional: true, Replacement: ReplacementUnknown},
+	"web_authn_configuration":          {Optional: true, Replacement: ReplacementUnknown},
 }
 
 func init() {

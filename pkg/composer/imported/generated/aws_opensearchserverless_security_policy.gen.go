@@ -12,6 +12,7 @@ type AWSOpensearchserverlessSecurityPolicy struct {
 	Name          *Value[string] `tf:"name" json:"name,omitempty"`
 	Policy        *Value[string] `tf:"policy" json:"policy,omitempty"`
 	PolicyVersion *Value[string] `tf:"policy_version" json:"policy_version,omitempty"`
+	Region        *Value[string] `tf:"region" json:"region,omitempty"`
 	Type_         *Value[string] `tf:"type" json:"type,omitempty"`
 }
 
@@ -23,6 +24,7 @@ var AWSOpensearchserverlessSecurityPolicySchema = map[string]FieldSchema{
 	"name":           {Required: true, Replacement: ReplacementUnknown},
 	"policy":         {Required: true, Replacement: ReplacementUnknown},
 	"policy_version": {Computed: true, Replacement: ReplacementUnknown},
+	"region":         {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"type":           {Required: true, Replacement: ReplacementUnknown},
 }
 
