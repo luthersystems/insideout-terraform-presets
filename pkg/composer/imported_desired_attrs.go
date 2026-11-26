@@ -18,10 +18,11 @@ import (
 // for readers that compare or walk attribute values (the imported diff, the
 // wiring graph's reference edges, the re-import conflict check).
 //
-// Typed Attrs and the legacy Attributes map are merged: a key in Attrs wins,
-// and Attributes fills the keys Attrs lacks. Rows persisted before typed
-// Attrs existed carry only Attributes, and an old row the plan backfill
-// added Attrs to carries both (luthersystems/insideout-terraform-presets#921).
+// It reads what emit reads: typed Attrs when they are set, and the legacy
+// Attributes map only when Attrs is empty (a row persisted before typed
+// Attrs existed). The two are never merged: a key only Attributes has is not
+// in the composed HCL, so a reader that saw it would disagree with emit
+// (luthersystems/insideout-terraform-presets#921).
 //
 // Each typed Value envelope becomes a plain value: a literal becomes its Go
 // value (numbers as float64, the form JSON decoding gives), an expression
@@ -32,11 +33,11 @@ import (
 // empty row: the caller reports it (imported_resource_decode_failed, or an
 // error on the diff). The returned map is always a fresh copy.
 func importedDesiredAttrs(ir imported.ImportedResource) (map[string]any, error) {
-	out := make(map[string]any, len(ir.Attributes))
-	for k, v := range ir.Attributes {
-		out[k] = v
-	}
 	if len(ir.Attrs) == 0 {
+		out := make(map[string]any, len(ir.Attributes))
+		for k, v := range ir.Attributes {
+			out[k] = v
+		}
 		return out, nil
 	}
 	decoded, err := generated.UnmarshalAttrs(ir.Identity.Type, ir.Attrs)
@@ -44,11 +45,9 @@ func importedDesiredAttrs(ir imported.ImportedResource) (map[string]any, error) 
 		return nil, err
 	}
 	if typed, ok := plainTypedValue(reflect.ValueOf(decoded)).(map[string]any); ok {
-		for k, v := range typed {
-			out[k] = v
-		}
+		return typed, nil
 	}
-	return out, nil
+	return map[string]any{}, nil
 }
 
 // legacyOnlyRow reports whether ir carries only the legacy Attributes map.

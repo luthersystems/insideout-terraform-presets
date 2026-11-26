@@ -62,8 +62,8 @@ type ImportedResource struct {
 	// read Attrs first and fall back to Attributes only when Attrs is
 	// empty. DiffImportedResources, the wiring graph's reference edges and
 	// the re-import conflict check read importedDesiredAttrs in
-	// pkg/composer, which merges the two (an Attrs key wins, Attributes
-	// fills the keys Attrs lacks) and reports Attrs that do not decode.
+	// pkg/composer, which reads the same way (Attrs when set, else
+	// Attributes, never a merge) and reports Attrs that do not decode.
 	//
 	// Path to removal, in order:
 	//
