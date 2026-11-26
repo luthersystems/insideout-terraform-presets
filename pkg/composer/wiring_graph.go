@@ -88,8 +88,19 @@ var resourceRefPattern = regexp.MustCompile(`(aws_|google_)[A-Za-z0-9_]+\.[A-Za-
 // order and within each value the parser yields traversals in source
 // order.
 func extractImportedEdges(irs []imported.ImportedResource) []UnionEdge {
+	edges, _ := extractImportedEdgesWithIssues(irs)
+	return edges
+}
+
+// extractImportedEdgesWithIssues is extractImportedEdges plus an
+// imported_resource_decode_failed issue for each resource whose typed Attrs
+// do not decode; such a resource contributes no edges, and the issue says
+// its references were not read. An edge repeated within one resource (the
+// same input naming the same target twice) is kept once.
+func extractImportedEdgesWithIssues(irs []imported.ImportedResource) ([]UnionEdge, []ValidationIssue) {
 	var edges []UnionEdge
-	for _, ir := range irs {
+	var issues []ValidationIssue
+	for i, ir := range irs {
 		if !isEmitEligibleConsumer(ir) {
 			continue
 		}
@@ -97,9 +108,28 @@ func extractImportedEdges(irs []imported.ImportedResource) []UnionEdge {
 		if consumer.Addr == "" {
 			continue
 		}
-		edges = appendExprEdges(edges, importedDesiredAttrs(ir), consumer, "")
+		attrs, err := importedDesiredAttrs(ir)
+		if err != nil {
+			issues = append(issues, importedDecodeIssue(importedField(ir, i), ir, err))
+			continue
+		}
+		edges = appendUniqueEdges(edges, appendExprEdges(nil, attrs, consumer, ""))
 	}
-	return edges
+	return edges, issues
+}
+
+// appendUniqueEdges appends the edges of add that dst and add do not
+// already hold, keeping their order.
+func appendUniqueEdges(dst, add []UnionEdge) []UnionEdge {
+	seen := make(map[UnionEdge]bool, len(add))
+	for _, e := range add {
+		if seen[e] {
+			continue
+		}
+		seen[e] = true
+		dst = append(dst, e)
+	}
+	return dst
 }
 
 // appendExprEdges appends the edges of every RawExpr in attrs, walking
@@ -212,7 +242,15 @@ func extractUnionEdges(blocks []ModuleBlock, irs []imported.ImportedResource) []
 		}
 		return a.ProducerAttr < b.ProducerAttr
 	})
-	return edges
+	// Drop repeats: sorted, an edge's copies are adjacent.
+	out := edges[:0]
+	for _, e := range edges {
+		if len(out) > 0 && e == out[len(out)-1] {
+			continue
+		}
+		out = append(out, e)
+	}
+	return out
 }
 
 // attrIsWiring reports whether the (tfType, attrPath) pair is curated

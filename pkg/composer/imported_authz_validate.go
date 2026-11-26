@@ -2,7 +2,6 @@ package composer
 
 import (
 	"fmt"
-	"reflect"
 	"sort"
 	"strings"
 
@@ -87,6 +86,11 @@ func ValidateImportedResourceAuthorization(cloud string, irs []imported.Imported
 
 		polMap, hasPol := policy.Lookup(ir.Identity.Type)
 		field := importedField(ir, i)
+		if _, err := importedDesiredAttrs(ir); err != nil {
+			// The re-import conflict check cannot read the desired state;
+			// say so rather than read the row as empty.
+			issues = append(issues, importedDecodeIssue(field, ir, err))
+		}
 
 		for _, path := range sortedFieldEditPaths(ir.FieldEdits) {
 			edit := ir.FieldEdits[path]
@@ -269,26 +273,30 @@ func approvalCompletenessIssue(issueField, path string, ap *imported.FieldEditAp
 // evaluateReimportConflict checks whether the resource's desired value at
 // path still matches the FieldEdit's NewValue. A divergence means a
 // re-import (or other writer) clobbered the pending edit; per decision #19
-// the operator must explicitly resolve before apply. The desired value comes
-// from typed Attrs, or from the legacy Attributes map for rows written
-// before Attrs existed (importedDesiredAttrs). Returns no issue when either
-// side cannot be observed deterministically (nested paths, or absent
-// OldValue/NewValue) — the structural Phase 1 validators and The InsideOut
+// the operator must explicitly resolve before apply.
+//
+// The desired value is typed Attrs merged over the legacy Attributes map
+// (importedDesiredAttrs), passed through comparableAttrValue: at any depth
+// an expression of constants (jsonencode({...})) compares by its evaluated
+// value, and any other expression by its source text, the form a FieldEdit
+// holds. Two JSON documents compare by decoded value. Returns no issue when
+// either side cannot be observed deterministically (nested paths, Attrs that
+// do not decode — ValidateImportedResourceAuthorization reports those — or
+// absent NewValue); the structural Phase 1 validators and The InsideOut
 // backend's chat-stream loop carry the rest.
 func evaluateReimportConflict(issueField, path string, edit imported.FieldEdit, ir imported.ImportedResource) (ValidationIssue, bool) {
-	desired, ok := lookupTopLevelAttribute(importedDesiredAttrs(ir), path)
+	attrs, err := importedDesiredAttrs(ir)
+	if err != nil {
+		return ValidationIssue{}, false
+	}
+	desired, ok := lookupTopLevelAttribute(attrs, path)
 	if !ok {
 		return ValidationIssue{}, false
 	}
 	if edit.NewValue == nil {
 		return ValidationIssue{}, false
 	}
-	if re, isExpr := desired.(RawExpr); isExpr {
-		// A typed Attrs expression; the legacy Attributes map, and so a
-		// FieldEdit, holds a reference as its source text.
-		desired = re.Expr
-	}
-	if reflect.DeepEqual(desired, edit.NewValue) {
+	if attrValuesEqual(comparableAttrValue(desired), comparableAttrValue(edit.NewValue)) {
 		return ValidationIssue{}, false
 	}
 	return ValidationIssue{

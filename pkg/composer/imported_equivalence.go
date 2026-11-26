@@ -125,8 +125,15 @@ func EquivalentImportedEmit(ir imported.ImportedResource, attrs json.RawMessage,
 
 // normalizeFuncs are the functions a constant attribute value may call and
 // still be compared by value. merge() is the one the provenance injector
-// writes; go-cty's MergeFunc is the implementation terraform uses.
-var normalizeFuncs = map[string]function.Function{"merge": stdlib.MergeFunc}
+// writes; jsonencode() and jsondecode() are what terraform plan
+// -generate-config-out writes for JSON-string attributes (#652), and typed
+// Attrs keep them as expressions. The go-cty functions are the
+// implementations terraform uses.
+var normalizeFuncs = map[string]function.Function{
+	"merge":      stdlib.MergeFunc,
+	"jsonencode": stdlib.JSONEncodeFunc,
+	"jsondecode": stdlib.JSONDecodeFunc,
+}
 
 // normalizeImportedHCL rewrites HCL so only differences terraform sees
 // remain (see EquivalentImportedEmit).
