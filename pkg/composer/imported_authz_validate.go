@@ -266,20 +266,27 @@ func approvalCompletenessIssue(issueField, path string, ap *imported.FieldEditAp
 	}, true
 }
 
-// evaluateReimportConflict checks whether the resource's desired Attributes
-// value at path still matches the FieldEdit's NewValue. A divergence means a
+// evaluateReimportConflict checks whether the resource's desired value at
+// path still matches the FieldEdit's NewValue. A divergence means a
 // re-import (or other writer) clobbered the pending edit; per decision #19
-// the operator must explicitly resolve before apply. Returns no issue when
-// either side cannot be observed deterministically (nested paths, typed-only
-// Attrs, or absent OldValue/NewValue) — the structural Phase 1 validators and
-// The InsideOut backend's chat-stream loop carry the rest.
+// the operator must explicitly resolve before apply. The desired value comes
+// from typed Attrs, or from the legacy Attributes map for rows written
+// before Attrs existed (importedDesiredAttrs). Returns no issue when either
+// side cannot be observed deterministically (nested paths, or absent
+// OldValue/NewValue) — the structural Phase 1 validators and The InsideOut
+// backend's chat-stream loop carry the rest.
 func evaluateReimportConflict(issueField, path string, edit imported.FieldEdit, ir imported.ImportedResource) (ValidationIssue, bool) {
-	desired, ok := lookupTopLevelAttribute(ir.Attributes, path)
+	desired, ok := lookupTopLevelAttribute(importedDesiredAttrs(ir), path)
 	if !ok {
 		return ValidationIssue{}, false
 	}
 	if edit.NewValue == nil {
 		return ValidationIssue{}, false
+	}
+	if re, isExpr := desired.(RawExpr); isExpr {
+		// A typed Attrs expression; the legacy Attributes map, and so a
+		// FieldEdit, holds a reference as its source text.
+		desired = re.Expr
 	}
 	if reflect.DeepEqual(desired, edit.NewValue) {
 		return ValidationIssue{}, false
