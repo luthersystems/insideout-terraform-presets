@@ -3,7 +3,9 @@ package genconfig
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"reflect"
+	"sort"
 	"strings"
 
 	"github.com/hashicorp/hcl/v2"
@@ -221,4 +223,73 @@ func tokensToString(tokens hclwrite.Tokens) string {
 		b.Write(t.Bytes)
 	}
 	return b.String()
+}
+
+// reportUntypedAttrs writes a warning line to w for each attribute or block
+// in the cleaned generated.tf that the resource's typed model has no field
+// for. extractAttributes writes only typed Attrs for a modeled type, so such
+// a value is not carried into the manifest; the warning keeps that from
+// happening silently (#921). Types with no model are skipped: their values
+// go into the legacy Attributes map.
+func reportUntypedAttrs(w io.Writer, cleaned []byte, resources []imported.ImportedResource) {
+	bodies, err := syntaxResourceBodies(cleaned)
+	if err != nil {
+		return
+	}
+	for _, r := range resources {
+		body, ok := bodies[r.Identity.Address]
+		if !ok {
+			continue
+		}
+		tfType := r.Identity.Type
+		if tfType == "" {
+			tfType, _, _ = strings.Cut(r.Identity.Address, ".")
+		}
+		goType, _, ok := generated.Lookup(tfType)
+		if !ok {
+			continue
+		}
+		for _, path := range untypedPaths(goType, body, "") {
+			_, _ = fmt.Fprintf(w, "genconfig: WARN: %s: %s is in generated.tf but not in the typed model for %s; the value is not kept\n", r.Identity.Address, path, tfType)
+		}
+	}
+}
+
+// untypedPaths returns the dotted paths of body's attributes and blocks that
+// goType has no `tf` field for, walking nested blocks.
+func untypedPaths(goType reflect.Type, body *hclsyntax.Body, prefix string) []string {
+	for goType.Kind() == reflect.Pointer || goType.Kind() == reflect.Slice {
+		goType = goType.Elem()
+	}
+	if goType.Kind() != reflect.Struct {
+		return nil
+	}
+	fields := map[string]reflect.Type{}
+	for i := 0; i < goType.NumField(); i++ {
+		fld := goType.Field(i)
+		name, _, _ := strings.Cut(fld.Tag.Get("tf"), ",")
+		if name != "" {
+			fields[name] = fld.Type
+		}
+	}
+	var out []string
+	names := make([]string, 0, len(body.Attributes))
+	for name := range body.Attributes {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	for _, name := range names {
+		if _, ok := fields[name]; !ok {
+			out = append(out, prefix+name)
+		}
+	}
+	for _, blk := range body.Blocks {
+		ft, ok := fields[blk.Type]
+		if !ok {
+			out = append(out, prefix+blk.Type)
+			continue
+		}
+		out = append(out, untypedPaths(ft, blk.Body, prefix+blk.Type+".")...)
+	}
+	return out
 }

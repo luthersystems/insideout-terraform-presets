@@ -254,3 +254,41 @@ func TestExtractAttributes_ReturnedSliceIsCopy(t *testing.T) {
 		t.Errorf("output slice missing typed Attrs")
 	}
 }
+
+// TestReportUntypedAttrs pins that an attribute or block in generated.tf the
+// typed model has no field for is reported, so typed Attrs never drop a
+// value silently (#921).
+func TestReportUntypedAttrs(t *testing.T) {
+	t.Parallel()
+	in := []byte(`resource "aws_sqs_queue" "x" {
+  name          = "alpha"
+  not_in_model  = "dropped"
+  timeouts {
+    create  = "5m"
+    unknown = "dropped"
+  }
+  mystery_block {
+    a = 1
+  }
+}
+resource "aws_unmodeled_thing" "y" {
+  anything = 1
+}
+`)
+	var buf strings.Builder
+	reportUntypedAttrs(&buf, in, []imported.ImportedResource{
+		{Identity: imported.ResourceIdentity{Type: "aws_sqs_queue", Address: "aws_sqs_queue.x"}},
+		{Identity: imported.ResourceIdentity{Type: "aws_unmodeled_thing", Address: "aws_unmodeled_thing.y"}},
+	})
+	got := buf.String()
+	for _, want := range []string{"aws_sqs_queue.x: not_in_model", "aws_sqs_queue.x: timeouts.unknown", "aws_sqs_queue.x: mystery_block"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("report missing %q:\n%s", want, got)
+		}
+	}
+	for _, unwanted := range []string{"name", "timeouts.create", "aws_unmodeled_thing"} {
+		if strings.Contains(got, ": "+unwanted+"\n") || strings.Contains(got, unwanted+".y") {
+			t.Errorf("report should not name %q:\n%s", unwanted, got)
+		}
+	}
+}

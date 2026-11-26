@@ -643,6 +643,7 @@ func cleanValidateExtract(ctx context.Context, opts Options, runner terraformRun
 	if err != nil {
 		return nil, nil, fmt.Errorf("extract attributes: %w", err)
 	}
+	reportUntypedAttrs(os.Stderr, cleaned, out)
 	progressf(opts.Stdout, "genconfig: %s: complete (%d resource(s) retained)\n", scope, len(out))
 	return out, skipped, nil
 }
