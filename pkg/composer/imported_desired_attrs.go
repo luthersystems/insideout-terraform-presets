@@ -50,9 +50,11 @@ func importedDesiredAttrs(ir imported.ImportedResource) (map[string]any, error) 
 	return map[string]any{}, nil
 }
 
-// legacyOnlyRow reports whether ir carries only the legacy Attributes map.
-// Such a row never stored nested blocks or values genconfig skipped, so the
-// diff compares it with a typed row only on the keys both sides have.
+// legacyOnlyRow reports whether ir carries only the legacy Attributes map,
+// the one case importedDesiredAttrs reads Attributes (Attrs is read alone
+// when set). The diff compares such a row with a typed row on every key
+// except the typed row's nested blocks the legacy row lacks and the keys
+// emit never writes (id, computed-only attributes).
 func legacyOnlyRow(ir imported.ImportedResource) bool {
 	return len(ir.Attrs) == 0 && len(ir.Attributes) > 0
 }

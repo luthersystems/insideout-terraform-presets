@@ -123,7 +123,7 @@ func legacyForms(t *testing.T, m map[string]any) map[string]map[string]any {
 	t.Helper()
 	out := map[string]map[string]any{"typed": m}
 	for k, v := range m {
-		var obj any = v
+		obj := v
 		if l, ok := v.([]any); ok && len(l) == 1 {
 			obj = l[0]
 		}
@@ -427,4 +427,87 @@ func TestComposeStack_DecodeIssueOnce(t *testing.T) {
 		}
 	}
 	require.Equal(t, 1, n, "issues: %+v", res.Issues)
+}
+
+// TestDiffImportedResources_LegacyToTypedIgnoresUnemittedKeys pins that a
+// row moved between Attributes and Attrs shows no change for a key emit
+// never writes (id, and computed-only attributes such as arn) on either
+// side.
+func TestDiffImportedResources_LegacyToTypedIgnoresUnemittedKeys(t *testing.T) {
+	t.Parallel()
+	legacy := imported.ImportedResource{
+		Identity:   imported.ResourceIdentity{Address: "aws_iam_role.r", Type: "aws_iam_role", Cloud: "aws"},
+		Tier:       imported.TierImportedFlat,
+		Attributes: map[string]any{"name": "r", "arn": "arn:aws:iam::123456789012:role/r", "id": "r"},
+	}
+	typed := legacy
+	typed.Attributes = nil
+	typed.Attrs = json.RawMessage(`{"name": {"literal": "r"}, "id": {"literal": "other"}}`)
+	require.Empty(t, DiffImportedResources([]imported.ImportedResource{legacy}, []imported.ImportedResource{typed}))
+	require.Empty(t, DiffImportedResources([]imported.ImportedResource{typed}, []imported.ImportedResource{legacy}))
+}
+
+// TestDiffAttributeMaps_BlockFormsEqualWithoutPolicy pins that a block
+// compares equal across its forms (map, one-element list, JSON string) even
+// at a path with no nested policy.
+func TestDiffAttributeMaps_BlockFormsEqualWithoutPolicy(t *testing.T) {
+	t.Parallel()
+	block := map[string]any{"create": "5m"}
+	forms := []any{block, []any{block}, `{"create":"5m"}`, `[{"create":"5m"}]`}
+	for i, a := range forms {
+		for j, b := range forms {
+			changes := diffAttributeMaps("aws_sqs_queue", map[string]any{"timeouts": a}, map[string]any{"timeouts": b})
+			require.Emptyf(t, changes, "forms %d and %d", i, j)
+		}
+	}
+	changes := diffAttributeMaps("aws_sqs_queue", map[string]any{"timeouts": block}, map[string]any{"timeouts": `[{"create":"9m"}]`})
+	require.Len(t, changes, 1)
+}
+
+// TestUnwrapSingleton_OnlyBlocks pins that a one-element list of a scalar
+// is not taken for its element: ["a"] and "a" differ.
+func TestUnwrapSingleton_OnlyBlocks(t *testing.T) {
+	t.Parallel()
+	require.Equal(t, []any{"a"}, unwrapSingleton([]any{"a"}, "a"))
+	require.Equal(t, map[string]any{"k": "v"}, unwrapSingleton([]any{map[string]any{"k": "v"}}, nil))
+	require.Nil(t, unwrapSingleton([]any{}, map[string]any{"k": "v"}))
+	changes := diffAttributeMaps("aws_sqs_queue", map[string]any{"x": []any{"a"}}, map[string]any{"x": "a"})
+	require.Len(t, changes, 1)
+}
+
+// TestEvaluateReimportConflict_NormalizedExprText pins that the expression
+// text match ignores layout (spaces, newlines, a trailing comma), and that a
+// constant NewValue matches by its value.
+func TestEvaluateReimportConflict_NormalizedExprText(t *testing.T) {
+	t.Parallel()
+	ir := imported.ImportedResource{
+		Identity: imported.ResourceIdentity{Address: "aws_sqs_queue.q", Type: "aws_sqs_queue", Cloud: "aws"},
+		Tier:     imported.TierImportedFlat,
+		Attrs:    json.RawMessage(`{"policy": {"expr": "join(\",\", [aws_kms_key.k.arn, \"x\"])"}, "redrive_policy": {"expr": "jsonencode({ maxReceiveCount = 5 })"}}`),
+	}
+	at := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	for _, nv := range []string{"join(\",\",[aws_kms_key.k.arn,\"x\"])", "join(\",\", [\n  aws_kms_key.k.arn,\n  \"x\",\n])"} {
+		_, conflict := evaluateReimportConflict("f", "policy", imported.FieldEdit{Source: imported.SourceAgent, EditedAt: at, NewValue: nv}, ir)
+		require.Falsef(t, conflict, "same expression laid out differently: %q", nv)
+	}
+	_, conflict := evaluateReimportConflict("f", "policy", imported.FieldEdit{Source: imported.SourceAgent, EditedAt: at, NewValue: "join(\",\", [aws_kms_key.k.id, \"x\"])"}, ir)
+	require.True(t, conflict, "different expression")
+
+	_, conflict = evaluateReimportConflict("f", "redrive_policy", imported.FieldEdit{Source: imported.SourceAgent, EditedAt: at, NewValue: "jsonencode({\n  maxReceiveCount = 5\n})"}, ir)
+	require.False(t, conflict, "same constant value")
+	_, conflict = evaluateReimportConflict("f", "redrive_policy", imported.FieldEdit{Source: imported.SourceAgent, EditedAt: at, NewValue: "jsonencode({ maxReceiveCount = 6 })"}, ir)
+	require.True(t, conflict, "different constant value")
+}
+
+// TestDedupeIssues_ExactOnly pins that only exact duplicates are dropped.
+func TestDedupeIssues_ExactOnly(t *testing.T) {
+	t.Parallel()
+	a := ValidationIssue{Field: "f", Code: "c", Reason: "r", Value: "v1"}
+	b := a
+	b.Value = "v2"
+	c := a
+	c.Suggestion = "s"
+	d := a
+	d.Allowed = []string{"x"}
+	require.Equal(t, []ValidationIssue{a, b, c, d}, dedupeIssues([]ValidationIssue{a, b, a, c, d, d}))
 }
