@@ -493,6 +493,26 @@ func TestEvaluateReimportConflict_NormalizedExprText(t *testing.T) {
 	_, conflict := evaluateReimportConflict("f", "policy", imported.FieldEdit{Source: imported.SourceAgent, EditedAt: at, NewValue: "join(\",\", [aws_kms_key.k.id, \"x\"])"}, ir)
 	require.True(t, conflict, "different expression")
 
+	// Inside braces a newline and a comma both separate items.
+	obj := ir
+	obj.Attrs = json.RawMessage(`{"policy": {"expr": "jsonencode({ a = var.x, b = var.y })"}}`)
+	_, conflict = evaluateReimportConflict("f", "policy", imported.FieldEdit{Source: imported.SourceAgent, EditedAt: at, NewValue: "jsonencode({\n  a = var.x\n  b = var.y\n})"}, obj)
+	require.False(t, conflict, "newline-separated object items")
+	_, conflict = evaluateReimportConflict("f", "policy", imported.FieldEdit{Source: imported.SourceAgent, EditedAt: at, NewValue: "jsonencode({ a = var.x, b = var.z })"}, obj)
+	require.True(t, conflict, "different object item")
+
+	// Text that does not parse as one expression is no match.
+	minus := ir
+	minus.Attrs = json.RawMessage(`{"policy": {"expr": "var.a - 1"}}`)
+	_, conflict = evaluateReimportConflict("f", "policy", imported.FieldEdit{Source: imported.SourceAgent, EditedAt: at, NewValue: "var.a\n- 1"}, minus)
+	require.True(t, conflict, "two expressions are not var.a - 1")
+
+	// A plain string is not evaluated: "5" is not the expression 2 + 3.
+	sum := ir
+	sum.Attrs = json.RawMessage(`{"policy": {"expr": "2 + 3"}}`)
+	_, conflict = evaluateReimportConflict("f", "policy", imported.FieldEdit{Source: imported.SourceAgent, EditedAt: at, NewValue: "5"}, sum)
+	require.True(t, conflict, "string 5 against 2 + 3")
+
 	_, conflict = evaluateReimportConflict("f", "redrive_policy", imported.FieldEdit{Source: imported.SourceAgent, EditedAt: at, NewValue: "jsonencode({\n  maxReceiveCount = 5\n})"}, ir)
 	require.False(t, conflict, "same constant value")
 	_, conflict = evaluateReimportConflict("f", "redrive_policy", imported.FieldEdit{Source: imported.SourceAgent, EditedAt: at, NewValue: "jsonencode({ maxReceiveCount = 6 })"}, ir)
@@ -510,4 +530,40 @@ func TestDedupeIssues_ExactOnly(t *testing.T) {
 	d := a
 	d.Allowed = []string{"x"}
 	require.Equal(t, []ValidationIssue{a, b, c, d}, dedupeIssues([]ValidationIssue{a, b, a, c, d, d}))
+}
+
+// TestDiffAttributeMaps_RedactedBlockForms pins that a redacted value that
+// changes only its form (map against JSON string) shows no change.
+func TestDiffAttributeMaps_RedactedBlockForms(t *testing.T) {
+	t.Parallel()
+	wrap := func(v any) map[string]any {
+		return map[string]any{"source_configuration": map[string]any{"image_repository": map[string]any{"image_configuration": map[string]any{"runtime_environment_secrets": v}}}}
+	}
+	secrets := map[string]any{"K": "arn:aws:ssm:us-east-1:123456789012:parameter/k"}
+	require.Empty(t, diffAttributeMaps("aws_apprunner_service", wrap(secrets), wrap(`{"K":"arn:aws:ssm:us-east-1:123456789012:parameter/k"}`)))
+	require.Empty(t, diffAttributeMaps("aws_apprunner_service", wrap(secrets), wrap([]any{secrets})))
+	require.Empty(t, diffAttributeMaps("aws_apprunner_service", wrap(secrets), wrap(`[{"K":"arn:aws:ssm:us-east-1:123456789012:parameter/k"}]`)))
+	require.Len(t, diffAttributeMaps("aws_apprunner_service", wrap(secrets), wrap(`{"K":"other"}`)), 1)
+}
+
+// TestDiffImportedResources_IgnoresUnemittedKeys pins that keys emit never
+// writes do not show as changes on any modified row: id, computed-only
+// attributes, and an empty collection that is not Required.
+func TestDiffImportedResources_IgnoresUnemittedKeys(t *testing.T) {
+	t.Parallel()
+	sqs := func(attrs string) imported.ImportedResource {
+		return imported.ImportedResource{
+			Identity: imported.ResourceIdentity{Address: "aws_sqs_queue.q", Type: "aws_sqs_queue", Cloud: "aws"},
+			Tier:     imported.TierImportedFlat,
+			Attrs:    json.RawMessage(attrs),
+		}
+	}
+	oldIR := sqs(`{"name": {"literal": "q"}, "id": {"literal": "a"}, "arn": {"literal": "arn:a"}, "tags": {}}`)
+	newIR := sqs(`{"name": {"literal": "q"}, "id": {"literal": "b"}, "arn": {"literal": "arn:b"}}`)
+	require.Empty(t, DiffImportedResources([]imported.ImportedResource{oldIR}, []imported.ImportedResource{newIR}))
+
+	legacy := newIR
+	legacy.Attrs = nil
+	legacy.Attributes = map[string]any{"name": "q", "tags": map[string]any{}}
+	require.Empty(t, DiffImportedResources([]imported.ImportedResource{legacy}, []imported.ImportedResource{newIR}))
 }

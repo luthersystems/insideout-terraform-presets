@@ -315,11 +315,9 @@ func evaluateReimportConflict(issueField, path string, edit imported.FieldEdit, 
 }
 
 // exprTextEqual reports whether desired is an expression and newValue (a
-// string or RawExpr) is the same expression: the same source tokens, with
-// layout (spaces, newlines, a comma before a closing bracket) ignored, or,
-// for constant text, the same evaluated value. An edit may carry the
-// expression as written ("jsonencode({ ... })"); comparing only the
-// evaluated desired value with the raw text would call that a conflict.
+// string or RawExpr) is the same expression. Both must parse as HCL; they
+// then match on the same tokens with layout ignored (exprTokens). A RawExpr newValue also matches by the same constant value;
+// a plain string is not evaluated, so "5" is not the expression 2 + 3.
 func exprTextEqual(desired, newValue any) bool {
 	expr, ok := desired.(RawExpr)
 	if !ok {
@@ -331,52 +329,86 @@ func exprTextEqual(desired, newValue any) bool {
 		text = nv
 	case RawExpr:
 		text = nv.Expr
+		want, wantOK := evalConstantExpr(expr.Expr)
+		got, gotOK := evalConstantExpr(text)
+		if wantOK && gotOK && attrValuesEqual(want, got) {
+			return true
+		}
 	default:
 		return false
 	}
 	a, aOK := exprTokens(expr.Expr)
 	b, bOK := exprTokens(text)
-	if aOK && bOK && slices.Equal(a, b) {
-		return true
-	}
-	want, wantOK := evalConstantExpr(expr.Expr)
-	got, gotOK := evalConstantExpr(text)
-	return wantOK && gotOK && attrValuesEqual(want, got)
+	return aOK && bOK && slices.Equal(a, b)
 }
 
-// exprTokens returns the tokens of an HCL expression without layout:
-// newlines and comments are dropped, and so is a comma right before a
-// closing bracket, brace or parenthesis.
+// exprTokens returns the tokens of one HCL expression without layout, or
+// false if src does not parse as an expression. Comments count as
+// newlines. Outside any bracket a run of newlines is one separator (it ends
+// the expression), except at the start or end. Inside braces a newline and a
+// comma both separate items, so a run of them is one separator. Inside
+// brackets and parentheses a newline means nothing and goes. A separator or
+// comma right before a closer goes.
 func exprTokens(src string) ([]string, bool) {
+	if _, diags := hclsyntax.ParseExpression([]byte(src), "edit", hcl.InitialPos); diags.HasErrors() {
+		return nil, false
+	}
 	toks, diags := hclsyntax.LexExpression([]byte(src), "edit", hcl.InitialPos)
 	if diags.HasErrors() {
 		return nil, false
 	}
+	const sep = "sep"
+	comma := tokenText(hclsyntax.TokenComma, ",")
 	var out []string
-	for i, tok := range toks {
+	var openers []hclsyntax.TokenType
+	inBraces := func() bool {
+		return len(openers) > 0 && openers[len(openers)-1] == hclsyntax.TokenOBrace
+	}
+	for _, tok := range toks {
 		switch tok.Type {
-		case hclsyntax.TokenNewline, hclsyntax.TokenComment, hclsyntax.TokenEOF:
+		case hclsyntax.TokenEOF:
+			if last := len(out) - 1; last >= 0 && out[last] == sep {
+				out = out[:last]
+			}
 			continue
-		case hclsyntax.TokenComma:
-			if next, ok := nextSignificantToken(toks, i+1); ok {
-				switch next {
-				case hclsyntax.TokenCBrack, hclsyntax.TokenCBrace, hclsyntax.TokenCParen:
-					continue
+		case hclsyntax.TokenNewline, hclsyntax.TokenComment, hclsyntax.TokenComma:
+			if len(openers) == 0 && tok.Type != hclsyntax.TokenComma {
+				// Outside any bracket a newline ends an expression, so
+				// "var.a\n- 1" is not var.a - 1.
+				if last := len(out) - 1; last >= 0 && out[last] != sep {
+					out = append(out, sep)
 				}
+				continue
+			}
+			if !inBraces() {
+				if tok.Type == hclsyntax.TokenComma {
+					out = append(out, comma)
+				}
+				continue
+			}
+			// No separator right after the opening brace or another
+			// separator.
+			if last := len(out) - 1; last >= 0 && out[last] != sep && out[last] != tokenText(hclsyntax.TokenOBrace, "{") {
+				out = append(out, sep)
+			}
+			continue
+		case hclsyntax.TokenOBrace, hclsyntax.TokenOBrack, hclsyntax.TokenOParen, hclsyntax.TokenTemplateInterp, hclsyntax.TokenTemplateControl:
+			openers = append(openers, tok.Type)
+		case hclsyntax.TokenCBrace, hclsyntax.TokenCBrack, hclsyntax.TokenCParen, hclsyntax.TokenTemplateSeqEnd:
+			if last := len(out) - 1; last >= 0 && (out[last] == sep || out[last] == comma) {
+				out = out[:last]
+			}
+			if len(openers) > 0 {
+				openers = openers[:len(openers)-1]
 			}
 		}
-		out = append(out, string(rune(tok.Type))+string(tok.Bytes))
+		out = append(out, tokenText(tok.Type, string(tok.Bytes)))
 	}
 	return out, true
 }
 
-func nextSignificantToken(toks hclsyntax.Tokens, from int) (hclsyntax.TokenType, bool) {
-	for _, tok := range toks[from:] {
-		if tok.Type != hclsyntax.TokenNewline && tok.Type != hclsyntax.TokenComment {
-			return tok.Type, true
-		}
-	}
-	return 0, false
+func tokenText(t hclsyntax.TokenType, b string) string {
+	return string(rune(t)) + b
 }
 
 // lookupTopLevelAttribute returns the value at path in attrs when the path

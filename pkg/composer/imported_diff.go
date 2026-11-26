@@ -245,12 +245,11 @@ func removedResourceDiff(ir imported.ImportedResource) ResourceDiff {
 // ok=false when nothing visible changed (same Tier and no policy-visible
 // attribute deltas) — DiffImportedResources skips no-op modifies entirely.
 //
-// When exactly one side is a legacy-only row (Attributes and no typed
-// Attrs), the typed side's nested blocks that the legacy side lacks are left
-// out (dropLegacyUnheldBlocks), and so are the keys emit never writes on
-// either side: id and computed-only attributes (dropUnemittedKeys). The two
-// forms differ in these, so showing them would flag every row the first
-// time it moves to typed Attrs. Every other key is compared as usual.
+// Keys emit never writes are left out on both sides (dropUnemittedKeys):
+// they are not in the composed HCL, so a change to them is noise. When
+// exactly one side is a legacy-only row (Attributes and no typed Attrs), the
+// typed side's nested blocks that the legacy side lacks are left out too
+// (dropLegacyUnheldBlocks): the legacy map never stored them.
 func modifiedResourceDiff(oldIR, newIR imported.ImportedResource) (ResourceDiff, bool) {
 	rd := ResourceDiff{
 		Address: newIR.Identity.Address,
@@ -286,8 +285,9 @@ func modifiedResourceDiff(oldIR, newIR imported.ImportedResource) (ResourceDiff,
 		} else {
 			oldAttrs = dropLegacyUnheldBlocks(tfType, newAttrs, oldAttrs)
 		}
-		oldAttrs, newAttrs = dropUnemittedKeys(tfType, oldAttrs), dropUnemittedKeys(tfType, newAttrs)
 	}
+	oldAttrs = dropUnemittedKeys(newIR.Identity.Type, oldAttrs)
+	newAttrs = dropUnemittedKeys(newIR.Identity.Type, newAttrs)
 	rd.Changes = diffAttributeMaps(newIR.Identity.Type, oldAttrs, newAttrs)
 	if !tierChanged && len(rd.Changes) == 0 {
 		return ResourceDiff{}, false
@@ -320,10 +320,9 @@ func dropLegacyUnheldBlocks(tfType string, legacy, typed map[string]any) map[str
 }
 
 // dropUnemittedKeys returns attrs without the keys emit never writes: id
-// (it belongs in the import block) and computed-only attributes, as
-// emitOpaqueAttrsBody and stripResourceIDAttr skip them. The two forms of a
-// row differ in these keys (the legacy map stored arn, typed Attrs may not),
-// so comparing them would show changes the composed HCL does not have.
+// (it belongs in the import block), computed-only attributes, and an empty
+// collection that is not Required (#951). Typed emit and
+// emitOpaqueAttrsBody skip the same keys.
 func dropUnemittedKeys(tfType string, attrs map[string]any) map[string]any {
 	_, schema, hasSchema := generated.Lookup(tfType)
 	out := make(map[string]any, len(attrs))
@@ -333,6 +332,9 @@ func dropUnemittedKeys(tfType string, attrs map[string]any) map[string]any {
 		}
 		if hasSchema {
 			if fs, ok := schema[k]; ok && !fs.Configurable() {
+				continue
+			}
+			if isEmptyOpaqueCollection(v) && !generated.KeepEmptyCollection(schema, k) {
 				continue
 			}
 		}
@@ -409,7 +411,7 @@ func appendValueDiffs(diffs []ResourceFieldDiff, polMap policy.Map, nested map[s
 		return diffs
 	}
 	if hasEntry && redactionRequired(entry) {
-		if leafValuesEqual(old, new) {
+		if leafValuesEqual(old, new) || blockFormsEqual(old, new) {
 			return diffs
 		}
 		return append(diffs, makeFieldDiff(path, redactedPlaceholder, redactedPlaceholder, entry, hasEntry))
