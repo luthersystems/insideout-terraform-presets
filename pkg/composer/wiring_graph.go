@@ -73,9 +73,11 @@ var resourceRefPattern = regexp.MustCompile(`(aws_|google_)[A-Za-z0-9_]+\.[A-Za-
 
 // extractImportedEdges walks every emit-eligible imported resource and
 // returns the cross-tier references its desired attributes carry as
-// expressions: Value.Expr in typed Attrs (top level and inside nested
-// blocks), or RawExpr values in the legacy Attributes map for rows written
-// before Attrs existed (importedDesiredAttrs). The producer of each edge is
+// expressions. It reads what emit reads (importedDesiredAttrs): typed Attrs
+// when set, where each Value.Expr at the top level or inside a nested block
+// is a reference, and otherwise the legacy Attributes map, where each
+// RawExpr is. A resource whose Attrs do not decode contributes no edges;
+// extractImportedEdgesWithIssues reports it. The producer of each edge is
 // whatever the expression names (a module call or another flat resource);
 // the consumer is the imported resource itself. ConsumerInput is the
 // attribute name, dotted for an attribute inside a nested block.
@@ -86,7 +88,7 @@ var resourceRefPattern = regexp.MustCompile(`(aws_|google_)[A-Za-z0-9_]+\.[A-Za-
 //
 // The function is deterministic: attribute keys are walked in sorted
 // order and within each value the parser yields traversals in source
-// order.
+// order. An edge one resource names twice is returned once.
 func extractImportedEdges(irs []imported.ImportedResource) []UnionEdge {
 	edges, _ := extractImportedEdgesWithIssues(irs)
 	return edges
@@ -118,8 +120,10 @@ func extractImportedEdgesWithIssues(irs []imported.ImportedResource) ([]UnionEdg
 	return edges, issues
 }
 
-// appendUniqueEdges appends the edges of add that dst and add do not
-// already hold, keeping their order.
+// appendUniqueEdges appends each distinct edge of add to dst once, in the
+// order add first holds it. It does not search dst: the caller passes one
+// resource's edges at a time, and edges of different resources differ in
+// their consumer, so they are never duplicates.
 func appendUniqueEdges(dst, add []UnionEdge) []UnionEdge {
 	seen := make(map[UnionEdge]bool, len(add))
 	for _, e := range add {

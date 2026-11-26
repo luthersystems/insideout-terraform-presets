@@ -99,10 +99,14 @@ const redactedPlaceholder = "***"
 // one ResourceDiff per address that differs. Resources in old but not new
 // produce Action="removed"; resources in new but not old produce
 // Action="added"; same address on both sides with any Tier or attribute
-// difference produces Action="modified". Attribute values come from typed
-// Attrs, or from the legacy Attributes map for rows written before Attrs
-// existed (importedDesiredAttrs), so a row moved from one to the other with
-// the same values shows no diff.
+// difference produces Action="modified". Attribute values are what emit
+// reads (importedDesiredAttrs): typed Attrs when set, otherwise the legacy
+// Attributes map of a row written before Attrs existed. A row moved from one
+// to the other with the same values shows no diff: an expression compares
+// by its constant value or its text, a JSON string by the document it
+// holds, a one-element list by its block, and the typed side's nested
+// blocks and computed-only attributes the legacy row lacks are left out.
+// Attrs that do not decode set ResourceDiff.Error and leave Changes empty.
 //
 // Field-level diffs respect the curated Layer 2 policy for the resource
 // type:
@@ -113,7 +117,10 @@ const redactedPlaceholder = "***"
 //   - RelationshipOnly fields appear with the RelationshipOnly flag set so
 //     renderers can show them as graph references rather than scalar edits.
 //   - Sensitive / Redacted fields have From / To replaced with "***" and
-//     Redacted=true.
+//     Redacted=true. This holds at nested paths too (a block's attribute,
+//     a map entry, a field inside a legacy JSON string): a value whose
+//     contents the policy cannot place, but which has a Hidden or redacted
+//     path under it, is redacted whole.
 //   - ChangeRisk, Role, Pillar, and EditPolicy are populated from the
 //     curated FieldPolicy so renderers can show plan-tied confirmation
 //     badges and policy grouping without re-querying the registry.
