@@ -10,9 +10,10 @@ import (
 )
 
 // TestEveryDiscoverableTypeHasTypedModel pins that reverse import can write
-// typed Attrs for every type it can discover. genconfig and the plan backfill
-// write the legacy Attributes map only for a type with no generated model, so
-// a discoverable type without one would keep the deprecated field alive
+// typed Attrs for every type it can discover. genconfig writes the legacy
+// Attributes map only for a type with no generated model (the plan backfill
+// never writes it), so a discoverable type without one would keep the
+// deprecated field alive
 // (luthersystems/insideout-terraform-presets#921). A type that fails here
 // needs adding to the codegen input (registry.AWSCodegenTypes or
 // GoogleCodegenTypes), then `make refresh-schemas gen-imported`.
