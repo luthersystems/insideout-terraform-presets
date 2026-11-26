@@ -2,8 +2,12 @@ package composer
 
 import (
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
+
+	"github.com/hashicorp/hcl/v2"
+	"github.com/hashicorp/hcl/v2/hclsyntax"
 
 	"github.com/luthersystems/insideout-terraform-presets/pkg/composer/imported"
 	"github.com/luthersystems/insideout-terraform-presets/pkg/composer/imported/policy"
@@ -275,11 +279,14 @@ func approvalCompletenessIssue(issueField, path string, ap *imported.FieldEditAp
 // re-import (or other writer) clobbered the pending edit; per decision #19
 // the operator must explicitly resolve before apply.
 //
-// The desired value is typed Attrs merged over the legacy Attributes map
-// (importedDesiredAttrs), passed through comparableAttrValue: at any depth
-// an expression of constants (jsonencode({...})) compares by its evaluated
-// value, and any other expression by its source text, the form a FieldEdit
-// holds. Two JSON documents compare by decoded value. Returns no issue when
+// The desired value is what emit reads (importedDesiredAttrs): typed Attrs
+// when set, else the legacy Attributes map. It is passed through
+// comparableAttrValue: at any depth an expression of constants
+// (jsonencode({...})) compares by its evaluated value, and any other
+// expression by its source text, the form a FieldEdit holds. Two JSON
+// documents compare by decoded value. A NewValue that is the expression's
+// own text, laid out differently or with the same constant value, is a
+// match (exprTextEqual). Returns no issue when
 // either side cannot be observed deterministically (nested paths, Attrs that
 // do not decode — ValidateImportedResourceAuthorization reports those — or
 // absent NewValue); the structural Phase 1 validators and The InsideOut
@@ -307,22 +314,69 @@ func evaluateReimportConflict(issueField, path string, edit imported.FieldEdit, 
 	}, true
 }
 
-// exprTextEqual reports whether desired is an expression whose source text
-// is the edit's NewValue. An edit may carry the expression as written
-// ("jsonencode({ ... })"); comparing only the evaluated value would call
-// that a conflict.
+// exprTextEqual reports whether desired is an expression and newValue (a
+// string or RawExpr) is the same expression: the same source tokens, with
+// layout (spaces, newlines, a comma before a closing bracket) ignored, or,
+// for constant text, the same evaluated value. An edit may carry the
+// expression as written ("jsonencode({ ... })"); comparing only the
+// evaluated desired value with the raw text would call that a conflict.
 func exprTextEqual(desired, newValue any) bool {
 	expr, ok := desired.(RawExpr)
 	if !ok {
 		return false
 	}
+	var text string
 	switch nv := newValue.(type) {
 	case string:
-		return strings.TrimSpace(nv) == strings.TrimSpace(expr.Expr)
+		text = nv
 	case RawExpr:
-		return strings.TrimSpace(nv.Expr) == strings.TrimSpace(expr.Expr)
+		text = nv.Expr
+	default:
+		return false
 	}
-	return false
+	a, aOK := exprTokens(expr.Expr)
+	b, bOK := exprTokens(text)
+	if aOK && bOK && slices.Equal(a, b) {
+		return true
+	}
+	want, wantOK := evalConstantExpr(expr.Expr)
+	got, gotOK := evalConstantExpr(text)
+	return wantOK && gotOK && attrValuesEqual(want, got)
+}
+
+// exprTokens returns the tokens of an HCL expression without layout:
+// newlines and comments are dropped, and so is a comma right before a
+// closing bracket, brace or parenthesis.
+func exprTokens(src string) ([]string, bool) {
+	toks, diags := hclsyntax.LexExpression([]byte(src), "edit", hcl.InitialPos)
+	if diags.HasErrors() {
+		return nil, false
+	}
+	var out []string
+	for i, tok := range toks {
+		switch tok.Type {
+		case hclsyntax.TokenNewline, hclsyntax.TokenComment, hclsyntax.TokenEOF:
+			continue
+		case hclsyntax.TokenComma:
+			if next, ok := nextSignificantToken(toks, i+1); ok {
+				switch next {
+				case hclsyntax.TokenCBrack, hclsyntax.TokenCBrace, hclsyntax.TokenCParen:
+					continue
+				}
+			}
+		}
+		out = append(out, string(rune(tok.Type))+string(tok.Bytes))
+	}
+	return out, true
+}
+
+func nextSignificantToken(toks hclsyntax.Tokens, from int) (hclsyntax.TokenType, bool) {
+	for _, tok := range toks[from:] {
+		if tok.Type != hclsyntax.TokenNewline && tok.Type != hclsyntax.TokenComment {
+			return tok.Type, true
+		}
+	}
+	return 0, false
 }
 
 // lookupTopLevelAttribute returns the value at path in attrs when the path

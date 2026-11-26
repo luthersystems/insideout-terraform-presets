@@ -159,9 +159,19 @@ func ValidateAll(
 // dedupeAndSortIssues returns a deterministic, deduped copy of issues. Two
 // issues are duplicates iff (Field, Code, Reason) match exactly.
 func dedupeAndSortIssues(in []ValidationIssue) []ValidationIssue {
-	out := dedupeIssues(in)
-	if len(out) == 0 {
+	if len(in) == 0 {
 		return nil
+	}
+	type key struct{ field, code, reason string }
+	seen := make(map[key]struct{}, len(in))
+	out := make([]ValidationIssue, 0, len(in))
+	for _, iss := range in {
+		k := key{iss.Field, iss.Code, iss.Reason}
+		if _, ok := seen[k]; ok {
+			continue
+		}
+		seen[k] = struct{}{}
+		out = append(out, iss)
 	}
 	sort.SliceStable(out, func(i, j int) bool {
 		if out[i].Field != out[j].Field {
@@ -175,24 +185,29 @@ func dedupeAndSortIssues(in []ValidationIssue) []ValidationIssue {
 	return out
 }
 
-// dedupeIssues returns issues without duplicates, in their first order.
-// Two issues are duplicates iff (Field, Code, Reason) match exactly. Several
-// validators raise the same issue for one cause (imported Attrs that do not
-// decode are read by the structural, authorization and wiring checks), and
-// the caller should see it once.
+// dedupeIssues returns issues without exact duplicates (every field
+// equal), in their first order. Several validators raise the same issue for
+// one cause (imported Attrs that do not decode are read by the structural,
+// authorization and wiring checks), and the caller should see it once. An
+// issue that differs in any field is kept.
 func dedupeIssues(in []ValidationIssue) []ValidationIssue {
 	if len(in) == 0 {
 		return in
 	}
-	type key struct{ field, code, reason string }
-	seen := make(map[key]struct{}, len(in))
+	seen := make(map[string]struct{}, len(in))
 	out := make([]ValidationIssue, 0, len(in))
 	for _, iss := range in {
-		k := key{iss.Field, iss.Code, iss.Reason}
-		if _, ok := seen[k]; ok {
+		// Every field is a string or a string slice, so the JSON form is
+		// a complete, exact key.
+		b, err := json.Marshal(iss)
+		if err != nil {
+			out = append(out, iss)
 			continue
 		}
-		seen[k] = struct{}{}
+		if _, ok := seen[string(b)]; ok {
+			continue
+		}
+		seen[string(b)] = struct{}{}
 		out = append(out, iss)
 	}
 	return out

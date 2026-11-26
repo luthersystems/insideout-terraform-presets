@@ -246,10 +246,11 @@ func removedResourceDiff(ir imported.ImportedResource) ResourceDiff {
 // attribute deltas) — DiffImportedResources skips no-op modifies entirely.
 //
 // When exactly one side is a legacy-only row (Attributes and no typed
-// Attrs), the typed side's nested blocks and computed-only attributes that
-// the legacy side lacks are left out (dropLegacyUnheldKeys). The legacy map
-// never stored them, so showing them would flag every row the first time it
-// moves to typed Attrs. Every other key is compared as usual.
+// Attrs), the typed side's nested blocks that the legacy side lacks are left
+// out (dropLegacyUnheldBlocks), and so are the keys emit never writes on
+// either side: id and computed-only attributes (dropUnemittedKeys). The two
+// forms differ in these, so showing them would flag every row the first
+// time it moves to typed Attrs. Every other key is compared as usual.
 func modifiedResourceDiff(oldIR, newIR imported.ImportedResource) (ResourceDiff, bool) {
 	rd := ResourceDiff{
 		Address: newIR.Identity.Address,
@@ -278,11 +279,14 @@ func modifiedResourceDiff(oldIR, newIR imported.ImportedResource) (ResourceDiff,
 		}
 		return rd, true
 	}
-	switch {
-	case legacyOnlyRow(oldIR) && !legacyOnlyRow(newIR):
-		newAttrs = dropLegacyUnheldKeys(newIR.Identity.Type, oldAttrs, newAttrs)
-	case legacyOnlyRow(newIR) && !legacyOnlyRow(oldIR):
-		oldAttrs = dropLegacyUnheldKeys(newIR.Identity.Type, newAttrs, oldAttrs)
+	if legacyOnlyRow(oldIR) != legacyOnlyRow(newIR) {
+		tfType := newIR.Identity.Type
+		if legacyOnlyRow(oldIR) {
+			newAttrs = dropLegacyUnheldBlocks(tfType, oldAttrs, newAttrs)
+		} else {
+			oldAttrs = dropLegacyUnheldBlocks(tfType, newAttrs, oldAttrs)
+		}
+		oldAttrs, newAttrs = dropUnemittedKeys(tfType, oldAttrs), dropUnemittedKeys(tfType, newAttrs)
 	}
 	rd.Changes = diffAttributeMaps(newIR.Identity.Type, oldAttrs, newAttrs)
 	if !tierChanged && len(rd.Changes) == 0 {
@@ -295,24 +299,39 @@ func diffDecodeError(ir imported.ImportedResource, err error) string {
 	return fmt.Sprintf("decode typed Attrs for %q failed: %s", ir.Identity.Type, err.Error())
 }
 
-// dropLegacyUnheldKeys returns typed without the keys the legacy map could
-// not hold and does not have: nested blocks (the legacy map kept only
-// top-level attributes) and computed-only attributes (generate-config-out
-// never writes them, so genconfig never stored them). Every other key stays,
-// so a key the legacy row had and the typed row lost still shows as a
-// removal, and a configurable key only the typed row has as an addition.
-func dropLegacyUnheldKeys(tfType string, legacy, typed map[string]any) map[string]any {
-	goType, schema, ok := generated.Lookup(tfType)
+// dropLegacyUnheldBlocks returns typed without the nested blocks the
+// legacy map does not have: the legacy map kept only top-level attributes.
+// A key the legacy row had and the typed row lost still shows as a removal,
+// and a configurable attribute only the typed row has as an addition.
+func dropLegacyUnheldBlocks(tfType string, legacy, typed map[string]any) map[string]any {
+	goType, _, ok := generated.Lookup(tfType)
 	if !ok {
 		return typed
 	}
 	blocks := typedBlockFields(goType)
 	out := make(map[string]any, len(typed))
 	for k, v := range typed {
-		if _, inLegacy := legacy[k]; !inLegacy {
-			if blocks[k] {
-				continue
-			}
+		if _, inLegacy := legacy[k]; !inLegacy && blocks[k] {
+			continue
+		}
+		out[k] = v
+	}
+	return out
+}
+
+// dropUnemittedKeys returns attrs without the keys emit never writes: id
+// (it belongs in the import block) and computed-only attributes, as
+// emitOpaqueAttrsBody and stripResourceIDAttr skip them. The two forms of a
+// row differ in these keys (the legacy map stored arn, typed Attrs may not),
+// so comparing them would show changes the composed HCL does not have.
+func dropUnemittedKeys(tfType string, attrs map[string]any) map[string]any {
+	_, schema, hasSchema := generated.Lookup(tfType)
+	out := make(map[string]any, len(attrs))
+	for k, v := range attrs {
+		if k == computedResourceIDAttr {
+			continue
+		}
+		if hasSchema {
 			if fs, ok := schema[k]; ok && !fs.Configurable() {
 				continue
 			}
@@ -396,7 +415,7 @@ func appendValueDiffs(diffs []ResourceFieldDiff, polMap policy.Map, nested map[s
 		return append(diffs, makeFieldDiff(path, redactedPlaceholder, redactedPlaceholder, entry, hasEntry))
 	}
 	if !nested[logical] {
-		if leafValuesEqual(old, new) {
+		if leafValuesEqual(old, new) || blockFormsEqual(old, new) {
 			return diffs
 		}
 		return append(diffs, makeFieldDiff(path, stringifyAttr(old), stringifyAttr(new), entry, hasEntry))
@@ -494,8 +513,10 @@ func jsonDocOrSelf(v any) any {
 }
 
 // unwrapSingleton returns the element of v when v is a list of at most one
-// element and other is not a list, so a block stored as a one-element list
-// compares with the same block stored as a map. An empty list becomes nil.
+// block (a map) and other is not a list, so a block stored as a one-element
+// list compares with the same block stored as a map. An empty list becomes
+// nil when other is a map. A list of one scalar stays a list: ["a"] and "a"
+// differ.
 func unwrapSingleton(v, other any) any {
 	l, ok := v.([]any)
 	if !ok || len(l) > 1 {
@@ -504,7 +525,26 @@ func unwrapSingleton(v, other any) any {
 	if _, otherList := other.([]any); otherList {
 		return v
 	}
-	return listAt(l, 0)
+	_, otherMap := other.(map[string]any)
+	if len(l) == 0 {
+		if otherMap {
+			return nil
+		}
+		return v
+	}
+	if _, elemMap := l[0].(map[string]any); elemMap || otherMap {
+		return l[0]
+	}
+	return v
+}
+
+// blockFormsEqual reports whether old and new are the same block in
+// different forms: a map, a one-element list of it, or a JSON string of
+// either.
+func blockFormsEqual(old, new any) bool {
+	old, new = jsonDocOrSelf(old), jsonDocOrSelf(new)
+	old, new = unwrapSingleton(old, new), unwrapSingleton(new, old)
+	return leafValuesEqual(old, new)
 }
 
 // bothMaps reports whether old and new are maps (or absent), at least one
