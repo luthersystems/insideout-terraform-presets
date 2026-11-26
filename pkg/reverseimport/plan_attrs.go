@@ -139,38 +139,34 @@ func configurablePlanValues(tfType string, values map[string]any, sensitive any)
 	return out
 }
 
+// backfillResourceAttrs adds the plan values that typed Attrs lacks. It
+// writes only Attrs: the deprecated Attributes map is left as it was, so a
+// legacy row keeps its old map until reliable migrates it (#921).
 func backfillResourceAttrs(resource *imported.ImportedResource, tfType string, values map[string]any) (bool, error) {
 	typed, err := decodeAttrsObject(resource.Attrs)
 	if err != nil {
 		return false, fmt.Errorf("resource %q: decode typed attrs: %w", resource.Identity.Address, err)
 	}
-	legacy := resource.Attributes
-	if legacy == nil {
-		legacy = map[string]any{}
-	}
 	changed := false
 	for key, value := range values {
-		if _, ok := typed[key]; !ok {
-			rawValue, err := json.Marshal(WrapPlanAttrValue(value))
-			if err != nil {
-				return false, fmt.Errorf("resource %q: marshal plan value %q: %w", resource.Identity.Address, key, err)
-			}
-			candidate := cloneRawObject(typed)
-			candidate[key] = rawValue
-			candidateRaw, err := json.Marshal(candidate)
-			if err != nil {
-				return false, fmt.Errorf("resource %q: marshal typed attrs candidate: %w", resource.Identity.Address, err)
-			}
-			if _, err := generated.UnmarshalAttrs(tfType, candidateRaw); err != nil {
-				continue
-			}
-			typed = candidate
-			changed = true
-			if _, legacyHasKey := legacy[key]; !legacyHasKey {
-				legacy[key] = value
-			}
+		if _, ok := typed[key]; ok {
 			continue
 		}
+		rawValue, err := json.Marshal(WrapPlanAttrValue(value))
+		if err != nil {
+			return false, fmt.Errorf("resource %q: marshal plan value %q: %w", resource.Identity.Address, key, err)
+		}
+		candidate := cloneRawObject(typed)
+		candidate[key] = rawValue
+		candidateRaw, err := json.Marshal(candidate)
+		if err != nil {
+			return false, fmt.Errorf("resource %q: marshal typed attrs candidate: %w", resource.Identity.Address, err)
+		}
+		if _, err := generated.UnmarshalAttrs(tfType, candidateRaw); err != nil {
+			continue
+		}
+		typed = candidate
+		changed = true
 	}
 	if !changed {
 		return false, nil
@@ -183,9 +179,6 @@ func backfillResourceAttrs(resource *imported.ImportedResource, tfType string, v
 		return false, fmt.Errorf("resource %q: validate typed attrs: %w", resource.Identity.Address, err)
 	}
 	resource.Attrs = raw
-	if len(legacy) > 0 {
-		resource.Attributes = legacy
-	}
 	return true, nil
 }
 

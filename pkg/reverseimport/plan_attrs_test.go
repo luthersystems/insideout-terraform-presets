@@ -2,6 +2,7 @@ package reverseimport
 
 import (
 	"encoding/json"
+	"reflect"
 	"testing"
 
 	tfjson "github.com/hashicorp/terraform-json"
@@ -64,19 +65,11 @@ func TestBackfillImportedAttrsFromPlanFillsMissingTypedBlocks(t *testing.T) {
 	if len(got) != 1 {
 		t.Fatalf("len(got)=%d, want 1", len(got))
 	}
-	if _, ok := got[0].Attributes["arn"]; ok {
-		t.Fatalf("computed-only arn must not be backfilled into legacy Attributes: %#v", got[0].Attributes)
-	}
-	tags, ok := got[0].Attributes["tags"].(map[string]any)
-	if !ok {
-		t.Fatalf("legacy tags = %#v, want map[string]any", got[0].Attributes["tags"])
-	}
-	if tags["InsideOutImported"] != nil {
-		t.Fatalf("existing tags must not be overwritten by plan/provenance tags: %#v", tags)
-	}
-	versioning, ok := got[0].Attributes["versioning"].([]any)
-	if !ok || len(versioning) != 1 {
-		t.Fatalf("legacy versioning = %#v, want one block", got[0].Attributes["versioning"])
+	// The backfill writes typed Attrs only; a legacy Attributes map on the
+	// input is left as it was (#921).
+	wantLegacy := map[string]any{"bucket": "luther-state", "tags": map[string]any{"Project": "core"}}
+	if !reflect.DeepEqual(got[0].Attributes, wantLegacy) {
+		t.Fatalf("legacy Attributes must not change: got %#v, want %#v", got[0].Attributes, wantLegacy)
 	}
 
 	decoded, err := generated.UnmarshalAttrs("aws_s3_bucket", got[0].Attrs)
@@ -122,7 +115,7 @@ func TestBackfillImportedAttrsFromPlanSkipsSensitivePlanValues(t *testing.T) {
 		t.Fatalf("BackfillImportedAttrsFromPlan: %v", err)
 	}
 	if changed {
-		t.Fatalf("sensitive-only plan value should not change resource: %#v", got[0].Attributes)
+		t.Fatalf("sensitive-only plan value should not change resource: %s", got[0].Attrs)
 	}
 	if string(got[0].Attrs) != `{"name":{"literal":"orders"}}` {
 		t.Fatalf("Attrs changed despite only sensitive missing fields: %s", got[0].Attrs)
