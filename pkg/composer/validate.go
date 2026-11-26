@@ -157,7 +157,9 @@ func ValidateAll(
 }
 
 // dedupeAndSortIssues returns a deterministic, deduped copy of issues. Two
-// issues are duplicates iff (Field, Code, Reason) match exactly.
+// issues are duplicates iff (Field, Code, Reason) match exactly. This is
+// looser than dedupeIssues on purpose: ValidateAll has always deduped on
+// these three, and its callers rely on that.
 func dedupeAndSortIssues(in []ValidationIssue) []ValidationIssue {
 	if len(in) == 0 {
 		return nil
@@ -189,7 +191,9 @@ func dedupeAndSortIssues(in []ValidationIssue) []ValidationIssue {
 // equal), in their first order. Several validators raise the same issue for
 // one cause (imported Attrs that do not decode are read by the structural,
 // authorization and wiring checks), and the caller should see it once. An
-// issue that differs in any field is kept.
+// issue that differs in any field is kept. This is stricter than
+// dedupeAndSortIssues on purpose: compose never deduped before, so it drops
+// only what is certainly a copy.
 func dedupeIssues(in []ValidationIssue) []ValidationIssue {
 	if len(in) == 0 {
 		return in
