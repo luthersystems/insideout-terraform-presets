@@ -15189,6 +15189,714 @@
             "description_kind": "plain"
           }
         },
+        "aws_cognito_user_pool": {
+          "version": 0,
+          "block": {
+            "attributes": {
+              "alias_attributes": {
+                "type": [
+                  "set",
+                  "string"
+                ],
+                "description_kind": "plain",
+                "optional": true
+              },
+              "arn": {
+                "type": "string",
+                "description_kind": "plain",
+                "computed": true
+              },
+              "auto_verified_attributes": {
+                "type": [
+                  "set",
+                  "string"
+                ],
+                "description_kind": "plain",
+                "optional": true
+              },
+              "creation_date": {
+                "type": "string",
+                "description_kind": "plain",
+                "computed": true
+              },
+              "custom_domain": {
+                "type": "string",
+                "description_kind": "plain",
+                "computed": true
+              },
+              "deletion_protection": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true
+              },
+              "domain": {
+                "type": "string",
+                "description_kind": "plain",
+                "computed": true
+              },
+              "email_verification_message": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "email_verification_subject": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "endpoint": {
+                "type": "string",
+                "description_kind": "plain",
+                "computed": true
+              },
+              "estimated_number_of_users": {
+                "type": "number",
+                "description_kind": "plain",
+                "computed": true
+              },
+              "id": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "last_modified_date": {
+                "type": "string",
+                "description_kind": "plain",
+                "computed": true
+              },
+              "mfa_configuration": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true
+              },
+              "name": {
+                "type": "string",
+                "description_kind": "plain",
+                "required": true
+              },
+              "region": {
+                "type": "string",
+                "description": "Region where this resource will be [managed](https://docs.aws.amazon.com/general/latest/gr/rande.html#regional-endpoints). Defaults to the Region set in the [provider configuration](https://registry.terraform.io/providers/hashicorp/aws/latest/docs#aws-configuration-reference).",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "sms_authentication_message": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true
+              },
+              "sms_verification_message": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "tags": {
+                "type": [
+                  "map",
+                  "string"
+                ],
+                "description_kind": "plain",
+                "optional": true
+              },
+              "tags_all": {
+                "type": [
+                  "map",
+                  "string"
+                ],
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "user_pool_tier": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "username_attributes": {
+                "type": [
+                  "set",
+                  "string"
+                ],
+                "description_kind": "plain",
+                "optional": true
+              }
+            },
+            "block_types": {
+              "account_recovery_setting": {
+                "nesting_mode": "list",
+                "block": {
+                  "block_types": {
+                    "recovery_mechanism": {
+                      "nesting_mode": "set",
+                      "block": {
+                        "attributes": {
+                          "name": {
+                            "type": "string",
+                            "description_kind": "plain",
+                            "required": true
+                          },
+                          "priority": {
+                            "type": "number",
+                            "description_kind": "plain",
+                            "required": true
+                          }
+                        },
+                        "description_kind": "plain"
+                      },
+                      "max_items": 2
+                    }
+                  },
+                  "description_kind": "plain"
+                },
+                "max_items": 1
+              },
+              "admin_create_user_config": {
+                "nesting_mode": "list",
+                "block": {
+                  "attributes": {
+                    "allow_admin_create_user_only": {
+                      "type": "bool",
+                      "description_kind": "plain",
+                      "optional": true
+                    }
+                  },
+                  "block_types": {
+                    "invite_message_template": {
+                      "nesting_mode": "list",
+                      "block": {
+                        "attributes": {
+                          "email_message": {
+                            "type": "string",
+                            "description_kind": "plain",
+                            "optional": true
+                          },
+                          "email_subject": {
+                            "type": "string",
+                            "description_kind": "plain",
+                            "optional": true
+                          },
+                          "sms_message": {
+                            "type": "string",
+                            "description_kind": "plain",
+                            "optional": true
+                          }
+                        },
+                        "description_kind": "plain"
+                      },
+                      "max_items": 1
+                    }
+                  },
+                  "description_kind": "plain"
+                },
+                "max_items": 1
+              },
+              "device_configuration": {
+                "nesting_mode": "list",
+                "block": {
+                  "attributes": {
+                    "challenge_required_on_new_device": {
+                      "type": "bool",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "device_only_remembered_on_user_prompt": {
+                      "type": "bool",
+                      "description_kind": "plain",
+                      "optional": true
+                    }
+                  },
+                  "description_kind": "plain"
+                },
+                "max_items": 1
+              },
+              "email_configuration": {
+                "nesting_mode": "list",
+                "block": {
+                  "attributes": {
+                    "configuration_set": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "email_sending_account": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "from_email_address": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "reply_to_email_address": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "source_arn": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true
+                    }
+                  },
+                  "description_kind": "plain"
+                },
+                "max_items": 1
+              },
+              "email_mfa_configuration": {
+                "nesting_mode": "list",
+                "block": {
+                  "attributes": {
+                    "message": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "subject": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true
+                    }
+                  },
+                  "description_kind": "plain"
+                },
+                "max_items": 1
+              },
+              "lambda_config": {
+                "nesting_mode": "list",
+                "block": {
+                  "attributes": {
+                    "create_auth_challenge": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "custom_message": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "define_auth_challenge": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "kms_key_id": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "post_authentication": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "post_confirmation": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "pre_authentication": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "pre_sign_up": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "pre_token_generation": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true,
+                      "computed": true
+                    },
+                    "user_migration": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "verify_auth_challenge_response": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true
+                    }
+                  },
+                  "block_types": {
+                    "custom_email_sender": {
+                      "nesting_mode": "list",
+                      "block": {
+                        "attributes": {
+                          "lambda_arn": {
+                            "type": "string",
+                            "description_kind": "plain",
+                            "required": true
+                          },
+                          "lambda_version": {
+                            "type": "string",
+                            "description_kind": "plain",
+                            "required": true
+                          }
+                        },
+                        "description_kind": "plain"
+                      },
+                      "max_items": 1
+                    },
+                    "custom_sms_sender": {
+                      "nesting_mode": "list",
+                      "block": {
+                        "attributes": {
+                          "lambda_arn": {
+                            "type": "string",
+                            "description_kind": "plain",
+                            "required": true
+                          },
+                          "lambda_version": {
+                            "type": "string",
+                            "description_kind": "plain",
+                            "required": true
+                          }
+                        },
+                        "description_kind": "plain"
+                      },
+                      "max_items": 1
+                    },
+                    "pre_token_generation_config": {
+                      "nesting_mode": "list",
+                      "block": {
+                        "attributes": {
+                          "lambda_arn": {
+                            "type": "string",
+                            "description_kind": "plain",
+                            "required": true
+                          },
+                          "lambda_version": {
+                            "type": "string",
+                            "description_kind": "plain",
+                            "required": true
+                          }
+                        },
+                        "description_kind": "plain"
+                      },
+                      "max_items": 1
+                    }
+                  },
+                  "description_kind": "plain"
+                },
+                "max_items": 1
+              },
+              "password_policy": {
+                "nesting_mode": "list",
+                "block": {
+                  "attributes": {
+                    "minimum_length": {
+                      "type": "number",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "password_history_size": {
+                      "type": "number",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "require_lowercase": {
+                      "type": "bool",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "require_numbers": {
+                      "type": "bool",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "require_symbols": {
+                      "type": "bool",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "require_uppercase": {
+                      "type": "bool",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "temporary_password_validity_days": {
+                      "type": "number",
+                      "description_kind": "plain",
+                      "optional": true,
+                      "computed": true
+                    }
+                  },
+                  "description_kind": "plain"
+                },
+                "max_items": 1
+              },
+              "schema": {
+                "nesting_mode": "set",
+                "block": {
+                  "attributes": {
+                    "attribute_data_type": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "required": true
+                    },
+                    "developer_only_attribute": {
+                      "type": "bool",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "mutable": {
+                      "type": "bool",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "name": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "required": true
+                    },
+                    "required": {
+                      "type": "bool",
+                      "description_kind": "plain",
+                      "optional": true
+                    }
+                  },
+                  "block_types": {
+                    "number_attribute_constraints": {
+                      "nesting_mode": "list",
+                      "block": {
+                        "attributes": {
+                          "max_value": {
+                            "type": "string",
+                            "description_kind": "plain",
+                            "optional": true
+                          },
+                          "min_value": {
+                            "type": "string",
+                            "description_kind": "plain",
+                            "optional": true
+                          }
+                        },
+                        "description_kind": "plain"
+                      },
+                      "max_items": 1
+                    },
+                    "string_attribute_constraints": {
+                      "nesting_mode": "list",
+                      "block": {
+                        "attributes": {
+                          "max_length": {
+                            "type": "string",
+                            "description_kind": "plain",
+                            "optional": true
+                          },
+                          "min_length": {
+                            "type": "string",
+                            "description_kind": "plain",
+                            "optional": true
+                          }
+                        },
+                        "description_kind": "plain"
+                      },
+                      "max_items": 1
+                    }
+                  },
+                  "description_kind": "plain"
+                },
+                "max_items": 50
+              },
+              "sign_in_policy": {
+                "nesting_mode": "list",
+                "block": {
+                  "attributes": {
+                    "allowed_first_auth_factors": {
+                      "type": [
+                        "set",
+                        "string"
+                      ],
+                      "description_kind": "plain",
+                      "optional": true
+                    }
+                  },
+                  "description_kind": "plain"
+                },
+                "max_items": 1
+              },
+              "sms_configuration": {
+                "nesting_mode": "list",
+                "block": {
+                  "attributes": {
+                    "external_id": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "required": true
+                    },
+                    "sns_caller_arn": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "required": true
+                    },
+                    "sns_region": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true,
+                      "computed": true
+                    }
+                  },
+                  "description_kind": "plain"
+                },
+                "max_items": 1
+              },
+              "software_token_mfa_configuration": {
+                "nesting_mode": "list",
+                "block": {
+                  "attributes": {
+                    "enabled": {
+                      "type": "bool",
+                      "description_kind": "plain",
+                      "required": true
+                    }
+                  },
+                  "description_kind": "plain"
+                },
+                "max_items": 1
+              },
+              "user_attribute_update_settings": {
+                "nesting_mode": "list",
+                "block": {
+                  "attributes": {
+                    "attributes_require_verification_before_update": {
+                      "type": [
+                        "set",
+                        "string"
+                      ],
+                      "description_kind": "plain",
+                      "required": true
+                    }
+                  },
+                  "description_kind": "plain"
+                },
+                "max_items": 1
+              },
+              "user_pool_add_ons": {
+                "nesting_mode": "list",
+                "block": {
+                  "attributes": {
+                    "advanced_security_mode": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "required": true
+                    }
+                  },
+                  "block_types": {
+                    "advanced_security_additional_flows": {
+                      "nesting_mode": "list",
+                      "block": {
+                        "attributes": {
+                          "custom_auth_mode": {
+                            "type": "string",
+                            "description_kind": "plain",
+                            "optional": true,
+                            "computed": true
+                          }
+                        },
+                        "description_kind": "plain"
+                      },
+                      "max_items": 1
+                    }
+                  },
+                  "description_kind": "plain"
+                },
+                "max_items": 1
+              },
+              "username_configuration": {
+                "nesting_mode": "list",
+                "block": {
+                  "attributes": {
+                    "case_sensitive": {
+                      "type": "bool",
+                      "description_kind": "plain",
+                      "optional": true,
+                      "computed": true
+                    }
+                  },
+                  "description_kind": "plain"
+                },
+                "max_items": 1
+              },
+              "verification_message_template": {
+                "nesting_mode": "list",
+                "block": {
+                  "attributes": {
+                    "default_email_option": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "email_message": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true,
+                      "computed": true
+                    },
+                    "email_message_by_link": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true,
+                      "computed": true
+                    },
+                    "email_subject": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true,
+                      "computed": true
+                    },
+                    "email_subject_by_link": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true,
+                      "computed": true
+                    },
+                    "sms_message": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true,
+                      "computed": true
+                    }
+                  },
+                  "description_kind": "plain"
+                },
+                "max_items": 1
+              },
+              "web_authn_configuration": {
+                "nesting_mode": "list",
+                "block": {
+                  "attributes": {
+                    "relying_party_id": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "user_verification": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true
+                    }
+                  },
+                  "description_kind": "plain"
+                },
+                "max_items": 1
+              }
+            },
+            "description_kind": "plain"
+          }
+        },
         "aws_cognito_user_pool_client": {
           "version": 0,
           "block": {
@@ -29998,6 +30706,56 @@
             "description_kind": "plain"
           }
         },
+        "aws_opensearchserverless_access_policy": {
+          "version": 0,
+          "block": {
+            "attributes": {
+              "description": {
+                "type": "string",
+                "description": "Description of the policy. Typically used to store information about the permissions defined in the policy.",
+                "description_kind": "plain",
+                "optional": true
+              },
+              "id": {
+                "type": "string",
+                "description_kind": "plain",
+                "computed": true
+              },
+              "name": {
+                "type": "string",
+                "description": "Name of the policy.",
+                "description_kind": "plain",
+                "required": true
+              },
+              "policy": {
+                "type": "string",
+                "description": "JSON policy document to use as the content for the new policy.",
+                "description_kind": "plain",
+                "required": true
+              },
+              "policy_version": {
+                "type": "string",
+                "description": "Version of the policy.",
+                "description_kind": "plain",
+                "computed": true
+              },
+              "region": {
+                "type": "string",
+                "description": "Region where this resource will be [managed](https://docs.aws.amazon.com/general/latest/gr/rande.html#regional-endpoints). Defaults to the Region set in the [provider configuration](https://registry.terraform.io/providers/hashicorp/aws/latest/docs#aws-configuration-reference).",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "type": {
+                "type": "string",
+                "description": "Type of access policy. Must be `data`.",
+                "description_kind": "plain",
+                "required": true
+              }
+            },
+            "description_kind": "plain"
+          }
+        },
         "aws_opensearchserverless_collection": {
           "version": 0,
           "block": {
@@ -30135,6 +30893,56 @@
                   },
                   "description_kind": "plain"
                 }
+              }
+            },
+            "description_kind": "plain"
+          }
+        },
+        "aws_opensearchserverless_security_policy": {
+          "version": 0,
+          "block": {
+            "attributes": {
+              "description": {
+                "type": "string",
+                "description": "Description of the policy. Typically used to store information about the permissions defined in the policy.",
+                "description_kind": "plain",
+                "optional": true
+              },
+              "id": {
+                "type": "string",
+                "description_kind": "plain",
+                "computed": true
+              },
+              "name": {
+                "type": "string",
+                "description": "Name of the policy.",
+                "description_kind": "plain",
+                "required": true
+              },
+              "policy": {
+                "type": "string",
+                "description": "JSON policy document to use as the content for the new policy.",
+                "description_kind": "plain",
+                "required": true
+              },
+              "policy_version": {
+                "type": "string",
+                "description": "Version of the policy.",
+                "description_kind": "plain",
+                "computed": true
+              },
+              "region": {
+                "type": "string",
+                "description": "Region where this resource will be [managed](https://docs.aws.amazon.com/general/latest/gr/rande.html#regional-endpoints). Defaults to the Region set in the [provider configuration](https://registry.terraform.io/providers/hashicorp/aws/latest/docs#aws-configuration-reference).",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "type": {
+                "type": "string",
+                "description": "Type of security policy. One of `encryption` or `network`.",
+                "description_kind": "plain",
+                "required": true
               }
             },
             "description_kind": "plain"
