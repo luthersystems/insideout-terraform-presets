@@ -286,9 +286,12 @@ resource "aws_unmodeled_thing" "y" {
 			t.Errorf("report missing %q:\n%s", want, got)
 		}
 	}
-	for _, unwanted := range []string{"name", "timeouts.create", "aws_unmodeled_thing"} {
-		if strings.Contains(got, ": "+unwanted+"\n") || strings.Contains(got, unwanted+".y") {
+	for _, unwanted := range []string{"name", "timeouts.create"} {
+		if strings.Contains(got, ": "+unwanted+" is in generated.tf") {
 			t.Errorf("report should not name %q:\n%s", unwanted, got)
 		}
+	}
+	if strings.Contains(got, "aws_unmodeled_thing") {
+		t.Errorf("report should not name the unmodeled type:\n%s", got)
 	}
 }
