@@ -72,16 +72,19 @@ type UnionEdge struct {
 var resourceRefPattern = regexp.MustCompile(`(aws_|google_)[A-Za-z0-9_]+\.[A-Za-z_][A-Za-z0-9_]*\.[A-Za-z_][A-Za-z0-9_]*`)
 
 // extractImportedEdges walks every emit-eligible imported resource and
-// returns the cross-tier references its Attributes carry as RawExpr
-// values. The producer of each edge is whatever the RawExpr names
-// (a module call or another flat resource); the consumer is the imported
-// resource itself.
+// returns the cross-tier references its desired attributes carry as
+// expressions: Value.Expr in typed Attrs (top level and inside nested
+// blocks), or RawExpr values in the legacy Attributes map for rows written
+// before Attrs existed (importedDesiredAttrs). The producer of each edge is
+// whatever the expression names (a module call or another flat resource);
+// the consumer is the imported resource itself. ConsumerInput is the
+// attribute name, dotted for an attribute inside a nested block.
 //
 // Tier filtering matches isImportedTier plus the
 // ImportedMissing+ActionRemoveFromInsideOut exclusion: a `removed {}`
-// block does not consume any references, so its Attributes are ignored.
+// block does not consume any references, so its attributes are ignored.
 //
-// The function is deterministic: Attribute keys are walked in sorted
+// The function is deterministic: attribute keys are walked in sorted
 // order and within each value the parser yields traversals in source
 // order.
 func extractImportedEdges(irs []imported.ImportedResource) []UnionEdge {
@@ -94,17 +97,39 @@ func extractImportedEdges(irs []imported.ImportedResource) []UnionEdge {
 		if consumer.Addr == "" {
 			continue
 		}
-		keys := make([]string, 0, len(ir.Attributes))
-		for k := range ir.Attributes {
-			keys = append(keys, k)
+		edges = appendExprEdges(edges, importedDesiredAttrs(ir), consumer, "")
+	}
+	return edges
+}
+
+// appendExprEdges appends the edges of every RawExpr in attrs, walking
+// nested maps and lists in sorted key order. prefix is the dotted path of
+// attrs inside the resource ("" at the top level).
+func appendExprEdges(edges []UnionEdge, attrs map[string]any, consumer GraphNode, prefix string) []UnionEdge {
+	keys := make([]string, 0, len(attrs))
+	for k := range attrs {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	for _, k := range keys {
+		path := k
+		if prefix != "" {
+			path = prefix + "." + k
 		}
-		sort.Strings(keys)
-		for _, k := range keys {
-			re, ok := ir.Attributes[k].(RawExpr)
-			if !ok {
-				continue
-			}
-			edges = append(edges, traversalEdges(re.Expr, consumer, k)...)
+		edges = appendValueExprEdges(edges, attrs[k], consumer, path)
+	}
+	return edges
+}
+
+func appendValueExprEdges(edges []UnionEdge, v any, consumer GraphNode, path string) []UnionEdge {
+	switch t := v.(type) {
+	case RawExpr:
+		return append(edges, traversalEdges(t.Expr, consumer, path)...)
+	case map[string]any:
+		return appendExprEdges(edges, t, consumer, path)
+	case []any:
+		for _, elem := range t {
+			edges = appendValueExprEdges(edges, elem, consumer, path)
 		}
 	}
 	return edges
