@@ -395,8 +395,10 @@ func appendValueDiffs(diffs []ResourceFieldDiff, polMap policy.Map, nested map[s
 		return append(diffs, makeFieldDiff(path, stringifyAttr(old), stringifyAttr(new), entry, hasEntry))
 	}
 	// A JSON-string attribute with curated subpaths (the legacy map's form
-	// of push_config and friends) is walked as the object it holds.
-	old, new = jsonObjectOrSelf(old), jsonObjectOrSelf(new)
+	// of push_config and friends) is walked as the object or array it
+	// holds, and a one-element list of a block as the block itself.
+	old, new = jsonDocOrSelf(old), jsonDocOrSelf(new)
+	old, new = unwrapSingleton(old, new), unwrapSingleton(new, old)
 	if oldMap, newMap, ok := bothMaps(old, new); ok {
 		for _, k := range unionKeys(oldMap, newMap) {
 			diffs = appendValueDiffs(diffs, polMap, nested, path+"."+k, logical+"."+k, oldMap[k], newMap[k])
@@ -427,8 +429,12 @@ func appendValueDiffs(diffs []ResourceFieldDiff, polMap policy.Map, nested map[s
 }
 
 // sanitizeAttrValue returns v with every nested path the policy hides
-// dropped and every path it redacts replaced by the placeholder.
+// dropped and every path it redacts replaced by the placeholder. A JSON
+// string is sanitized as the document it holds. Any other scalar at a path
+// with Hidden or redacted paths under it is replaced by the placeholder:
+// its contents are unknown, so it may hold one of them.
 func sanitizeAttrValue(polMap policy.Map, logical string, v any) any {
+	v = jsonDocOrSelf(v)
 	switch t := v.(type) {
 	case map[string]any:
 		out := make(map[string]any, len(t))
@@ -451,6 +457,11 @@ func sanitizeAttrValue(polMap policy.Map, logical string, v any) any {
 			out[i] = sanitizeAttrValue(polMap, logical, e)
 		}
 		return out
+	case nil:
+		return nil
+	}
+	if projectionRedacted(logical, polMap) {
+		return redactedPlaceholder
 	}
 	return v
 }
@@ -461,16 +472,32 @@ func leafValuesEqual(a, b any) bool {
 	return attrValuesEqual(a, b) || stringifyAttr(a) == stringifyAttr(b)
 }
 
-// jsonObjectOrSelf returns the object a JSON-string value holds, or v.
-func jsonObjectOrSelf(v any) any {
+// jsonDocOrSelf returns the object or array a JSON-string value holds, or
+// v.
+func jsonDocOrSelf(v any) any {
 	if str, ok := v.(string); ok {
 		if doc, ok := decodeJSONDocument(str); ok {
-			if m, ok := doc.(map[string]any); ok {
-				return m
+			switch doc.(type) {
+			case map[string]any, []any:
+				return doc
 			}
 		}
 	}
 	return v
+}
+
+// unwrapSingleton returns the element of v when v is a list of at most one
+// element and other is not a list, so a block stored as a one-element list
+// compares with the same block stored as a map. An empty list becomes nil.
+func unwrapSingleton(v, other any) any {
+	l, ok := v.([]any)
+	if !ok || len(l) > 1 {
+		return v
+	}
+	if _, otherList := other.([]any); otherList {
+		return v
+	}
+	return listAt(l, 0)
 }
 
 // bothMaps reports whether old and new are maps (or absent), at least one
@@ -602,8 +629,9 @@ func jsonProjectionParents(tfType string, m policy.Map) map[string]bool {
 	return parents
 }
 
-// projectionRedacted reports whether any projection under parent is Hidden
-// or must be redacted, so a raw parent diff would leak it.
+// projectionRedacted reports whether any policy path under parent (a JSON
+// projection or a nested attribute) is Hidden or must be redacted, so
+// showing parent's raw value would leak it.
 func projectionRedacted(parent string, polMap policy.Map) bool {
 	for path, entry := range polMap {
 		if strings.HasPrefix(path, parent+".") && (entry.Visibility == policy.VisibilityHidden || redactionRequired(entry)) {

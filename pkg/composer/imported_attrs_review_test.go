@@ -91,19 +91,75 @@ func TestDiffAttributeMaps_NestedPolicyGuard(t *testing.T) {
 			}
 			newMap, _ := plainAtPath(goType, strings.Split(path, "."), diffSecretSentinel+"-new")
 			checked++
-			for name, pair := range map[string][2]map[string]any{
-				"added":    {nil, newMap},
-				"removed":  {oldMap, nil},
-				"modified": {oldMap, newMap},
-			} {
-				changes := diffAttributeMaps(tfType, pair[0], pair[1])
-				b, err := json.Marshal(changes)
-				require.NoError(t, err)
-				require.NotContainsf(t, string(b), diffSecretSentinel, "%s %s (%s): diff leaked the value: %s", tfType, path, name, b)
+			// The legacy map may hold the top-level value as a JSON string
+			// of the object or of a one-element array, or as any other
+			// scalar. Every pair of forms must stay redacted.
+			oldForms := legacyForms(t, oldMap)
+			newForms := legacyForms(t, newMap)
+			for oldName, o := range oldForms {
+				for newName, n := range newForms {
+					for name, pair := range map[string][2]map[string]any{
+						"added":    {nil, n},
+						"removed":  {o, nil},
+						"modified": {o, n},
+					} {
+						changes := diffAttributeMaps(tfType, pair[0], pair[1])
+						b, err := json.Marshal(changes)
+						require.NoError(t, err)
+						require.NotContainsf(t, string(b), diffSecretSentinel, "%s %s (%s, %s to %s): diff leaked the value: %s", tfType, path, name, oldName, newName, b)
+					}
+				}
 			}
 		}
 	}
 	require.Positive(t, checked, "the guard must check at least one nested entry")
+}
+
+// legacyForms returns m (one top-level key) in each form the legacy
+// Attributes map may hold its value: as typed decoding gives it, as a JSON
+// string of the object, as a JSON string of a one-element array, and as an
+// opaque scalar.
+func legacyForms(t *testing.T, m map[string]any) map[string]map[string]any {
+	t.Helper()
+	out := map[string]map[string]any{"typed": m}
+	for k, v := range m {
+		var obj any = v
+		if l, ok := v.([]any); ok && len(l) == 1 {
+			obj = l[0]
+		}
+		if _, ok := obj.(map[string]any); ok {
+			b, err := json.Marshal(obj)
+			require.NoError(t, err)
+			out["json object"] = map[string]any{k: string(b)}
+			b, err = json.Marshal([]any{obj})
+			require.NoError(t, err)
+			out["json array"] = map[string]any{k: string(b)}
+		}
+		b, err := json.Marshal(v)
+		require.NoError(t, err)
+		out["scalar"] = map[string]any{k: "opaque " + string(b)}
+	}
+	return out
+}
+
+// TestDiffAttributeMaps_SingletonListEqualsMap pins that a one-element list
+// of a block compares equal to the block itself, in any legacy form, so a
+// row moved between the forms shows no diff.
+func TestDiffAttributeMaps_SingletonListEqualsMap(t *testing.T) {
+	t.Parallel()
+	block := map[string]any{"push_endpoint": "https://example.com/push"}
+	forms := []any{
+		block,
+		[]any{block},
+		`{"push_endpoint":"https://example.com/push"}`,
+		`[{"push_endpoint":"https://example.com/push"}]`,
+	}
+	for i, a := range forms {
+		for j, b := range forms {
+			changes := diffAttributeMaps("google_pubsub_subscription", map[string]any{"push_config": a}, map[string]any{"push_config": b})
+			require.Emptyf(t, changes, "forms %d and %d", i, j)
+		}
+	}
 }
 
 // plainAtPath builds the plain attribute map importedDesiredAttrs gives for
